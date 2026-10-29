@@ -135,9 +135,9 @@ function makeBuilding(lot: Rect, fromCentre: number, rand: () => number): Buildi
     minZ: lot.minZ + inset,
     maxX: lot.maxX - inset,
     maxZ: lot.maxZ - inset,
-    // Kept well under the camera (on foot it sits ~16 m up) so roofs don't
-    // swallow the screen; downtown gets the tallest.
-    height: 4 + rand() * 4 + (1 - fromCentre) ** 2 * rand() * 7,
+    // Max 12 m: kept well under the on-foot camera (20 m) so roofs never
+    // reach the near plane or swallow the screen; downtown gets the tallest.
+    height: 3.5 + rand() * 3.5 + (1 - fromCentre) ** 2 * rand() * 5,
     tint: rand(),
   };
   const w = b.maxX - b.minX;

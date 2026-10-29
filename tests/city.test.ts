@@ -56,7 +56,7 @@ describe('city generator', () => {
   });
 
   it('keeps building heights under the on-foot camera', () => {
-    for (const b of city.buildings) expect(b.height).toBeLessThan(15.5);
+    for (const b of city.buildings) expect(b.height).toBeLessThanOrEqual(12);
   });
 });
 

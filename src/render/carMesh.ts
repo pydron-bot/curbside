@@ -30,6 +30,7 @@ export function createCarMesh(paint: ColorRepresentation = '#c8342b'): CarMesh {
     new CircleGeometry(1, 24),
     new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
   );
+  shadow.name = 'shadow';
   shadow.rotation.x = -Math.PI / 2;
   shadow.scale.set(1.3, 2.6, 1);
   shadow.position.y = 0.02;

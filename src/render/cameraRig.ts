@@ -26,7 +26,7 @@ export class CameraRig {
       zoomRate: 1.6,
     },
   ) {
-    this.camera = new PerspectiveCamera(45, aspect, 1, 400);
+    this.camera = new PerspectiveCamera(45, aspect, 0.5, 400);
     this.camera.up.set(0, 0, -1); // screen-up is world -Z
     this.height = opts.minHeight;
   }

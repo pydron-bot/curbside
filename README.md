@@ -43,11 +43,19 @@ On hive1 the dev server runs as the transient user unit `urban-blight-dev`
 - **M3 Blender pipeline** — started: `blender/build_assets.py` runs generators headless;
   `characters.py` builds the player (rigid parts on an armature, Idle + Walk
   clips) → `public/assets/player.glb`, loaded with GLTFLoader + AnimationMixer.
-  Vehicles, road tiles and buildings still to do.
+  `vehicles.py` builds five parametric cars (sedan, compact, sports, van,
+  police) → `public/assets/vehicles.glb`; the game tints the `paint` material
+  per car and steers the `*_wheel_F*` nodes. Each archetype has its own
+  handling (`VEHICLE_SPECS`). Road tiles and building kits still to do.
 - **M4 On foot** — started: screen-relative walking/sprinting
   (`src/entities/pedestrian.ts`), enter/exit any nearby slow car, three parked
   cars to take. Punching and weapons still to do.
-- Next: **M2 City v1** (procedural grid city, chunking, collision).
+- **M2 City v1** — done: seeded 16×16-block city (`src/world/city.ts`) with
+  lot subdivision, alleys, parks/trees, plazas and boundary walls; rendered as
+  per-chunk instanced meshes with shader-painted windows; cars and the player
+  collide with buildings, trees, walls and each other (`src/systems/physics.ts`).
+- Next: finish **M4** (punch, steal occupied cars once there are drivers) or
+  start **M5** (lane graph, traffic, pedestrians).
 
 ## Layout
 

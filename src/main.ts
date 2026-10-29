@@ -13,13 +13,14 @@ import { Input } from './core/input';
 import { FixedStep } from './core/loop';
 import { PLAYER_ON_FOOT, createPedState, stepPedestrian, type PedState } from './entities/pedestrian';
 import {
-  SEDAN,
+  VEHICLE_SPECS,
   createVehicleState,
   driverDoorPosition,
   forwardSpeed,
   lerpAngle,
   speed,
   stepVehicle,
+  type VehicleArchetype,
   type VehicleControls,
   type VehicleState,
 } from './entities/vehicle';
@@ -27,6 +28,7 @@ import { CameraRig } from './render/cameraRig';
 import { createCarMesh, type CarMesh } from './render/carMesh';
 import { CharacterModel } from './render/characterModel';
 import { DynamicResolution } from './render/dynamicResolution';
+import { VehicleModels } from './render/vehicleModels';
 import { mountTouchControls } from './ui/touchControls';
 import {
   collidePedStatic,
@@ -52,7 +54,7 @@ const hintEl = document.getElementById('hint')!;
 const ENTER_RANGE = 4;
 /** Cars moving faster than this can't be boarded. */
 const ENTER_MAX_SPEED = 6;
-const CAMERA_FOOT = [16, 22] as const;
+const CAMERA_FOOT = [20, 24] as const;
 const CAMERA_CAR = [26, 58] as const;
 
 // --- Renderer ---
@@ -76,21 +78,30 @@ scene.add(createCityMesh(city));
 
 // --- Vehicles (parked at the kerbs around the spawn intersection) ---
 interface Vehicle {
+  archetype: VehicleArchetype;
   sim: VehicleState;
   prev: VehicleState;
   mesh: CarMesh;
 }
-const PARKED: Array<[x: number, z: number, heading: number, paint: ColorRepresentation]> = [
-  [5.5, -14, Math.PI, '#c8342b'],
-  [-5.5, 16, 0, '#2f6fc0'],
-  [20, 5.5, Math.PI / 2, '#d9d6cc'],
+type Parked = [archetype: VehicleArchetype, x: number, z: number, heading: number, paint: ColorRepresentation];
+const PARKED: Parked[] = [
+  ['sedan', 5.5, -14, Math.PI, '#c8342b'],
+  ['compact', -5.5, 16, 0, '#2f6fc0'],
+  ['van', 20, 5.5, Math.PI / 2, '#d9d6cc'],
+  ['sports', -22, -5.5, -Math.PI / 2, '#e8b923'],
+  ['police', 5.5, 34, Math.PI, '#f2f2f2'],
 ];
-const vehicles: Vehicle[] = PARKED.map(([x, z, h, paint]) => {
+const vehicles: Vehicle[] = PARKED.map(([archetype, x, z, h, paint]) => {
   const sim = createVehicleState(x, z, h);
   const mesh = createCarMesh(paint);
   scene.add(mesh.root);
-  return { sim, prev: { ...sim }, mesh };
+  return { archetype, sim, prev: { ...sim }, mesh };
 });
+// Placeholder boxes show until the Blender-built models arrive.
+VehicleModels.load('/assets/vehicles.glb').then(
+  (models) => vehicles.forEach((v, i) => models.dress(v.mesh, v.archetype, PARKED[i][4])),
+  (err) => console.error('Failed to load vehicles.glb', err),
+);
 
 // --- Player ---
 const player = {
@@ -169,7 +180,7 @@ function simulate(dt: number) {
   const vehicleControls = input.readVehicle();
   for (const v of vehicles) {
     Object.assign(v.prev, v.sim);
-    stepVehicle(v.sim, v === driving ? vehicleControls : NO_CONTROLS, SEDAN, dt);
+    stepVehicle(v.sim, v === driving ? vehicleControls : NO_CONTROLS, VEHICLE_SPECS[v.archetype], dt);
   }
   Object.assign(player.prev!, player.ped);
   if (!driving) stepPedestrian(player.ped, input.readMove(), PLAYER_ON_FOOT, dt);
