@@ -72,6 +72,17 @@ export function spawnPed(bx: number, bz: number, edge: number, t: number, rand: 
   };
 }
 
+/** Knock a ped over, sliding away from a point (punch, explosion). */
+export function knockDown(p: PedAgent, fromX: number, fromZ: number, push = 3, seconds = 2.5): void {
+  const dx = p.s.x - fromX;
+  const dz = p.s.z - fromZ;
+  const d = Math.hypot(dx, dz) || 1;
+  p.mode = 'down';
+  p.timer = seconds;
+  p.s.vx = (dx / d) * push;
+  p.s.vz = (dz / d) * push;
+}
+
 /** Make a ped run from a point (e.g. a carjacker) for a while. */
 export function scare(p: PedAgent, fromX: number, fromZ: number, seconds = 4): void {
   if (p.mode === 'down') return;

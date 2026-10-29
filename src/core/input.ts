@@ -17,6 +17,8 @@ export interface InputSource {
   sprint: boolean;
   /** Enter/exit presses not yet consumed by the game. */
   actionPresses: number;
+  /** Punch presses (on foot) not yet consumed. */
+  punchPresses: number;
 }
 
 export const emptySource = (): InputSource => ({
@@ -27,6 +29,7 @@ export const emptySource = (): InputSource => ({
   moveY: 0,
   sprint: false,
   actionPresses: 0,
+  punchPresses: 0,
 });
 
 export class Input {
@@ -35,6 +38,7 @@ export class Input {
   readonly gamepad = emptySource();
   private keys = new Set<string>();
   private padActionWasDown = false;
+  private padPunchWasDown = false;
 
   constructor(target: Window = window) {
     target.addEventListener('keydown', (e) => {
@@ -42,6 +46,7 @@ export class Input {
       if (!e.repeat && (e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'Enter')) {
         this.keyboard.actionPresses++;
       }
+      if (!e.repeat && (e.code === 'Space' || e.code === 'KeyJ')) this.keyboard.punchPresses++;
       this.keys.add(e.code);
       this.updateKeyboard();
     });
@@ -88,6 +93,9 @@ export class Input {
     const action = pad.buttons[3]?.pressed ?? false;
     if (action && !this.padActionWasDown) g.actionPresses++;
     this.padActionWasDown = action;
+    const punch = pad.buttons[2]?.pressed ?? false; // X
+    if (punch && !this.padPunchWasDown) g.punchPresses++;
+    this.padPunchWasDown = punch;
   }
 
   readVehicle(): VehicleControls {
@@ -107,6 +115,16 @@ export class Input {
     }
     const sprint = [this.keyboard, this.touch, this.gamepad].some((s) => s.sprint);
     return { x: best.moveX, y: best.moveY, sprint };
+  }
+
+  /** True once per punch press from any device. */
+  consumePunch(): boolean {
+    let pressed = false;
+    for (const s of [this.keyboard, this.touch, this.gamepad]) {
+      if (s.punchPresses > 0) pressed = true;
+      s.punchPresses = 0;
+    }
+    return pressed;
   }
 
   /** True once per enter/exit press from any device. */

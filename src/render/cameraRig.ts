@@ -10,6 +10,7 @@ export class CameraRig {
   private x = 0;
   private z = 0;
   private height: number;
+  private shakeAmount = 0;
 
   constructor(
     aspect: number,
@@ -37,6 +38,11 @@ export class CameraRig {
     this.opts.maxHeight = max;
   }
 
+  /** Add screen shake (metres of jitter), e.g. for explosions. */
+  shake(amount: number): void {
+    this.shakeAmount = Math.min(3, this.shakeAmount + amount);
+  }
+
   snapTo(x: number, z: number): void {
     this.x = x;
     this.z = z;
@@ -54,6 +60,7 @@ export class CameraRig {
 
     const wantHeight = Math.min(o.maxHeight, o.minHeight + speed * o.heightPerSpeed);
     this.height += (wantHeight - this.height) * (1 - Math.exp(-o.zoomRate * dt));
+    this.shakeAmount *= Math.exp(-5 * dt);
     this.apply();
   }
 
@@ -66,7 +73,9 @@ export class CameraRig {
 
   private apply(): void {
     const back = this.height * this.opts.tilt;
-    this.camera.position.set(this.x, this.height, this.z + back);
-    this.camera.lookAt(this.x, 0, this.z);
+    const jx = (Math.random() - 0.5) * this.shakeAmount;
+    const jz = (Math.random() - 0.5) * this.shakeAmount;
+    this.camera.position.set(this.x + jx, this.height, this.z + back + jz);
+    this.camera.lookAt(this.x + jx, 0, this.z + jz);
   }
 }

@@ -9,6 +9,7 @@ import { createVehicleState, type VehicleArchetype, type VehicleState } from '..
 import type { CarMesh } from '../render/carMesh';
 import { CharacterModel, type Outfit } from '../render/characterModel';
 import { spawnPed, type PedAgent } from '../systems/crowd';
+import type { DamageState } from '../systems/damage';
 import { spawnAi, type AiDriver } from '../systems/traffic';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT } from '../world/city';
 import { DIRS, MAX_NODE } from '../world/roads';
@@ -21,6 +22,9 @@ export interface Vehicle {
   mesh: CarMesh;
   /** Set while an NPC is driving it. */
   ai: AiDriver | null;
+  damage: DamageState;
+  /** Seconds since it blew up (for lingering smoke). */
+  wreckAge: number;
 }
 
 export interface CrowdPed {
@@ -63,19 +67,22 @@ export class Population {
     private readonly scene: Scene,
     private readonly vehicles: Vehicle[],
     private readonly makeVehicle: (archetype: VehicleArchetype, paint: ColorRepresentation) => Vehicle,
+    /** Restore a recycled vehicle (health, model) before it rejoins traffic. */
+    private readonly resetVehicle: (v: Vehicle) => void,
     private readonly rand: () => number,
   ) {}
 
   /** Call a few times a second: tops up and recycles traffic and crowd. */
   maintain(px: number, pz: number, driving: Vehicle | null): void {
-    // Traffic: recycle far-away AI cars instead of creating new ones.
+    // Traffic: recycle far-away AI cars (and wrecks) instead of creating new ones.
     let aiCount = 0;
     for (const v of this.vehicles) {
-      if (!v.ai) continue;
-      aiCount++;
-      if (v !== driving && Math.hypot(v.sim.x - px, v.sim.z - pz) > TRAFFIC_DESPAWN) {
-        this.placeAi(v, px, pz);
+      const recyclable = v.ai || v.damage.wrecked;
+      if (!recyclable || v === driving) continue;
+      if (Math.hypot(v.sim.x - px, v.sim.z - pz) > TRAFFIC_DESPAWN) {
+        if (this.placeAi(v, px, pz)) this.resetVehicle(v);
       }
+      if (v.ai) aiCount++;
     }
     for (; aiCount < TRAFFIC_COUNT; aiCount++) {
       const v = this.makeVehicle(pickWeighted(TRAFFIC_MIX, this.rand), pick(PAINTS, this.rand));

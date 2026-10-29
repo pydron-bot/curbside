@@ -14,11 +14,11 @@ _Plan written 2026-10-29 as "Urban Blight"; renamed **Curbside** the same day (o
 | M1 | Drive a box | ✅ Done |
 | M2 | City v1 | ✅ Done — seeded 16×16-block city, chunked instancing, collision |
 | M3 | Blender pipeline | 🟡 Characters + 5 vehicle archetypes; road tiles / building kit to do |
-| M4 | On foot | 🟡 Walk/sprint, enter/exit, carjacking; punching / weapons to do |
-| M5 | Living city | 🟡 v1 traffic + pedestrians; damage/explosions, traffic lights to do |
+| M4 | On foot | ✅ Walk/sprint, enter/exit, carjacking, punching (weapons → later) |
+| M5 | Living city | ✅ Traffic, pedestrians, damage → smoke → fire → explosion, wrecks (polish: traffic lights, AI reacting to hits) |
 | M6–M8 | Heat, Missions & HUD, Ship | ⬜ Not started |
 
-**Where it runs:** code at `~/dev/curbside` on hive1 (git, remote `pydron-bot/curbside` pending). Dev server is the `curbside-dev` user service; play at `https://hive1.tail078432.ts.net:8443` (tailnet only). Drive keeps this plan and any source art.
+**Where it runs:** code at `~/dev/curbside` on hive1 (git, pushed to `pydron-bot/curbside`). Dev server is the `curbside-dev` user service; play at `https://hive1.tail078432.ts.net:8443` (tailnet only). Drive keeps this plan and any source art.
 
 ---
 
@@ -164,5 +164,6 @@ These streams are largely independent and can run in parallel:
 
 ## 10. Next steps
 
-1. Create the `pydron-bot/curbside` GitHub repo and add the hive1 deploy key, then push.
-2. Pick the next milestone: M6 (wanted level + police) or finish M4 (punching).
+1. ✅ GitHub repo `pydron-bot/curbside` set up and pushed.
+2. M6: wanted level + police (police archetype already exists).
+3. M3 leftovers when convenient: road tiles, building kit, props (payphones are needed for M7).

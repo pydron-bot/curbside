@@ -1,4 +1,6 @@
 import {
+  Quaternion,
+  Vector3,
   AnimationAction,
   AnimationMixer,
   CapsuleGeometry,
@@ -26,6 +28,10 @@ function loadShared(url: string): Promise<GLTF> {
   return p;
 }
 
+const PUNCH_SECONDS = 0.3;
+const X_AXIS = new Vector3(1, 0, 0);
+const punchQ = new Quaternion();
+
 const shadowGeo = new CircleGeometry(0.45, 16);
 const shadowMat = new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
 const placeholderGeo = new CapsuleGeometry(0.3, 1.1, 4, 8);
@@ -46,6 +52,8 @@ export class CharacterModel {
   /** Ground speed the walk cycle was authored for (from the GLB's extras). */
   private walkSpeed = 1.6;
   private ownedMaterials: Material[] = [];
+  private punchArm: Object3D | null = null;
+  private punchTime = 0;
   private disposed = false;
 
   constructor(url: string, outfit: Outfit = {}) {
@@ -68,6 +76,8 @@ export class CharacterModel {
         this.body.add(scene);
         const extras = scene.children[0]?.userData;
         if (typeof extras?.walkSpeed === 'number') this.walkSpeed = extras.walkSpeed;
+        // GLTFLoader sanitises "arm.R" to "armR".
+        this.punchArm = scene.getObjectByName('armR') ?? null;
         this.mixer = new AnimationMixer(scene);
         const clip = (name: string) => gltf.animations.find((a) => a.name === name);
         const idleClip = clip('Idle');
@@ -118,6 +128,19 @@ export class CharacterModel {
       this.play(this.idle);
     }
     this.mixer.update(dt);
+    if (this.punchTime > 0 && this.punchArm) {
+      this.punchTime = Math.max(0, this.punchTime - dt);
+      // Fast out, slower back: 0 → 1 → 0 over the punch.
+      const t = 1 - this.punchTime / PUNCH_SECONDS;
+      const reach = t < 0.3 ? t / 0.3 : (1 - t) / 0.7;
+      punchQ.setFromAxisAngle(X_AXIS, -1.5 * reach); // swing the arm forward
+      this.punchArm.quaternion.multiply(punchQ);
+    }
+  }
+
+  /** Throw a right jab (layered on top of whatever clip is playing). */
+  punch(): void {
+    this.punchTime = PUNCH_SECONDS;
   }
 
   dispose(): void {

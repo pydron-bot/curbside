@@ -10,7 +10,7 @@ export interface TouchControls {
 /**
  * On-screen controls. Left half: a floating joystick (steers in a car, walks
  * on foot; pushing it to the rim sprints). Right side: GAS / BRAKE / HAND in a
- * car, plus an ENTER / EXIT button. Plain DOM over the canvas, shown on the
+ * car, PUNCH on foot, plus an ENTER / EXIT button. Plain DOM over the canvas, shown on the
  * first touch so desktop players never see it.
  */
 export function mountTouchControls(root: HTMLElement, out: InputSource): TouchControls {
@@ -28,7 +28,8 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): TouchCo
   const hand = button('HAND', 'btn-hand car-only');
   const brake = button('BRAKE', 'btn-brake car-only');
   const gas = button('GAS', 'btn-gas car-only');
-  buttons.append(action, hand, brake, gas);
+  const punch = button('PUNCH', 'btn-punch foot-only');
+  buttons.append(action, hand, brake, gas, punch);
   layer.append(stickZone, buttons);
   root.append(layer);
 
@@ -97,6 +98,13 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): TouchCo
   bindHold(gas, (v) => ((held.gas = v), sync()));
   bindHold(brake, (v) => ((held.brake = v), sync()));
   bindHold(hand, (v) => ((held.hand = v), sync()));
+  punch.addEventListener('pointerdown', () => {
+    out.punchPresses++;
+    punch.classList.add('pressed');
+  });
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
+    punch.addEventListener(type, () => punch.classList.remove('pressed'));
+  }
   action.addEventListener('pointerdown', () => {
     out.actionPresses++;
     action.classList.add('pressed');

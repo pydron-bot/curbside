@@ -4,6 +4,7 @@
 Uploads two files named after today's date and the current commit:
   curbside-<date>-<sha>.zip      tracked files at HEAD (git archive)
   curbside-<date>-<sha>.bundle   full git history (restore: git clone <file>)
+and refreshes Curbside/PLAN.md from docs/PLAN.md so the Drive copy stays in sync.
 
 Uses the stored OAuth credential of hive1's gworkspace MCP (Drive scope);
 stdlib only. Usage:  python3 -I tools/drive-snapshot.py [--folder-id ID]
@@ -76,6 +77,18 @@ def upload(token, folder, path, name, mime):
     return api(token, UPLOAD, body, {"Content-Type": f"multipart/related; boundary={boundary}"})
 
 
+def sync_plan(token, folder):
+    """Overwrite Curbside/PLAN.md's content with docs/PLAN.md (same file id, keeps history)."""
+    q = f"name = 'PLAN.md' and '{folder}' in parents and trashed = false"
+    found = api(token, f"{API}?{urllib.parse.urlencode({'q': q, 'fields': 'files(id)'})}")["files"]
+    with open(os.path.join(REPO, "docs", "PLAN.md"), "rb") as f:
+        content = f.read()
+    if found:
+        url = f"https://www.googleapis.com/upload/drive/v3/files/{found[0]['id']}?uploadType=media"
+        api(token, url, content, {"Content-Type": "text/markdown"}, method="PATCH")
+        print("updated PLAN.md in Drive")
+
+
 def git(*args, **kw):
     return subprocess.run(["git", "-C", REPO, *args], check=True, capture_output=True, text=True, **kw).stdout.strip()
 
@@ -100,6 +113,7 @@ def main():
         for path, mime in ((zip_path, "application/zip"), (bundle_path, "application/octet-stream")):
             r = upload(token, folder, path, os.path.basename(path), mime)
             print(f"uploaded {r['name']} ({int(r['size']) // 1024} KB) id={r['id']}")
+    sync_plan(token, args.folder_id)
     print(f"https://drive.google.com/drive/folders/{folder}")
 
 

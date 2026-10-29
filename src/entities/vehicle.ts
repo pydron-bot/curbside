@@ -86,6 +86,15 @@ export const VEHICLE_SPECS: Record<VehicleArchetype, VehicleSpec> = {
   police: { ...SEDAN, maxSpeed: 44, accel: 17, brakeDecel: 28, steerRate: 2.7 },
 };
 
+/** Max health per archetype. */
+export const VEHICLE_HEALTH: Record<VehicleArchetype, number> = {
+  sedan: 100,
+  compact: 85,
+  sports: 80,
+  van: 130,
+  police: 120,
+};
+
 export function createVehicleState(x = 0, z = 0, heading = Math.PI): VehicleState {
   return { x, z, heading, vx: 0, vz: 0, yawRate: 0 };
 }

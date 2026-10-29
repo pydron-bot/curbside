@@ -31,6 +31,7 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Walk (on foot) | WASD / arrows | left-half joystick | left stick |
 | Sprint (on foot) | Shift | push joystick to the rim | A |
 | Enter / exit car | E / F / Enter | ENTER / EXIT | Y |
+| Punch (on foot) | Space / J | PUNCH | X |
 | Steer | A/D, ←/→ | left-half joystick | left stick |
 | Gas / brake-reverse | W/S, ↑/↓ | GAS / BRAKE | RT / LT |
 | Handbrake | Space | HAND | A |
@@ -65,7 +66,12 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
   `src/game/population.ts` keeps ~16 cars / ~14 peds around the player.
   Carjacking: E next to an AI car throws the driver out.
   Car models are merged per material on load (~8 draw calls per car).
-- Next: **M6 Heat** (wanted level, police) or finish **M4** (punching).
+- **Damage** (`src/systems/damage.ts`, `src/render/effects.ts`): crashes
+  cost health (bar under the speedo); smoking → burning → explosion →
+  charred wreck; blasts damage/shove cars and knock people down; NPC
+  drivers bail out of burning cars; your own car throws you clear.
+- **Punching**: knocks down whoever is in front, scares bystanders.
+- Next: **M6 Heat** (wanted level, police).
 
 ## Layout
 

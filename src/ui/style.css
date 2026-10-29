@@ -187,8 +187,16 @@ body {
   visibility: visible;
 }
 
-.touch-layer[data-mode='foot'] .car-only {
+.touch-layer[data-mode='foot'] .car-only,
+.touch-layer[data-mode='car'] .foot-only {
   display: none;
+}
+
+.btn-punch {
+  grid-area: brake;
+  width: 76px;
+  height: 76px;
+  background: rgb(230 140 60 / 0.35);
 }
 
 .touch-layer[data-mode='foot'] .btn-action {
@@ -211,4 +219,20 @@ body {
 
 #hint[hidden] {
   display: none;
+}
+
+#vhealth {
+  width: 90px;
+  height: 5px;
+  margin: 6px 0 0 auto;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.2);
+  overflow: hidden;
+}
+
+#vhealth > div {
+  height: 100%;
+  width: 100%;
+  background: #6cc46c;
+  transition: width 0.2s;
 }
