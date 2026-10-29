@@ -54,8 +54,15 @@ On hive1 the dev server runs as the transient user unit `urban-blight-dev`
   lot subdivision, alleys, parks/trees, plazas and boundary walls; rendered as
   per-chunk instanced meshes with shader-painted windows; cars and the player
   collide with buildings, trees, walls and each other (`src/systems/physics.ts`).
-- Next: finish **M4** (punch, steal occupied cars once there are drivers) or
-  start **M5** (lane graph, traffic, pedestrians).
+- **M5 Living city** — v1 done: AI traffic (`src/systems/traffic.ts`) drives
+  the right-hand lanes of the road grid (`src/world/roads.ts`), turns at
+  intersections, brakes for cars/people ahead, with a gridlock breaker;
+  sidewalk crowd (`src/systems/crowd.ts`) strolls blocks, crosses at
+  crosswalks, dodges speeding cars, gets knocked down and runs.
+  `src/game/population.ts` keeps ~16 cars / ~14 peds around the player.
+  Carjacking: E next to an AI car throws the driver out.
+  Car models are merged per material on load (~8 draw calls per car).
+- Next: **M6 Heat** (wanted level, police) or finish **M4** (punching).
 
 ## Layout
 

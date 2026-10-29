@@ -22,24 +22,27 @@ import {
   stepVehicle,
   type VehicleArchetype,
   type VehicleControls,
-  type VehicleState,
 } from './entities/vehicle';
+import { Population, type Vehicle } from './game/population';
 import { CameraRig } from './render/cameraRig';
-import { createCarMesh, type CarMesh } from './render/carMesh';
+import { createCarMesh } from './render/carMesh';
 import { CharacterModel } from './render/characterModel';
 import { DynamicResolution } from './render/dynamicResolution';
 import { VehicleModels } from './render/vehicleModels';
-import { mountTouchControls } from './ui/touchControls';
+import { scare, spawnPed, stepCrowdPed } from './systems/crowd';
 import {
   collidePedStatic,
   collidePedVehicle,
   collideVehicleStatic,
   collideVehicles,
 } from './systems/physics';
+import { driveAi, type Obstacle } from './systems/traffic';
+import { mountTouchControls } from './ui/touchControls';
 import { generateCity } from './world/city';
 import { createCityMesh } from './world/cityMesh';
 import { StaticGrid } from './world/collision';
 import { createGround } from './world/ground';
+import { mulberry32 } from './world/random';
 
 registerSW({ immediate: true });
 
@@ -75,33 +78,42 @@ scene.add(createGround());
 const city = generateCity(1337);
 const collision = new StaticGrid(city.obstacles);
 scene.add(createCityMesh(city));
+const rand = mulberry32(Date.now() >>> 0);
 
-// --- Vehicles (parked at the kerbs around the spawn intersection) ---
-interface Vehicle {
-  archetype: VehicleArchetype;
-  sim: VehicleState;
-  prev: VehicleState;
-  mesh: CarMesh;
+// --- Vehicles ---
+const vehicles: Vehicle[] = [];
+let vehicleModels: VehicleModels | null = null;
+
+function makeVehicle(archetype: VehicleArchetype, paint: ColorRepresentation, x = 0, z = 0, heading = 0): Vehicle {
+  const sim = createVehicleState(x, z, heading);
+  const mesh = createCarMesh(paint);
+  vehicleModels?.dress(mesh, archetype, paint);
+  scene.add(mesh.root);
+  const v: Vehicle = { archetype, paint, sim, prev: { ...sim }, mesh, ai: null };
+  vehicles.push(v);
+  return v;
 }
-type Parked = [archetype: VehicleArchetype, x: number, z: number, heading: number, paint: ColorRepresentation];
-const PARKED: Parked[] = [
+
+// A few parked at the kerbs around the spawn intersection.
+const PARKED: Array<[VehicleArchetype, number, number, number, ColorRepresentation]> = [
   ['sedan', 5.5, -14, Math.PI, '#c8342b'],
   ['compact', -5.5, 16, 0, '#2f6fc0'],
   ['van', 20, 5.5, Math.PI / 2, '#d9d6cc'],
   ['sports', -22, -5.5, -Math.PI / 2, '#e8b923'],
   ['police', 5.5, 34, Math.PI, '#f2f2f2'],
 ];
-const vehicles: Vehicle[] = PARKED.map(([archetype, x, z, h, paint]) => {
-  const sim = createVehicleState(x, z, h);
-  const mesh = createCarMesh(paint);
-  scene.add(mesh.root);
-  return { archetype, sim, prev: { ...sim }, mesh };
-});
+for (const [archetype, x, z, h, paint] of PARKED) makeVehicle(archetype, paint, x, z, h);
+
 // Placeholder boxes show until the Blender-built models arrive.
 VehicleModels.load('/assets/vehicles.glb').then(
-  (models) => vehicles.forEach((v, i) => models.dress(v.mesh, v.archetype, PARKED[i][4])),
+  (models) => {
+    vehicleModels = models;
+    for (const v of vehicles) models.dress(v.mesh, v.archetype, v.paint);
+  },
   (err) => console.error('Failed to load vehicles.glb', err),
 );
+
+const population = new Population(scene, vehicles, (a, p) => makeVehicle(a, p), rand);
 
 // --- Player ---
 const player = {
@@ -155,6 +167,15 @@ function nearestEnterable(): Vehicle | null {
 }
 
 function enterVehicle(v: Vehicle) {
+  if (v.ai) {
+    // Carjack: the driver is thrown out on their side and runs for it.
+    v.ai = null;
+    const door = driverDoorPosition(v.sim);
+    const agent = spawnPed(0, 0, 0, 0, rand);
+    Object.assign(agent.s, { x: door.x, z: door.z, vx: 0, vz: 0, heading: v.sim.heading });
+    scare(agent, player.ped.x, player.ped.z, 5);
+    population.addPed(agent);
+  }
   player.driving = v;
   player.model.root.visible = false;
   rig.setHeights(...CAMERA_CAR);
@@ -170,31 +191,59 @@ function exitVehicle() {
   rig.setHeights(...CAMERA_FOOT);
 }
 
-// --- Loop ---
-const loop = new FixedStep(1 / 60);
-let last = performance.now();
-let paused = false;
+// --- Simulation ---
+const obstacles: Obstacle[] = [];
+const vehicleStates = () => vehicles.map((v) => v.sim);
 
 function simulate(dt: number) {
   const driving = player.driving;
-  const vehicleControls = input.readVehicle();
+  const playerControls = input.readVehicle();
+
+  // What AI drivers need to avoid this step.
+  obstacles.length = 0;
+  for (const v of vehicles) obstacles.push({ x: v.sim.x, z: v.sim.z, halfWidth: 1 });
+  if (!driving) obstacles.push({ x: player.ped.x, z: player.ped.z, halfWidth: 0.4 });
+  for (const c of population.crowd) obstacles.push({ x: c.agent.s.x, z: c.agent.s.z, halfWidth: 0.4 });
+
   for (const v of vehicles) {
     Object.assign(v.prev, v.sim);
-    stepVehicle(v.sim, v === driving ? vehicleControls : NO_CONTROLS, VEHICLE_SPECS[v.archetype], dt);
+    let controls = NO_CONTROLS;
+    if (v === driving) controls = playerControls;
+    // A car's own entry sits at distance 0, which clearDistance ignores.
+    else if (v.ai) controls = driveAi(v.ai, v.sim, obstacles, rand, dt);
+    stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt);
   }
+
   Object.assign(player.prev!, player.ped);
   if (!driving) stepPedestrian(player.ped, input.readMove(), PLAYER_ON_FOOT, dt);
 
+  const states = vehicleStates();
+  for (const c of population.crowd) {
+    Object.assign(c.prev, c.agent.s);
+    stepCrowdPed(c.agent, states, rand, dt);
+  }
+
+  // --- Collisions ---
   for (const v of vehicles) collideVehicleStatic(v.sim, collision);
   for (let i = 0; i < vehicles.length; i++) {
     for (let j = i + 1; j < vehicles.length; j++) collideVehicles(vehicles[i].sim, vehicles[j].sim);
   }
   if (!driving) {
-    for (const v of vehicles) collidePedVehicle(player.ped, v.sim);
+    for (const s of states) collidePedVehicle(player.ped, s);
     // Static last so a car can't shove the player into a wall.
     collidePedStatic(player.ped, collision);
   }
+  for (const c of population.crowd) {
+    if (c.agent.mode !== 'down') for (const s of states) collidePedVehicle(c.agent.s, s);
+    collidePedStatic(c.agent.s, collision);
+  }
 }
+
+// --- Loop ---
+const loop = new FixedStep(1 / 60);
+let last = performance.now();
+let paused = false;
+let maintainTimer = 0;
 
 function frame(now: number) {
   requestAnimationFrame(frame);
@@ -211,6 +260,12 @@ function frame(now: number) {
     }
   }
 
+  const focus = player.driving ? player.driving.sim : player.ped;
+  if ((maintainTimer -= frameSeconds) <= 0) {
+    maintainTimer = 0.25;
+    population.maintain(focus.x, focus.z, player.driving);
+  }
+
   const alpha = loop.advance(frameSeconds, simulate);
 
   // Interpolate render state between the last two sim steps.
@@ -219,6 +274,12 @@ function frame(now: number) {
     v.mesh.root.position.set(lerp(v.prev.x, v.sim.x, alpha), 0, lerp(v.prev.z, v.sim.z, alpha));
     v.mesh.root.rotation.y = lerpAngle(v.prev.heading, v.sim.heading, alpha);
     for (const w of v.mesh.frontWheels) w.rotation.y = v === player.driving ? -steer * 0.5 : 0;
+  }
+  for (const c of population.crowd) {
+    const s = c.agent.s;
+    c.model.root.position.set(lerp(c.prev.x, s.x, alpha), 0, lerp(c.prev.z, s.z, alpha));
+    c.model.root.rotation.y = lerpAngle(c.prev.heading, s.heading, alpha);
+    c.model.update(frameSeconds, Math.hypot(s.vx, s.vz), c.agent.mode === 'down');
   }
 
   const ped = player.ped;
@@ -232,13 +293,11 @@ function frame(now: number) {
   const nearCar = player.driving ? null : nearestEnterable();
   touch.setMode(player.driving ? 'car' : 'foot', nearCar !== null);
   hintEl.hidden = !nearCar || !document.querySelector('.touch-layer[hidden]');
-  hintEl.textContent = 'Press E to get in';
+  hintEl.textContent = nearCar?.ai ? 'Press E to take this car' : 'Press E to get in';
 
   if (player.driving) {
     const v = player.driving;
-    const x = v.mesh.root.position.x;
-    const z = v.mesh.root.position.z;
-    rig.update(frameSeconds, x, z, v.sim.vx, v.sim.vz);
+    rig.update(frameSeconds, v.mesh.root.position.x, v.mesh.root.position.z, v.sim.vx, v.sim.vz);
     speedEl.textContent = String(Math.round(Math.abs(forwardSpeed(v.sim)) * 3.6));
   } else {
     rig.update(frameSeconds, px, pz, ped.vx, ped.vz);
@@ -248,7 +307,7 @@ function frame(now: number) {
   renderer.render(scene, rig.camera);
 
   resolution.sample(frameSeconds);
-  debugEl.textContent = `${resolution.summary()} · ${viewW}×${viewH}`;
+  debugEl.textContent = `${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`;
 }
 requestAnimationFrame(frame);
 
@@ -256,7 +315,7 @@ function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
-// --- Window / lifecycle ---
+// --- Lifecycle ---
 function setPaused(p: boolean) {
   paused = p;
   pausedEl.hidden = !p;
@@ -274,4 +333,4 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Debug hook for poking at the sim from the console / automated checks.
-(window as unknown as { __ub: unknown }).__ub = { player, vehicles, input, city };
+(window as unknown as { __ub: unknown }).__ub = { player, vehicles, input, city, population, renderer };

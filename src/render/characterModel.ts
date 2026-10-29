@@ -8,67 +8,123 @@ import {
   Mesh,
   MeshBasicMaterial,
   MeshLambertMaterial,
+  type ColorRepresentation,
+  type Material,
+  type MeshStandardMaterial,
+  type Object3D,
 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFLoader, type GLTF } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
+
+/** Recolour parts by material suffix: player_shirt → "shirt", etc. */
+export type Outfit = Partial<Record<'skin' | 'hair' | 'shirt' | 'pants' | 'shoes', ColorRepresentation>>;
+
+const cache = new Map<string, Promise<GLTF>>();
+function loadShared(url: string): Promise<GLTF> {
+  let p = cache.get(url);
+  if (!p) cache.set(url, (p = new GLTFLoader().loadAsync(url)));
+  return p;
+}
+
+const shadowGeo = new CircleGeometry(0.45, 16);
+const shadowMat = new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false });
+const placeholderGeo = new CapsuleGeometry(0.3, 1.1, 4, 8);
 
 /**
  * A character from a Blender-built GLB (see blender/generators/characters.py)
- * with Idle/Walk clips. Shows a capsule until the GLB arrives so the game
- * never waits on assets.
+ * with Idle/Walk clips. The GLB is fetched once per URL and cloned per
+ * character. Shows a capsule until it arrives so the game never waits.
  */
 export class CharacterModel {
   readonly root = new Group();
+  /** Holds the model; tipped over when knocked down. */
+  private readonly body = new Group();
   private mixer: AnimationMixer | null = null;
   private idle: AnimationAction | null = null;
   private walk: AnimationAction | null = null;
   private current: AnimationAction | null = null;
   /** Ground speed the walk cycle was authored for (from the GLB's extras). */
   private walkSpeed = 1.6;
-  private placeholder: Mesh;
+  private ownedMaterials: Material[] = [];
+  private disposed = false;
 
-  constructor(url: string) {
-    const shadow = new Mesh(
-      new CircleGeometry(0.45, 16),
-      new MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.35, depthWrite: false }),
-    );
+  constructor(url: string, outfit: Outfit = {}) {
+    const shadow = new Mesh(shadowGeo, shadowMat);
     shadow.rotation.x = -Math.PI / 2;
     shadow.position.y = 0.02;
-    this.root.add(shadow);
+    this.root.add(shadow, this.body);
 
-    this.placeholder = new Mesh(new CapsuleGeometry(0.3, 1.1, 4, 8), new MeshLambertMaterial({ color: '#e6c43c' }));
-    this.placeholder.position.y = 0.85;
-    this.root.add(this.placeholder);
+    const placeholder = new Mesh(placeholderGeo, new MeshLambertMaterial({ color: outfit.shirt ?? '#e6c43c' }));
+    this.ownedMaterials.push(placeholder.material as Material);
+    placeholder.position.y = 0.85;
+    this.body.add(placeholder);
 
-    new GLTFLoader().load(
-      url,
+    loadShared(url).then(
       (gltf) => {
-        this.root.remove(this.placeholder);
-        this.root.add(gltf.scene);
-        const extras = gltf.scene.getObjectByName('Player')?.userData ?? gltf.scene.children[0]?.userData;
+        if (this.disposed) return;
+        this.body.remove(placeholder);
+        const scene = cloneSkinned(gltf.scene);
+        this.applyOutfit(scene, outfit);
+        this.body.add(scene);
+        const extras = scene.children[0]?.userData;
         if (typeof extras?.walkSpeed === 'number') this.walkSpeed = extras.walkSpeed;
-        this.mixer = new AnimationMixer(gltf.scene);
+        this.mixer = new AnimationMixer(scene);
         const clip = (name: string) => gltf.animations.find((a) => a.name === name);
         const idleClip = clip('Idle');
         const walkClip = clip('Walk');
         if (idleClip) this.idle = this.mixer.clipAction(idleClip).setLoop(LoopRepeat, Infinity);
         if (walkClip) this.walk = this.mixer.clipAction(walkClip).setLoop(LoopRepeat, Infinity);
-        this.play(this.idle);
+        // Desynchronise crowds so they don't all step in unison.
+        if (this.idle) {
+          this.idle.play();
+          this.idle.time = Math.random() * 2;
+          this.current = this.idle;
+        }
       },
-      undefined,
       (err) => console.error(`Failed to load ${url}`, err),
     );
   }
 
+  private applyOutfit(scene: Object3D, outfit: Outfit) {
+    const swapped = new Map<Material, MeshStandardMaterial>();
+    scene.traverse((o) => {
+      if (!(o instanceof Mesh)) return;
+      const mat = o.material as MeshStandardMaterial;
+      const part = mat.name.split('_').pop() as keyof Outfit;
+      const colour = outfit[part];
+      if (colour === undefined) return;
+      let m = swapped.get(mat);
+      if (!m) {
+        m = mat.clone();
+        m.color.set(colour);
+        swapped.set(mat, m);
+        this.ownedMaterials.push(m);
+      }
+      o.material = m;
+    });
+  }
+
   /** Advance animation; picks Idle or Walk and matches stride to ground speed. */
-  update(dt: number, groundSpeed: number): void {
+  update(dt: number, groundSpeed: number, down = false): void {
+    // Knocked down: lie flat on the back, feet toward where we were facing.
+    const target = down ? -Math.PI / 2 : 0;
+    this.body.rotation.x += (target - this.body.rotation.x) * Math.min(1, dt * 12);
+    this.body.position.y = down ? 0.15 : 0;
     if (!this.mixer) return;
-    if (groundSpeed > 0.2 && this.walk) {
+    if (!down && groundSpeed > 0.2 && this.walk) {
       this.play(this.walk);
       this.walk.timeScale = groundSpeed / this.walkSpeed;
     } else {
       this.play(this.idle);
     }
     this.mixer.update(dt);
+  }
+
+  dispose(): void {
+    this.disposed = true;
+    this.root.removeFromParent();
+    this.mixer?.stopAllAction();
+    for (const m of this.ownedMaterials) m.dispose();
   }
 
   private play(action: AnimationAction | null): void {
