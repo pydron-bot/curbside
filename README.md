@@ -3,8 +3,8 @@
 _Formerly "Urban Blight" (renamed 2026-10-29; other games already use that name)._
 
 Top-down open-world crime/driving game for the browser — three.js, TypeScript,
-Vite, installable as a PWA. Full plan: `PLAN.md` in the Google Drive folder
-*GameDev / Urban Blight* (the Drive folder keeps the old name; Drive holds the plan and art; code lives here).
+Vite, installable as a PWA. Full plan: `docs/PLAN.md` (mirrored as `PLAN.md` in the Google Drive folder
+*GameDev / Curbside*, which also holds art; code lives here).
 
 ## Run
 
