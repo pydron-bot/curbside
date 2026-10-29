@@ -48,7 +48,6 @@ const CAMERA_CAR = [26, 58] as const;
 
 // --- Renderer ---
 const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setSize(window.innerWidth, window.innerHeight);
 app.append(renderer.domElement);
 const resolution = new DynamicResolution(renderer);
 
@@ -92,8 +91,25 @@ const player = {
 player.prev = { ...player.ped };
 scene.add(player.model.root);
 
-const rig = new CameraRig(window.innerWidth / window.innerHeight);
-rig.resize(window.innerWidth / window.innerHeight);
+const rig = new CameraRig(1);
+let viewW = 0;
+let viewH = 0;
+/**
+ * Match the drawing buffer to #app's laid-out size. Checked every frame rather
+ * than on 'resize': iOS home-screen apps fire resize before the rotated
+ * dimensions are available, which left the canvas stuck at portrait size.
+ */
+function fitToScreen() {
+  const w = app.clientWidth;
+  const h = app.clientHeight;
+  if (w === viewW && h === viewH) return;
+  if (w === 0 || h === 0) return;
+  viewW = w;
+  viewH = h;
+  renderer.setSize(w, h, false); // CSS sizes the canvas; only set the buffer
+  rig.resize(w / h);
+}
+fitToScreen();
 rig.setHeights(...CAMERA_FOOT);
 rig.snapTo(player.ped.x, player.ped.z);
 
@@ -195,10 +211,11 @@ function frame(now: number) {
     rig.update(frameSeconds, px, pz, ped.vx, ped.vz);
   }
   speedBox.hidden = !player.driving;
+  fitToScreen();
   renderer.render(scene, rig.camera);
 
   resolution.sample(frameSeconds);
-  debugEl.textContent = resolution.summary();
+  debugEl.textContent = `${resolution.summary()} · ${viewW}×${viewH}`;
 }
 requestAnimationFrame(frame);
 
@@ -207,12 +224,6 @@ function lerp(a: number, b: number, t: number) {
 }
 
 // --- Window / lifecycle ---
-window.addEventListener('resize', () => {
-  const aspect = window.innerWidth / window.innerHeight;
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  rig.resize(aspect);
-});
-
 function setPaused(p: boolean) {
   paused = p;
   pausedEl.hidden = !p;
