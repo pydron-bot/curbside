@@ -125,6 +125,7 @@ body {
   display: grid;
   grid-template-columns: auto auto;
   grid-template-areas:
+    'action .'
     'hand gas'
     'brake gas';
   gap: 12px;
@@ -165,4 +166,42 @@ body {
   grid-area: hand;
   width: 64px;
   height: 64px;
+}
+
+.btn-action {
+  grid-area: action;
+  width: 64px;
+  height: 64px;
+  background: rgb(110 160 255 / 0.35);
+  visibility: hidden;
+}
+
+.btn-action.available {
+  visibility: visible;
+}
+
+.touch-layer[data-mode='foot'] .car-only {
+  display: none;
+}
+
+.touch-layer[data-mode='foot'] .btn-action {
+  grid-area: gas;
+  width: 96px;
+  height: 96px;
+}
+
+#hint {
+  position: fixed;
+  left: 50%;
+  bottom: max(18px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.5);
+  font-size: 14px;
+  pointer-events: none;
+}
+
+#hint[hidden] {
+  display: none;
 }

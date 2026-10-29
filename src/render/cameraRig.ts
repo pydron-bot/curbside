@@ -13,7 +13,7 @@ export class CameraRig {
 
   constructor(
     aspect: number,
-    private readonly opts = {
+    readonly opts = {
       minHeight: 26,
       maxHeight: 58,
       /** Height gained per m/s of speed. */
@@ -29,6 +29,12 @@ export class CameraRig {
     this.camera = new PerspectiveCamera(45, aspect, 1, 400);
     this.camera.up.set(0, 0, -1); // screen-up is world -Z
     this.height = opts.minHeight;
+  }
+
+  /** Switch zoom range, e.g. lower and tighter on foot. Height eases over. */
+  setHeights(min: number, max: number): void {
+    this.opts.minHeight = min;
+    this.opts.maxHeight = max;
   }
 
   snapTo(x: number, z: number): void {

@@ -6,3 +6,5 @@ dev-dist/
 # Blender autosaves / backups
 *.blend1
 *.blend2
+blender/thumbs/
+__pycache__/

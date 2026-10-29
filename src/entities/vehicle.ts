@@ -105,7 +105,7 @@ export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSp
 
   const fx = Math.sin(s.heading);
   const fz = Math.cos(s.heading);
-  // Lateral axis (car's right when seen from above with nose up-screen).
+  // Lateral axis: points out of the car's left (driver's) side.
   const lx = Math.cos(s.heading);
   const lz = -Math.sin(s.heading);
 
@@ -153,6 +153,15 @@ export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSp
 
   s.x += s.vx * dt;
   s.z += s.vz * dt;
+}
+
+/** Where someone stands to get in: beside the driver's (left) door. */
+export function driverDoorPosition(s: VehicleState, offset = 1.6): { x: number; z: number } {
+  const lx = Math.cos(s.heading);
+  const lz = -Math.sin(s.heading);
+  const fx = Math.sin(s.heading);
+  const fz = Math.cos(s.heading);
+  return { x: s.x + lx * offset + fx * 0.3, z: s.z + lz * offset + fz * 0.3 };
 }
 
 export function wrapAngle(a: number): number {

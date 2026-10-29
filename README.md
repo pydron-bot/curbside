@@ -14,6 +14,7 @@ npm run dev          # vite --host, http://<host>:5173
 npm test             # vitest (physics, loop)
 npm run build        # typecheck + production build with service worker
 npm run icons        # regenerate PWA icons
+npm run assets       # rebuild GLBs from blender/ (needs `blender` on PATH; add `-- --thumbs` for previews)
 ```
 
 On hive1 the dev server runs as the transient user unit `urban-blight-dev`
@@ -24,6 +25,9 @@ On hive1 the dev server runs as the transient user unit `urban-blight-dev`
 
 | | Keyboard | Touch | Gamepad |
 |---|---|---|---|
+| Walk (on foot) | WASD / arrows | left-half joystick | left stick |
+| Sprint (on foot) | Shift | push joystick to the rim | A |
+| Enter / exit car | E / F / Enter | ENTER / EXIT | Y |
 | Steer | A/D, ←/→ | left-half joystick | left stick |
 | Gas / brake-reverse | W/S, ↑/↓ | GAS / BRAKE | RT / LT |
 | Handbrake | Space | HAND | A |
@@ -36,6 +40,13 @@ On hive1 the dev server runs as the transient user unit `urban-blight-dev`
   arcade car physics (`src/entities/vehicle.ts`, pure + unit-tested),
   speed-zoom chase camera, keyboard/touch/gamepad input, placeholder road-grid
   world with non-colliding blocks, dynamic resolution, pause on background.
+- **M3 Blender pipeline** — started: `blender/build_assets.py` runs generators headless;
+  `characters.py` builds the player (rigid parts on an armature, Idle + Walk
+  clips) → `public/assets/player.glb`, loaded with GLTFLoader + AnimationMixer.
+  Vehicles, road tiles and buildings still to do.
+- **M4 On foot** — started: screen-relative walking/sprinting
+  (`src/entities/pedestrian.ts`), enter/exit any nearby slow car, three parked
+  cars to take. Punching and weapons still to do.
 - Next: **M2 City v1** (procedural grid city, chunking, collision).
 
 ## Layout
@@ -48,5 +59,5 @@ src/world     ground / city
 src/ui        touch controls, CSS
 tests/        vitest
 tools/        icon generator
-blender/      (M3) procedural asset scripts
+blender/      procedural asset scripts (lib/ helpers, generators/, build_assets.py)
 ```

@@ -1,13 +1,22 @@
 import type { InputSource } from '../core/input';
 
+export type ControlMode = 'foot' | 'car';
+
+export interface TouchControls {
+  /** Switch button layout; `canAct` shows the ENTER button on foot. */
+  setMode(mode: ControlMode, canAct: boolean): void;
+}
+
 /**
- * On-screen controls: a floating joystick anywhere on the left half (steer),
- * and GAS / BRAKE / HANDBRAKE buttons on the right. Plain DOM over the canvas.
- * Shown on the first touch so desktop players never see it.
+ * On-screen controls. Left half: a floating joystick (steers in a car, walks
+ * on foot; pushing it to the rim sprints). Right side: GAS / BRAKE / HAND in a
+ * car, plus an ENTER / EXIT button. Plain DOM over the canvas, shown on the
+ * first touch so desktop players never see it.
  */
-export function mountTouchControls(root: HTMLElement, out: InputSource): void {
+export function mountTouchControls(root: HTMLElement, out: InputSource): TouchControls {
   const layer = el('div', 'touch-layer');
   layer.hidden = true;
+  layer.dataset.mode = 'foot';
   const stickZone = el('div', 'stick-zone');
   const stickBase = el('div', 'stick-base');
   const stickKnob = el('div', 'stick-knob');
@@ -15,10 +24,11 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): void {
   stickZone.append(stickBase);
 
   const buttons = el('div', 'touch-buttons');
-  const hand = button('HAND', 'btn-hand');
-  const brake = button('BRAKE', 'btn-brake');
-  const gas = button('GAS', 'btn-gas');
-  buttons.append(hand, brake, gas);
+  const action = button('ENTER', 'btn-action');
+  const hand = button('HAND', 'btn-hand car-only');
+  const brake = button('BRAKE', 'btn-brake car-only');
+  const gas = button('GAS', 'btn-gas car-only');
+  buttons.append(action, hand, brake, gas);
   layer.append(stickZone, buttons);
   root.append(layer);
 
@@ -55,7 +65,11 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): void {
     }
     moveKnob(dx, dy);
     const nx = dx / RADIUS;
+    const ny = dy / RADIUS;
     out.steer = Math.abs(nx) < 0.08 ? 0 : nx;
+    out.moveX = nx;
+    out.moveY = -ny; // screen-up is positive
+    out.sprint = len >= RADIUS * 0.9;
   });
   const releaseStick = (e: PointerEvent) => {
     if (e.pointerId !== stickPointer) return;
@@ -63,7 +77,8 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): void {
     stickBase.classList.remove('active');
     stickBase.style.left = '';
     stickBase.style.top = '';
-    out.steer = 0;
+    out.steer = out.moveX = out.moveY = 0;
+    out.sprint = false;
     moveKnob(0, 0);
   };
   stickZone.addEventListener('pointerup', releaseStick);
@@ -82,6 +97,27 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): void {
   bindHold(gas, (v) => ((held.gas = v), sync()));
   bindHold(brake, (v) => ((held.brake = v), sync()));
   bindHold(hand, (v) => ((held.hand = v), sync()));
+  action.addEventListener('pointerdown', () => {
+    out.actionPresses++;
+    action.classList.add('pressed');
+  });
+  for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
+    action.addEventListener(type, () => action.classList.remove('pressed'));
+  }
+
+  return {
+    setMode(mode, canAct) {
+      if (layer.dataset.mode !== mode) {
+        layer.dataset.mode = mode;
+        // Don't carry held pedals into or out of a car.
+        held.gas = held.brake = held.hand = false;
+        sync();
+        for (const b of [gas, brake, hand]) b.classList.remove('pressed');
+      }
+      action.textContent = mode === 'car' ? 'EXIT' : 'ENTER';
+      action.classList.toggle('available', mode === 'car' || canAct);
+    },
+  };
 }
 
 function bindHold(target: HTMLElement, set: (down: boolean) => void): void {

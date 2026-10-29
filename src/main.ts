@@ -6,20 +6,26 @@ import {
   HemisphereLight,
   Scene,
   WebGLRenderer,
+  type ColorRepresentation,
 } from 'three';
 import { registerSW } from 'virtual:pwa-register';
 import { Input } from './core/input';
 import { FixedStep } from './core/loop';
+import { PLAYER_ON_FOOT, createPedState, stepPedestrian, type PedState } from './entities/pedestrian';
 import {
   SEDAN,
   createVehicleState,
+  driverDoorPosition,
   forwardSpeed,
   lerpAngle,
+  speed,
   stepVehicle,
+  type VehicleControls,
   type VehicleState,
 } from './entities/vehicle';
 import { CameraRig } from './render/cameraRig';
-import { createCarMesh } from './render/carMesh';
+import { createCarMesh, type CarMesh } from './render/carMesh';
+import { CharacterModel } from './render/characterModel';
 import { DynamicResolution } from './render/dynamicResolution';
 import { mountTouchControls } from './ui/touchControls';
 import { createGround } from './world/ground';
@@ -27,9 +33,18 @@ import { createGround } from './world/ground';
 registerSW({ immediate: true });
 
 const app = document.getElementById('app')!;
+const speedBox = document.getElementById('speed')!;
 const speedEl = document.getElementById('speed-value')!;
 const debugEl = document.getElementById('debug')!;
 const pausedEl = document.getElementById('paused')!;
+const hintEl = document.getElementById('hint')!;
+
+/** How close (m, centre to centre) you must be to get into a car. */
+const ENTER_RANGE = 4;
+/** Cars moving faster than this can't be boarded. */
+const ENTER_MAX_SPEED = 6;
+const CAMERA_FOOT = [16, 22] as const;
+const CAMERA_CAR = [26, 58] as const;
 
 // --- Renderer ---
 const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -48,25 +63,89 @@ sun.position.set(-30, 80, 20);
 scene.add(sun);
 scene.add(createGround());
 
-// --- Player car ---
-const car = createCarMesh();
-scene.add(car.root);
-const sim: VehicleState = createVehicleState(0, 0);
-const prev: VehicleState = { ...sim };
+// --- Vehicles (parked at the kerbs around the spawn intersection) ---
+interface Vehicle {
+  sim: VehicleState;
+  prev: VehicleState;
+  mesh: CarMesh;
+}
+const PARKED: Array<[x: number, z: number, heading: number, paint: ColorRepresentation]> = [
+  [5.5, -14, Math.PI, '#c8342b'],
+  [-5.5, 16, 0, '#2f6fc0'],
+  [20, 5.5, Math.PI / 2, '#d9d6cc'],
+];
+const vehicles: Vehicle[] = PARKED.map(([x, z, h, paint]) => {
+  const sim = createVehicleState(x, z, h);
+  const mesh = createCarMesh(paint);
+  scene.add(mesh.root);
+  return { sim, prev: { ...sim }, mesh };
+});
+
+// --- Player ---
+const player = {
+  ped: createPedState(9.5, 9.5, Math.PI),
+  prev: null as PedState | null,
+  model: new CharacterModel('/assets/player.glb'),
+  /** Vehicle being driven, or null when on foot. */
+  driving: null as Vehicle | null,
+};
+player.prev = { ...player.ped };
+scene.add(player.model.root);
 
 const rig = new CameraRig(window.innerWidth / window.innerHeight);
 rig.resize(window.innerWidth / window.innerHeight);
-rig.snapTo(sim.x, sim.z);
+rig.setHeights(...CAMERA_FOOT);
+rig.snapTo(player.ped.x, player.ped.z);
 
 // --- Input ---
 const input = new Input();
-mountTouchControls(document.body, input.touch);
+const touch = mountTouchControls(document.body, input.touch);
+const NO_CONTROLS: VehicleControls = { throttle: 0, steer: 0, handbrake: false };
+
+function nearestEnterable(): Vehicle | null {
+  let best: Vehicle | null = null;
+  let bestDist = ENTER_RANGE;
+  for (const v of vehicles) {
+    const d = Math.hypot(v.sim.x - player.ped.x, v.sim.z - player.ped.z);
+    if (d < bestDist && speed(v.sim) < ENTER_MAX_SPEED) {
+      best = v;
+      bestDist = d;
+    }
+  }
+  return best;
+}
+
+function enterVehicle(v: Vehicle) {
+  player.driving = v;
+  player.model.root.visible = false;
+  rig.setHeights(...CAMERA_CAR);
+}
+
+function exitVehicle() {
+  const v = player.driving!;
+  const door = driverDoorPosition(v.sim);
+  Object.assign(player.ped, { x: door.x, z: door.z, heading: v.sim.heading, vx: 0, vz: 0 });
+  Object.assign(player.prev!, player.ped);
+  player.driving = null;
+  player.model.root.visible = true;
+  rig.setHeights(...CAMERA_FOOT);
+}
 
 // --- Loop ---
 const loop = new FixedStep(1 / 60);
 let last = performance.now();
 let paused = false;
-let lastControls = input.read();
+
+function simulate(dt: number) {
+  const driving = player.driving;
+  const vehicleControls = input.readVehicle();
+  for (const v of vehicles) {
+    Object.assign(v.prev, v.sim);
+    stepVehicle(v.sim, v === driving ? vehicleControls : NO_CONTROLS, SEDAN, dt);
+  }
+  Object.assign(player.prev!, player.ped);
+  if (!driving) stepPedestrian(player.ped, input.readMove(), PLAYER_ON_FOOT, dt);
+}
 
 function frame(now: number) {
   requestAnimationFrame(frame);
@@ -75,28 +154,57 @@ function frame(now: number) {
   if (paused) return;
 
   input.pollGamepad();
-  lastControls = input.read();
+  if (input.consumeAction()) {
+    if (player.driving) exitVehicle();
+    else {
+      const v = nearestEnterable();
+      if (v) enterVehicle(v);
+    }
+  }
 
-  const alpha = loop.advance(frameSeconds, (dt) => {
-    Object.assign(prev, sim);
-    stepVehicle(sim, lastControls, SEDAN, dt);
-  });
+  const alpha = loop.advance(frameSeconds, simulate);
 
   // Interpolate render state between the last two sim steps.
-  const x = prev.x + (sim.x - prev.x) * alpha;
-  const z = prev.z + (sim.z - prev.z) * alpha;
-  car.root.position.set(x, 0, z);
-  car.root.rotation.y = lerpAngle(prev.heading, sim.heading, alpha);
-  for (const w of car.frontWheels) w.rotation.y = -lastControls.steer * 0.5;
+  const steer = player.driving ? input.readVehicle().steer : 0;
+  for (const v of vehicles) {
+    v.mesh.root.position.set(lerp(v.prev.x, v.sim.x, alpha), 0, lerp(v.prev.z, v.sim.z, alpha));
+    v.mesh.root.rotation.y = lerpAngle(v.prev.heading, v.sim.heading, alpha);
+    for (const w of v.mesh.frontWheels) w.rotation.y = v === player.driving ? -steer * 0.5 : 0;
+  }
 
-  rig.update(frameSeconds, x, z, sim.vx, sim.vz);
+  const ped = player.ped;
+  const prev = player.prev!;
+  const px = lerp(prev.x, ped.x, alpha);
+  const pz = lerp(prev.z, ped.z, alpha);
+  player.model.root.position.set(px, 0, pz);
+  player.model.root.rotation.y = lerpAngle(prev.heading, ped.heading, alpha);
+  player.model.update(frameSeconds, Math.hypot(ped.vx, ped.vz));
+
+  const nearCar = player.driving ? null : nearestEnterable();
+  touch.setMode(player.driving ? 'car' : 'foot', nearCar !== null);
+  hintEl.hidden = !nearCar || !document.querySelector('.touch-layer[hidden]');
+  hintEl.textContent = 'Press E to get in';
+
+  if (player.driving) {
+    const v = player.driving;
+    const x = v.mesh.root.position.x;
+    const z = v.mesh.root.position.z;
+    rig.update(frameSeconds, x, z, v.sim.vx, v.sim.vz);
+    speedEl.textContent = String(Math.round(Math.abs(forwardSpeed(v.sim)) * 3.6));
+  } else {
+    rig.update(frameSeconds, px, pz, ped.vx, ped.vz);
+  }
+  speedBox.hidden = !player.driving;
   renderer.render(scene, rig.camera);
 
   resolution.sample(frameSeconds);
-  speedEl.textContent = String(Math.round(Math.abs(forwardSpeed(sim)) * 3.6));
   debugEl.textContent = resolution.summary();
 }
 requestAnimationFrame(frame);
+
+function lerp(a: number, b: number, t: number) {
+  return a + (b - a) * t;
+}
 
 // --- Window / lifecycle ---
 window.addEventListener('resize', () => {
@@ -122,4 +230,4 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Debug hook for poking at the sim from the console / automated checks.
-(window as unknown as { __ub: unknown }).__ub = { sim, input };
+(window as unknown as { __ub: unknown }).__ub = { player, vehicles, input };

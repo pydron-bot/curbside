@@ -13,7 +13,8 @@
     "preview": "vite preview --host",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "icons": "node tools/make-icons.mjs"
+    "icons": "node tools/make-icons.mjs",
+    "assets": "blender -b --factory-startup -P blender/build_assets.py -- --out public/assets"
   },
   "dependencies": {
     "three": "0.186.1"

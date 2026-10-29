@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   SEDAN,
   createVehicleState,
+  driverDoorPosition,
   forwardSpeed,
   lateralSpeed,
   lerpAngle,
@@ -115,6 +116,15 @@ describe('vehicle physics', () => {
       run(b, c, 1);
     }
     expect(a).toEqual(b);
+  });
+});
+
+describe('driverDoorPosition', () => {
+  it('is on the screen-left side of a car pointing up-screen', () => {
+    const s = createVehicleState(10, 20); // heading PI = nose toward -Z
+    const door = driverDoorPosition(s);
+    expect(door.x).toBeCloseTo(10 - 1.6);
+    expect(door.z).toBeLessThan(20); // slightly toward the front
   });
 });
 
