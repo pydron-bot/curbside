@@ -31,7 +31,7 @@ On hive1 the dev server runs as the transient user unit `urban-blight-dev`
 
 ## Status
 
-- **M0 Setup** — done (pending phone check): Vite 8 + three 0.186 + TS + vite-plugin-pwa, Vitest.
+- **M0 Setup** — done, verified on a phone over Tailscale: Vite 8 + three 0.186 + TS + vite-plugin-pwa, Vitest.
 - **M1 Drive a box** — done: fixed-timestep loop with render interpolation,
   arcade car physics (`src/entities/vehicle.ts`, pure + unit-tested),
   speed-zoom chase camera, keyboard/touch/gamepad input, placeholder road-grid
