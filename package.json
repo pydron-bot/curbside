@@ -1,5 +1,5 @@
 {
-  "name": "urban-blight",
+  "name": "curbside",
   "version": "0.1.0",
   "private": true,
   "description": "Top-down open-world crime/driving game for the browser (PWA, three.js).",

@@ -1,8 +1,10 @@
-# Urban Blight
+# Curbside
+
+_Formerly "Urban Blight" (renamed 2026-10-29; other games already use that name)._
 
 Top-down open-world crime/driving game for the browser — three.js, TypeScript,
 Vite, installable as a PWA. Full plan: `PLAN.md` in the Google Drive folder
-*GameDev / Urban Blight* (Drive holds the plan and art; code lives here).
+*GameDev / Urban Blight* (the Drive folder keeps the old name; Drive holds the plan and art; code lives here).
 
 ## Run
 
@@ -17,9 +19,10 @@ npm run icons        # regenerate PWA icons
 npm run assets       # rebuild GLBs from blender/ (needs `blender` on PATH; add `-- --thumbs` for previews)
 ```
 
-On hive1 the dev server runs as the transient user unit `urban-blight-dev`
-(`systemctl --user status|restart|stop urban-blight-dev`); open
-`http://hive1:5173` from a phone on the tailnet.
+On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on boot;
+`systemctl --user status|restart|stop curbside-dev`). Open
+`https://hive1.tail078432.ts.net:8443` (tailscale serve → :5173) or
+`http://hive1:5173` from a device on the tailnet.
 
 ## Controls
 

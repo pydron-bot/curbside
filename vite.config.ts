@@ -17,8 +17,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['icons/*.png', 'icons/*.svg'],
       manifest: {
-        name: 'Urban Blight',
-        short_name: 'Urban Blight',
+        name: 'Curbside',
+        short_name: 'Curbside',
         description: 'Top-down open-world crime and driving.',
         display: 'fullscreen',
         orientation: 'landscape',
