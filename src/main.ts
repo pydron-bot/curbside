@@ -28,6 +28,15 @@ import { createCarMesh, type CarMesh } from './render/carMesh';
 import { CharacterModel } from './render/characterModel';
 import { DynamicResolution } from './render/dynamicResolution';
 import { mountTouchControls } from './ui/touchControls';
+import {
+  collidePedStatic,
+  collidePedVehicle,
+  collideVehicleStatic,
+  collideVehicles,
+} from './systems/physics';
+import { generateCity } from './world/city';
+import { createCityMesh } from './world/cityMesh';
+import { StaticGrid } from './world/collision';
 import { createGround } from './world/ground';
 
 registerSW({ immediate: true });
@@ -61,6 +70,9 @@ const sun = new DirectionalLight('#fff1d6', 1.6);
 sun.position.set(-30, 80, 20);
 scene.add(sun);
 scene.add(createGround());
+const city = generateCity(1337);
+const collision = new StaticGrid(city.obstacles);
+scene.add(createCityMesh(city));
 
 // --- Vehicles (parked at the kerbs around the spawn intersection) ---
 interface Vehicle {
@@ -161,6 +173,16 @@ function simulate(dt: number) {
   }
   Object.assign(player.prev!, player.ped);
   if (!driving) stepPedestrian(player.ped, input.readMove(), PLAYER_ON_FOOT, dt);
+
+  for (const v of vehicles) collideVehicleStatic(v.sim, collision);
+  for (let i = 0; i < vehicles.length; i++) {
+    for (let j = i + 1; j < vehicles.length; j++) collideVehicles(vehicles[i].sim, vehicles[j].sim);
+  }
+  if (!driving) {
+    for (const v of vehicles) collidePedVehicle(player.ped, v.sim);
+    // Static last so a car can't shove the player into a wall.
+    collidePedStatic(player.ped, collision);
+  }
 }
 
 function frame(now: number) {
@@ -241,4 +263,4 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Debug hook for poking at the sim from the console / automated checks.
-(window as unknown as { __ub: unknown }).__ub = { player, vehicles, input };
+(window as unknown as { __ub: unknown }).__ub = { player, vehicles, input, city };
