@@ -16,6 +16,7 @@ _Plan written 2026-10-29 as "Urban Blight"; renamed **Curbside** the same day (o
 | M3 | Blender pipeline | 🟡 Characters + 5 vehicle archetypes; road tiles / building kit to do |
 | M4 | On foot | ✅ Walk/sprint, enter/exit, carjacking, punching (weapons → later) |
 | M5 | Living city | ✅ Traffic, pedestrians, damage → smoke → fire → explosion, wrecks (polish: traffic lights, AI reacting to hits) |
+| + | Chaos score | ✅ Combo-chained points for drifts, near misses, smashes, knockouts, carjacks, explosions; best score saved |
 | M6–M8 | Heat, Missions & HUD, Ship | ⬜ Not started |
 
 **Where it runs:** code at `~/dev/curbside` on hive1 (git, pushed to `pydron-bot/curbside`). Dev server is the `curbside-dev` user service; play at `https://hive1.tail078432.ts.net:8443` (tailnet only). Drive keeps this plan and any source art.

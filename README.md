@@ -71,6 +71,10 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
   charred wreck; blasts damage/shove cars and knock people down; NPC
   drivers bail out of burning cars; your own car throws you clear.
 - **Punching**: knocks down whoever is in front, scares bystanders.
+- **Chaos score** (`src/systems/score.ts`, `src/ui/scoreHud.ts`): drifts,
+  near misses, smashes, hit-and-runs, knockouts, carjacks and explosions
+  score points; anything within 3 s of the last event raises a ×2…×10
+  combo. Best score is kept in localStorage (`curbside.best`).
 - Next: **M6 Heat** (wanted level, police).
 
 ## Layout

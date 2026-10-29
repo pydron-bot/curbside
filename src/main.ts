@@ -20,6 +20,7 @@ import {
   createVehicleState,
   driverDoorPosition,
   forwardSpeed,
+  lateralSpeed,
   lerpAngle,
   speed,
   stepVehicle,
@@ -48,7 +49,9 @@ import {
   collideVehicleStatic,
   collideVehicles,
 } from './systems/physics';
+import { Score, type Award } from './systems/score';
 import { driveAi, type Obstacle } from './systems/traffic';
+import { ScoreHud, loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
 import { generateCity } from './world/city';
 import { createCityMesh } from './world/cityMesh';
@@ -75,6 +78,11 @@ const CAMERA_CAR = [26, 58] as const;
 const BLAST_RADIUS = 9;
 const PUNCH_RANGE = 1.5;
 const PUNCH_COOLDOWN = 0.4;
+/** Passing this close (centre to centre) at speed without touching is a near miss. */
+const NEAR_MISS_DIST = 3.4;
+const NEAR_MISS_SPEED = 10;
+/** Explosions further than this from the player don't score. */
+const BOOM_SCORE_RANGE = 60;
 
 // --- Renderer ---
 const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -191,6 +199,14 @@ fitToScreen();
 rig.setHeights(...CAMERA_FOOT);
 rig.snapTo(player.ped.x, player.ped.z);
 
+// --- Score ---
+const score = new Score(loadBest());
+const scoreHud = new ScoreHud(document.body, score);
+const award = (a: Award | null) => a && scoreHud.pop(a);
+/** Sim time each vehicle last earned a near miss, so one pass scores once. */
+const nearMissAt = new Map<Vehicle, number>();
+let simTime = 0;
+
 // --- Input ---
 const input = new Input();
 const touch = mountTouchControls(document.body, input.touch);
@@ -221,7 +237,10 @@ function ejectDriver(v: Vehicle, fromX: number, fromZ: number) {
 
 function enterVehicle(v: Vehicle) {
   // Carjack: the driver is thrown out and runs for it.
-  if (v.ai) ejectDriver(v, player.ped.x, player.ped.z);
+  if (v.ai) {
+    ejectDriver(v, player.ped.x, player.ped.z);
+    award(score.award('carjack'));
+  }
   player.driving = v;
   player.model.root.visible = false;
   rig.setHeights(...CAMERA_CAR);
@@ -271,16 +290,46 @@ function simulate(dt: number) {
   const states = vehicleStates();
   for (const c of population.crowd) {
     Object.assign(c.prev, c.agent.s);
+    const wasDown = c.agent.mode === 'down';
     stepCrowdPed(c.agent, states, rand, dt);
+    // Knocked over by the player's car?
+    if (!wasDown && c.agent.mode === 'down' && driving) {
+      if (Math.hypot(driving.sim.x - c.agent.s.x, driving.sim.z - c.agent.s.z) < 5) award(score.award('hitAndRun'));
+    }
   }
 
   // --- Collisions ---
   for (const v of vehicles) applyDamage(v.damage, impactDamage(collideVehicleStatic(v.sim, collision)));
   for (let i = 0; i < vehicles.length; i++) {
     for (let j = i + 1; j < vehicles.length; j++) {
-      const hit = impactDamage(collideVehicles(vehicles[i].sim, vehicles[j].sim));
+      const impact = collideVehicles(vehicles[i].sim, vehicles[j].sim);
+      const hit = impactDamage(impact);
       applyDamage(vehicles[i].damage, hit);
       applyDamage(vehicles[j].damage, hit);
+      if (driving && impact > 6 && (vehicles[i] === driving || vehicles[j] === driving)) {
+        award(score.award('smash', Math.round(impact * 4)));
+        // A hit isn't a near miss.
+        nearMissAt.set(vehicles[i] === driving ? vehicles[j] : vehicles[i], simTime);
+      }
+    }
+  }
+
+  // --- Stunt scoring ---
+  simTime += dt;
+  score.step(dt);
+  if (driving && !driving.damage.wrecked) {
+    const ds = driving.sim;
+    award(score.drift(Math.abs(lateralSpeed(ds)), speed(ds), dt));
+    if (speed(ds) > NEAR_MISS_SPEED) {
+      for (const v of vehicles) {
+        if (v === driving || v.damage.wrecked) continue;
+        const d = Math.hypot(v.sim.x - ds.x, v.sim.z - ds.z);
+        if (d > NEAR_MISS_DIST || d < 2.05) continue;
+        if (Math.hypot(v.sim.vx - ds.vx, v.sim.vz - ds.vz) < NEAR_MISS_SPEED) continue;
+        if (simTime - (nearMissAt.get(v) ?? -99) < 2.5) continue;
+        nearMissAt.set(v, simTime);
+        award(score.award('nearMiss'));
+      }
     }
   }
 
@@ -307,7 +356,9 @@ function explode(source: Vehicle) {
   charVehicle(source);
   source.wreckAge = 0;
   const focus = player.driving ? player.driving.sim : player.ped;
-  rig.shake(Math.max(0, 2.5 - Math.hypot(focus.x - x, focus.z - z) / 30));
+  const distance = Math.hypot(focus.x - x, focus.z - z);
+  rig.shake(Math.max(0, 2.5 - distance / 30));
+  if (distance < BOOM_SCORE_RANGE) award(score.award('boom'));
 
   if (player.driving === source) {
     // Thrown clear of your own car.
@@ -348,7 +399,10 @@ function tryPunch() {
     const dx = c.agent.s.x - x;
     const dz = c.agent.s.z - z;
     const d = Math.hypot(dx, dz);
-    if (d < PUNCH_RANGE && (dx * fx + dz * fz) / (d || 1) > 0.4) knockDown(c.agent, x, z);
+    if (d < PUNCH_RANGE && (dx * fx + dz * fz) / (d || 1) > 0.4 && c.agent.mode !== 'down') {
+      knockDown(c.agent, x, z);
+      award(score.award('knockout'));
+    }
     else if (d < 10) scare(c.agent, x, z, 3);
   }
 }
@@ -422,6 +476,7 @@ function frame(now: number) {
     }
   }
   effects.update(frameSeconds);
+  scoreHud.update();
 
   const nearCar = player.driving ? null : nearestEnterable();
   touch.setMode(player.driving ? 'car' : 'foot', nearCar !== null);
@@ -469,4 +524,4 @@ window.addEventListener('keydown', (e) => {
 });
 
 // Debug hook for poking at the sim from the console / automated checks.
-(window as unknown as { __ub: unknown }).__ub = { player, vehicles, input, city, population, renderer };
+(window as unknown as { __ub: unknown }).__ub = { player, vehicles, input, city, population, renderer, score };
