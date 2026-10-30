@@ -271,6 +271,17 @@ describe('throws', () => {
     expect(w.combat.marker.z).toBeLessThan(6);
     expect(w.combat.fire(aim)).toBe(true);
     expect(w.log.find((e) => e.type === 'throw')).toMatchObject({ toZ: w.combat.marker.z });
+    // Right up against it, the throw would land at your own feet: it doesn't go.
+    w.step(1);
+    const thrown = w.log.filter((e) => e.type === 'throw').length;
+    const left = w.player.arsenal.ammo.get('grenade');
+    w.player.ped.z = 5.5;
+    w.combat.updateAim(false, aim);
+    expect(w.combat.marker.blocked).toBe(true);
+    expect(w.combat.fire(aim)).toBe(false);
+    expect(w.log.filter((e) => e.type === 'throw')).toHaveLength(thrown);
+    expect(w.player.arsenal.ammo.get('grenade')).toBe(left);
+    w.player.ped.z = 0;
     // Turned away from it, the throw is clear.
     aim.heading = Math.PI;
     w.combat.updateAim(false, aim);

@@ -257,7 +257,8 @@ after 3 m and blow up on the first thing they touch (75 m max); their
 lock-on and aim assist ignore anything within 8 m (inside their own blast). While a
 grenade or molotov is in hand, a landing ring and a dotted arc show
 where it will land, 1 m short of any wall on the way (`clampThrowToWalls`:
-it would bounce back off it; the ring turns red when a wall cuts it short) (a touch tap on FIRE throws right there). On touch
+it would bounce back off it; the ring turns red when a wall cuts it short,
+and a throw a wall would drop within 3 m of your own feet doesn't go) (a touch tap on FIRE throws right there). On touch
 the aim stick only aims a throwable (it never auto-fires one): let go to
 throw where the ring is, or slide back to the centre first to cancel.
 

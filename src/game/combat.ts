@@ -33,7 +33,7 @@ import {
   type BlastKind,
 } from '../systems/damage';
 import { CAR_CIRCLE_OFFSETS, CAR_CIRCLE_RADIUS, carCircles } from '../systems/physics';
-import { FIRE_RADIUS, Projectiles, clampThrowToWalls, throwTarget, type ProjectileWorld } from '../systems/projectiles';
+import { FIRE_RADIUS, MIN_THROW, Projectiles, clampThrowToWalls, throwTarget, type ProjectileWorld } from '../systems/projectiles';
 import type { Award, Score } from '../systems/score';
 import {
   DRIVE_BY_SPREAD,
@@ -322,10 +322,12 @@ export class Combat {
 
   private throwIt(kind: 'grenade' | 'molotov', aim: AimInput): boolean {
     const p = this.d.player;
+    const { x, z } = p.ped;
+    const blocked = this.throwPoint(WEAPONS[kind].range, aim, this.target);
+    // Hugging a wall and throwing into it would drop it at your own feet: no throw (the ring shows red there).
+    if (blocked && Math.hypot(this.target.x - x, this.target.z - z) < MIN_THROW) return false;
     if (!p.arsenal.tryFire()) return false;
     this.sinceShot = 0;
-    const { x, z } = p.ped;
-    this.throwPoint(WEAPONS[kind].range, aim, this.target);
     p.ped.heading = Math.atan2(this.target.x - x, this.target.z - z);
     this.d.pose?.punch(1);
     this.projectiles.throw(kind, x, z, this.target.x, this.target.z, true);
