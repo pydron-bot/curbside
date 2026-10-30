@@ -50,7 +50,7 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 Settings (title or pause menu): master / effects / music volume, sound with
 the iPhone silent switch on, graphics quality, touch steering
 (point / classic), left-handed layout (mirrors the controls and the HUD),
-vibration, show FPS.
+vibration, perf overlay (Off / FPS / Full).
 
 ## Status
 

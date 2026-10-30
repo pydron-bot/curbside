@@ -76,27 +76,33 @@ small vehicles; SMASH and bike HIT & RUN only when the player did the
 ramming (head-ons still count); a build id in Settings and on the pause card;
 the screen stays awake while playing; GLBs get precache revisions, so an
 installed app picks up new art; stored settings are sanitised at boot.
+Then: frame-time stats (fps, p50/p95/p99/max, hitches/min, JS p95) and a
+Settings → Perf overlay choice (Off / FPS / Full; `?debug` forces Full)
+[`perf-overlay` and `overlay-in-app`, minus `DynamicResolution.state()`, a
+third overlay line and the DIAGNOSTICS button, which go with `diag-report`];
+crowd members well off-screen aren't posed [`pose-offscreen`]; small
+instance buffers upload whole and empty car batches not at all
+[`upload-ranges`]; car batches share one precompiled shadow-depth material
+[`shadow-depth-flip`]; the Old Town race no longer runs into the back of a
+stunt ramp, with a test for every course; asset builds run under pip `bpy`
+[`toolchain-bpy`].
 
-1. **Diagnostics for the device pass** (cloud, ~1 session): frame-time
-   percentiles and a fuller overlay — today's FPS readout shows 0 or a stale
-   value most of the time [`perf-overlay`]; overlay reachable in the
-   home-screen app [`overlay-in-app`]; a persisted session log with a
-   Share/Copy diagnostics report [`diag-report`]; haptics / rumble / pad
-   probes [`input-probes`]; optionally live touch tuning [`touch-tuning`].
-   With it, the cheap perf fixes that also help JavaScriptCore:
-   [`pose-offscreen`], [`upload-ranges`], [`shadow-depth-flip`].
+1. **Diagnostics for the device pass** (cloud, ~half a session): a
+   persisted session log with a Share/Copy diagnostics report and a
+   DIAGNOSTICS button on the pause card [`diag-report`]; haptics / rumble /
+   pad probes [`input-probes`]; optionally live touch tuning
+   [`touch-tuning`].
 2. **Real-device pass on an iPhone 15 Pro** (the user, ~1.5–2 h): follow
    [`device-checklist`] and send back the diagnostics report. Decide on
    [`update-reloads-midrun`] first (an update can reload mid-run on any app
    switch, which will bite during the session).
 3. **Play telemetry and races** (cloud): local play log [`tune-telemetry`];
-   the Old Town race leg runs into the back of a stunt ramp, add the
-   bot-vs-dev-time and ramp-on-course tests [`tune-race-dev-times`]; commit
+   the bot-vs-dev-time test [`tune-race-dev-times`]; reset nitro at a race
+   start (needs `nitro` in ProgressDeps and a call: empty or `NITRO_START`); commit
    the `__ub` bot harnesses [`tune-chaos-medals`, `tune-five-star-escape`].
    Re-tune medals and 5-star escape only from logged real play.
 4. **Blender adjustment pass** (cloud): the pip `bpy` 5.2.3 module rebuilds
-   every committed GLB to 1 ULP headless, after a one-line `import bpy` in
-   `build_assets.py` [`toolchain-bpy`]. Then: fly the `rocket` model
+   every committed GLB headless (recipe in `docs/BLENDER_TODO.md`). Then: fly the `rocket` model
    [`rocket-projectile`], GetUp/Throw timing [`clips-getup-throw`], held
    weapons [`weapons-held`], cop badge / backpack / Pike / pigeons
    [`characters-looks`], rooftop tops, lamp and signal heads, police sign,
@@ -123,10 +129,10 @@ installed app picks up new art; stored settings are sanitised at boot.
    [`online-leaderboard`].
 
 Smaller bugs found on the way (details in BACKLOG.md): the Chaos Run result
-can show less than the HUD did in its last second; races don't reset nitro;
+can show less than the HUD did in its last second;
 the radar's district tint doesn't match the real districts; README still
-describes an `AnimationMixer` that's gone; `check_assets.py` lacks the
-`badge` slot; muzzle flashes sit at grip height.
+describes an `AnimationMixer` that's gone; muzzle flashes sit at grip
+height.
 
 ## Working conventions that worked
 
