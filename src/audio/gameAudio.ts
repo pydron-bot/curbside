@@ -346,7 +346,8 @@ export class GameAudio {
     if (!this.ctx) this.unlock();
     const ctx = this.ctx;
     if (!ctx) return;
-    if (ctx.state !== 'running') {
+    if (ctx.state !== 'running' || !this.bank) {
+      // Plays once the context is running and the graph is built.
       this.pendingUi = kind;
       this.wake();
       return;
@@ -537,13 +538,16 @@ export class GameAudio {
     const ctx = this.ctx;
     // 'interrupted' (iOS: a call, Siri) or an unexpected 'suspended' is resumed by the next gesture.
     if (!ctx || ctx.state !== 'running') return;
-    if (this.pendingUi) {
-      const kind = this.pendingUi;
-      this.pendingUi = null;
-      this.ui(kind);
-    }
+    this.flushPendingUi();
     if (this.paused) this.armPauseSuspend();
   };
+
+  private flushPendingUi(): void {
+    if (!this.pendingUi || !this.bank || this.ctx?.state !== 'running') return;
+    const kind = this.pendingUi;
+    this.pendingUi = null;
+    this.ui(kind);
+  }
 
   private readonly tick = (): void => {
     const ctx = this.ctx;
@@ -573,17 +577,44 @@ export class GameAudio {
     this.ctx = ctx;
     applyAudioSession(settings);
     this.kick(ctx);
-    try {
-      this.build(ctx);
-    } catch (err) {
-      console.warn('Audio unavailable:', err);
-      this.failed = true;
-      this.ctx = null;
-      ctx.close().catch(() => {});
-      return;
-    }
     ctx.addEventListener('statechange', this.onStateChange);
-    this.tickHandle = window.setInterval(this.tick, 25);
+    this.buildSoon(ctx);
+  }
+
+  /**
+   * Only the unlock has to happen inside the gesture. Generating noise, the
+   * reverb impulse and the graph takes ~20 ms, so it runs in separate tasks
+   * after the handler returns: the first touch doesn't drop frames.
+   */
+  private buildSoon(ctx: AudioContext): void {
+    let bank: NoiseBank | null = null;
+    let impulse: AudioBuffer | null = null;
+    const stages = [
+      () => (bank = new NoiseBank(ctx)),
+      () => (impulse = makeImpulse(ctx)),
+      () => this.build(ctx, bank!, impulse!),
+    ];
+    let i = 0;
+    const next = () => {
+      if (this.ctx !== ctx) return; // disposed meanwhile
+      try {
+        stages[i++]();
+      } catch (err) {
+        console.warn('Audio unavailable:', err);
+        this.failed = true;
+        this.ctx = null;
+        this.bank = null;
+        ctx.close().catch(() => {});
+        return;
+      }
+      if (i < stages.length) {
+        window.setTimeout(next, 0);
+        return;
+      }
+      this.tickHandle = window.setInterval(this.tick, 25);
+      this.flushPendingUi();
+    };
+    window.setTimeout(next, 0);
   }
 
   /** iOS only truly unlocks once something has played inside the gesture: a one-sample silent buffer. */
@@ -615,10 +646,7 @@ export class GameAudio {
     }, PAUSE_SUSPEND_MS);
   }
 
-  private build(ctx: AudioContext): void {
-    const bank = (this.bank = new NoiseBank(ctx));
-    const impulse = makeImpulse(ctx);
-
+  private build(ctx: AudioContext, bank: NoiseBank, impulse: AudioBuffer): void {
     // Glue compression, then a limiter so a pile-up of booms can't clip.
     const glue = ctx.createDynamicsCompressor();
     glue.threshold.value = -20;
@@ -671,6 +699,8 @@ export class GameAudio {
       this.muffleDip.hold(600);
       this.worldMuffle.frequency.value = 600;
     }
+    // Last: `bank` marks the graph as ready for everything else.
+    this.bank = bank;
     this.applySettings(settings);
   }
 

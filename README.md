@@ -113,7 +113,9 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
 
 - **Unlock and lifecycle.** One `AudioContext`, created on the first
   tap / click / key (iOS needs a user gesture; a one-sample silent buffer
-  completes the unlock). Interrupted or suspended contexts
+  completes the unlock). Only that happens inside the gesture handler: noise
+  buffers, the reverb impulse and the graph are built in the next few tasks,
+  so the first touch doesn't drop frames. Interrupted or suspended contexts
   resume on the next gesture. A hidden page suspends it; pausing silences the
   world and muffles the music (UI sounds still play), and 45 s of pause
   suspends it to save battery. Master volume at 0 keeps the context
