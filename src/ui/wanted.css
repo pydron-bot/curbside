@@ -230,21 +230,18 @@ body:has(#radio.in) #wanted {
   background: #4f8bff;
 }
 
-/* The fine: only on the BUSTED screen. */
+/* What the life cost: points (BUSTED only) and cash (wastedScreen.ts hides
+   the rows with nothing to show; the global [hidden] rule beats .ws-row's flex). */
 .ws-fine {
-  display: none;
-}
-
-#wasted.busted .ws-fine {
-  display: flex;
   animation-delay: 0.95s;
 }
 
-#wasted.busted .ws-fine[hidden] {
-  display: none;
+.ws-bill {
+  animation-delay: 1.05s;
 }
 
-#wasted.busted .ws-fine b {
+.ws-fine b,
+.ws-bill b {
   color: #ff6b7d;
 }
 

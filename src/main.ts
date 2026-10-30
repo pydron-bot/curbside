@@ -290,6 +290,7 @@ const heat = new Heat({
   pay: (cost) => progress.payRespray(cost),
   // A race or Chaos Run 3-2-1 holds the car: no bust while it can't move.
   held: () => progress.holdControls,
+  bustFine: () => progress.bustShare(),
 });
 addHeatLook(look, heat);
 

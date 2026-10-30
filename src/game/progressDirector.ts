@@ -39,6 +39,7 @@ import { RaceMode } from './modes/raceMode';
 import { RACES, formatRaceTime } from './modes/races';
 import { SHOP_ITEMS, TOUGH_SKIN_HEALTH, canBuy, sprayPrice } from './modes/shop';
 import { TaxiMode } from './modes/taxiMode';
+import { BUST_FINE } from './heat';
 import { MAX_ARMOUR, MAX_HEALTH } from './player';
 import type { Vehicle } from './population';
 import { Progress, bustFine, hospitalBill } from './progress';
@@ -364,6 +365,15 @@ export class ProgressDirector implements ModeCtx {
     }
   }
 
+  /**
+   * The share of the score a bust takes. A Chaos Run's bust takes none: being
+   * cut short is the cost (as WASTED), and its results card and recorded best
+   * must add up to the breakdown.
+   */
+  bustShare(): number {
+    return this.chaos.active ? 0 : BUST_FINE;
+  }
+
   /** WASTED or BUSTED: the open chain is lost, and the bill comes. */
   private lifeLost(busted: boolean): void {
     if (!this.deps.playing()) return;
@@ -373,6 +383,8 @@ export class ProgressDirector implements ModeCtx {
     const due = busted ? bustFine(cash) : hospitalBill(cash);
     const taken = this.progress.charge(due, busted ? 'fine' : 'hospital');
     if (taken > 0) this.notice(busted ? `FINE −$${fmt(taken)}` : `HOSPITAL −$${fmt(taken)}`, 'lost');
+    // On the card too, beside the points: two different "fines" need their units.
+    this.deps.hud.wastedBill(busted ? 'CASH FINE' : 'HOSPITAL', taken);
     this.progress.flush();
   }
 

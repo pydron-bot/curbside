@@ -74,6 +74,8 @@ export interface HeatDeps {
   pay?(cost: number): boolean;
   /** The game is holding the player's car still (a 3-2-1): no bust meanwhile. */
   held?(): boolean;
+  /** The share of the score a bust takes (default BUST_FINE). */
+  bustFine?(): number;
 }
 
 export class Heat {
@@ -358,7 +360,7 @@ export class Heat {
 
   /** BUSTED: a cut of the score, weapons gone, heat cleared, the police stand down. */
   private arrest(): void {
-    const fine = this.deps.score.fine(BUST_FINE);
+    const fine = this.deps.score.fine(this.deps.bustFine?.() ?? BUST_FINE);
     if (!this.deps.player.arrest(fine)) return;
     this.wanted.clear('busted');
     this.police.standDown();

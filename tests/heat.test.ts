@@ -26,7 +26,7 @@ const DT = 1 / 60;
 const city = generateCity(1337);
 const grid = new StaticGrid(city.obstacles);
 
-function world(seed = 3, x = 9.5, z = 9.5, held?: () => boolean) {
+function world(seed = 3, x = 9.5, z = 9.5, held?: () => boolean, bustFine?: () => number) {
   const bus = new EventBus();
   const log: GameEvent[] = [];
   bus.onAny((e) => log.push(e));
@@ -86,6 +86,7 @@ function world(seed = 3, x = 9.5, z = 9.5, held?: () => boolean) {
     npcShoot: () => shots.push(1),
     repaint: () => {},
     held,
+    bustFine,
   });
   population.maintain({ x, z, vx: 0, vz: 0, view: updateView(), keep: [], seed: true });
 
@@ -197,6 +198,15 @@ describe('heat: police response', () => {
     expect(w.score.total).toBe(750);
     expect(w.player.arsenal.current).toBeNull();
     expect(w.heat.police.units.every((u) => u.dismissed)).toBe(true);
+  });
+
+  it('a bust can take no points (a Chaos Run: being cut short is the cost)', () => {
+    const w = world(7, 9.5, 9.5, undefined, () => 0);
+    w.score.total = 3750;
+    w.heat.wanted.force(2);
+    w.runUntil(() => w.player.arrested, 90);
+    expect(w.log.find((e) => e.type === 'busted')).toMatchObject({ fine: 0 });
+    expect(w.score.total).toBe(3750);
   });
 
   it('officers cuff someone lying on the ground rather than shoot them, even at 3 stars', () => {
