@@ -85,6 +85,12 @@ const PAD_LT = 6;
 const PAD_RT = 7;
 const PAD_START = 9;
 const PAD_BUTTONS = 17;
+/**
+ * How far the sticks/triggers must move (summed) to count as using the pad.
+ * Measured from where they were last time, so a drifting stick resting off
+ * centre doesn't keep claiming the player is on the pad.
+ */
+const PAD_ACTIVITY = 0.25;
 
 /** Keys that are "held actions" rather than movement: cleared on a foot/car switch. */
 const ACTION_KEYS = ['Space', 'KeyJ'];
@@ -109,9 +115,12 @@ export class Input {
   private readonly stick = { x: 0, y: 0 };
   private readonly vehicleOut: VehicleControls = { steer: 0, throttle: 0, handbrake: false };
   private readonly moveOut: MoveInput = { x: 0, y: 0, sprint: false };
-  private device: InputDevice = 'keyboard';
+  /** Stick and trigger readings when the pad last counted as in use. */
+  private readonly padAnchor = { x: 0, y: 0, throttle: 0 };
+  private device: InputDevice;
 
   constructor(target: Window = window) {
+    this.device = initialDevice(target);
     target.addEventListener('keydown', (e) => {
       this.device = 'keyboard';
       if (isGameKey(e.code)) e.preventDefault();
@@ -230,7 +239,15 @@ export class Input {
     g.throttle = (pad.buttons[PAD_RT]?.value ?? 0) - (pad.buttons[PAD_LT]?.value ?? 0);
     if (Math.abs(g.throttle) < 0.05) g.throttle = 0;
 
-    let active = this.stick.x !== 0 || this.stick.y !== 0 || g.throttle !== 0;
+    const anchor = this.padAnchor;
+    let active =
+      Math.abs(this.stick.x - anchor.x) + Math.abs(this.stick.y - anchor.y) + Math.abs(g.throttle - anchor.throttle) >
+      PAD_ACTIVITY;
+    if (active) {
+      anchor.x = this.stick.x;
+      anchor.y = this.stick.y;
+      anchor.throttle = g.throttle;
+    }
     const n = Math.min(PAD_BUTTONS, pad.buttons.length);
     for (let i = 0; i < n; i++) {
       const raw = pad.buttons[i]?.pressed ?? false;
@@ -239,7 +256,7 @@ export class Input {
       const edge = down && !this.padWasDown[i];
       this.padWasDown[i] = down;
       if (!down) continue;
-      active = true;
+      if (edge) active = true;
       if (i === PAD_A) g.handbrake = g.sprint = true;
       else if (i === PAD_X) g.fireHeld = true;
       if (!edge) continue;
@@ -320,6 +337,18 @@ export class Input {
       s[key] = 0;
     }
     return n;
+  }
+}
+
+/**
+ * Phones and tablets start on touch, so a prompt shown before the first tap
+ * (paused by an app switch straight after launch) talks about tapping.
+ */
+function initialDevice(target: Window): InputDevice {
+  try {
+    return target.matchMedia?.('(pointer: coarse)').matches ? 'touch' : 'keyboard';
+  } catch {
+    return 'keyboard';
   }
 }
 

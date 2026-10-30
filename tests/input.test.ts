@@ -159,6 +159,31 @@ describe('input', () => {
     expect(input.consumePause()).toBe(1);
   });
 
+  it('starts on touch on phones and tablets (prompts before the first tap)', () => {
+    const { win } = fakeWindow();
+    expect(new Input(win).lastDevice).toBe('keyboard');
+    const coarse = Object.assign(win, { matchMedia: (q: string) => ({ matches: q === '(pointer: coarse)' }) });
+    expect(new Input(coarse).lastDevice).toBe('touch');
+  });
+
+  it('a drifting stick does not steal the prompts from the keyboard', () => {
+    const { win, send } = fakeWindow();
+    const input = new Input(win);
+    const pad = fakePad();
+    usePad(pad);
+    pad.axes[0] = 0.6; // pushed: the pad is in use
+    input.pollGamepad();
+    expect(input.lastDevice).toBe('gamepad');
+    pad.axes[0] = 0.3; // let go, but it rests off centre
+    input.pollGamepad();
+    send('keydown', { code: 'KeyW' });
+    for (let i = 0; i < 10; i++) input.pollGamepad();
+    expect(input.lastDevice).toBe('keyboard');
+    pad.buttons[0].pressed = true; // a real press takes it back
+    input.pollGamepad();
+    expect(input.lastDevice).toBe('gamepad');
+  });
+
   it('uses a rescaled radial deadzone on the stick', () => {
     const { win } = fakeWindow();
     const input = new Input(win);
