@@ -825,7 +825,9 @@ and every new program is compiled behind the current frame.
   mailboxes, payphones; busiest downtown), dumpsters at alley mouths,
   bollards round plazas, park trees by district (round, tall, palms);
   rooftop kit fitted to the building plans (AC units, vents, water tanks,
-  dishes, stair huts, antennas with a blinking tip); spray booths with
+  dishes, stair huts, antennas with a blinking tip; the huts' and tanks'
+  near-black caps are recoloured until the GLB changes, see
+  `propModels.ts: PART_COLOURS`); spray booths with
   their mouth to the street (the roof opens while you're inside), the
   export bay, the police sign and the safehouse door on their walls (both
   lamps glow at night), race-start gantries with barriers and cones, ramp
@@ -844,7 +846,10 @@ and every new program is compiled behind the current frame.
   uniform; the lit lens throws a glow and, at night, its colour on the
   lanes. AI traffic stops for red, and for amber it can stop for, and
   queues behind; panicking and urgent drivers (police, emergency calls)
-  run them.
+  run them. Drivers see a long vehicle as a point per body circle
+  (`traffic.ts: vehicleObstacles`), and a long driver keeps its gap from
+  its own nose, so a bus or fire truck in a queue neither rams the car
+  ahead nor gets driven into.
 - **Pickups, tokens, debris**: pickups are the pickups.glb models (drawn
   ×1.7 so they read from the camera) with their rings and bob; frenzy
   tokens spin and bob in the frenzy's colour; an explosion throws a run of
@@ -858,15 +863,17 @@ and every new program is compiled behind the current frame.
   Traffic mixes them in by `TRAFFIC_MIX` (buses, limos, the trucks and the
   vans are rare), taxis, ambulances, fire trucks and the rest in their
   livery. Half the ambulances and fire trucks are on a call: lights,
-  siren, 17 m/s, and traffic pulls over for them as for the police. The
-  ice cream van plays its jingle every 9 s within 70 m.
+  siren, 17 m/s, and traffic pulls over for them as for the police (take
+  one and its lights go off). The ice cream van plays its jingle every 9 s
+  within 70 m.
 - **Two-wheelers**: the scooter and the police bike get off the line and
   turn quicker than a car, lean into turns (`bikeLean`, from the sideways
   pull; upright in the air), and carry a rider (`CharacterModel.riding`
   plays `Ride`, seated on the model's `<arch>_seat`). An impact over
-  8 m/s throws the rider over the bars (knocked flat, hurt if it's you)
-  and leaves the bike on its side, scraping to a stop; whoever gets on
-  stands it up. A scooter is parked at the spawn corner and a few ride
+  8 m/s throws the rider over the bars (knocked flat, hurt if it's you;
+  a hit-and-run if your car did it) and leaves the bike on its side,
+  scraping to a stop; whoever gets on stands it up. A police bike's light
+  flare and road wash are bike-sized. A scooter is parked at the spawn corner and a few ride
   in traffic.
 - **Police helicopter** (`render/heliModel.ts`): heli.glb as one mesh, one
   draw call and no shadow pass (the shadow and the searchlight pool on the

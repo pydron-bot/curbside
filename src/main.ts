@@ -475,8 +475,12 @@ function boardVehicle(v: Vehicle) {
     events.emit({ type: 'carjack', x: v.sim.x, z: v.sim.z });
     award(score.award('carjack'));
   }
-  // A bike on its side is stood back up.
+  // A bike on its side is stood back up; an ambulance or fire truck taken off its call goes dark.
   v.tipped = false;
+  if (v.emergency) {
+    v.emergency = false;
+    look.cars.setSiren(v, false);
+  }
   player.enter(v);
 }
 
