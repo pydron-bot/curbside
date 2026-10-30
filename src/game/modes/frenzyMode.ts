@@ -52,9 +52,9 @@ export class FrenzyMode implements Mode {
       if (!run || run.phase !== 'live') return;
       if (run.event(e) && run.def.goal !== 'drift' && run.def.goal !== 'combo') ctx.deps.audio.ui('click');
     });
-    const fail = () => this.run && !this.run.done && this.end(false);
-    bus.on('playerDied', fail);
-    bus.on('busted', fail);
+    const fail = (why: string) => this.run && !this.run.done && this.end(false, why);
+    bus.on('playerDied', () => fail('WASTED'));
+    bus.on('busted', () => fail('BUSTED'));
   }
 
   private beaten(def: FrenzyDef): boolean {
@@ -115,7 +115,8 @@ export class FrenzyMode implements Mode {
     this.ctx.busy = 'frenzy';
   }
 
-  private end(passed: boolean): void {
+  /** `why` (WASTED / BUSTED): the player is already down, so the banner waits behind that card. */
+  private end(passed: boolean, why?: string): void {
     const ctx = this.ctx;
     const run = this.run!;
     run.fail(); // no-op once passed; stops the clock otherwise
@@ -128,8 +129,8 @@ export class FrenzyMode implements Mode {
       const left = FRENZIES.filter((f) => !this.beaten(f)).length;
       if (first) ctx.notice(left === 0 ? 'ALL FRENZIES BEATEN!' : `FRENZIES ${FRENZIES.length - left}/${FRENZIES.length}`, 'progress');
       ctx.progress.flush();
-    } else if (ctx.live) {
-      ctx.ui.banner('FRENZY FAILED', 'fail', 'TOUCH THE TOKEN TO RETRY');
+    } else if (ctx.live || why) {
+      ctx.ui.banner('FRENZY FAILED', 'fail', why ?? 'TOUCH THE TOKEN TO RETRY');
       ctx.deps.audio.ui('fail');
     }
     this.run = null;
