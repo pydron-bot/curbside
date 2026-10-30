@@ -1,0 +1,9 @@
+/* Look stream: overlays drawn over the WebGL canvas. */
+
+/* Soft vignette framing the action; a composited layer, no GPU pass. */
+.look-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 72% 78% at 50% 50%, transparent 58%, rgba(6, 8, 18, 0.34) 100%);
+}

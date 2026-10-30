@@ -7,6 +7,7 @@
  * intersection. Each block is a road band, a sidewalk ring, then a buildable
  * interior that becomes buildings, a park or a plaza.
  */
+import { buildingHeight, districtOf, type District } from './districts';
 import { mulberry32 } from './random';
 
 export const BLOCK_SIZE = 64;
@@ -29,6 +30,7 @@ export interface Building extends Rect {
   height: number;
   /** 0..1, used to pick a colour. */
   tint: number;
+  district: District;
   /** Optional rooftop box (AC unit / stairwell), in world coords. */
   roofBox?: Rect & { height: number };
 }
@@ -46,6 +48,7 @@ export interface Block {
   bx: number;
   bz: number;
   kind: BlockKind;
+  district: District;
   /** Buildable interior (inside the sidewalk). */
   interior: Rect;
 }
@@ -76,18 +79,15 @@ export function generateCity(seed = 1337): City {
   for (let bx = 0; bx < BLOCKS_PER_SIDE; bx++) {
     for (let bz = 0; bz < BLOCKS_PER_SIDE; bz++) {
       const interior = blockInterior(bx, bz);
-      const cx = (interior.minX + interior.maxX) / 2;
-      const cz = (interior.minZ + interior.maxZ) / 2;
-      // 0 at the centre of town, 1 at the edge: drives height and density.
-      const fromCentre = Math.min(1, Math.hypot(cx, cz) / HALF_EXTENT);
+      const district = districtOf(bx, bz);
 
       const roll = rand();
       const kind: BlockKind = roll < 0.1 ? 'park' : roll < 0.16 ? 'plaza' : 'buildings';
-      blocks.push({ bx, bz, kind, interior });
+      blocks.push({ bx, bz, kind, district, interior });
 
       if (kind === 'buildings') {
         for (const lot of subdivide(interior, rand, 0)) {
-          buildings.push(makeBuilding(lot, fromCentre, rand));
+          buildings.push(makeBuilding(lot, district, rand));
         }
       } else if (kind === 'park') {
         plantTrees(interior, rand, trees);
@@ -127,18 +127,21 @@ function subdivide(r: Rect, rand: () => number, depth: number): Rect[] {
   ];
 }
 
-function makeBuilding(lot: Rect, fromCentre: number, rand: () => number): Building {
+function makeBuilding(lot: Rect, district: District, rand: () => number): Building {
   // Small random setback so street walls aren't perfectly flush.
   const inset = rand() < 0.5 ? 0 : rand() * 1.5;
+  // Max 12 m: kept well under the on-foot camera (20 m) so roofs never
+  // reach the near plane or swallow the screen; downtown gets the tallest.
+  const r1 = rand();
+  const r2 = rand();
   const b: Building = {
     minX: lot.minX + inset,
     minZ: lot.minZ + inset,
     maxX: lot.maxX - inset,
     maxZ: lot.maxZ - inset,
-    // Max 12 m: kept well under the on-foot camera (20 m) so roofs never
-    // reach the near plane or swallow the screen; downtown gets the tallest.
-    height: 3.5 + rand() * 3.5 + (1 - fromCentre) ** 2 * rand() * 5,
+    height: buildingHeight(district, r1, r2),
     tint: rand(),
+    district,
   };
   const w = b.maxX - b.minX;
   const d = b.maxZ - b.minZ;

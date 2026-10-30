@@ -1,13 +1,4 @@
-import {
-  AmbientLight,
-  Color,
-  DirectionalLight,
-  Fog,
-  HemisphereLight,
-  Scene,
-  WebGLRenderer,
-  type ColorRepresentation,
-} from 'three';
+import { Scene, type ColorRepresentation } from 'three';
 import { registerSW } from 'virtual:pwa-register';
 import { events } from './core/events';
 import { Input } from './core/input';
@@ -32,14 +23,14 @@ import { Player } from './game/player';
 import { CROWD_DESPAWN, Population, type CrowdPed, type ParkingSpot, type Vehicle } from './game/population';
 import { Effects } from './render/effects';
 import { CameraRig } from './render/cameraRig';
-import { CharacterModel } from './render/characterModel';
 import { DynamicResolution } from './render/dynamicResolution';
+import { Look, type PlayerView } from './render/look';
+import { createRenderer } from './render/post';
 import { getQuality } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
-import { charVehicle, createVehicleMesh, dressAll, restoreVehicleLook } from './render/vehicleLooks';
+import { charVehicle, restoreVehicleLook } from './render/vehicleLooks';
 import { PUNCH_REACH, knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
 import { VEHICLE_SHARE, WEAPONS, autoAim, rayCircle, rayRect, type WeaponKind } from './systems/weapons';
-import { PickupMesh } from './render/pickupMesh';
 import { HEALTH_PICKUP, PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
   applyDamage,
@@ -66,9 +57,7 @@ import { PauseOverlay, type PauseReason } from './ui/pauseOverlay';
 import { ScoreHud, loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
 import { generateCity, type Rect } from './world/city';
-import { createCityMesh } from './world/cityMesh';
 import { StaticGrid } from './world/collision';
-import { createGround } from './world/ground';
 import { mulberry32 } from './world/random';
 import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audio/gameAudio';
 import { mountRadioToast } from './ui/radioToast';
@@ -120,37 +109,27 @@ const NPC_SPREAD = 0.14;
 const CRASH_EVENT_MIN = 2.5;
 
 // --- Renderer ---
-const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+const renderer = createRenderer();
 app.append(renderer.domElement);
 const resolution = new DynamicResolution(renderer);
 
 // --- Scene ---
 const scene = new Scene();
-scene.background = new Color('#1b1d22');
-scene.fog = new Fog('#1b1d22', 90, 220);
-scene.add(new HemisphereLight('#cfd8ff', '#3a3326', 1.2));
-scene.add(new AmbientLight('#ffffff', 0.25));
-const sun = new DirectionalLight('#fff1d6', 1.6);
-sun.position.set(-30, 80, 20);
-scene.add(sun);
-scene.add(createGround());
 const city = generateCity(1337);
 const collision = new StaticGrid(city.obstacles);
-scene.add(createCityMesh(city));
 const rand = mulberry32(Date.now() >>> 0);
-const effects = new Effects(scene);
 const pickups = generatePickups(1337);
-const pickupMesh = new PickupMesh(pickups);
-scene.add(pickupMesh.mesh);
+const rig = new CameraRig(1);
+// Lights, time of day, ground, city, and the batched people/car/glow renderers.
+const look = new Look(renderer, scene, city, rig, pickups, app);
+const effects = new Effects(scene);
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
-let vehicleModels: VehicleModels | null = null;
 
 function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation): Vehicle {
   const sim = createVehicleState(0, 0, 0);
-  const mesh = createVehicleMesh(paint);
-  vehicleModels?.dress(mesh, archetype, paint);
+  const mesh = look.cars.create(archetype, paint);
   scene.add(mesh.root);
   return {
     archetype,
@@ -178,7 +157,7 @@ const PARKED: ParkingSpot[] = [
 function resetVehicle(v: Vehicle, restyled: boolean) {
   v.damage = createDamage(VEHICLE_HEALTH[v.archetype]);
   v.wreckAge = 0;
-  if (v.charred || restyled) restoreVehicleLook(v, vehicleModels);
+  if (v.charred || restyled) restoreVehicleLook(v, look.cars);
 }
 
 const population = new Population(
@@ -187,7 +166,7 @@ const population = new Population(
     createVehicle,
     resetVehicle,
     createPedModel: (outfit) => {
-      const model = new CharacterModel('/assets/player.glb', outfit);
+      const model = look.characters.create(outfit);
       scene.add(model.root);
       return model;
     },
@@ -198,19 +177,17 @@ const population = new Population(
 // Placeholder boxes show until the Blender-built models arrive.
 VehicleModels.load('/assets/vehicles.glb').then(
   (models) => {
-    vehicleModels = models;
-    dressAll([...vehicles, ...population.spares], models);
-    resolution.holdOff(2); // first draws of the new materials compile shaders
+    look.cars.setModels(models);
+    resolution.holdOff(2); // new geometry uploads
   },
   (err) => console.error('Failed to load vehicles.glb', err),
 );
 
 // --- Player ---
 const player = new Player(events, SPAWN_POINT.x, SPAWN_POINT.z);
-const playerModel = new CharacterModel('/assets/player.glb');
+const playerModel = look.characters.create();
 scene.add(playerModel.root);
 
-const rig = new CameraRig(1);
 let viewW = 0;
 let viewH = 0;
 /**
@@ -814,7 +791,6 @@ function frame(now: number) {
     }
   }
   effects.update(frameSeconds);
-  pickupMesh.update(now / 1000);
   updateHud(frameSeconds);
 
   if (player.driving) {
@@ -830,8 +806,23 @@ function frame(now: number) {
   audioFrame.health = player.health;
   audio.update(frameSeconds, audioFrame);
 
-  renderer.render(scene, rig.camera);
+  look.update(frameSeconds, viewOfPlayer());
+  look.render(rig.camera);
   resolution.sample(elapsed);
+}
+
+const playerView: PlayerView = { x: 0, z: 0, heading: 0, driving: false, speed: 0, alive: true };
+/** Where the player marker goes this frame (the interpolated positions just set). */
+function viewOfPlayer(): PlayerView {
+  const v = player.driving;
+  const o = v ? v.mesh.root : playerModel.root;
+  playerView.x = o.position.x;
+  playerView.z = o.position.z;
+  playerView.heading = o.rotation.y;
+  playerView.driving = v !== null;
+  playerView.speed = v ? speed(v.sim) : Math.hypot(player.ped.vx, player.ped.vz);
+  playerView.alive = player.alive;
+  return playerView;
 }
 
 let hudGun: WeaponKind | null | undefined;
@@ -955,6 +946,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   renderer,
   resolution,
   rig,
+  look,
   score,
   events,
   audio,

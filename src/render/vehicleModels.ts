@@ -1,99 +1,81 @@
-import {
-  Color,
-  Group,
-  Matrix4,
-  Mesh,
-  type BufferGeometry,
-  type ColorRepresentation,
-  type Material,
-  type MeshStandardMaterial,
-  type Object3D,
-} from 'three';
+import { Box3, Matrix4, Mesh, Vector3, type BufferGeometry, type MeshStandardMaterial, type Object3D } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { VehicleArchetype } from '../entities/vehicle';
-import type { CarMesh } from './carMesh';
+import { partKind, tagCarGeometry } from './carMesh';
+
+/** A car model's footprint, for lights and shadows. */
+export interface CarDims {
+  halfWidth: number;
+  /** Nose and tail, along local +Z / −Z. */
+  front: number;
+  rear: number;
+  /** Roof height. */
+  height: number;
+}
 
 /**
  * Loads vehicles.glb (blender/generators/vehicles.py) once. Each archetype is
- * a root node; on load its parts are merged into one mesh per material (front
- * wheels stay separate so they can steer), taking a car from ~16 draw calls
- * to ~8. `dress` swaps a placeholder CarMesh's contents for a clone, tinting
- * the "paint" material.
+ * a root node; on load all of its parts — body, glass, lights, wheels — are
+ * merged into ONE geometry whose vertices carry their base colour, part kind
+ * (paint, glass, headlight, ...) and, for the front wheels, the steering
+ * pivot. CarBatch draws every car of an archetype from it in a single
+ * instanced draw call, tinting paint and steering wheels in the shader.
  */
 export class VehicleModels {
-  private constructor(private readonly roots: Map<string, Object3D>) {}
+  private constructor(
+    private readonly geometries: Map<string, BufferGeometry>,
+    private readonly sizes: Map<string, CarDims>,
+  ) {}
 
   static async load(url: string): Promise<VehicleModels> {
     const gltf = await new GLTFLoader().loadAsync(url);
-    const roots = new Map<string, Object3D>();
+    const geometries = new Map<string, BufferGeometry>();
+    const sizes = new Map<string, CarDims>();
     for (const child of [...gltf.scene.children]) {
       child.position.set(0, 0, 0); // laid out side by side in Blender
-      roots.set(child.name, mergeByMaterial(child));
+      const geo = mergeCar(child);
+      if (!geo) continue;
+      geometries.set(child.name, geo);
+      sizes.set(child.name, dimsOf(geo));
     }
-    return new VehicleModels(roots);
+    return new VehicleModels(geometries, sizes);
   }
 
-  /** Replace `car`'s placeholder geometry (keeping its blob shadow) with the model. */
-  dress(car: CarMesh, archetype: VehicleArchetype, paint: ColorRepresentation): boolean {
-    const source = this.roots.get(archetype);
-    if (!source) return false;
-    const model = source.clone(true);
-    const tint = new Color(paint);
-    let tinted: MeshStandardMaterial | null = null;
-    model.traverse((o) => {
-      if (!(o instanceof Mesh)) return;
-      const mat = o.material as MeshStandardMaterial;
-      if (mat.name !== 'paint') return;
-      if (!tinted) {
-        tinted = mat.clone();
-        tinted.color.copy(tint);
-      }
-      o.material = tinted;
-    });
+  geometry(archetype: VehicleArchetype): BufferGeometry | undefined {
+    return this.geometries.get(archetype);
+  }
 
-    for (const child of [...car.root.children]) {
-      if (child.name !== 'shadow') car.root.remove(child);
-    }
-    car.root.add(model);
-    car.frontWheels.length = 0;
-    model.traverse((o) => {
-      if (o instanceof Mesh && /_wheel_F[LR]$/.test(o.name)) car.frontWheels.push(o);
-    });
-    return true;
+  dims(archetype: VehicleArchetype): CarDims | undefined {
+    return this.sizes.get(archetype);
   }
 }
 
-function mergeByMaterial(root: Object3D): Object3D {
+export function dimsOf(geo: BufferGeometry): CarDims {
+  geo.computeBoundingBox();
+  const b = geo.boundingBox ?? new Box3(new Vector3(-0.95, 0, -2.2), new Vector3(0.95, 1.6, 2.2));
+  return { halfWidth: Math.max(-b.min.x, b.max.x), front: b.max.z, rear: -b.min.z, height: b.max.y };
+}
+
+function mergeCar(root: Object3D): BufferGeometry | null {
   root.updateMatrixWorld(true);
   const inverseRoot = new Matrix4().copy(root.matrixWorld).invert();
-  const groups = new Map<Material, BufferGeometry[]>();
-  const out = new Group();
-  out.name = root.name;
-
+  const parts: BufferGeometry[] = [];
+  const toRoot = new Matrix4();
+  const pivot = new Vector3();
   root.traverse((o) => {
     if (!(o instanceof Mesh)) return;
-    if (/_wheel_F[LR]$/.test(o.name)) {
-      const wheel = o.clone();
-      wheel.matrix.multiplyMatrices(inverseRoot, o.matrixWorld);
-      wheel.matrix.decompose(wheel.position, wheel.quaternion, wheel.scale);
-      out.add(wheel);
-      return;
-    }
-    const geo = (o.geometry as BufferGeometry).clone();
-    geo.applyMatrix4(new Matrix4().multiplyMatrices(inverseRoot, o.matrixWorld));
+    toRoot.multiplyMatrices(inverseRoot, o.matrixWorld);
+    let geo = (o.geometry as BufferGeometry).clone();
     for (const name of Object.keys(geo.attributes)) {
       if (name !== 'position' && name !== 'normal') geo.deleteAttribute(name); // untextured
     }
-    const list = groups.get(o.material as Material) ?? [];
-    list.push(geo);
-    groups.set(o.material as Material, list);
+    if (geo.index) geo = geo.toNonIndexed();
+    geo.applyMatrix4(toRoot);
+    const mat = o.material as MeshStandardMaterial;
+    // Front wheels steer about their own origin.
+    const front = /_wheel_F[LR]$/.test(o.name) ? pivot.setFromMatrixPosition(toRoot) : null;
+    parts.push(tagCarGeometry(geo, mat.color, partKind(mat.name), front && { x: front.x, z: front.z }));
   });
-
-  for (const [material, geos] of groups) {
-    const merged = mergeGeometries(geos.map((g) => (g.index ? g.toNonIndexed() : g)));
-    if (!merged) continue;
-    out.add(new Mesh(merged, material));
-  }
-  return out;
+  return parts.length ? mergeGeometries(parts) : null;
 }
