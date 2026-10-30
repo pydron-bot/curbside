@@ -162,26 +162,32 @@ Mayhem has a cost now. **Wanted level** (`systems/wanted.ts`, pure): heat
 0–5, stars = floor(heat). A crime counts if it's on screen or within 60 m
 of any police (car, officer, helicopter): knocking someone down +0.3,
 carjack +0.35, a shot +0.05 (at most +0.5 per 5 s), an explosion you
-caused +0.6, ramming a police car +0.6, bullets into one +0.15 (capped),
-knocking down an officer +1, wrecking a police car +1; stealing one sets
-at least 1★. Civilian crimes stop at 3★; 4–5★ need attacks on the police.
-Below a star, heat fades after 10 quiet seconds. **Evasion:** once no cop
-has seen you for 1.5 s the stars blink; after 6 s + 3 s per star out of
-sight one star drops, and the clock restarts on the next (3★ ≈ 36 s
-unseen). Sightings and witnessed crimes reset it.
+caused +0.6 (not your own car going up), clearly ramming a police car
++0.6 (bumps in a chase don't count), bullets into one +0.15 (capped),
+knocking down an officer +1 (at most +1 per 5 s), wrecking a police car
++1; stealing one sets at least 1★. Civilian crimes stop at 3★; 4–5★ need
+attacks on the police. Below a star, heat fades after 10 quiet seconds.
+A new star (or a witnessed crime) is called in: for 8 s dispatch tracks
+you while units respond, and the evasion clock waits. **Evasion:** once no
+cop has seen you for 1.5 s the stars blink; after 6 s + 3 s per star out
+of sight one star drops, and the clock restarts on the next (3★ ≈ 36 s
+unseen). Sightings and witnessed crimes reset it; the radio keeps units on
+your real position for 2 s after each sighting.
 
-**Response** (`systems/police.ts`): units by stars 2 / 3 / 5 / 6 / 7 (SWAT
-vans from 4★: dark vans, 180 HP), arriving one at a time on a lane 65–130 m
-away, out of view, heading your way and already rolling. Sight: each car
-sees you within 26 m, or 78 m with a clear line past buildings (officers
-18 / 45 m), checked 4×/s per unit and shared over the radio. Units that
+**Response** (`systems/police.ts`): units by stars 2 / 3 / 4 / 6 / 7 (SWAT
+vans from 4★: dark vans, 180 HP), arriving one at a time on a lane 75–140 m
+away, out of view, heading your way and already rolling (mostly ahead on a
+fresh call, from all round mid-chase, so outrunning them can work). Sight:
+each car sees you within 20 m, or 62 m with a clear line past buildings
+(officers 15 / 40 m), checked 4×/s per unit and shared over the radio. Units that
 fall 210 m behind out of sight, or wedge for good, recycle and a fresh one
 comes. 1–2★ follow and box you in; from 3★ they ram and PIT, and every
 25 s at speed a roadblock (2–3 cars across the road 120–170 m ahead,
 mid-block, officers behind them) goes up; from 4★ passengers shoot at your
-car; 5★ adds the helicopter (`systems/helicopter.ts`): a shadow and a
-searchlight that keeps you seen while it's on you, flying at 27 m/s so a
-fast car can outrun it. Stopped near you, officers get out (crowd peds
+car (every ~2 s within 20 m); 5★ adds the helicopter
+(`systems/helicopter.ts`): a shadow and a searchlight that keeps you seen
+while it's on you, flying at 27 m/s so a fast car can outrun it, and
+leaving to refuel for 20 s after every 45 s on station. Stopped near you, officers get out (crowd peds
 with role 'cop', navy uniforms through the outfit palette): they run you
 down at 5 m/s (you sprint at 6), go for your door if your car is stopped,
 and shoot from 2★ at someone armed or running (from 3★ on sight). When
@@ -190,13 +196,16 @@ patrolling as traffic. A unit whose car is wrecked, on fire or stolen
 fights on on foot. Police cars are lent by Population (`takeVehicle`,
 flagged `police`, so traffic upkeep leaves them alone).
 
-**Pursuit driving** (`systems/pursuit.ts`, pure): out of sight or over 70 m
-away, follow the lanes junction to junction toward the last sighting
-(driveAi with the turn chosen toward the goal; traffic's unstick logic
-comes with it); in sight, steer for an intercept point (lead = gap ÷
-closing speed, ≤ 1.2 s), swerving round cars, settling 8 m behind; ram at
-7 m/s over your speed, PIT into the rear quarter when alongside, box in a
-stopped car (near end, far end, sides). Backs out of walls like traffic.
+**Pursuit driving** (`systems/pursuit.ts`, pure): without its own clear
+view, or over 70 m away, follow the lanes junction to junction toward
+where you are (or were last seen) — driveAi in a hurry: half the gap,
+12 m/s corners, overtaking through the oncoming lane, the turn at each
+junction chosen toward the goal, and traffic's unstick logic; in view,
+steer for an intercept point (lead = gap ÷ closing speed, ≤ 1.2 s),
+swerving round cars, settling 10 m behind; from behind or alongside only
+(never head-on: an oncoming pursuer slows, passes and turns), ram at 5 m/s
+over your speed every 2.6 s and PIT the rear quarter; box in a stopped car
+(near end, far end, sides). Backs out of walls like traffic.
 
 **Busted** (`systems/arrest.ts`): on foot, an officer within 1.3 m for 1 s
 while you're slower than 2.8 m/s (0.5 s if you're knocked down); in a car,
@@ -232,6 +241,14 @@ with "EVADED"; arrest and respray meters. Radar: flashing police cars,
 officers, the helicopter. All the faked light (searchlight, bays, station)
 goes through the shared glow batch (`render/heatLook.ts`): no extra draw
 calls beyond one instanced police-car mesh.
+
+**Tuning** was done headless: a copy of the sim loop drives a getaway car
+against each level over many seeds (`__ub.fastForward(seconds)` does the
+same in the browser). A reckless random-turn driver in a sports car shakes
+1★ about 3 times in 4, drops a star at 3★ about 1 time in 4 within 90 s,
+and can't shake 5★ by driving alone (refuel windows, resprays and wrecking
+pursuers are the way out); police cause 20–140 HP of damage per 3★ chase
+(most damage comes from the player's own crashes).
 
 API for other systems:
 
