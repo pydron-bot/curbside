@@ -70,8 +70,11 @@ const TIPS = [
   ['Chain it', 'Anything within 3 s of the last stunt builds a combo, up to ×10.'],
   ['Score', 'Drifts, near misses, smashes, hit & runs, knockouts, carjacks, explosions and ramp jumps.'],
   ['Bank it', 'When a chain ends its points bank as cash (more with stars on). WASTED or BUSTED first and the chain is lost.'],
-  ['Heat', "Crimes the police see earn stars. Get out of sight until they fade, or drive into a Pay 'n' Spray."],
-  ['Survive', 'Grab health and armour crates. Get WASTED and the run is over — your best is kept.'],
+  ['Heat', "Crimes the police see earn stars. Get out of sight until they fade, or pay for a Pay 'n' Spray ('S' on the radar)."],
+  ['Busted', 'Caught by the police: a fine, your guns gone and the chain lost. Stand still with empty hands and they cuff you rather than shoot.'],
+  ['Survive', 'Grab health and armour crates. WASTED costs the chain, your guns and a hospital bill; your best score is kept.'],
+  ['Cash & shop', "Spend it at the safehouse door ('H' on the radar): armour, ammo, upgrades. SHOP is in the pause menu nearby."],
+  ['Activities', "Purple gems start frenzies; ringing payphones ('M') give jobs; 'R' starts a race; '$' buys the cars on its list; a taxi earns fares; 40 packages hide in alleys. PROGRESS in the pause menu tracks it all."],
   ['Radar', RADAR_LEGEND_LINE],
 ] as const;
 
