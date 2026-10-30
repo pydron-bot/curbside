@@ -89,7 +89,9 @@ export function detectDevice(): DeviceInfo {
 
 /** The tier a quality preset means on this device. */
 export function tierForPreset(preset: QualityPreset, device: DeviceInfo): QualityTierName {
-  if (preset !== 'auto') return preset;
+  // A name this build has no tier for is treated as 'auto' rather than
+  // leaving the game without a tier at boot.
+  if (preset !== 'auto' && Object.hasOwn(QUALITY_TIERS, preset)) return preset;
   return device.handheld ? 'medium' : 'high';
 }
 

@@ -5,6 +5,9 @@
 export type QualityPreset = 'auto' | 'high' | 'medium' | 'low';
 export type SteeringMode = 'directional' | 'classic';
 
+export const QUALITY_PRESETS: readonly QualityPreset[] = ['auto', 'high', 'medium', 'low'];
+export const STEERING_MODES: readonly SteeringMode[] = ['directional', 'classic'];
+
 export interface Settings {
   /** 0..1 */
   masterVolume: number;
@@ -37,10 +40,38 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const KEY = 'curbside.settings';
 
+type Obj = Record<string, unknown>;
+const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * Any parsed JSON (or nothing) → valid settings. A field that is missing, the
+ * wrong type or a value this build doesn't know (a renamed preset, a newer
+ * tab's choice, a hand edit) falls back to its default on its own, so a bad
+ * value can't stop the game booting. Keys this build doesn't know are carried
+ * through, so an older build's next write keeps a newer one's settings.
+ */
+export function sanitizeSettings(raw: unknown): Settings {
+  const out: Settings = { ...DEFAULT_SETTINGS };
+  if (!isObj(raw)) return out;
+  const known = out as unknown as Obj;
+  for (const [k, v] of Object.entries(raw)) if (!(k in known)) known[k] = v;
+  for (const k of ['masterVolume', 'sfxVolume', 'musicVolume'] as const) {
+    const v = raw[k];
+    if (typeof v === 'number' && Number.isFinite(v)) out[k] = Math.min(1, Math.max(0, v));
+  }
+  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics', 'showFps'] as const) {
+    const v = raw[k];
+    if (typeof v === 'boolean') out[k] = v;
+  }
+  if (QUALITY_PRESETS.includes(raw.quality as QualityPreset)) out.quality = raw.quality as QualityPreset;
+  if (STEERING_MODES.includes(raw.steering as SteeringMode)) out.steering = raw.steering as SteeringMode;
+  return out;
+}
+
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...(JSON.parse(raw) as Partial<Settings>) };
+    if (raw) return sanitizeSettings(JSON.parse(raw));
   } catch {
     // Unavailable or corrupt storage: fall back to defaults.
   }
