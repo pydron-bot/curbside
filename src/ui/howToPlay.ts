@@ -21,6 +21,7 @@ function touchRows(s: Settings): Binding[] {
     ['Drift', 'The DRIFT band presses gas + handbrake; stopped, it\'s a burnout'],
     ['Nitro', 'Hold NOS (fills as you drift, near-miss and jump)'],
     ['Aim & shoot', `${other} thumb anywhere: drag to aim, push far to fire, tap to fire`],
+    ['Grenade · molotov', 'Drag to aim (further = further), let go to throw'],
     ['Punch / fire', 'The big button (punches combo: jab, jab, hook)'],
     ['Drive-by', 'The car FIRE button (pistol or SMG)'],
     ['Switch weapon', '[[⇄]]'],

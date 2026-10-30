@@ -31,7 +31,7 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Walk / run (on foot) | WASD / arrows, Shift sprints | left stick (appears under the thumb): push further to run | left stick, A sprints |
 | Aim (on foot) | mouse (crosshair cursor) | right half: drag the aim stick | right stick |
 | Punch / fire (hold for SMG) | left click, Space / J | FIRE button; push the aim stick past half-way; tap the right half | RT or X |
-| Throw a grenade / molotov | aim with the mouse (it lands at the cursor), click | aim stick (further = further), FIRE | right stick, RT / X |
+| Throw a grenade / molotov | aim with the mouse (it lands at the cursor), click | drag the aim stick (further = further, full push = full range) and let go; or FIRE | right stick, RT / X |
 | Drive-by (pistol / SMG) | left click / J in a car | car FIRE button (inboard of the pedals) | X |
 | Switch weapon (also in a car) | wheel, right click, Q / Tab (Shift+Tab back) | ⇄ | RB / LB |
 | Enter / exit car | E / F / Enter | door button (pulses next to a car) | Y |
@@ -251,7 +251,9 @@ alight (22 HP/s) and cooks cars (12 HP/s); rockets fly at 26 m/s, arm
 after 3 m and blow up on the first thing they touch (75 m max); their
 lock-on and aim assist ignore anything within 8 m (inside their own blast). While a
 grenade or molotov is in hand, a landing ring and a dotted arc show
-where it will land (a touch tap on FIRE throws right there).
+where it will land (a touch tap on FIRE throws right there). On touch
+the aim stick only aims a throwable (it never auto-fires one): let go to
+throw where the ring is, or slide back to the centre first to cancel.
 
 **Drive-bys**: in a car, FIRE shoots a pistol or SMG (picking one if
 something else is held) out of whichever side window has the best target

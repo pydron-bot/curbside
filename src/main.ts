@@ -726,7 +726,9 @@ function frame(now: number) {
       aimInput.ground = input.mouseAimLive() && mouseGround.valid ? mouseGround : null;
       combat.updateAim(pressed || aim.fire || input.fireHeld, aimInput);
       if (gun) {
-        if (pressed || aim.fire || (WEAPONS[gun].automatic && input.fireHeld)) combat.fire(aimInput);
+        // Throwables go when the aim stick is let go (once), never on a held push.
+        const stick = WEAPONS[gun].mode === 'throw' ? aim.release : aim.fire;
+        if (pressed || stick || (WEAPONS[gun].automatic && input.fireHeld)) combat.fire(aimInput);
       } else if (pressed || aim.fire) combat.punch(aimHeadingNow);
     } else combat.updateAim(false, aimInput);
     if (acted && player.ready) {
