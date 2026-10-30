@@ -668,8 +668,15 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     vec3 wood = bSrgb(0.55, 0.38, 0.24) * (0.85 + 0.15 * ubLine(fract(along / 0.16) - 0.5, 0.42, px / 0.16));
     c = mix(c, wood, deck);
   } else if (type < ${ROOF.membrane} + 0.5) {
-    float seam = ubLine(fract(across / 2.0) - 0.5, 0.49, px / 2.0);
-    c *= (0.95 + 0.06 * ubNoise(sp * 0.4)) * (1.0 - (1.0 - seam) * 0.12);
+    // Single-ply sheets 2 m wide laid along the roof, each a shade off its
+    // neighbours, with welded lap seams, and a dashed line of grey walkway
+    // pads down the spine: big flat roofs (spawn is beside one) get structure.
+    float sheet = floor(across / 2.0);
+    float seam = ubLine(fract(across / 2.0) - 0.5, 0.465, px / 2.0);
+    c *= (0.95 + 0.06 * ubNoise(sp * 0.4)) * (0.95 + 0.08 * ubHash(vec2(sheet, seed * 97.0)));
+    c *= 1.0 - (1.0 - seam) * 0.2 * (1.0 - smoothstep(0.06, 0.16, px));
+    float pad = ubLine(fract(along / 1.5) - 0.5, 0.36, px / 1.5) * ubLine(across, 0.5, px) * step(1.4, e);
+    c = mix(c, c * 0.74, pad);
   } else if (type < ${ROOF.terracotta} + 0.5) {
     // Hipped tile roof faked on the flat top: each side slopes toward its eave.
     bool xSide = eD.x < eD.y;
@@ -683,6 +690,14 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     // Helipad: pale concrete deck, a dark landing circle with a yellow ring
     // and a white H (floodlit at night), blinking lights round the edge.
     c *= 0.9 + 0.12 * ubNoise(sp * 0.6);
+    // Poured panels with joints, and a dashed white safety line inside the
+    // parapet: the deck reads as a deck even when only a corner is on screen.
+    vec2 jf = fract((rp + hs) / 3.0) - 0.5;
+    float joints = ubLine(jf.x, 0.485, px / 3.0) * ubLine(jf.y, 0.485, px / 3.0);
+    c *= 1.0 - (1.0 - joints) * 0.2 * (1.0 - smoothstep(0.05, 0.15, px));
+    float edgeAlong = eD.x < eD.y ? rp.y : rp.x;
+    float safety = ubLine(e - 1.0, 0.1, px) * step(fract(edgeAlong / 2.0), 0.6);
+    c = mix(c, bSrgb(0.9, 0.9, 0.86), safety);
     float rr = length(rp);
     float R = min(hs.x, hs.y) * 0.72;
     float pad = 1.0 - smoothstep(R + 0.45 - px, R + 0.45 + px, rr);
