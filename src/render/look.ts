@@ -7,6 +7,9 @@ import type { CameraRig } from './cameraRig';
 import { CharacterBatch } from './characterModel';
 import { ContactShadows } from './contactShadows';
 import { GLOW, GlowSprites } from './glowSprites';
+
+/** Adds faked lights for one frame (muzzle flashes, beacons, ...); `view` is the visible ground. */
+export type GlowSource = (glows: GlowSprites, view: Rect) => void;
 import { PickupMesh } from './pickupMesh';
 import { PostEffects, mountVignette } from './post';
 import { getQuality, onQualityChange } from './quality';
@@ -57,6 +60,7 @@ export class Look {
   private player: PlayerView | null = null;
   private night = 0;
   private warmedUp = false;
+  private readonly glowSources: GlowSource[] = [];
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -109,12 +113,25 @@ export class Look {
     this.cars.flush(view, this.dt, this.contactShadows, this.glows);
     this.pickups.update(worldUniforms.uTime.value, this.glows, view);
     this.addMarker();
+    for (let i = 0; i < this.glowSources.length; i++) this.glowSources[i](this.glows, view);
     this.contactShadows.end();
     this.glows.end();
     this.sunShadow.update(view, this.lighting.toLight);
     // Count the whole frame (shadow pass, scene, bloom), not just the last pass.
     this.renderer.info.reset();
     this.renderer.render(this.scene, camera);
+  }
+
+  /**
+   * Have `source` add faked lights every frame, drawn with all the other
+   * glows (no extra draw call). Returns a function that removes it.
+   */
+  addGlowSource(source: GlowSource): () => void {
+    this.glowSources.push(source);
+    return () => {
+      const i = this.glowSources.indexOf(source);
+      if (i >= 0) this.glowSources.splice(i, 1);
+    };
   }
 
   /**
