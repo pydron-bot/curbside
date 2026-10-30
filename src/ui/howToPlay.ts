@@ -18,9 +18,11 @@ function touchRows(s: Settings): Binding[] {
       ? ['Drive', 'Point the stick where to go; push further for more gas']
       : ['Steer', 'Stick left / right; GAS to go'],
     ['Gas · brake · handbrake', `${other} thumb — slide between pedals`],
-    ['Drift', 'The DRIFT band presses gas + handbrake'],
+    ['Drift', 'The DRIFT band presses gas + handbrake; stopped, it\'s a burnout'],
+    ['Nitro', 'Hold NOS (fills as you drift, near-miss and jump)'],
     ['Aim & shoot', `${other} thumb anywhere: drag to aim, push far to fire, tap to fire`],
-    ['Punch / fire', 'The big button'],
+    ['Punch / fire', 'The big button (punches combo: jab, jab, hook)'],
+    ['Drive-by', 'The car FIRE button (pistol or SMG)'],
     ['Switch weapon', '[[⇄]]'],
     ['Get in / out', 'The door button (it pulses next to a car)'],
     ['Pause', '[[❚❚]] top centre'],
@@ -35,9 +37,11 @@ const CONTROLS: Record<Exclude<InputDevice, 'touch'>, { title: string; rows: rea
       ['Walk / steer', '[[W]][[A]][[S]][[D]] or arrows'],
       ['Sprint', '[[Shift]]'],
       ['Gas / brake', '[[W]] / [[S]]'],
-      ['Handbrake (drift)', '[[Space]]'],
-      ['Aim', 'Mouse'],
+      ['Handbrake (drift)', '[[Space]] — with [[W]] from a stop, a burnout'],
+      ['Nitro', '[[Shift]] in a car'],
+      ['Aim', 'Mouse (grenades land at the cursor)'],
       ['Punch / fire', 'Left click, [[Space]] or [[J]] — hold for SMG'],
+      ['Drive-by', 'Left click or [[J]] in a car'],
       ['Switch weapon', 'Wheel, right click, [[Q]] / [[Tab]]'],
       ['Get in / out', '[[E]]'],
       ['Radio station', '[[R]]'],
@@ -51,7 +55,8 @@ const CONTROLS: Record<Exclude<InputDevice, 'touch'>, { title: string; rows: rea
       ['Aim', 'Right stick'],
       ['Gas / brake', '[[RT]] / [[LT]]'],
       ['Handbrake · sprint', '[[A]]'],
-      ['Fire / punch', '[[RT]] on foot, or [[X]]'],
+      ['Nitro', '[[B]] in a car'],
+      ['Fire / punch', '[[RT]] on foot, or [[X]] (drive-bys too)'],
       ['Switch weapon', '[[LB]] / [[RB]]'],
       ['Get in / out', '[[Y]]'],
       ['Pause', '[[Start]]'],
@@ -61,8 +66,8 @@ const CONTROLS: Record<Exclude<InputDevice, 'touch'>, { title: string; rows: rea
 
 const TIPS = [
   ['Chain it', 'Anything within 3 s of the last stunt builds a combo, up to ×10.'],
-  ['Score', 'Drifts, near misses, smashes, hit & runs, knockouts, carjacks and explosions.'],
-  ['Survive', 'Grab health crates. Get WASTED and the run is over — your best is kept.'],
+  ['Score', 'Drifts, near misses, smashes, hit & runs, knockouts, carjacks, explosions and ramp jumps.'],
+  ['Survive', 'Grab health and armour crates. Get WASTED and the run is over — your best is kept.'],
 ] as const;
 
 /**
