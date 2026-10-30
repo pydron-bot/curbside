@@ -137,6 +137,25 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
   opacity: 0;
 }
 
+/* With a gun out: a faint ring where the right thumb naturally rests, just
+   inboard of the swap button (which ends edge + 160px in). While a thumb is
+   down the class is off and the inline transform places it instead. */
+.aim-base.resting {
+  left: auto;
+  top: auto;
+  right: calc(var(--edge-r) + 172px);
+  bottom: calc(var(--edge-b) + 6px);
+  margin: 0;
+  transform: none !important;
+  opacity: 0.38;
+  transition: opacity 0.2s;
+}
+
+.touch-layer[data-hand='left'] .aim-base.resting {
+  right: auto;
+  left: calc(var(--edge-l) + 172px);
+}
+
 .aim-base.active {
   opacity: 1;
 }

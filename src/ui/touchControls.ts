@@ -104,7 +104,10 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   root.append(layer);
 
   const applySettings = () => {
-    layer.dataset.hand = settings.leftHanded ? 'left' : 'right';
+    const hand = settings.leftHanded ? 'left' : 'right';
+    layer.dataset.hand = hand;
+    // The HUD mirrors too, so the radar stays clear of the buttons (hud.css).
+    document.body.dataset.hand = hand;
     layer.dataset.steer = settings.steering;
     restStick();
   };
@@ -213,6 +216,16 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   let aimPointer: number | null = null;
   let aimDownAt = 0;
   let aimTravel = 0;
+  let armed = false;
+
+  /**
+   * With a gun out, a faint aim ring waits beside the swap button so the aim
+   * pad is discoverable (it works anywhere on that half). Its resting spot is
+   * pure CSS (touch.css), so it follows the layout without measuring.
+   */
+  function restAim() {
+    aimBase.classList.toggle('resting', armed && mode === 'foot' && aimPointer === null);
+  }
 
   aimZone.addEventListener('pointerdown', (e) => {
     if (aimPointer !== null || mode !== 'foot') return;
@@ -223,6 +236,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     clampOrigin(aimOrigin, settings.leftHanded, AIM_R);
     aimDownAt = performance.now();
     aimTravel = 0;
+    aimBase.classList.remove('resting');
     aimBase.classList.add('active');
     updateAim();
   });
@@ -241,6 +255,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     out.aimFire = false;
     aimBase.classList.remove('active', 'firing');
     moveKnob(aimKnob, 0, 0);
+    restAim();
   };
   aimZone.addEventListener('pointerup', releaseAim);
   aimZone.addEventListener('pointercancel', releaseAim);
@@ -357,7 +372,9 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
       if (w === weapon) return;
       weapon = w;
       fireIcon.innerHTML = WEAPON_ICON[w ?? 'fists'];
-      fire.classList.toggle('armed', w !== null);
+      armed = w !== null;
+      fire.classList.toggle('armed', armed);
+      restAim();
     },
     setMode(m, canAct) {
       if (m !== mode) {
@@ -368,6 +385,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
         if (aimPointer !== null) releaseAim({ pointerId: aimPointer });
         // A thumb still on the stick keeps going, re-read for the new mode.
         if (stickPointer !== null) writeStick(thumb.x - origin.x, thumb.y - origin.y);
+        restAim();
       }
       const text = m === 'car' ? 'EXIT' : 'ENTER';
       if (text !== doorText) doorLabel.textContent = doorText = text;
