@@ -6,21 +6,24 @@ _Plan written 2026-10-29 as "Urban Blight"; renamed **Curbside** the same day (o
 
 ---
 
-## 0. Status (2026-10-29)
+## 0. Status (2026-10-30)
 
 | # | Milestone | State |
 |---|---|---|
 | M0 | Setup | ✅ Done — verified on iPhone, incl. home-screen app over HTTPS |
 | M1 | Drive a box | ✅ Done |
 | M2 | City v1 | ✅ Done — seeded 16×16-block city, chunked instancing, collision |
-| M3 | Blender pipeline | 🟡 Characters + 5 vehicle archetypes; road tiles / building kit to do |
-| M4 | On foot | ✅ Walk/sprint, enter/exit, carjacking, punching (weapons → later) |
-| M5 | Living city | ✅ Traffic, pedestrians, damage → smoke → fire → explosion, wrecks (polish: traffic lights, AI reacting to hits) |
-| + | Weapons & fight-back | ✅ Pistol/SMG/shotgun + health crates; peds may punch or shoot back; player health, WASTED + respawn; taxi + pickup archetypes |
-| + | Chaos score | ✅ Combo-chained points for drifts, near misses, smashes, knockouts, carjacks, explosions; best score saved |
-| M6–M8 | Heat, Missions & HUD, Ship | ⬜ Not started |
+| M3 | Blender pipeline | ✅ Characters (8 bodies, 22 clips), 22 vehicles incl. bikes and the helicopter, props, pickups, weapons, debris; road tiles/buildings are shader-drawn instead |
+| M4 | On foot | ✅ Walk/run, enter/exit, carjacking, punch combos, guns, grenades, molotovs, rockets |
+| M5 | Living city | ✅ Traffic with signals and reactions, crowds, pigeons, damage → fire → explosion chains |
+| M6 | Heat | ✅ 0–5 stars, pursuit AI, roadblocks, SWAT, helicopter, BUSTED, Pay 'n' Spray |
+| M7 | Missions & HUD | ✅ Eight payphone missions, Chaos Run, frenzies, packages, races, exports, taxi, cash, shop, save, radar, new HUD and menus |
+| M8 | Ship as PWA | 🟡 Live at https://deeek.org/curbside/ (GitHub Pages, offline-capable); real-device performance pass still to do |
 
-**Where it runs:** code at `~/dev/curbside` on hive1 (git, pushed to `pydron-bot/curbside`). Dev server is the `curbside-dev` user service; play at `https://hive1.tail078432.ts.net:8443` (tailnet only). Drive keeps this plan and any source art.
+The overhaul that took M5 to here is summarised in `docs/HANDOFF.md`, which
+also holds the prioritised to-do list.
+
+**Where it runs:** live at https://deeek.org/curbside/ (deployed from `main` by GitHub Pages). Code at `~/dev/curbside` on hive1 (git, pushed to `pydron-bot/curbside`). Dev server is the `curbside-dev` user service; play at `https://hive1.tail078432.ts.net:8443` (tailnet only). Drive keeps this plan and any source art.
 
 ---
 
@@ -166,6 +169,10 @@ These streams are largely independent and can run in parallel:
 
 ## 10. Next steps
 
-1. ✅ GitHub repo `pydron-bot/curbside` set up and pushed.
-2. M6: wanted level + police (police archetype already exists).
-3. M3 leftovers when convenient: road tiles, building kit, props (payphones are needed for M7).
+Full list with context in `docs/HANDOFF.md`. In short:
+
+1. Real-device pass on an iPhone 15 Pro (frame rate, audio/silent switch, haptics, controller, touch feel) and tuning from it.
+2. Tune from real play: Chaos Run medals, race times, 5-star difficulty.
+3. Blender adjustment pass from in-game readability (notes at the end of `docs/BLENDER_TODO.md`).
+4. A landing page at the root of deeek.org for all projects (`pydron-bot/pydron-bot.github.io`; Curbside first).
+5. The minor known issues listed in `docs/HANDOFF.md`.

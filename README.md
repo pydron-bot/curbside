@@ -6,6 +6,10 @@ Top-down open-world crime/driving game for the browser — three.js, TypeScript,
 Vite, installable as a PWA. Full plan: `docs/PLAN.md` (mirrored as `PLAN.md` in the Google Drive folder
 *GameDev / Curbside*, which also holds art; code lives here).
 
+**Play:** https://deeek.org/curbside/ (deployed from `main` by
+`.github/workflows/pages.yml`). Current state and the to-do list:
+`docs/HANDOFF.md`.
+
 ## Run
 
 Needs Node ≥ 22.12 (hive1: `~/.local/opt/node24/bin`, the system Node 20 is too old).
@@ -204,7 +208,9 @@ vibration, show FPS.
   bike) with their own handling, health and collision bodies; emergency
   calls with right of way; two-wheelers that lean, carry a rider and
   throw them off in a hard crash.
-- Next: **M8 Ship** (offline caching, install prompt, performance pass).
+- **M8 Ship** — live on GitHub Pages at deeek.org/curbside/ (served from a
+  sub-path: `CURBSIDE_BASE`, `publicUrl()`). Next: a real-device
+  performance pass and the to-do list in `docs/HANDOFF.md`.
 
 ## Driving and combat
 
