@@ -12,6 +12,8 @@ export interface Settings {
   sfxVolume: number;
   /** 0..1 */
   musicVolume: number;
+  /** iOS: play sound even with the ring/silent switch on (audio session 'playback' vs 'ambient'). */
+  ignoreSilentSwitch: boolean;
   quality: QualityPreset;
   /** Touch steering: stick points where to go (directional) or steers left/right (classic). */
   steering: SteeringMode;
@@ -25,6 +27,7 @@ export const DEFAULT_SETTINGS: Settings = {
   masterVolume: 0.8,
   sfxVolume: 0.9,
   musicVolume: 0.5,
+  ignoreSilentSwitch: true,
   quality: 'auto',
   steering: 'directional',
   leftHanded: false,
