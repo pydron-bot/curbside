@@ -119,10 +119,14 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   battery. On iOS 16.4+ `navigator.audioSession.type` is `'playback'` so the
   silent switch doesn't mute the game (setting `ignoreSilentSwitch`, false →
   `'ambient'`).
-- **Mix.** World sounds (muted on pause, muffled by close blasts and death,
-  with a synthetic street reverb) and UI/stingers → SFX bus; music → its own
-  bus; both → master → glue compressor → limiter. Bus gains follow
+- **Mix.** World sounds (muted on pause, muffled by close blasts, hits and
+  death, with a synthetic street reverb) and UI/stingers → SFX bus; music →
+  its own bus; both → master → glue compressor → limiter. Bus gains follow
   `settings.masterVolume / sfxVolume / musicVolume` (squared slider curve).
+  The world muffle and the music duck are each one merged state (`Dip` in
+  `mix.ts`): the deepest pull wins and the longest hold is kept, so a hurt in
+  the same frame as a close blast or the killing blow can't cut the blast's
+  deafening or the WASTED muffle short.
 - **Spatial.** One-shots are placed relative to the camera focus: inverse
   distance falloff with a floor (far events are quiet, not silent), stereo pan
   by screen x, air-absorption lowpass and more reverb with distance. Sirens

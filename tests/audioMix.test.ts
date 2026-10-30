@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  Dip,
   PAN_LIMIT,
   airCutoff,
   distanceGain,
@@ -68,6 +69,68 @@ describe('audio mixing math', () => {
     expect(smoothstep(2, 4, 1)).toBe(0);
     expect(smoothstep(2, 4, 3)).toBeCloseTo(0.5);
     expect(smoothstep(2, 4, 9)).toBe(1);
+  });
+});
+
+describe('dips (world muffle, music duck)', () => {
+  it('rests open, then holds a pull and recovers exponentially', () => {
+    const d = new Dip(20000);
+    expect(d.at(5)).toBe(20000);
+    expect(d.active(5)).toBe(false);
+    d.add(1, 800, 0.2, 0.9);
+    expect(d.at(1.1)).toBe(800);
+    expect(d.at(1.2 + 0.3)).toBeCloseTo(20000 - 19200 * Math.exp(-1), 0);
+    expect(d.at(10)).toBeCloseTo(20000, 0);
+  });
+
+  it('a weaker pull in the same frame does not cut a deeper one short (hurt + close blast)', () => {
+    const d = new Dip(20000);
+    d.add(0, 700, 0.15, 1.6); // blast
+    d.add(0, 2400, 0.06, 0.45); // hurt, same instant
+    expect(d.level).toBe(700);
+    expect(d.holdEnd).toBeCloseTo(0.15);
+    expect(d.tau).toBeCloseTo(1.6 / 3);
+    // Same answer whichever arrives first.
+    const e = new Dip(20000);
+    e.add(0, 2400, 0.06, 0.45);
+    e.add(0, 700, 0.15, 1.6);
+    expect(e.level).toBe(700);
+    expect(e.holdEnd).toBeCloseTo(0.15);
+    expect(e.at(0.4)).toBeCloseTo(d.at(0.4), 0);
+  });
+
+  it('a pull during recovery starts from where it has got to, keeping the slow recovery', () => {
+    const d = new Dip(20000);
+    d.add(0, 600, 0.1, 1.5);
+    const mid = d.at(0.4);
+    expect(mid).toBeGreaterThan(600);
+    d.add(0.4, 15000, 0.05, 0.3); // shallower than where it is: stays at `mid`
+    expect(d.level).toBeCloseTo(mid);
+    expect(d.tau).toBeCloseTo(0.5);
+    d.add(0.45, 300, 0.05, 0.3); // deeper: goes deeper
+    expect(d.level).toBe(300);
+  });
+
+  it('holds until released (WASTED), whatever was queued before, then recovers from there', () => {
+    const d = new Dip(20000);
+    d.add(0, 2400, 0.06, 0.45); // the killing blow's hurt
+    d.hold(600); // then death, same frame
+    expect(d.at(0.5)).toBe(600);
+    expect(d.at(100)).toBe(600);
+    d.add(1, 2400, 0.06, 0.45);
+    expect(d.at(50)).toBe(600);
+    d.release(3, 0.9);
+    expect(d.at(3)).toBe(600);
+    expect(d.at(3.3)).toBeCloseTo(20000 - 19400 * Math.exp(-1), 0);
+  });
+
+  it('works for gains too (deeper is lower)', () => {
+    const d = new Dip(1);
+    d.add(0, 0.6, 0.12, 0.5);
+    d.add(0.01, 0.22, 0.12, 1.6);
+    expect(d.level).toBe(0.22);
+    expect(d.at(0.1)).toBe(0.22);
+    expect(d.at(5)).toBeCloseTo(1, 2);
   });
 });
 

@@ -77,3 +77,58 @@ export function dopplerCents(radial: number, limit = 300): number {
 export function semis(semitones: number): number {
   return Math.pow(2, semitones / 12);
 }
+
+/**
+ * A parameter pulled below its resting value for a while (the world muffle,
+ * the music duck). Later pulls merge into the one in progress instead of
+ * overriding it: the deepest level wins, the hold lasts until the latest one
+ * ends, and recovery takes the slowest time constant still in play. So a
+ * hurt in the same frame as a close blast or a death can't cut either short.
+ * Pure; the owner re-schedules the AudioParam from it (see automateDip).
+ * Lower is deeper (cutoff Hz, gain).
+ */
+export class Dip {
+  /** Bottom of the dip. */
+  level: number;
+  /** Held at `level` until this time, then recovers toward `rest`. Infinity holds until release(). */
+  holdEnd = -Infinity;
+  /** Recovery time constant, s. */
+  tau = 0.1;
+
+  constructor(readonly rest: number) {
+    this.level = rest;
+  }
+
+  /** Where the dip has got to at `t` (its short attack counted as instant). */
+  at(t: number): number {
+    if (t < this.holdEnd) return this.level;
+    if (this.holdEnd === -Infinity) return this.rest;
+    return this.rest + (this.level - this.rest) * Math.exp(-(t - this.holdEnd) / this.tau);
+  }
+
+  /** Still noticeably below rest at `t`. */
+  active(t: number): boolean {
+    return Math.abs(this.rest - this.at(t)) > Math.abs(this.rest) * 0.02;
+  }
+
+  /** Pull down to `level` for `hold` s, then recover over about `recover` s. */
+  add(now: number, level: number, hold: number, recover: number): void {
+    const tau = Math.max(0.005, recover / 3);
+    this.tau = this.active(now) ? Math.max(this.tau, tau) : tau;
+    this.level = Math.min(level, this.at(now));
+    this.holdEnd = Math.max(this.holdEnd, now + hold);
+  }
+
+  /** Pull down to `level` and stay there until release(). */
+  hold(level: number): void {
+    this.level = level;
+    this.holdEnd = Infinity;
+  }
+
+  /** Recover from wherever it is now over about `recover` s. */
+  release(now: number, recover: number): void {
+    this.level = this.at(now);
+    this.holdEnd = now;
+    this.tau = Math.max(0.005, recover / 3);
+  }
+}

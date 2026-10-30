@@ -16,6 +16,7 @@ import { ChaosMeter, MAX_INTENSITY } from './chaos';
 import { AmbientBed, EngineVoice, FireVoice, SirenVoice, TyreVoice, type SirenStyle } from './loops';
 import {
   AIR_FILTER_BELOW,
+  Dip,
   airCutoff,
   clamp,
   clamp01,
@@ -30,7 +31,7 @@ import { MusicPlayer } from './music/musicPlayer';
 import type { MusicMode } from './music/sequencer';
 import { STATIONS, type Station } from './music/stations';
 import * as sfx from './sfx';
-import { NoiseBank, Voice, makeImpulse, nodeStats } from './synth';
+import { NoiseBank, Voice, automateDip, makeImpulse, nodeStats } from './synth';
 import { RateGate, VoiceLimiter } from './voices';
 
 export { createCarSound, describeCar, type CarSound } from './carSound';
@@ -134,6 +135,8 @@ const MUSIC_LEVEL = 1.4;
 /** On foot the soundtrack is underscore, a little quieter than the car radio. */
 const MUSIC_ON_FOOT = 0.7;
 const STATION_KEY = 'curbside.station';
+/** The world muffle's resting cutoff, Hz (effectively open). */
+const OPEN = 20000;
 
 const rnd = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
 
@@ -202,6 +205,8 @@ export class GameAudio {
   private readonly chaos = new ChaosMeter();
   private readonly stationListeners: Array<(s: Station) => void> = [];
   private readonly cleanups: Array<() => void> = [];
+  /** The world muffle as one merged state (a hurt can't cut short a blast's or WASTED's). */
+  private readonly muffleDip = new Dip(OPEN);
   private stationIndex = loadStation();
   private musicMode: MusicMode = 'game';
   private intensityFloor = 0;
@@ -463,6 +468,7 @@ export class GameAudio {
           }
         : null,
       chaos: { energy: +this.chaos.energy.toFixed(2), level: this.chaos.level },
+      muffle: Math.round(this.muffleDip.at(this.ctx?.currentTime ?? 0)),
       paused: this.paused,
       hidden: this.hidden,
     };
@@ -624,7 +630,7 @@ export class GameAudio {
     this.worldGate.connect(this.sfxBus);
     this.worldMuffle = ctx.createBiquadFilter();
     this.worldMuffle.type = 'lowpass';
-    this.worldMuffle.frequency.value = 20000;
+    this.worldMuffle.frequency.value = OPEN;
     this.worldMuffle.Q.value = 0.5;
     this.worldMuffle.connect(this.worldGate);
     this.worldIn = ctx.createGain();
@@ -648,6 +654,10 @@ export class GameAudio {
     if (this.paused) {
       this.worldGate.gain.value = 0;
       this.music.setPaused(true);
+    }
+    if (this.dead) {
+      this.muffleDip.hold(600);
+      this.worldMuffle.frequency.value = 600;
     }
   }
 
@@ -754,13 +764,12 @@ export class GameAudio {
     this.retiring.length = w;
   }
 
-  /** Briefly dull the world: a hit, a blast nearby. */
+  /** Briefly dull the world: a hit, a blast nearby. Merges with a muffle in progress (deepest wins). */
   private muffle(cutoff: number, hold: number, recover: number): void {
-    if (this.dead || !this.ctx) return;
-    const f = this.worldMuffle.frequency;
+    if (this.dead || !this.ctx || !this.bank) return;
     const now = this.ctx.currentTime;
-    f.setTargetAtTime(cutoff, now, 0.01);
-    f.setTargetAtTime(20000, now + hold, recover / 3);
+    this.muffleDip.add(now, cutoff, hold, recover);
+    automateDip(this.worldMuffle.frequency, this.muffleDip, now, 0.01);
   }
 
   // --- Events ---
@@ -901,7 +910,9 @@ export class GameAudio {
       this.commit('player', v);
     }
     this.music?.setMode('off');
-    this.worldMuffle.frequency.setTargetAtTime(600, now, 0.25);
+    // Held until respawn; cancels any hurt or blast recovery already queued.
+    this.muffleDip.hold(600);
+    automateDip(this.worldMuffle.frequency, this.muffleDip, now, 0.25);
   }
 
   private onRespawn(): void {
@@ -909,7 +920,8 @@ export class GameAudio {
     this.runPoints = 0;
     if (!this.ctx || !this.bank) return;
     const now = this.ctx.currentTime;
-    this.worldMuffle.frequency.setTargetAtTime(20000, now, 0.3);
+    this.muffleDip.release(now, 0.9);
+    automateDip(this.worldMuffle.frequency, this.muffleDip, now, 0.01);
     const v = this.voice(null, FALLOFF.near, 0.9, 0, 0, 'ui');
     if (v) {
       sfx.respawn(v, this.station.key);

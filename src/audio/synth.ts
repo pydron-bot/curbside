@@ -4,6 +4,7 @@
  * envelope helpers, soft-clip curves and a synthetic reverb impulse. Works on
  * any BaseAudioContext, so sounds can also be rendered offline for checks.
  */
+import type { Dip } from './mix';
 
 /** Live node accounting for the debug readout: a leak shows up as `live` creeping up. */
 export const nodeStats = { created: 0, live: 0 };
@@ -134,6 +135,19 @@ export function perc(p: AudioParam, t: number, peak: number, attack: number, tau
   p.linearRampToValueAtTime(peak, t + attack);
   p.setTargetAtTime(0, t + attack, tau);
   return t + attack + tau * 7;
+}
+
+/**
+ * Re-schedule `p` to follow `dip` from `now`. Everything queued is dropped
+ * first (keeping the value reached), so an earlier "recover at t" can't undo a
+ * deeper dip scheduled after it. Glides down with time constant `attack`.
+ */
+export function automateDip(p: AudioParam, dip: Dip, now: number, attack: number): void {
+  const reached = p.value;
+  p.cancelScheduledValues(now);
+  p.setValueAtTime(reached, now);
+  if (dip.holdEnd > now) p.setTargetAtTime(dip.level, now, attack);
+  if (dip.holdEnd !== Infinity) p.setTargetAtTime(dip.rest, Math.max(now, dip.holdEnd), dip.tau);
 }
 
 /** Exponential glide of a frequency from f0 to f1 over `dur` seconds. */

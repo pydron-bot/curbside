@@ -5,7 +5,8 @@
  * note, free portamento); drums, pads, keys and arps are short-lived voices
  * that are disconnected once they finish. Works on an OfflineAudioContext too.
  */
-import { NoiseBank, Voice, perc, sweep } from '../synth';
+import { Dip } from '../mix';
+import { NoiseBank, Voice, automateDip, perc, sweep } from '../synth';
 import { Arranger, StepClock, swingOffset, type MusicMode, type NoteEvent } from './sequencer';
 import { STATIONS, type Station, type StationSound } from './stations';
 import { midiToHz } from './theory';
@@ -33,6 +34,7 @@ export class MusicPlayer {
   private running = false;
   /** Faded out by setMode('off'), waiting to come back. */
   private off = false;
+  private readonly duckDip = new Dip(1);
 
   private readonly duckGain: GainNode;
   private readonly fadeGain: GainNode;
@@ -239,12 +241,11 @@ export class MusicPlayer {
     return station;
   }
 
-  /** Dip the music under something loud. `depth` is the gain at the bottom. */
+  /** Dip the music under something loud. `depth` is the gain at the bottom; overlapping ducks merge (deepest wins). */
   duck(depth: number, release: number): void {
     const now = this.ctx.currentTime;
-    const g = this.duckGain.gain;
-    g.setTargetAtTime(depth, now, 0.015);
-    g.setTargetAtTime(1, now + 0.12, Math.max(0.05, release / 3));
+    this.duckDip.add(now, depth, 0.12, Math.max(0.15, release));
+    automateDip(this.duckGain.gain, this.duckDip, now, 0.015);
   }
 
   /** Paused: the music drops back and goes muffled, like it's in the next room. */
