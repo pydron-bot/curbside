@@ -259,7 +259,8 @@ radar.setBlip(id, { x, z, kind?, colour?, icon?, pulse?, edgeArrow?, size? })
 radar.removeBlip(id)
 radar.setWaypoint(x, z) / radar.clearWaypoint()          // route along the roads + rim arrow when off-radar
 hud.score.notice(text, kind?)                            // a feed line without points
-haptics.pulse(strength0to1, ms)                          // also fired by crash / explosion / shot / hurt events
+haptics.pulse(strength0to1, ms)                          // also fired by crash / explosion / shot / hurt events;
+                                                         // haptics.enabled is off behind the title
 ```
 
 Kinds: `objective`, `enemy`, `police`, `pickup`, `friend`, `shop`, `race`,
