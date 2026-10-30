@@ -101,7 +101,9 @@ export class PackageMode implements Mode {
       const i = pk.index;
       const pulse = 0.5 + 0.5 * Math.sin(t * 3 + i);
       groundRing(g, pk.x, pk.z, 1.6 + pulse * 0.3, MARK.package, 0.55 + 0.35 * pulse, t);
-      props.box(pk.x, 0.65 + Math.sin(t * 2.6 + i) * 0.12, pk.z, 0.55, 0.42, 0.55, t * 2 + i, r * 0.55, gr * 0.85, b * 0.4);
+      const bob = Math.sin(t * 2.6 + i) * 0.12;
+      if (props.modelled) props.model('package', pk.x, 0.3 + bob, pk.z, t * 2 + i, 1.6, 1, 1, 1, 0.25);
+      else props.box(pk.x, 0.65 + bob, pk.z, 0.55, 0.42, 0.55, t * 2 + i, r * 0.55, gr * 0.85, b * 0.4);
     }
   }
 

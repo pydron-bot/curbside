@@ -6,7 +6,7 @@
  * so a lucky brush past a cop isn't an arrest and the player can break free.
  * Pure logic.
  */
-import { CAR_CIRCLE_RADIUS, carCircles, type Point } from './physics';
+import { bodyOf, carCircles, type Point } from './physics';
 import type { VehicleState } from '../entities/vehicle';
 
 export interface ArrestSituation {
@@ -79,21 +79,17 @@ export class BustMeter {
   }
 }
 
-const circlesA: Point[] = [
-  { x: 0, z: 0 },
-  { x: 0, z: 0 },
-  { x: 0, z: 0 },
-];
-const circlesB: Point[] = [
-  { x: 0, z: 0 },
-  { x: 0, z: 0 },
-  { x: 0, z: 0 },
-];
+/** Reused for each car's collision circles (carCircles resizes them to the body). */
+const circlesA: Point[] = [];
+const circlesB: Point[] = [];
 
 /** Are two cars in contact (their collision circles within a hair of each other)? */
 export function carsTouching(a: VehicleState, b: VehicleState): boolean {
-  if (Math.abs(a.x - b.x) > 6 || Math.abs(a.z - b.z) > 6) return false;
-  const reach = CAR_CIRCLE_RADIUS * 2 + TOUCH_SLOP;
+  const ba = bodyOf(a);
+  const bb = bodyOf(b);
+  const far = ba.reach + bb.reach + TOUCH_SLOP;
+  if (Math.abs(a.x - b.x) > far || Math.abs(a.z - b.z) > far) return false;
+  const reach = ba.radius + bb.radius + TOUCH_SLOP;
   for (const p of carCircles(a, circlesA)) {
     for (const q of carCircles(b, circlesB)) {
       if (Math.hypot(p.x - q.x, p.z - q.z) < reach) return true;

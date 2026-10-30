@@ -60,6 +60,10 @@ export interface VehicleSpec {
   driftCarry: number;
   /** Mass relative to a sedan, for car-on-car collisions and who gets hurt. */
   mass: number;
+  /** Extra acceleration of a launch after a burnout (default LAUNCH_ACCEL): muscle cars leave harder. */
+  launch?: number;
+  /** Seconds of burnout to a full launch charge (default BURNOUT_CHARGE). */
+  burnoutCharge?: number;
 }
 
 export interface VehicleState {
@@ -81,7 +85,37 @@ export interface VehicleState {
   burnout: number;
   /** Seconds left of a launch (after a burnout), with extra acceleration. */
   launchTime: number;
+  /**
+   * Collision shape (circles along the body). Set from the archetype when a
+   * car is built or restyled; left out (a standard car) by createVehicleState,
+   * so Object.assign(sim, createVehicleState(...)) keeps the car's own.
+   */
+  body?: CarBody;
 }
+
+/**
+ * A vehicle's footprint for collisions: circles of `radius` at `offsets`
+ * along its forward axis. Long vehicles get more circles (a bus is five),
+ * two-wheelers small ones. `reach` is how far the body extends from the
+ * centre (furthest circle's edge), `halfWidth` how far to the side.
+ */
+export interface CarBody {
+  radius: number;
+  offsets: readonly number[];
+  reach: number;
+  halfWidth: number;
+}
+
+/** Circles of `radius` spread evenly from `rear` to `front` (circle centres), n of them. */
+function makeBody(radius: number, rear: number, front: number, n: number, halfWidth = radius): CarBody {
+  const offsets: number[] = [];
+  for (let i = 0; i < n; i++) offsets.push(n === 1 ? (rear + front) / 2 : rear + ((front - rear) * i) / (n - 1));
+  const reach = Math.max(...offsets.map((o) => Math.abs(o))) + radius;
+  return { radius, offsets, reach, halfWidth };
+}
+
+/** The standard car: three 0.98 m circles 1.38 m apart (sedan-sized, ~4.7 m long). */
+export const CAR_BODY: CarBody = makeBody(0.98, -1.38, 1.38, 3, 0.98);
 
 /**
  * dst = src, field by field: the sim keeps last step's state of every car for
@@ -100,6 +134,7 @@ export function copyVehicleState(dst: VehicleState, src: VehicleState): void {
   dst.slide = src.slide;
   dst.burnout = src.burnout;
   dst.launchTime = src.launchTime;
+  dst.body = src.body;
 }
 
 export interface VehicleControls {
@@ -135,7 +170,41 @@ export const SEDAN: VehicleSpec = {
   mass: 1,
 };
 
-export type VehicleArchetype = 'sedan' | 'compact' | 'sports' | 'van' | 'police' | 'taxi' | 'pickup';
+export type VehicleArchetype =
+  | 'sedan'
+  | 'compact'
+  | 'sports'
+  | 'van'
+  | 'police'
+  | 'taxi'
+  | 'pickup'
+  | 'muscle'
+  | 'limo'
+  | 'police_suv'
+  | 'swat'
+  | 'ambulance'
+  | 'firetruck'
+  | 'garbage_truck'
+  | 'tow_truck'
+  | 'ice_cream_van'
+  | 'bus'
+  | 'scooter'
+  | 'cop_bike';
+
+/** Police vehicles: the force's own (stealing one is a crime, ramming one too). */
+export function isPoliceArchetype(a: VehicleArchetype): boolean {
+  return a === 'police' || a === 'police_suv' || a === 'swat' || a === 'cop_bike';
+}
+
+/** Two-wheelers: lean into turns, and a hard crash throws the rider off. */
+export function isBike(a: VehicleArchetype): boolean {
+  return a === 'scooter' || a === 'cop_bike';
+}
+
+/** Ambulances and fire trucks: run with sirens now and then, and traffic gives way. */
+export function isEmergency(a: VehicleArchetype): boolean {
+  return a === 'ambulance' || a === 'firetruck';
+}
 
 /**
  * Handling per archetype, as tweaks on the sedan baseline: the sports car is
@@ -192,6 +261,183 @@ export const VEHICLE_SPECS: Record<VehicleArchetype, VehicleSpec> = {
     driftGrip: 3.4,
     mass: 1.35,
   },
+  // A big-block muscle car: nearly as fast as the sports car in a straight
+  // line, a loose, lazy rear that loves to slide, and burnouts that launch hard.
+  muscle: {
+    ...SEDAN,
+    maxSpeed: 40,
+    accel: 18,
+    brakeDecel: 25,
+    steerRate: 2.6,
+    steerResponse: 10,
+    grip: 8.5,
+    handbrakeGrip: 1,
+    handbrakeYawBoost: 1.7,
+    latAccel: 20,
+    driftGrip: 2,
+    driftRecover: 1.5,
+    driftCarry: 0.46,
+    mass: 1.15,
+    launch: 2.3,
+    burnoutCharge: 0.6,
+  },
+  // Long and floaty: slow to answer the wheel, soft grip, slides that hang on.
+  limo: {
+    ...SEDAN,
+    maxSpeed: 32,
+    accel: 11,
+    brakeDecel: 21,
+    steerRate: 2,
+    steerResponse: 4.5,
+    grip: 6.5,
+    handbrakeGrip: 1.3,
+    latAccel: 15,
+    driftGrip: 2.8,
+    driftRecover: 1.4,
+    driftCarry: 0.3,
+    mass: 1.7,
+  },
+  police_suv: { ...SEDAN, maxSpeed: 35, accel: 16, brakeDecel: 27, steerRate: 2.5, steerResponse: 10, grip: 8.5, latAccel: 22, driftGrip: 3, mass: 1.45 },
+  swat: {
+    ...SEDAN,
+    maxSpeed: 30,
+    accel: 12,
+    brakeDecel: 20,
+    steerRate: 2,
+    steerResponse: 6,
+    grip: 8,
+    handbrakeGrip: 2,
+    latAccel: 16,
+    driftGrip: 4,
+    driftRecover: 3,
+    mass: 2.2,
+  },
+  ambulance: { ...SEDAN, maxSpeed: 29, accel: 11, brakeDecel: 20, steerRate: 2.1, steerResponse: 6, grip: 7.5, latAccel: 16, driftGrip: 3.8, driftRecover: 3, mass: 1.8 },
+  // The heavies: slow, lazy steering, a low cornering limit, and they shove everything.
+  firetruck: {
+    ...SEDAN,
+    maxSpeed: 25,
+    accel: 8,
+    brakeDecel: 16,
+    steerRate: 1.7,
+    steerResponse: 4.5,
+    grip: 7,
+    handbrakeGrip: 2.4,
+    handbrakeYawBoost: 1.15,
+    latAccel: 13,
+    driftGrip: 4.5,
+    driftRecover: 3.5,
+    driftCarry: 0.15,
+    mass: 3,
+  },
+  garbage_truck: {
+    ...SEDAN,
+    maxSpeed: 21,
+    accel: 6.5,
+    brakeDecel: 15,
+    steerRate: 1.7,
+    steerResponse: 4,
+    grip: 7,
+    handbrakeGrip: 2.4,
+    handbrakeYawBoost: 1.15,
+    latAccel: 12,
+    driftGrip: 4.5,
+    driftRecover: 3.5,
+    driftCarry: 0.15,
+    mass: 3.1,
+  },
+  tow_truck: { ...SEDAN, maxSpeed: 27, accel: 10, brakeDecel: 19, steerRate: 2, steerResponse: 6, grip: 7.5, latAccel: 15, driftGrip: 3.8, driftRecover: 3, mass: 2 },
+  // Top-heavy and in no hurry.
+  ice_cream_van: { ...SEDAN, maxSpeed: 22, accel: 8, brakeDecel: 17, steerRate: 2, steerResponse: 5, grip: 7, latAccel: 13, driftGrip: 3.8, driftRecover: 3, mass: 1.5 },
+  bus: {
+    ...SEDAN,
+    maxSpeed: 22,
+    accel: 6,
+    brakeDecel: 14,
+    steerRate: 1.5,
+    steerFullSpeed: 4,
+    steerResponse: 4,
+    grip: 7,
+    handbrakeGrip: 2.6,
+    handbrakeYawBoost: 1.1,
+    latAccel: 12,
+    driftGrip: 4.8,
+    driftRecover: 4,
+    driftCarry: 0.1,
+    mass: 3.4,
+  },
+  // Two-wheelers: quick off the line, tight turns, a high cornering limit
+  // (they lean into it), light enough that anything shoves them about.
+  scooter: {
+    ...SEDAN,
+    maxSpeed: 24,
+    maxReverseSpeed: 3,
+    accel: 19,
+    reverseAccel: 3,
+    brakeDecel: 24,
+    handbrakeDecel: 8,
+    steerRate: 3.6,
+    steerFullSpeed: 3,
+    steerFalloffSpeed: 24,
+    steerResponse: 16,
+    grip: 12,
+    handbrakeGrip: 3,
+    handbrakeYawBoost: 1.4,
+    latAccel: 29,
+    driftGrip: 5,
+    driftRecover: 3.5,
+    driftCarry: 0.3,
+    mass: 0.35,
+  },
+  cop_bike: {
+    ...SEDAN,
+    maxSpeed: 38,
+    maxReverseSpeed: 3,
+    accel: 26,
+    reverseAccel: 3,
+    brakeDecel: 28,
+    handbrakeDecel: 8,
+    steerRate: 3.4,
+    steerFullSpeed: 3,
+    steerFalloffSpeed: 30,
+    steerResponse: 15,
+    grip: 12,
+    handbrakeGrip: 2.6,
+    handbrakeYawBoost: 1.5,
+    latAccel: 30,
+    driftGrip: 4.5,
+    driftRecover: 3,
+    driftCarry: 0.35,
+    mass: 0.5,
+  },
+};
+
+/**
+ * Collision footprints per archetype, matched to the models' lengths
+ * (vehicles.glb): the standard car for the five original saloons, more and
+ * bigger circles for the long ones (the bus is 12 m: five circles), two
+ * small ones for the bikes.
+ */
+export const VEHICLE_BODIES: Record<VehicleArchetype, CarBody> = {
+  sedan: CAR_BODY,
+  compact: CAR_BODY,
+  sports: CAR_BODY,
+  van: CAR_BODY,
+  police: CAR_BODY,
+  taxi: CAR_BODY,
+  pickup: CAR_BODY,
+  muscle: makeBody(1, -1.45, 1.45, 3),
+  limo: makeBody(1, -2.45, 2.45, 4),
+  police_suv: makeBody(1.02, -1.48, 1.55, 3),
+  swat: makeBody(1.18, -1.86, 2.07, 3, 1.25),
+  ambulance: makeBody(1.1, -1.94, 2.02, 3, 1.13),
+  firetruck: makeBody(1.28, -3.36, 3.44, 5, 1.31),
+  garbage_truck: makeBody(1.28, -3.06, 3.14, 4, 1.31),
+  tow_truck: makeBody(1.12, -2.38, 2.15, 4, 1.16),
+  ice_cream_van: makeBody(1.1, -1.64, 1.72, 3, 1.11),
+  bus: makeBody(1.3, -4.74, 4.83, 5, 1.33),
+  scooter: makeBody(0.44, -0.4, 0.42, 2, 0.31),
+  cop_bike: makeBody(0.45, -0.64, 0.66, 3, 0.38),
 };
 
 /**
@@ -206,6 +452,19 @@ export const VEHICLE_HEALTH: Record<VehicleArchetype, number> = {
   police: 130,
   taxi: 100,
   pickup: 125,
+  muscle: 110,
+  limo: 150,
+  police_suv: 160,
+  swat: 220,
+  ambulance: 160,
+  firetruck: 300,
+  garbage_truck: 320,
+  tow_truck: 180,
+  ice_cream_van: 120,
+  bus: 320,
+  // Bikes are fragile: a couple of hard knocks and they burn.
+  scooter: 35,
+  cop_bike: 60,
 };
 
 /** Gravity for airborne cars, m/s² (a touch heavier than real: jumps read snappier from above). */
@@ -290,7 +549,7 @@ export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSp
   // --- Burnout: held on the handbrake with the throttle down, it spins up a launch ---
   const burning = c.handbrake && throttle > 0.5 && Math.abs(vF) < BURNOUT_SPEED;
   if (burning) {
-    s.burnout = Math.min(1, s.burnout + dt / BURNOUT_CHARGE);
+    s.burnout = Math.min(1, s.burnout + dt / (spec.burnoutCharge ?? BURNOUT_CHARGE));
   } else if (s.burnout > 0) {
     // Let go of the handbrake still on the gas: launch, as hard as it was charged.
     if (!c.handbrake && throttle > 0.3 && s.burnout > 0.25) s.launchTime = LAUNCH_SECONDS * s.burnout;
@@ -300,7 +559,7 @@ export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSp
 
   // --- Longitudinal ---
   const top = terminalSpeed(spec, boost);
-  const accel = spec.accel * (boost ? BOOST_ACCEL : 1) * (s.launchTime > 0 ? LAUNCH_ACCEL : 1);
+  const accel = spec.accel * (boost ? BOOST_ACCEL : 1) * (s.launchTime > 0 ? (spec.launch ?? LAUNCH_ACCEL) : 1);
   const limit = taperLimit(accel, top, spec.drag);
   if (burning) {
     // The brakes hold the car while the rear wheels spin.
@@ -408,8 +667,8 @@ export function launch(s: VehicleState, vy: number): void {
   s.vy = vy;
 }
 
-/** Where someone stands to get in: beside the driver's (left) door. */
-export function driverDoorPosition(s: VehicleState, offset = 1.6): { x: number; z: number } {
+/** Where someone stands to get in: beside the driver's (left) door (on a bike, beside the saddle). */
+export function driverDoorPosition(s: VehicleState, offset = (s.body ?? CAR_BODY).halfWidth + 0.62): { x: number; z: number } {
   const lx = Math.cos(s.heading);
   const lz = -Math.sin(s.heading);
   const fx = Math.sin(s.heading);
@@ -428,4 +687,41 @@ export function wrapAngle(a: number): number {
 /** Shortest-path angle interpolation, for render smoothing. */
 export function lerpAngle(a: number, b: number, t: number): number {
   return a + wrapAngle(b - a) * t;
+}
+
+// --- Two-wheelers ---------------------------------------------------------
+
+/** A bike rider is thrown off by an impact harder than this (closing speed, m/s). */
+export const BIKE_THROW_IMPACT = 8;
+/** Lean (rad) per m/s² of sideways acceleration, and the most a bike leans. */
+const LEAN_PER_ACCEL = 0.045;
+export const MAX_LEAN = 0.62;
+
+/** A bike lying on its side scrapes to a stop: no grip, no engine, a lot of friction. */
+export function slideOnSide(s: VehicleState, dt: number): void {
+  const k = Math.exp(-2.4 * dt);
+  s.vx *= k;
+  s.vz *= k;
+  s.yawRate *= Math.exp(-5 * dt);
+}
+
+/** Does a crash at `impact` m/s throw the rider off a bike? */
+export function bikeThrows(impact: number): boolean {
+  return impact > BIKE_THROW_IMPACT;
+}
+
+/**
+ * How far a bike leans for a sideways acceleration (m/s², positive toward
+ * its left): into the turn, in proportion, capped at MAX_LEAN. As a roll
+ * about the bike's forward axis, positive lifts the left side, so a left
+ * turn (acceleration to the left) gives a negative roll.
+ */
+export function bikeLean(lateralAccel: number): number {
+  return -Math.max(-MAX_LEAN, Math.min(MAX_LEAN, lateralAccel * LEAN_PER_ACCEL));
+}
+
+/** A bike's lean from its own motion: sideways acceleration = yaw rate × forward speed. */
+export function leanOf(s: VehicleState): number {
+  if (s.airborne) return 0;
+  return bikeLean(s.yawRate * forwardSpeed(s));
 }

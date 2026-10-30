@@ -1,6 +1,8 @@
 /**
  * Per-building dressing decided from the city seed: roof type, rooftop props
- * (AC units, vents, water tanks, chimneys, solar panels), helipads on the
+ * (AC units, vents, water tanks, satellite dishes, antennas, chimneys, solar
+ * panels; the first five are props.glb models, sized here to their
+ * footprints, see docs/BLENDER_TODO.md §3), helipads on the
  * tallest downtown towers, and street-level shopfronts with awnings and neon.
  * Pure data (no three.js); cityMesh.ts turns it into instanced meshes and
  * shader attributes. Deterministic, so the same city always looks the same.
@@ -9,13 +11,19 @@ import { BLOCK_SIZE, HALF_EXTENT, blockInterior, type Building, type City, type 
 import { DISTRICT_STYLES, pickWeighted, type District, type RoofType } from './districts';
 import { mulberry32 } from './random';
 
-export type PropKind = 'ac' | 'vent' | 'tank' | 'chimney' | 'solar' | 'housing';
+export type PropKind = 'ac' | 'vent' | 'tank' | 'dish' | 'antenna' | 'chimney' | 'solar' | 'housing';
 
-/** A rooftop box or cylinder, in world coordinates; y0 is where it stands. */
+/** A rooftop prop's footprint, in world coordinates; y0 is where it stands. */
 export interface RoofProp extends Rect {
   kind: PropKind;
   y0: number;
   height: number;
+  /**
+   * Which way the model faces (vehicle convention, radians, a whole number
+   * of quarter turns): the footprint is the model's width (x) by depth (z),
+   * swapped when it's turned an odd number of quarters.
+   */
+  yaw: number;
 }
 
 /** Building faces, by the direction they look: north (−Z), east (+X), south (+Z), west (−X). */
@@ -57,28 +65,34 @@ const PROP_WEIGHTS: Readonly<Record<District, ReadonlyArray<readonly [PropKind, 
     ['vent', 2],
     ['tank', 0.4],
     ['solar', 0.8],
+    ['dish', 0.8],
+    ['antenna', 0.5],
   ],
   oldtown: [
     ['tank', 1.6],
     ['chimney', 2],
     ['vent', 1],
     ['ac', 1],
+    ['antenna', 0.6],
   ],
   arts: [
     ['ac', 2],
     ['vent', 2],
     ['tank', 0.8],
     ['solar', 0.6],
+    ['dish', 0.8],
   ],
   industrial: [
     ['vent', 3],
     ['ac', 1.2],
     ['tank', 0.4],
+    ['antenna', 0.4],
   ],
   residential: [
     ['chimney', 2],
     ['solar', 2],
     ['ac', 0.6],
+    ['dish', 1],
   ],
 };
 
@@ -88,16 +102,18 @@ const PITCHED_PROPS: ReadonlyArray<readonly [PropKind, number]> = [
   ['solar', 2],
 ];
 
+/** A model's footprint (width x, depth z) and height at scale 1, m (props.glb). */
+const model = (w: number, d: number, h: number, lo: number, hi: number) => (r: () => number): [number, number, number] => {
+  const s = lo + r() * (hi - lo);
+  return [w * s, d * s, h * s];
+};
+
 const PROP_SIZE: Readonly<Record<PropKind, (r: () => number) => [w: number, d: number, h: number]>> = {
-  ac: (r) => [1 + r() * 0.6, 1.4 + r() * 0.8, 0.8 + r() * 0.4],
-  vent: (r) => {
-    const d = 0.35 + r() * 0.5;
-    return [d, d, 0.5 + r() * 0.6];
-  },
-  tank: (r) => {
-    const d = 2 + r() * 0.8;
-    return [d, d, 2 + r() * 0.6];
-  },
+  ac: model(1.2, 0.92, 0.81, 0.95, 1.35),
+  vent: model(0.6, 0.6, 0.89, 0.8, 1.3),
+  tank: model(2.4, 2.5, 4.2, 0.85, 1.05),
+  dish: model(1.14, 0.8, 1.54, 0.8, 1.15),
+  antenna: model(1.2, 0.4, 3.28, 0.8, 1.2),
   chimney: (r) => [0.5 + r() * 0.3, 0.7 + r() * 0.4, 1 + r() * 0.8],
   solar: (r) => [3 + r() * 3, 2 + r() * 2, 0.35],
   housing: () => [0, 0, 0],
@@ -122,7 +138,7 @@ export function planBuilding(b: Building, index: number, citySeed: number): Buil
   const props: RoofProp[] = [];
   // Pitched tile roofs carry no stair bulkheads or plant boxes, just chimneys and solar panels.
   const pitched = roof === 'terracotta';
-  if (b.roofBox && !helipad && !pitched) props.push({ ...b.roofBox, kind: 'housing', y0: b.height });
+  if (b.roofBox && !helipad && !pitched) props.push({ ...b.roofBox, kind: 'housing', y0: b.height, yaw: 0 });
   if (!helipad) placeProps(b, roof, rand, props);
 
   const { shopSides, shopfronts } = planShops(b, rand);
@@ -145,11 +161,13 @@ function placeProps(b: Building, roof: RoofType, rand: () => number, out: RoofPr
   for (let attempt = 0, placed = 0; attempt < wanted * 6 && placed < wanted; attempt++) {
     const kind = pickWeighted(weights, rand());
     let [pw, pd, ph] = PROP_SIZE[kind](rand);
-    if (rand() < 0.5) [pw, pd] = [pd, pw];
+    // Any of four ways round: an odd quarter turn swaps the footprint.
+    const yaw = Math.floor(rand() * 4);
+    if (yaw % 2) [pw, pd] = [pd, pw];
     if (pw > iw || pd > id) continue;
     const x = inner.minX + rand() * (iw - pw);
     const z = inner.minZ + rand() * (id - pd);
-    const p: RoofProp = { kind, minX: x, minZ: z, maxX: x + pw, maxZ: z + pd, y0: b.height, height: ph };
+    const p: RoofProp = { kind, minX: x, minZ: z, maxX: x + pw, maxZ: z + pd, y0: b.height, height: ph, yaw: (yaw * Math.PI) / 2 };
     if (out.some((o) => overlaps(o, p, 0.5))) continue;
     out.push(p);
     placed++;

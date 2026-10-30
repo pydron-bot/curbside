@@ -11,7 +11,7 @@
  */
 import type { ColorRepresentation } from 'three';
 import type { PedState } from '../entities/pedestrian';
-import { createVehicleState, type VehicleArchetype, type VehicleState } from '../entities/vehicle';
+import { createVehicleState, isEmergency, type VehicleArchetype, type VehicleState } from '../entities/vehicle';
 import type { CarMesh } from '../render/carMesh';
 import type { CharacterModel, Outfit } from '../render/characterModel';
 import { CAP_COLOURS, STORY_BODIES, pickCrowdBody, type BodyKind } from './bodies';
@@ -45,6 +45,10 @@ export interface Vehicle {
   pursuit?: PursuitDriver | null;
   /** Sold at the docks and waiting for the crane: nobody can get back in. */
   exported?: boolean;
+  /** A bike lying on its side after a crash threw its rider (stood up again by whoever gets on). */
+  tipped?: boolean;
+  /** An ambulance or fire truck on a call: lights and siren, in a hurry, and traffic gives way. */
+  emergency?: boolean;
 }
 
 export interface CrowdPed {
@@ -104,16 +108,54 @@ const SPAWN_GAP = 10;
 /** A parking spot counts as taken when a car is this close to it (each axis), m. */
 const PARK_CLEAR = 4;
 
-const TRAFFIC_MIX: Array<[VehicleArchetype, number]> = [
-  ['sedan', 0.3],
-  ['compact', 0.22],
-  ['taxi', 0.14],
-  ['pickup', 0.12],
-  ['van', 0.12],
-  ['sports', 0.1],
+/**
+ * What traffic is made of (weights sum to 1): mostly saloons, now and then a
+ * special (a bus, a muscle car, a limo, a garbage truck, an ice cream van,
+ * an ambulance on a call...) and a scooter weaving through.
+ */
+export const TRAFFIC_MIX: Array<[VehicleArchetype, number]> = [
+  ['sedan', 0.24],
+  ['compact', 0.19],
+  ['taxi', 0.12],
+  ['pickup', 0.1],
+  ['van', 0.1],
+  ['sports', 0.07],
+  ['muscle', 0.04],
+  ['scooter', 0.025],
+  ['bus', 0.025],
+  ['limo', 0.02],
+  ['garbage_truck', 0.015],
+  ['tow_truck', 0.015],
+  ['ice_cream_van', 0.015],
+  ['ambulance', 0.015],
+  ['firetruck', 0.01],
 ];
+/** Share of ambulances and fire trucks in traffic that are on a call. */
+export const EMERGENCY_SHARE = 0.5;
+/** How fast one on a call cruises, m/s. */
+const EMERGENCY_CRUISE = 17;
 /** Archetypes with a fixed livery rather than a random paint job. */
-const LIVERY: Partial<Record<VehicleArchetype, string>> = { taxi: '#f2c12e' };
+const LIVERY: Partial<Record<VehicleArchetype, string>> = {
+  taxi: '#f2c12e',
+  ambulance: '#f4f4f0',
+  firetruck: '#c3191c',
+  bus: '#e8a21e',
+  garbage_truck: '#3f7a3a',
+  tow_truck: '#e8b923',
+  police_suv: '#f2f2f2',
+  swat: '#1b1f27',
+};
+/** Some models come in a few colours of their own rather than the street palette. */
+const LIVERIES: Partial<Record<VehicleArchetype, readonly string[]>> = {
+  limo: ['#121316', '#f2f2ee', '#1c1c24'],
+  ice_cream_van: ['#f7c6d9', '#bfe8d8', '#f5ead0', '#c9dcf5'],
+};
+
+/** A traffic paint job for `archetype`: its livery, one of its own colours, or the street palette. */
+export function trafficPaint(archetype: VehicleArchetype, rand: () => number): string {
+  const own = LIVERIES[archetype];
+  return LIVERY[archetype] ?? (own ? pick(own, rand) : pick(PAINTS, rand));
+}
 const PAINTS = ['#c8342b', '#2f6fc0', '#d9d6cc', '#e8b923', '#3d7a4a', '#1f2328', '#8a8f96', '#7a2f5a', '#c86a2b'];
 const SHIRTS = ['#c94f4f', '#4f7cc9', '#5aa36a', '#d8d2c0', '#2f2f35', '#a0662f', '#7d4fc9', '#e08a3c'];
 const PANTS = ['#2e3a5c', '#3b3b3b', '#6b5a45', '#1f2a24', '#59606b'];
@@ -345,7 +387,7 @@ export class Population {
 
   private newVehicle(
     archetype: VehicleArchetype = pickWeighted(TRAFFIC_MIX, this.rand),
-    paint: ColorRepresentation = LIVERY[archetype] ?? pick(PAINTS, this.rand),
+    paint: ColorRepresentation = trafficPaint(archetype, this.rand),
   ): Vehicle {
     const v = this.hooks.createVehicle(archetype, paint);
     v.mesh.root.visible = false;
@@ -378,6 +420,8 @@ export class Population {
     Object.assign(v.sim, createVehicleState(spot.x, spot.z, spot.heading));
     Object.assign(v.prev, v.sim);
     v.ai = null;
+    v.tipped = false;
+    v.emergency = false;
     v.mesh.root.visible = true;
     this.vehicles.push(v);
     idle.push(v);
@@ -391,6 +435,8 @@ export class Population {
     v.pursuit = null;
     v.police = false;
     v.exported = false;
+    v.tipped = false;
+    v.emergency = false;
     v.mesh.siren = false;
     v.mesh.root.visible = false;
     v.sim.vx = v.sim.vz = v.sim.yawRate = 0;
@@ -405,7 +451,7 @@ export class Population {
     const restyle = v.charred || !TRAFFIC_MIX.some(([a]) => a === v.archetype);
     if (restyle) {
       v.archetype = pickWeighted(TRAFFIC_MIX, this.rand);
-      v.paint = LIVERY[v.archetype] ?? pick(PAINTS, this.rand);
+      v.paint = trafficPaint(v.archetype, this.rand);
     }
     this.hooks.resetVehicle(v, restyle);
   }
@@ -430,6 +476,14 @@ export class Population {
       Object.assign(v.sim, createVehicleState(spawned.x, spawned.z, spawned.heading));
       Object.assign(v.prev, v.sim);
       v.ai = spawned.driver;
+      v.tipped = false;
+      // Ambulances and fire trucks are on a call half the time: lights, siren, in a hurry.
+      v.emergency = isEmergency(v.archetype) && this.rand() < EMERGENCY_SHARE;
+      v.mesh.siren = v.emergency;
+      if (v.emergency) {
+        v.ai.urgent = true;
+        v.ai.cruise = EMERGENCY_CRUISE;
+      }
       return true;
     }
     return false;

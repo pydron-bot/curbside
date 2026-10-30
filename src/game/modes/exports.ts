@@ -31,6 +31,19 @@ export const EXPORT_BASE: Readonly<Record<VehicleArchetype, number>> = {
   taxi: 600,
   sports: 900,
   police: 1500,
+  // Not on the buyer's lists (the lists are fixed per save), but priced for a sale all the same.
+  muscle: 1000,
+  limo: 1200,
+  police_suv: 1700,
+  swat: 2500,
+  ambulance: 1300,
+  firetruck: 2000,
+  garbage_truck: 800,
+  tow_truck: 900,
+  ice_cream_van: 700,
+  bus: 1100,
+  scooter: 250,
+  cop_bike: 1400,
 };
 /** A colour-specific order pays this much more. */
 const COLOUR_PREMIUM = 1.25;
@@ -59,6 +72,18 @@ export const CAR_NAMES: Readonly<Record<VehicleArchetype, string>> = {
   taxi: 'TAXI',
   sports: 'SPORTS',
   police: 'POLICE CAR',
+  muscle: 'MUSCLE CAR',
+  limo: 'LIMO',
+  police_suv: 'POLICE SUV',
+  swat: 'SWAT TRUCK',
+  ambulance: 'AMBULANCE',
+  firetruck: 'FIRE TRUCK',
+  garbage_truck: 'GARBAGE TRUCK',
+  tow_truck: 'TOW TRUCK',
+  ice_cream_van: 'ICE CREAM VAN',
+  bus: 'BUS',
+  scooter: 'SCOOTER',
+  cop_bike: 'POLICE BIKE',
 };
 
 /** Paints seen so far (a few palettes' worth): the export check asks every step. */
@@ -150,7 +175,8 @@ export function exportList(n: number): ExportOrder[] {
 }
 
 export function matchesOrder(o: ExportOrder, archetype: VehicleArchetype, paint: ColorRepresentation, police = false): boolean {
-  const kind: VehicleArchetype = police ? 'police' : archetype;
+  // Any police car (the saloon or the SUV) fills "A POLICE CAR".
+  const kind: VehicleArchetype = police || archetype === 'police_suv' ? 'police' : archetype;
   if (kind !== o.archetype) return false;
   return o.colour === null || colourName(paint) === o.colour;
 }

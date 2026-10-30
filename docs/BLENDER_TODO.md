@@ -532,3 +532,53 @@ on the iPhone profile and 27 m on desktop, by day and at night):
 8. **Pike at night:** the black coat on dark asphalt nearly disappears; a
    lighter collar or lapels (`badge` or `hair` slot) would help. Vex's
    orange hair and Tuna's teal headphones read well from above.
+
+## Code side integrated: world, props and vehicles (stage 6)
+
+props.glb, pickups.glb, debris.glb, heli.glb and the twelve new
+`vehicles.glb` roots are now in the game (see README → *World*). Material
+names are the contract: `lamp`, `light_red/amber/green`, `police_lamp`,
+`spray_sign` / `export_sign` / `payphone_sign` / `stripe_*`, `hazard` /
+`cone_orange` / `barrier_orange`, `ramp`, `frenzy`, `booth_roof`,
+`searchlight`, `siren_red/blue` and `paint` get special shading; keep
+them. Root names are looked up by name, and the bikes' `<arch>_seat`
+empties and the helicopter's `heli_rotor_main` / `heli_rotor_tail` nodes
+are used.
+
+Things that look off from the game camera (high, near top-down), for a
+future Blender pass. The code works round each one for now:
+- **Near-black tops on the rooftop kit.** `rooftop_door_roof` and
+  `water_tank_roof` are `dark` (0.018), and from above that's most of what
+  you see, so every stair hut and water tank reads as a black square or
+  disc. A tar-grey cap (about 0.12) and a galvanised or weathered-wood lid
+  would read much better. The `ac_unit` fan grille is fine. (Until then
+  the code recolours those two parts by node name: `PART_COLOURS` in
+  `src/render/propModels.ts`; drop the entries once the GLB changes.)
+- **Lamp and signal heads are tiny from above.** The `streetlamp` head and
+  the `traffic_light` lenses are a few pixels on a phone, and the lenses
+  face along the road, so from above you can't see which one is lit. The
+  code draws a coloured glow beside the lit lens and a pool on the lanes
+  at night. A top-visible hood or backplate in the signal's colour (or a
+  slightly bigger head) would help.
+- **The police sign and the safehouse door are hard to spot.** They're flat
+  on a wall and often sit under the building's awnings, so from above the
+  door is mostly hidden and the sign is a thin blue line. The code adds a
+  night halo for each lamp. A small canopy, or a lamp box that pokes out
+  over the pavement, would show from above.
+- **The spray booth roof (`booth_roof`, 0.08) is very dark at night,** so
+  only the sign reads. Try a lighter roof or a painted stripe. (The code
+  cuts the roof away while the player is inside.)
+- **`start_gantry` is 12.5 m between pillars, but roads are 16 m wide,** so
+  the code stretches it ×1.376 across to put the pillars on the kerbs
+  (±8.6 m). Building it at that span would keep the chequers square.
+- **The pickups are life-size** (0.3–0.6 m), which is too small at the
+  game's zoom. They're drawn ×1.7. Modelling them about 1.5× would let
+  the code drop the scale.
+- **`heli` is life-size** (about 12 m). It flies under the camera, so
+  perspective blows it up, and it's drawn ×0.55. That's fine as it is,
+  just don't be surprised.
+- **`panel_a`–`panel_c` are `paint` only.** They tumble as flat chips of
+  colour, and at night they're black specks. A `trim` edge would give them
+  some shape (the door, hood, bumper and wheel are fine).
+- **Bikes:** Pike's coat still passes through the seat when he rides, as
+  noted in §9.

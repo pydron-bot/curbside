@@ -77,7 +77,7 @@ export class ProgressDirector implements ModeCtx {
   readonly taxi: TaxiMode;
   readonly missions: MissionMode;
   private readonly modes: Mode[];
-  private readonly props = new ProgressProps();
+  private readonly props: ProgressProps;
   private readonly bank = new ChainBank();
   private readonly results: ResultsCard;
   private readonly dialogue: DialogueCard;
@@ -117,6 +117,7 @@ export class ProgressDirector implements ModeCtx {
     this.dialogue = new DialogueCard(document.body, d.audio);
     this.shop = new ShopSheet(document.body, d.audio, SHOP_ITEMS, d.haptics ?? null);
     this.stats = new StatsSheet(document.body, d.audio);
+    this.props = new ProgressProps(d.look.props);
     for (const o of this.props.objects) d.scene.add(o);
 
     this.chaos = new ChaosRunMode(this, this.results);

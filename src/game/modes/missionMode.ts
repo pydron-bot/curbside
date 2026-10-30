@@ -633,8 +633,8 @@ export class MissionMode implements Mode {
       for (const p of this.phones) {
         if (!nearView(p.x, p.z, view)) continue;
         const on = p === ringing;
-        // The booth: a dark kiosk with a lit top.
-        props.box(p.x, 1.05, p.z, 0.75, 2.1, 0.55, 0, 0.08, 0.32, 0.3);
+        // The booth: the payphone model stands beside the spot (world props); until it's in, a dark kiosk.
+        if (!props.modelled) props.box(p.x, 1.05, p.z, 0.75, 2.1, 0.55, 0, 0.08, 0.32, 0.3);
         if (on) {
           // Ringing: rings rippling out, in time with the bell.
           const phase = (t * 1.6) % 1;
@@ -665,7 +665,9 @@ export class MissionMode implements Mode {
           if (!nearView(x, z, view)) continue;
           groundRing(g, x, z, 3, c, pulse, t);
           beacon(g, x, z, 0.9, 6, c, 0.5);
-          props.box(x, 0.55 + Math.sin(t * 3 + i) * 0.1, z, 0.7, 0.5, 0.5, t * 1.5 + i, 1, 0.55, 0.12);
+          const bob = Math.sin(t * 3 + i) * 0.1;
+          if (props.modelled) props.model('package', x, 0.3 + bob, z, t * 1.5 + i, 1.8, 1, 1, 1, 0.3);
+          else props.box(x, 0.55 + bob, z, 0.7, 0.5, 0.5, t * 1.5 + i, 1, 0.55, 0.12);
         }
         break;
       case 'race': {

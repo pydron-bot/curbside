@@ -173,7 +173,9 @@ export class FrenzyMode implements Mode {
       const k = (running ? 0.5 : 0.85) + 0.45 * pulse;
       groundRing(g, x, z, 3 + pulse * 0.6, c, k, t);
       beacon(g, x, z, 1.1, 6, c, 0.45 * k);
-      props.gem(x, 1.3 + Math.sin(t * 2.2 + i) * 0.18, z, 1, t * 1.8 + i, c[0], c[1], c[2]);
+      const y = 1.3 + Math.sin(t * 2.2 + i) * 0.18;
+      if (props.modelled) props.model('frenzy_token', x, y, z, t * 1.8 + i, 1.7, c[0], c[1], c[2]);
+      else props.gem(x, y, z, 1, t * 1.8 + i, c[0], c[1], c[2]);
     }
   }
 

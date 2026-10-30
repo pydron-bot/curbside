@@ -290,10 +290,31 @@ export class Effects {
     // draw whatever the count, so it isn't cut on phones: 12 for a lone blast,
     // fewer per car in a chain.
     const pieces = Math.max(4, Math.round(12 / Math.max(1, this.recentBooms * 0.6)));
+    const parts = this.debris.hasParts;
+    // Each blast throws a run of different parts, starting anywhere in the list.
+    let part = Math.floor(Math.random() * 7);
     for (let k = 0; k < pieces; k++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 3 + Math.random() * 8;
       const own = k % 3 !== 2;
+      if (own && parts) {
+        // The real thing (debris.glb): a door, the hood, a bumper, a wheel, twisted panels, in the car's paint.
+        this.debris.throwPart(
+          part++ % 7,
+          x + Math.cos(a) * 0.8,
+          1.3,
+          z + Math.sin(a) * 0.8,
+          Math.cos(a) * sp,
+          6 + Math.random() * 9,
+          Math.sin(a) * sp,
+          paint.r,
+          paint.g,
+          paint.b,
+          6 + Math.random() * 4,
+          8,
+        );
+        continue;
+      }
       const c = own ? paint : CHARCOAL;
       const w = own ? 0.5 + Math.random() * 0.6 : 0.25 + Math.random() * 0.35;
       this.debris.throw(

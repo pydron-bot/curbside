@@ -2,6 +2,7 @@ import { BoxGeometry, Color, InstancedMesh, Matrix4, OctahedronGeometry, Quatern
 import type { Rect } from '../world/city';
 import { GLOW, uploadRange, type GlowSprites } from './glowSprites';
 import { createPickupMaterial } from './pickupMesh';
+import type { WorldProps } from './worldProps';
 
 /** Linear RGB triples for the activity markers. */
 export type Rgb = readonly [number, number, number];
@@ -23,12 +24,15 @@ export const MARK = {
 const MARGIN = 6;
 
 /**
- * Solid props for the activities: spinning hidden packages, payphone booths
- * and mission parcels (one instanced box mesh) and the frenzy tokens (one
- * instanced gem mesh). Refilled every frame with only what's near the view,
- * and not drawn at all when nothing is, so they cost a draw call (and one
- * in the shadow pass) only while one is on screen. They share the pickup
- * crates' material and program: nothing new to compile.
+ * Solid props for the activities: spinning hidden packages and mission
+ * parcels, frenzy gems. With props.glb / pickups.glb in, they're models in
+ * the world props' `things` family (`model()`, and the payphones are static
+ * landmarks there); until then, or without them, stand-ins: one instanced
+ * box mesh (packages, parcels, payphone booths) and one instanced gem mesh.
+ * Refilled every frame with only what's near the view, and not drawn at all
+ * when nothing is, so they cost a draw call (and one in the shadow pass)
+ * only while one is on screen. The stand-ins share the pickup crates'
+ * material and program: nothing new to compile.
  */
 export class ProgressProps {
   readonly boxes: InstancedMesh;
@@ -42,7 +46,11 @@ export class ProgressProps {
   private nBoxes = 0;
   private nGems = 0;
 
-  constructor(capacityBoxes = 64, capacityGems = 16) {
+  constructor(
+    private readonly world: WorldProps | null = null,
+    capacityBoxes = 64,
+    capacityGems = 16,
+  ) {
     const material = createPickupMaterial();
     this.boxes = new InstancedMesh(new BoxGeometry(1, 1, 1), material, capacityBoxes);
     this.gems = new InstancedMesh(new OctahedronGeometry(0.62), material, capacityGems);
@@ -61,6 +69,21 @@ export class ProgressProps {
 
   get objects(): Object3D[] {
     return [this.boxes, this.gems];
+  }
+
+  /** Are the models in (draw with model(); else the box and gem stand-ins)? */
+  get modelled(): boolean {
+    return this.world?.loaded ?? false;
+  }
+
+  /**
+   * A props.glb / pickups.glb model for this frame (see WorldProps.things):
+   * `kind` is its root name, scaled uniformly, turned `yaw`; (r, g, b) tints
+   * surfaces that take a tint (the frenzy gem), `glow` lights it in its own
+   * colours.
+   */
+  model(kind: string, x: number, y: number, z: number, yaw: number, scale = 1, r = 1, g = 1, b = 1, glow = 0): void {
+    this.world?.things.add(kind, x, y, z, yaw, scale, scale, scale, 0, glow, r, g, b);
   }
 
   begin(): void {

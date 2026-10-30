@@ -1,3 +1,4 @@
+import type { PropBatch } from './propBatch';
 import {
   BoxGeometry,
   Color,
@@ -13,12 +14,22 @@ import {
 const GRAVITY = 24;
 const FLOOR = 0.03;
 
+/** The debris.glb models a blown-up car sheds (paint / trim / tyre, tinted with the car's paint). */
+export const CAR_PARTS = ['door', 'hood', 'bumper', 'wheel', 'panel_a', 'panel_b', 'panel_c'] as const;
+/** Half the thickness a part lies at on the ground (its origin is its centre), m. */
+const PART_REST = 0.12;
+
 /**
  * Solid bits flying about: car panels and chunks from explosions, glass
  * chips from crashes, brass shell casings from guns. One instanced box mesh,
  * lit like the world (one draw call, no shadow pass), with struct-of-arrays
  * physics: gravity, a couple of bounces with friction, spin that dies down on
  * the ground, and a shrink-out at the end of life.
+ *
+ * With debris.glb in (`parts` set), a blown-up car also sheds real parts:
+ * doors, its hood, bumpers, wheels and twisted panels in its paint, drawn
+ * as the world props' debris family (drawParts(), between the props'
+ * begin and end) on the same physics.
  */
 export class Debris {
   readonly mesh: InstancedMesh;
@@ -44,6 +55,10 @@ export class Debris {
   private readonly cg: Float32Array;
   private readonly cb: Float32Array;
   private readonly alive: Uint8Array;
+  /** 0 a box; n > 0 the car part CAR_PARTS[n - 1]. */
+  private readonly part: Uint8Array;
+  /** The debris.glb family, once loaded (render/worldProps.ts). */
+  parts: PropBatch | null = null;
   private next = 0;
   private readonly m = new Matrix4();
   private readonly q = new Quaternion();
@@ -76,6 +91,7 @@ export class Debris {
     this.cg = f();
     this.cb = f();
     this.alive = new Uint8Array(capacity);
+    this.part = new Uint8Array(capacity);
     const mat = new MeshLambertMaterial({ color: '#ffffff' });
     this.mesh = new InstancedMesh(new BoxGeometry(1, 1, 1), mat, capacity);
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
@@ -109,6 +125,39 @@ export class Debris {
     spin: number,
     bounce = 0.38,
   ): void {
+    const i = this.slot();
+    this.part[i] = 0;
+    this.launch(i, x, y, z, vx, vy, vz, w, h, d, r, g, b, life, spin, bounce);
+  }
+
+  /**
+   * Throw one car part (CAR_PARTS[part]) in paint (r, g, b): only once
+   * `parts` is set (check hasParts). Scale 1 (the models are car-sized).
+   */
+  throwPart(part: number, x: number, y: number, z: number, vx: number, vy: number, vz: number, r: number, g: number, b: number, life: number, spin: number): void {
+    const i = this.slot();
+    this.part[i] = part + 1;
+    this.launch(i, x, y, z, vx, vy, vz, 1, PART_REST * 2, 1, r, g, b, life, spin, 0.32);
+  }
+
+  /** Can it throw car parts (debris.glb is in)? */
+  get hasParts(): boolean {
+    return this.parts !== null && this.parts.loaded;
+  }
+
+  /** Add the flying car parts to their family for this frame (call between the props' begin() and end()). */
+  drawParts(): void {
+    const parts = this.parts;
+    if (!parts) return;
+    for (let i = 0; i < this.capacity; i++) {
+      if (!this.alive[i] || !this.part[i]) continue;
+      this.pose(i, 1);
+      parts.addMatrix(CAR_PARTS[this.part[i] - 1], this.m, 0, 0, this.cr[i], this.cg[i], this.cb[i]);
+    }
+  }
+
+  /** A free slot (or the oldest when the pool is full). */
+  private slot(): number {
     let i = -1;
     for (let k = 0; k < this.capacity; k++) {
       const j = (this.next + k) % this.capacity;
@@ -119,6 +168,27 @@ export class Debris {
     }
     if (i < 0) i = this.next;
     this.next = (i + 1) % this.capacity;
+    return i;
+  }
+
+  private launch(
+    i: number,
+    x: number,
+    y: number,
+    z: number,
+    vx: number,
+    vy: number,
+    vz: number,
+    w: number,
+    h: number,
+    d: number,
+    r: number,
+    g: number,
+    b: number,
+    life: number,
+    spin: number,
+    bounce: number,
+  ): void {
     this.alive[i] = 1;
     this.px[i] = x;
     this.py[i] = y;
@@ -156,14 +226,9 @@ export class Debris {
     for (let i = 0; i < this.capacity; i++) {
       if (!this.alive[i]) continue;
       if (dt > 0) this.stepOne(i, dt);
-      if (!this.alive[i]) continue;
-      const t = this.age[i] / this.life[i];
-      const shrink = t > 0.85 ? (1 - t) / 0.15 : 1;
-      this.e.set(this.rx[i], this.ry[i], this.rz[i]);
-      this.q.setFromEuler(this.e);
-      this.p.set(this.px[i], this.py[i], this.pz[i]);
-      this.s.set(this.sx[i] * shrink, this.sy[i] * shrink, this.sz[i] * shrink);
-      this.m.compose(this.p, this.q, this.s);
+      // Car parts are drawn by their family (drawParts).
+      if (!this.alive[i] || this.part[i]) continue;
+      this.pose(i, 0);
       // Live pieces are packed at the front of the instance buffers.
       mesh.setMatrixAt(n, this.m);
       col[n * 3] = this.cr[i];
@@ -182,6 +247,18 @@ export class Debris {
       colour.addUpdateRange(0, n * 3);
       colour.needsUpdate = true;
     }
+  }
+
+  /** Piece i's transform into this.m (`part`: unit scale, else its box size), shrinking out at the end. */
+  private pose(i: number, part: number): void {
+    const t = this.age[i] / this.life[i];
+    const shrink = t > 0.85 ? (1 - t) / 0.15 : 1;
+    this.e.set(this.rx[i], this.ry[i], this.rz[i]);
+    this.q.setFromEuler(this.e);
+    this.p.set(this.px[i], this.py[i], this.pz[i]);
+    if (part) this.s.set(shrink, shrink, shrink);
+    else this.s.set(this.sx[i] * shrink, this.sy[i] * shrink, this.sz[i] * shrink);
+    this.m.compose(this.p, this.q, this.s);
   }
 
   clear(): void {

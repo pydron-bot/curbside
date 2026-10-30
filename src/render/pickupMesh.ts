@@ -3,6 +3,7 @@ import type { Rect } from '../world/city';
 import type { Pickup, PickupKind } from '../world/pickups';
 import { GLOW, type GlowSprites } from './glowSprites';
 import { after } from './shaderLib';
+import type { WorldProps } from './worldProps';
 
 const COLORS: Record<PickupKind, string> = {
   pistol: '#4fa3ff',
@@ -44,11 +45,30 @@ export function createPickupMaterial(): MeshLambertMaterial {
 /** Pickups this far outside the view still get their glow (it reaches in), m. */
 const GLOW_MARGIN = 4;
 
+/** The pickups.glb model for each kind (docs/BLENDER_TODO.md §4, §8). */
+export const PICKUP_MODELS: Readonly<Record<PickupKind, string>> = {
+  pistol: 'crate_pistol',
+  smg: 'crate_smg',
+  shotgun: 'crate_shotgun',
+  grenade: 'crate_grenade',
+  molotov: 'crate_molotov',
+  rocket: 'crate_rocket',
+  health: 'health_kit',
+  armour: 'armour',
+  ammo: 'ammo_box',
+};
+/** The models are life-size (a crate is 0.7 m): shown bigger so they read from 20–60 m up. */
+const MODEL_SCALE = 1.7;
+/** Self-light in their own colours, so they pop against the street (more at night). */
+const MODEL_GLOW = 0.3;
+
 /**
- * Weapon, ammo, armour and health crates: glowing, colour-coded boxes that spin and bob
- * (one instanced draw call for all of them), each standing in a pulsing
- * light ring with a soft shaft of light so they read from 20–60 m up. The
- * ring and shaft are GlowSprites quads, drawn with every other glow.
+ * Weapon, ammo, armour and health crates, spinning and bobbing, each
+ * standing in a pulsing light ring with a soft shaft of light so they read
+ * from 20–60 m up (the ring and shaft are GlowSprites quads, drawn with
+ * every other glow). Drawn as their pickups.glb models in the world props'
+ * `things` family once it's loaded (only those near the view); until then,
+ * or without it, as glowing colour-coded boxes (one instanced draw call).
  */
 export class PickupMesh {
   readonly mesh: InstancedMesh;
@@ -59,7 +79,10 @@ export class PickupMesh {
   private readonly scale = new Vector3();
   private readonly colours: Color[];
 
-  constructor(private readonly pickups: Pickup[]) {
+  constructor(
+    private readonly pickups: Pickup[],
+    private readonly props: WorldProps | null = null,
+  ) {
     const material = createPickupMaterial();
     this.mesh = new InstancedMesh(new BoxGeometry(0.75, 0.75, 0.75), material, pickups.length);
     this.colours = pickups.map((p) => new Color(COLORS[p.kind]));
@@ -71,17 +94,23 @@ export class PickupMesh {
 
   /** Spin and bob the crates; add rings and light shafts for those near `view`. */
   update(time: number, glows?: GlowSprites, view?: Rect): void {
+    const things = this.props?.loaded ? this.props.things : null;
+    // With the models in, the boxes stand down (the mesh stays hidden).
+    this.mesh.visible = things === null;
     for (let i = 0; i < this.pickups.length; i++) {
       const p = this.pickups[i];
       const s = p.respawnAt === 0 ? 1 : 0;
-      this.q.setFromAxisAngle(this.up, time * 2 + i);
       const bob = Math.sin(time * 3 + i) * 0.15;
-      this.pos.set(p.x, 0.8 + bob, p.z);
-      this.m.compose(this.pos, this.q, this.scale.set(s, s, s));
-      this.mesh.setMatrixAt(i, this.m);
+      if (!things) {
+        this.q.setFromAxisAngle(this.up, time * 2 + i);
+        this.pos.set(p.x, 0.8 + bob, p.z);
+        this.m.compose(this.pos, this.q, this.scale.set(s, s, s));
+        this.mesh.setMatrixAt(i, this.m);
+      }
       if (!s || !glows || !view) continue;
       if (p.x < view.minX - GLOW_MARGIN || p.x > view.maxX + GLOW_MARGIN) continue;
       if (p.z < view.minZ - GLOW_MARGIN || p.z > view.maxZ + GLOW_MARGIN) continue;
+      if (things) things.add(PICKUP_MODELS[p.kind], p.x, 0.35 + bob, p.z, time * 2 + i, MODEL_SCALE, MODEL_SCALE, MODEL_SCALE, 0, MODEL_GLOW);
       const c = this.colours[i];
       const pulse = 0.5 + 0.5 * Math.sin(time * 4 + i * 1.7);
       const ring = 2.1 + pulse * 0.5;
@@ -93,6 +122,6 @@ export class PickupMesh {
       glows.addUpright(p.x, 0, p.z, yaw, 0.9, 4.5, c.r * 0.5, c.g * 0.5, c.b * 0.5, GLOW.beam);
       glows.addUpright(p.x, 0, p.z, yaw + Math.PI / 2, 0.9, 4.5, c.r * 0.5, c.g * 0.5, c.b * 0.5, GLOW.beam);
     }
-    this.mesh.instanceMatrix.needsUpdate = true;
+    if (!things) this.mesh.instanceMatrix.needsUpdate = true;
   }
 }

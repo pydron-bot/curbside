@@ -11,7 +11,7 @@
  * state in heatPresenter.ts.
  */
 import type { EventBus } from '../core/events';
-import { VEHICLE_HEALTH, speed, type VehicleControls } from '../entities/vehicle';
+import { VEHICLE_HEALTH, isPoliceArchetype, speed, type VehicleControls } from '../entities/vehicle';
 import { DOOR_RANGE, BustMeter, type ArrestSituation } from '../systems/arrest';
 import { scare } from '../systems/crowd';
 import { createDamage } from '../systems/damage';
@@ -22,6 +22,7 @@ import { driveAi, reactToHit, rerouteAi, scareDriver, shouldYield, YIELD_RANGE, 
 import { Wanted, WITNESS_RANGE, type Crime } from '../systems/wanted';
 import type { City, Rect } from '../world/city';
 import type { StaticGrid } from '../world/collision';
+import type { SignalView } from '../world/signals';
 import { inShop, placeSprayShops, placeStation, type SprayShop, type Station } from '../world/landmarks';
 import type { Player } from './player';
 import type { Population, Vehicle } from './population';
@@ -76,6 +77,8 @@ export interface HeatDeps {
   held?(): boolean;
   /** The share of the score a bust takes (default BUST_FINE). */
   bustFine?(): number;
+  /** Traffic lights: ordinary traffic stops on red. */
+  signals?: SignalView;
 }
 
 export class Heat {
@@ -212,7 +215,7 @@ export class Heat {
       ai.mood = 'calm';
       rerouteAi(ai, v.sim, rand);
     }
-    const c = driveAi(ai, v.sim, obstacles, rand, dt);
+    const c = driveAi(ai, v.sim, obstacles, rand, dt, this.deps.signals);
     if (ai.honk > 0) {
       this.deps.bus.emit({ type: 'horn', x: v.sim.x, z: v.sim.z, duration: ai.honk });
       ai.honk = 0;
@@ -228,7 +231,7 @@ export class Heat {
   playerCrash(other: Vehicle, impact: number): void {
     const own = this.deps.player.driving;
     if (!own || !this.live || impact <= 6) return;
-    if (other.police || other.archetype === 'police') {
+    if (other.police || isPoliceArchetype(other.archetype)) {
       // In a chase, bumps happen both ways: only a clear ram counts. A cop
       // ramming, PITting or boxing you in was asking for it, and so was one
       // driving into you (cutting across, overtaking head-on). Smashing
@@ -412,17 +415,22 @@ export class Heat {
     this.deps.bus.emit({ type: 'respray', x: car.sim.x, z: car.sim.z, cleared });
   }
 
-  /** Traffic pulls over for police cars with sirens coming up behind (or head-on). */
+  /** Traffic pulls over for police cars, ambulances and fire trucks with sirens coming up behind (or head-on). */
   private pullOver(): void {
     for (const u of this.police.units) {
       const cop = u.vehicle;
       if (!cop || u.dismissed || u.role !== 'pursuit' || speed(cop.sim) < 5) continue;
-      for (const v of this.deps.vehicles) {
-        const ai = v.ai;
-        if (!ai || v.police || v.pursuit || ai.mood !== 'calm') continue;
-        if (Math.abs(v.sim.x - cop.sim.x) > YIELD_RANGE || Math.abs(v.sim.z - cop.sim.z) > YIELD_RANGE) continue;
-        if (shouldYield(v.sim, cop.sim)) ai.yielding = 1;
-      }
+      this.giveWay(cop);
+    }
+    for (const e of this.deps.vehicles) if (e.emergency && e.ai && !e.damage.wrecked && speed(e.sim) > 5) this.giveWay(e);
+  }
+
+  private giveWay(siren: Vehicle): void {
+    for (const v of this.deps.vehicles) {
+      const ai = v.ai;
+      if (v === siren || !ai || v.police || v.pursuit || v.emergency || ai.mood !== 'calm') continue;
+      if (Math.abs(v.sim.x - siren.sim.x) > YIELD_RANGE || Math.abs(v.sim.z - siren.sim.z) > YIELD_RANGE) continue;
+      if (shouldYield(v.sim, siren.sim)) ai.yielding = 1;
     }
   }
 

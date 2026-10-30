@@ -134,10 +134,13 @@ describe('driving feel', () => {
       expect(forwardSpeed(s), name).toBeGreaterThan(spec.maxSpeed * 0.97);
       expect(forwardSpeed(s), name).toBeLessThanOrEqual(spec.maxSpeed + 0.01);
     }
-    // The sports car is the fastest thing on the road, the van the slowest.
+    // The sports car is the fastest thing on the road, the garbage truck the
+    // slowest; of the ordinary cars, the van.
     const tops = Object.values(VEHICLE_SPECS).map((v) => v.maxSpeed);
     expect(VEHICLE_SPECS.sports.maxSpeed).toBe(Math.max(...tops));
-    expect(VEHICLE_SPECS.van.maxSpeed).toBe(Math.min(...tops));
+    expect(VEHICLE_SPECS.garbage_truck.maxSpeed).toBe(Math.min(...tops));
+    const saloons = (['sedan', 'compact', 'sports', 'van', 'police', 'taxi', 'pickup'] as const).map((a) => VEHICLE_SPECS[a].maxSpeed);
+    expect(VEHICLE_SPECS.van.maxSpeed).toBe(Math.min(...saloons));
   });
 
   it('nitro lifts the top speed and the pull', () => {

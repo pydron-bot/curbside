@@ -351,6 +351,7 @@ function swerve(car: VehicleState, obstacles: Obstacle[], t: PursuitTarget, out:
   let bestAlong = reach;
   let side = 0;
   for (const o of obstacles) {
+    if (o.owner === car) continue;
     const rx = o.x - car.x;
     const rz = o.z - car.z;
     const along = rx * fx + rz * fz;

@@ -364,6 +364,14 @@ export class GameAudio {
     this.rainAmount = clamp01(amount);
   }
 
+  /** The ice cream van's jingle at (x, z). */
+  chime(x: number, z: number): void {
+    const v = this.voice({ x, z }, FALLOFF.horn, 0.5, 0.25);
+    if (!v) return;
+    sfx.chime(v);
+    this.commit('horn', v);
+  }
+
   /** A car horn at (x, z). */
   horn(x: number, z: number, duration = 0.4): void {
     const v = this.voice({ x, z }, FALLOFF.horn, 0.55, 0.25);
