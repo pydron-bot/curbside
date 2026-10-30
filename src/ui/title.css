@@ -41,9 +41,17 @@
   width: min(440px, 58vw);
   display: flex;
   flex-direction: column;
-  justify-content: center;
   gap: clamp(8px, 2.6vmin, 16px);
   padding-left: clamp(0px, 2.5vw, 36px);
+}
+
+/* Centred by two spacers rather than justify-content: if the column is
+   ever taller than the screen it starts at the top instead of cutting the
+   wordmark off. */
+.title-main::before,
+.title-main::after {
+  content: '';
+  flex: 1 0 0;
 }
 
 /* --- The wordmark: heavy, slanted, hot gradient, neon outline offset behind --- */
@@ -174,9 +182,17 @@
 
 .title-modes {
   display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
   width: min(330px, 100%);
   animation: fade-up 0.5s 0.55s ease-out both;
+}
+
+/* Modes added under PLAY (addMode) pair up two to a row, so CHAOS RUN and
+   friends fit a short phone screen; an odd one out takes the full width. */
+.title-play,
+.title-mode:last-child:nth-child(even) {
+  grid-column: 1 / -1;
 }
 
 .title-play {
@@ -198,9 +214,21 @@
 }
 
 .title-mode {
-  min-height: 48px;
-  font-size: 16px;
+  min-width: 0;
+  min-height: 46px;
+  padding: 7px 14px;
+  font-size: 14px;
   box-shadow: inset 0 0 0 1.5px rgb(46 230 255 / 0.55);
+}
+
+.title-mode .mbtn-text {
+  min-width: 0;
+}
+
+.title-mode small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .title-row {
