@@ -212,7 +212,8 @@ each head-on), scaled by mass. Health: sedan 100, compact and sports 90,
 van 140, police 130, taxi 100, pickup 125; fire at 20%, burning 4.5 s.
 Blasts (`BLASTS`): a car going up does 85 at the centre to 0 at 9 m and
 sets cars within 4.8 m (of their nearest part) alight on a 0.5–1.9 s fuse
-(jams still chain); grenades 105 / 8 m, rockets 160 / 10 m. Landing a jump
+instead, so a jam goes up in a rippling chain (your own car gets 3–4 s to
+bail out); grenades 105 / 8 m, rockets 160 / 10 m. Landing a jump
 costs 3 HP per m/s of vertical speed over 10. NPC bullets do 8 to the
 player (6 beyond 14 m) and 45% of that to cars, so 4★ chases are
 survivable, and spread 60% wider at a running target.
@@ -235,11 +236,13 @@ deliberate aim only within ~20° of it; it lets go 0.6 s after the last
 shot, and you strafe while locked (a red ring marks the target). Spread
 blooms per shot (pistol +0.04, SMG +0.03 rad) and settles in about a
 second; running widens it. Grenades land where you aim (the cursor, the
-stick's reach, or a target near the aim line), bounce and go off after
+stick's reach, or a target near the aim line; unaimed, a lob of half the
+range or onto someone in front within it), bounce and go off after
 2 s; molotovs burst into a 3.2 m fire for 6 s that sets people running
 alight (22 HP/s) and cooks cars (12 HP/s); rockets fly at 26 m/s, arm
-after 3 m and blow up on the first thing they touch (75 m max). A
-landing ring and a dotted arc show a throw.
+after 3 m and blow up on the first thing they touch (75 m max). While a
+grenade or molotov is in hand, a landing ring and a dotted arc show
+where it will land (a touch tap on FIRE throws right there).
 
 **Drive-bys**: in a car, FIRE shoots a pistol or SMG (picking one if
 something else is held) out of whichever side window has the best target
@@ -252,6 +255,7 @@ applies like any gunfire.
 block east of the spawn corner); traffic in its lanes never touches them.
 A car lined up on the front climbs the slope and flies off the lip with
 vy = 0.36 × speed (a drop at a crawl): ~1 s and ~28 m at 28 m/s.
+A ramp's sides and back are solid to cars and people alike.
 Airborne: gravity 22, no grip or steering, cars pass over people and
 other cars, the body pitches with the arc, the contact shadow stays on
 the road. STUNT = 1000/s of airtime + 20/m + 500 per half-turn of spin
