@@ -1,6 +1,7 @@
 /**
- * Stunt ramps: every ramp in the city as one instanced wedge (one draw call,
- * one more in the shadow pass when in view). The slope is painted in the
+ * Stunt ramps: until props.glb's ramp and kicker models are in (render/
+ * worldProps.ts), every ramp as one instanced wedge (one draw call, one
+ * more in the shadow pass when in view). The slope is painted in the
  * shader with yellow-and-black chevrons pointing up it and a white lip, the
  * sides with hazard stripes, so a ramp reads from 60 m up at speed; a glow
  * chevron on the road in front points the way in (shared glow mesh).
@@ -110,6 +111,11 @@ export class RampMesh {
     this.mesh.name = 'ramps';
     this.mesh.computeBoundingSphere();
     look.addGlowSource((glows, view) => this.drawGlows(glows, view));
+    // The ramp and kicker models (world props' landmarks) replace the painted wedges.
+    look.props.onLoaded(() => {
+      this.mesh.removeFromParent();
+      this.mesh.dispose();
+    });
   }
 
   /** Approach chevrons on the road in front of each ramp in view, pulsing toward it. */

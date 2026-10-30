@@ -86,6 +86,7 @@ import { WantedHud } from './ui/wantedHud';
 import { generateCity, type Rect } from './world/city';
 import { StaticGrid } from './world/collision';
 import { mulberry32 } from './world/random';
+import { dressCity } from './world/dressing';
 import { TrafficSignals } from './world/signals';
 import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audio/gameAudio';
 import { mountRadioToast } from './ui/radioToast';
@@ -125,21 +126,25 @@ const resolution = new DynamicResolution(renderer);
 // --- Scene ---
 const scene = new Scene();
 const city = generateCity(1337);
-const collision = new StaticGrid(city.obstacles);
-const rand = mulberry32(Date.now() >>> 0);
 const pickups = generatePickups(1337);
-const rig = new CameraRig(1);
-// Lights, time of day, ground, city, and the batched people/car/glow renderers.
-const look = new Look(renderer, scene, city, rig, pickups, app);
-const effects = new Effects(scene);
 /** Stunt ramps and kickers: their sides and backs are solid. */
 const bigRamps = placeRamps(1337);
 const ramps = [...bigRamps, ...placeKickers(1337, bigRamps)];
+/** Street furniture and landmark models: lamp posts, signal poles, bollards, booth walls... collide. */
+const dressing = dressCity(city, pickups, ramps);
+const collision = new StaticGrid([...city.obstacles, ...dressing.solids]);
+const rand = mulberry32(Date.now() >>> 0);
+const rig = new CameraRig(1);
+// Lights, time of day, ground, city, props, and the batched people/car/glow renderers.
+const look = new Look(renderer, scene, city, rig, pickups, app, dressing.street);
+look.props.setLandmarks(dressing.landmarks);
+const effects = new Effects(scene);
 const rampGrid = new StaticGrid(rampSolids(ramps));
 scene.add(new RampMesh(ramps, look).mesh);
 const stunts = new StuntTracker();
 /** Traffic lights: their clock runs with the sim; traffic stops on red, the lenses show it. */
 const signals = new TrafficSignals();
+look.props.signals = signals;
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];

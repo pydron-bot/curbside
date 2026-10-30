@@ -45,6 +45,8 @@ const PROP_COLOURS: Readonly<Record<RoofProp['kind'], readonly string[]>> = {
   tank: ['#9a7148', '#8c6a46', '#a9aeb0'],
   chimney: ['#8a4a3a', '#7c4436', '#6f6a66'],
   solar: ['#22355a', '#1d2f4f'],
+  dish: ['#d8d8d4'],
+  antenna: ['#7f8486'],
   housing: [],
 };
 const LAMP_POST = '#535b5f';
@@ -52,13 +54,23 @@ const HOUSING_GREY = new Color('#8e8c88');
 const LAMP_HEAD = '#ffe2b0';
 const LAMP_GLOW = '#ff9a3c';
 
-/** What a chunk is made of: one instanced mesh each. */
-type PartName = 'buildings' | 'boxes' | 'cylinders' | 'canopies' | 'glows';
+/**
+ * What a chunk is made of: one instanced mesh each. `standins`, `cylinders`
+ * and `canopies` hold box-and-cylinder stand-ins for things props.glb models
+ * (street lamps, rooftop kit, trees): shown until the models arrive.
+ */
+type PartName = 'buildings' | 'boxes' | 'standins' | 'cylinders' | 'canopies' | 'glows';
+const STANDIN_PARTS: readonly PartName[] = ['standins', 'cylinders', 'canopies'];
+
+/** Rooftop props drawn as props.glb models (the rest, chimneys and solar panels, stay boxes). */
+export const MODELLED_ROOF_PROPS: ReadonlySet<RoofProp['kind']> = new Set(['ac', 'vent', 'tank', 'dish', 'antenna', 'housing']);
 
 export interface CityMesh {
   root: Group;
   /** Per frame: hide the night-only glow meshes by day (saves their draw calls). */
   update(night: number): void;
+  /** props.glb arrived and its models are drawn (render/worldProps.ts): drop the stand-ins for good. */
+  hideStandIns(): void;
 }
 
 /**
@@ -66,17 +78,17 @@ export interface CityMesh {
  * its own bounding sphere, so three.js culls whole chunks):
  * - buildings: one box per building, dressed entirely in the building shader
  *   (windows aligned to the corners, floor ledges, shopfronts, roofs);
- * - boxes: rooftop AC units, stair housings, chimneys, solar panels, awnings,
- *   neon tubes and street-lamp posts;
- * - cylinders: vents, water tanks and tree trunks;
- * - canopies: trees;
- * - glows (night only): lamp halos and neon light spilling on the sidewalk.
- * A typical view touches 1–2 chunks: ~4–5 draw calls each.
+ * - boxes: chimneys, solar panels, awnings and neon tubes;
+ * - glows (night only): lamp halos and neon light spilling on the sidewalk;
+ * - stand-ins until props.glb is in: street-lamp posts and rooftop AC units,
+ *   stair housings, dishes and antennas (boxes), vents, water tanks and tree
+ *   trunks (cylinders), tree canopies.
+ * A typical view touches 1–2 chunks: 3 draw calls each once the models are
+ * in (the models themselves are a handful of instanced families city-wide).
  */
-export function createCityMesh(city: City): CityMesh {
+export function createCityMesh(city: City, plans: readonly BuildingPlan[] = planBuildings(city)): CityMesh {
   const root = new Group();
   root.name = 'city';
-  const plans = planBuildings(city);
 
   const unitBox = new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
   const cylinder = new CylinderGeometry(0.5, 0.5, 1, 10).translate(0, 0.5, 0);
@@ -132,14 +144,17 @@ export function createCityMesh(city: City): CityMesh {
   const parts: Record<PartName, [BufferGeometry, Material, string[]]> = {
     buildings: [unitBox, buildingMat, ['aRoofColor:3', 'aInfo:4']],
     boxes: [unitBox, propMat, ['aGlow:1']],
+    standins: [unitBox, propMat, ['aGlow:1']],
     cylinders: [cylinder, propMat, ['aGlow:1']],
     canopies: [canopyGeo, canopyMat, []],
     glows: [glowGeo, glowMat, []],
   };
   const glowMeshes: InstancedMesh[] = [];
+  const standIns: InstancedMesh[] = [];
   for (const c of chunks.values()) {
     const group = c.build(parts);
     for (const mesh of group.children as InstancedMesh[]) {
+      if (STANDIN_PARTS.includes(mesh.userData.part)) standIns.push(mesh);
       if (mesh.userData.part === 'glows') glowMeshes.push(mesh);
       else {
         mesh.castShadow = true;
@@ -155,6 +170,14 @@ export function createCityMesh(city: City): CityMesh {
     update(night: number) {
       const show = night > 0.02;
       for (const g of glowMeshes) g.visible = show;
+    },
+    hideStandIns() {
+      // Out of the scene altogether (not just hidden), so nothing ever draws or re-uploads them.
+      for (const m of standIns) {
+        m.removeFromParent();
+        m.dispose();
+      }
+      standIns.length = 0;
     },
   };
 }
@@ -176,6 +199,8 @@ function addRoofProps(c: ChunkBuilder, plan: BuildingPlan, wall: Color, m: Matri
   const color = new Color();
   for (const p of plan.props) {
     const options = PROP_COLOURS[p.kind];
+    // Modelled kinds are stand-ins until props.glb is in.
+    const boxes: PartName = MODELLED_ROOF_PROPS.has(p.kind) ? 'standins' : 'boxes';
     // Stair bulkheads: the wall colour, toned down toward roof grey so loud facades don't shout from the roof.
     if (p.kind === 'housing') color.copy(wall).lerp(HOUSING_GREY, 0.55);
     else color.set(options[Math.floor((p.minX * 3.1 + p.minZ * 1.7) * 10) % options.length]);
@@ -188,7 +213,7 @@ function addRoofProps(c: ChunkBuilder, plan: BuildingPlan, wall: Color, m: Matri
           [p.minX + 0.2, p.maxZ - 0.2],
           [p.maxX - 0.2, p.maxZ - 0.2],
         ]) {
-          c.add('boxes', m.makeScale(0.14, legs, 0.14).setPosition(lx, p.y0, lz), color.set('#4a4038'), [0]);
+          c.add(boxes, m.makeScale(0.14, legs, 0.14).setPosition(lx, p.y0, lz), color.set('#4a4038'), [0]);
         }
         color.set(options[Math.floor(p.minX * 13) % options.length]);
       }
@@ -204,7 +229,7 @@ function addRoofProps(c: ChunkBuilder, plan: BuildingPlan, wall: Color, m: Matri
       tiltedBox(p, p.y0 + 0.2, 0.06, 0.26, m);
       c.add('boxes', m, color, [0]);
     } else {
-      c.add('boxes', boxMatrix(p, p.y0, p.height, m), color, [0]);
+      c.add(boxes, boxMatrix(p, p.y0, p.height, m), color, [0]);
     }
   }
 }
@@ -254,20 +279,21 @@ function addShopfronts(c: ChunkBuilder, b: Rect, plan: BuildingPlan, m: Matrix4)
   }
 }
 
+/** A street lamp's stand-in (post, arm, head) and its night halo (kept with the model too). */
 function addLamp(c: ChunkBuilder, lamp: { x: number; z: number; dx: number; dz: number }, m: Matrix4): void {
   const color = new Color(LAMP_POST);
   const along = lamp.dx !== 0;
-  c.add('boxes', m.makeScale(0.32, 0.45, 0.32).setPosition(lamp.x, 0, lamp.z), color, [0]);
-  c.add('boxes', m.makeScale(0.15, LAMP_HEIGHT, 0.15).setPosition(lamp.x, 0, lamp.z), color, [0]);
+  c.add('standins', m.makeScale(0.32, 0.45, 0.32).setPosition(lamp.x, 0, lamp.z), color, [0]);
+  c.add('standins', m.makeScale(0.15, LAMP_HEIGHT + 0.1, 0.15).setPosition(lamp.x, 0, lamp.z), color, [0]);
   const armX = lamp.x + (lamp.dx * LAMP_ARM) / 2;
   const armZ = lamp.z + (lamp.dz * LAMP_ARM) / 2;
-  m.makeScale(along ? LAMP_ARM : 0.1, 0.1, along ? 0.1 : LAMP_ARM).setPosition(armX, LAMP_HEIGHT - 0.1, armZ);
-  c.add('boxes', m, color, [0]);
+  m.makeScale(along ? LAMP_ARM : 0.1, 0.1, along ? 0.1 : LAMP_ARM).setPosition(armX, LAMP_HEIGHT + 0.05, armZ);
+  c.add('standins', m, color, [0]);
   const hx = lamp.x + lamp.dx * LAMP_ARM;
   const hz = lamp.z + lamp.dz * LAMP_ARM;
-  m.makeScale(along ? 0.62 : 0.34, 0.16, along ? 0.34 : 0.62).setPosition(hx, LAMP_HEIGHT - 0.22, hz);
-  c.add('boxes', m, color.set(LAMP_HEAD), [1.6]);
-  m.makeScale(2.8, 1, 2.8).setPosition(hx, LAMP_HEIGHT - 0.32, hz);
+  m.makeScale(along ? 0.62 : 0.34, 0.16, along ? 0.34 : 0.62).setPosition(hx, LAMP_HEIGHT - 0.06, hz);
+  c.add('standins', m, color.set(LAMP_HEAD), [1.6]);
+  m.makeScale(2.8, 1, 2.8).setPosition(hx, LAMP_HEIGHT - 0.12, hz);
   c.add('glows', m, color.set(LAMP_GLOW).multiplyScalar(0.4));
 }
 

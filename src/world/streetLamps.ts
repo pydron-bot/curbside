@@ -14,10 +14,10 @@ import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH } from './city';
 export const LAMP_OFFSET = ROAD_WIDTH / 2 + 0.5;
 /** Spacing along a block side; the posts sit at 1, 2 and 3 × this from the block's corner. */
 export const LAMP_SPACING = 16;
-/** Height of the lamp head, m. */
-export const LAMP_HEIGHT = 5.2;
-/** How far the arm reaches out over the road, m. */
-export const LAMP_ARM = 1.3;
+/** Height of the lamp head's underside, m (props.glb `streetlamp`: the `lamp` face at 5.87 m). */
+export const LAMP_HEIGHT = 5.87;
+/** How far the arm reaches out over the road, m (the model's head is 1.85 m out from the pole). */
+export const LAMP_ARM = 1.85;
 
 export interface StreetLamp {
   /** Post position. */

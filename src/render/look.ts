@@ -1,6 +1,8 @@
 import type { Camera, Object3D, Scene, WebGLRenderer } from 'three';
+import { planBuildings } from '../world/buildingPlans';
 import type { City, Rect } from '../world/city';
 import { createCityMesh, type CityMesh } from '../world/cityMesh';
+import type { StreetProps } from '../world/streetProps';
 import { createGround } from '../world/ground';
 import type { Pickup } from '../world/pickups';
 import type { CameraRig } from './cameraRig';
@@ -18,6 +20,7 @@ import { worldUniforms } from './shaderLib';
 import { SunShadow } from './sunShadow';
 import { TimeOfDay } from './timeOfDay';
 import { CarBatch } from './vehicleBatch';
+import { WorldProps } from './worldProps';
 
 /** Where the player is, for the marker that keeps them findable. */
 export interface PlayerView {
@@ -52,6 +55,8 @@ export class Look {
   readonly glows = new GlowSprites();
   readonly contactShadows = new ContactShadows();
   readonly pickups: PickupMesh;
+  /** props.glb / pickups.glb models: street furniture, rooftop kit, trees, landmarks, and per-frame `things`. */
+  readonly props: WorldProps;
   readonly post: PostEffects;
   private readonly sunShadow: SunShadow;
   private readonly city: CityMesh;
@@ -76,15 +81,25 @@ export class Look {
     private readonly rig: CameraRig,
     pickups: Pickup[],
     overlayParent: HTMLElement,
+    streetProps: StreetProps,
   ) {
     this.lighting = new SceneLighting(renderer, scene);
     this.sunShadow = new SunShadow(renderer, this.lighting.sun);
     scene.add(createGround(city));
-    this.city = createCityMesh(city);
+    const plans = planBuildings(city);
+    this.city = createCityMesh(city, plans);
     scene.add(this.city.root);
+    this.props = new WorldProps(streetProps, plans);
+    scene.add(...this.props.objects);
+    // The models replace the city's box stand-ins for lamps, rooftop kit and trees.
+    this.props.onLoaded(() => {
+      this.city.hideStandIns();
+      this.warmedUp = false;
+    });
+    this.addGlowSource((g, view) => this.props.drawGlows(g, view));
     this.characters = new CharacterBatch('/assets/player.glb');
     this.cars = new CarBatch(renderer);
-    this.pickups = new PickupMesh(pickups);
+    this.pickups = new PickupMesh(pickups, this.props);
     scene.add(this.characters.mesh, this.cars.root, this.pickups.mesh, this.contactShadows.mesh, this.glows.mesh);
     this.post = new PostEffects(renderer);
     renderer.info.autoReset = false; // reset once per frame in render()
@@ -121,6 +136,7 @@ export class Look {
     const view = this.rig.visibleGround(this.view);
     this.contactShadows.begin();
     this.glows.begin();
+    this.props.begin(view);
     this.characters.flush(this.contactShadows);
     this.cars.flush(view, this.dt, this.contactShadows, this.glows);
     // A redraw without update() (resized while paused) must not read as motion.
@@ -128,6 +144,7 @@ export class Look {
     this.pickups.update(worldUniforms.uTime.value, this.glows, view);
     this.addMarker();
     for (let i = 0; i < this.glowSources.length; i++) this.glowSources[i](this.glows, view);
+    this.props.end();
     this.contactShadows.end();
     this.glows.end();
     this.sunShadow.update(view, this.lighting.toLight);
