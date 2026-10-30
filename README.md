@@ -338,7 +338,9 @@ are `src/game/modes/*Mode.ts`.
   smash, hit & run, KO, carjack, boom, cops) and RETRY / FREE ROAM / TITLE.
   WASTED or BUSTED ends the run early (results after the respawn). The best
   and medal are saved and shown on the title; RESTART in the pause menu
-  starts a fresh run.
+  starts a fresh run. The medal lines are the review's (bronze is a run
+  that keeps its car and chains a few stunts); a reckless autopilot that
+  wrecks its car in the first 15 s and stays on foot scores 4.5–6.6k.
 - **Frenzies** (`modes/frenzies.ts`, `frenzyMode.ts`): eight spinning purple
   gems on pavements ('!' on the radar). Touch one, 3-2-1, then: KNOCK DOWN 15
   in 60 s (with an SMG), NEAR MISS ×8 in 60 s, CARJACK 5 in 120 s, DRIFT
@@ -358,10 +360,12 @@ are `src/game/modes/*Mode.ts`.
   Drive onto the chequered line: the car lines up, 3-2-1, then gates of
   light (the next-but-one small), a radar route to the next checkpoint and
   the time against gold on the card. Medals against a developer time from
-  the course (straights at 31 m/s, 1.6 s a corner): gold ×1.05, silver
-  ×1.2, bronze ×1.4, paying $800 / $400 / $200 the first time (a tenth on a
-  repeat). Out of the car for 8 s, wrecked, WASTED, BUSTED or 2.5× the dev
-  time ends it.
+  the course (straights at 36 m/s, 1.2 s a corner, 2 s to launch): gold
+  ×1.05, silver ×1.2, bronze ×1.4, paying $800 / $400 / $200 the first time
+  (a tenth on a repeat). A braking-aware autopilot in the sports car lands
+  silver; re-tune `DEV_SPEED` / `DEV_CORNER` (`modes/races.ts`) if the cars'
+  handling changes. Out of the car for 8 s, wrecking the car, WASTED,
+  BUSTED or 2.5× the dev time ends it.
 - **Hot-car exports** (`modes/exports.ts`, `exportMode.ts`): a drive-in bay
   on an open lot at the docks ('$' on the radar, pulsing with an arrow when
   you're in a car on the list). An eight-car order list ("YELLOW SPORTS",
@@ -400,11 +404,15 @@ are `src/game/modes/*Mode.ts`.
   progress, the export list, bests with medals, and the lifetime stats.
 
 Cards (results, calls, the shop on the street) freeze the sim and take the
-input; FrontDoor routes keyboard / pad navigation to them. Markers are glow
+input; FrontDoor routes keyboard / pad navigation to them. Free roam's best
+run score is saved per mode too (`best.free`). HUD text is rebuilt only when
+what it says changes (`KeyedText`), so nothing allocates per frame. Markers are glow
 quads in the shared batch; packages, payphone booths, parcels and frenzy
 gems are two instanced meshes using the pickup crates' program, drawn only
 while one is in view (+1–2 draw calls then, +1–2 in the shadow pass;
-nothing compiled after start-up).
+nothing compiled after start-up). Measured in Chromium (iPhone 15 Pro
+profile, 'medium'): 36–38 draw calls on foot beside a package or a frenzy
+gem, 45–47 driving in a Chaos Run; desktop ('high') 56–67 during missions.
 
 API for other systems:
 

@@ -228,8 +228,8 @@ export class MissionMode implements Mode {
         this.finish();
         ctx.progress.complete('missions', m.id);
         const paid = ctx.pay(m.reward, 'mission', 'MISSION');
+        // The debrief card says MISSION PASSED and the pay (no banner under it).
         ctx.deps.audio.ui('success');
-        ctx.ui.banner('MISSION PASSED', 'gold', `+$${fmt(paid)}`, 2.6);
         ctx.progress.flush();
         const last = this.next === null;
         ctx.openModal(this.card);
