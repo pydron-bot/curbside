@@ -97,8 +97,8 @@ export function fireColour(t: number, out: Float32Array | number[]): void {
   if (t < 0.12) {
     const k = t / 0.12;
     r = 1;
-    g = 0.95 - 0.17 * k;
-    b = 0.75 - 0.45 * k;
+    g = 0.9 - 0.12 * k;
+    b = 0.55 - 0.25 * k;
   } else if (t < 0.4) {
     const k = (t - 0.12) / 0.28;
     r = 1;

@@ -188,31 +188,32 @@ export class Effects {
     const n = (count: number) => Math.max(1, Math.round(count * budget));
 
     // Flash on the ground and a shockwave ring out to the blast radius (9 m).
-    this.light(x, 0.12, z, 3, 17, 3.2, 2.1, 1.1, 0.5, GLOW.disc);
-    this.light(x, 0.1, z, 2, 9.5, 2.4, 1.4, 0.7, 0.42, GLOW.ring);
-    this.light(x, 0.1, z, 1, 11, 1.2, 0.8, 0.5, 0.6, GLOW.ring);
+    this.light(x, 0.12, z, 2.5, 12, 2.1, 1.25, 0.5, 0.34, GLOW.disc);
+    this.light(x, 0.1, z, 1.5, 9.5, 1.9, 1.15, 0.55, 0.38, GLOW.ring);
+    this.light(x, 0.1, z, 1, 11.5, 0.6, 0.42, 0.28, 0.6, GLOW.ring);
     // A brief white pop high over the car (draws over its roof).
-    this.flare(x, 3.2, z, 7, 0.16, 3, 2.5, 1.8);
+    this.flare(x, 2.8, z, 4.6, 0.12, 2.6, 2.2, 1.6);
 
-    // Fireball: a few big slow balls and a spray of fast ones.
+    // Fireball: a few big slow balls (above the roof, so the body can't hide
+    // them) and a spray of fast ones.
     for (let k = n(12); k > 0; k--) {
       const a = Math.random() * Math.PI * 2;
       const sp = 1 + Math.random() * 3.5;
       const i = this.hot.spawn(
-        x + Math.cos(a) * 0.6,
-        2.2 + Math.random() * 1.2,
-        z + Math.sin(a) * 0.6,
+        x + Math.cos(a) * 0.8,
+        1.9 + Math.random() * 1.2,
+        z + Math.sin(a) * 0.8,
         Math.cos(a) * sp,
         2.5 + Math.random() * 3,
         Math.sin(a) * sp,
-        0.65 + Math.random() * 0.45,
-        2.2 + Math.random() * 1.2,
-        4.2 + Math.random() * 2,
+        0.7 + Math.random() * 0.5,
+        2.8 + Math.random() * 1.2,
+        5 + Math.random() * 2.2,
         RAMP.fire,
         FRAME.flame,
       );
       if (i < 0) break;
-      this.fireLook(i, 2.2, 0.45);
+      this.fireLook(i, 2.6, 0.5);
       this.hot.flags[i] = FLAG.handoff;
       this.hot.drag[i] = 1.6;
     }

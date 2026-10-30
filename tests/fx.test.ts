@@ -89,7 +89,7 @@ describe('particle pool', () => {
   it('cools fire from white-yellow through orange to dark red', () => {
     const c = [0, 0, 0];
     fireColour(0, c);
-    expect(c[1]).toBeGreaterThan(0.9);
+    expect(c[1]).toBeGreaterThan(0.85);
     fireColour(0.55, c);
     expect(c[0]).toBeGreaterThan(c[1] * 2);
     fireColour(1, c);

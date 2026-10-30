@@ -79,6 +79,7 @@ export class FxDirector {
   private playing = false;
   private realTime = 0;
   private lastCombat = -Infinity;
+  private lastBoomKick = -Infinity;
   private lastShot: TracerKind = 'pistol';
   private readonly paint: Rgb = { r: 0, g: 0, b: 0 };
   private readonly view: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
@@ -216,8 +217,12 @@ export class FxDirector {
     this.flash = Math.max(this.flash, 0.12 + 0.75 * close);
     const rig = this.d.rig;
     rig.addTrauma(close > 0 ? 0.2 + 0.75 * close : 0.08);
-    if (close > 0.05) rig.kick(rig.focusX - e.x, rig.focusZ - e.z, 1.6 * close);
-    if (close > 0.35) rig.punchFov(5 * close);
+    // A chain reaction going off in one frame jolts the view once, not five times over.
+    if (this.realTime - this.lastBoomKick > 0.15) {
+      this.lastBoomKick = this.realTime;
+      if (close > 0.05) rig.kick(rig.focusX - e.x, rig.focusZ - e.z, 1.6 * close);
+      if (close > 0.35) rig.punchFov(5 * close);
+    }
     if (this.playing && (e.byPlayer || e.ownCar ? close > 0.25 : close > 0.6)) this.hitStop.hit(0.075, 0.06);
   }
 
