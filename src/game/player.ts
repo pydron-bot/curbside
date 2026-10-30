@@ -42,6 +42,8 @@ export class Player {
   stunned = 0;
   punchCooldown = 0;
   health = MAX_HEALTH;
+  /** Health a life starts with (raised by the shop's TOUGH SKIN upgrade). */
+  maxHealth = MAX_HEALTH;
   /** Seconds until respawn while "wasted"; 0 when alive. */
   dead = 0;
   /** Seconds left in custody after an arrest; 0 when free. */
@@ -183,14 +185,14 @@ export class Player {
     return this.dead > 0 && (this.dead -= dt) <= 0;
   }
 
-  /** Back on your feet at (x, z) with full health and no weapons. Always on foot. */
+  /** Back on your feet at (x, z) with full health (maxHealth). Always on foot. */
   respawn(x: number, z: number, heading = Math.PI): void {
     this.driving = null;
     this.dead = 0;
     this.custody = 0;
     this.stunned = 0;
     this.punchCooldown = 0;
-    this.health = MAX_HEALTH;
+    this.health = this.maxHealth;
     Object.assign(this.ped, { x, z, vx: 0, vz: 0, heading });
     Object.assign(this.prev, this.ped);
     this.bus.emit({ type: 'respawn' });

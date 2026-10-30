@@ -1,5 +1,6 @@
 import type { InputDevice } from '../core/input';
 import './core.css';
+import type { IconName } from './icons';
 import { MenuNav, menuButton, type Panel } from './menu';
 
 /**
@@ -37,6 +38,7 @@ export class PauseOverlay implements Panel {
   private readonly menu: HTMLElement;
   private readonly update: HTMLButtonElement;
   private readonly resumeBtn: HTMLButtonElement;
+  private readonly grid: HTMLElement;
   private reason: PauseReason = 'paused';
   private armed: HTMLButtonElement | null = null;
   private armTimer = 0;
@@ -65,6 +67,7 @@ export class PauseOverlay implements Panel {
     const grid = document.createElement('div');
     grid.className = 'pause-grid';
     grid.append(settings, howTo, restart, quit);
+    this.grid = grid;
     this.menu.append(this.resumeBtn, grid);
 
     this.update = menuButton('UPDATE READY — RESTART NOW', { className: 'pause-update' });
@@ -113,6 +116,17 @@ export class PauseOverlay implements Panel {
 
   back(): void {
     if (this.reason === 'paused') this.actions.resume();
+  }
+
+  /**
+   * Another system's button in the menu grid, before RESTART (e.g. PROGRESS,
+   * SHOP). Hide it with `hidden`: hidden buttons are skipped by navigation.
+   */
+  addButton(label: string, icon: IconName, activate: () => void): HTMLButtonElement {
+    const b = menuButton(label, { icon });
+    this.grid.insertBefore(b, this.grid.querySelector('.risky'));
+    this.nav.add({ el: b, activate });
+    return b;
   }
 
   /** Offer the waiting update on the pause screen. */

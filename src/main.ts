@@ -21,6 +21,7 @@ import {
 import { Heat } from './game/heat';
 import { HeatPresenter } from './game/heatPresenter';
 import { Player } from './game/player';
+import { ProgressDirector } from './game/progressDirector';
 import { CROWD_DESPAWN, Population, type CrowdPed, type ParkingSpot, type Vehicle } from './game/population';
 import { Effects } from './render/effects';
 import { FxDirector } from './render/fxDirector';
@@ -213,6 +214,8 @@ const viewRect: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 const attract = new AttractCamera(rand);
 attract.start(SPAWN_POINT.x, SPAWN_POINT.z);
 const keepVehicles: Array<Vehicle | null> = [null, null];
+/** Cars an activity needs kept (a mission's target, the Chaos Run car): filled by the progress director. */
+const activityCars: Vehicle[] = [];
 /**
  * Recycle and top up traffic and crowd; `seed` fills the streets from scratch
  * and puts the spawn point's parked cars back.
@@ -222,6 +225,8 @@ function maintainPopulation(seed = false, parked = seed) {
   const at = attract.active ? attract : player.position;
   keepVehicles[0] = player.driving;
   keepVehicles[1] = player.lastDriven;
+  keepVehicles.length = 2;
+  for (const v of activityCars) keepVehicles.push(v);
   population.maintain({
     x: at.x,
     z: at.z,
@@ -264,6 +269,8 @@ const heat = new Heat({
   ejectDriver,
   npcShoot,
   repaint: (v) => look.cars.restyle(v.mesh, v.archetype, v.paint),
+  // Resprays cost cash (the progress director sets the price and can refuse).
+  pay: (cost) => progress.payRespray(cost),
 });
 addHeatLook(look, heat);
 
@@ -418,7 +425,8 @@ const contact = { x: 0, z: 0 };
 
 function simulate(dt: number) {
   const driving = player.driving;
-  const playerControls = driving ? input.readVehicle(driving.sim, dt) : NO_CONTROLS;
+  // A race or Chaos Run 3-2-1 holds the car on the line.
+  const playerControls = driving && !progress.holdControls ? input.readVehicle(driving.sim, dt) : NO_CONTROLS;
 
   // What AI drivers need to avoid this step.
   obstacles.length = 0;
@@ -527,10 +535,10 @@ function simulate(dt: number) {
   respawnPickups(pickups, simTime);
   if (!driving && player.alive && !attract.active) {
     const pk = pickupAt(pickups, player.ped.x, player.ped.z);
-    if (pk && (pk.kind !== 'health' || player.health < 100)) {
+    if (pk && (pk.kind !== 'health' || player.health < player.maxHealth)) {
       pk.respawnAt = simTime + PICKUP_RESPAWN;
       if (pk.kind === 'health') {
-        player.health = Math.min(100, player.health + HEALTH_PICKUP);
+        player.health = Math.min(player.maxHealth, player.health + HEALTH_PICKUP);
       } else {
         player.arsenal.pickUp(pk.kind);
         player.arsenal.current = pk.kind;
@@ -539,6 +547,8 @@ function simulate(dt: number) {
     }
   }
   heat.step(dt);
+  // Cash, the Chaos Run clock and the free-roam activities.
+  progress.step(dt);
   // Back on your feet: after dying a fresh run; after a bust, released at the station.
   const held = player.arrested;
   if (player.step(dt)) {
@@ -790,11 +800,13 @@ function frame(now: number) {
   updateMouseAim(input, rig.camera, player.ped.x, player.ped.z, viewW, viewH);
   const aim = input.readAim();
   const playing = !attract.active;
-  aimHeadingNow = playing && !player.driving && player.ready && aim.active ? aimHeading(aim.x, aim.y) : null;
+  // A card over the game (results, a phone call, the shop) takes the input.
+  const control = playing && !progress.blocksInput;
+  aimHeadingNow = control && !player.driving && player.ready && aim.active ? aimHeading(aim.x, aim.y) : null;
   const pressed = input.consumePunch();
   const cycle = input.consumeCycle();
   const acted = input.consumeAction();
-  if (playing) {
+  if (control) {
     if (cycle !== 0 && !player.driving) player.arsenal.cycle(cycle);
     if (!player.driving && player.ready) {
       const gun = player.arsenal.current;
@@ -818,7 +830,8 @@ function frame(now: number) {
   }
 
   // Hit-stop slows the sim on big moments; the camera keeps real time.
-  const alpha = loop.advance(frameSeconds * fx.simScale(frameSeconds), simulate);
+  // Cards freeze it; the end of a Chaos Run slows it to a stop.
+  const alpha = loop.advance(frameSeconds * fx.simScale(frameSeconds) * progress.simScale(), simulate);
 
   // Interpolate render state between the last two sim steps.
   // Read once per frame: the wheel steer and the engine sound share it.
@@ -848,6 +861,7 @@ function frame(now: number) {
   const focus = attract.active ? attract : player.position;
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
   updateHud(frameSeconds);
+  progress.update(frameSeconds);
   heatPresenter.update(frameSeconds, focus.x, focus.z, playing);
 
   if (attract.active) {
@@ -895,7 +909,8 @@ const hudCar: CarHud = { kmh: 0, maxKmh: 100, health: 1, burning: false };
 function updateHud(frameSeconds: number) {
   const gun = player.arsenal.current;
   const v = player.driving;
-  hudFrame.health = player.health;
+  // The bar shows the share of this life's maximum (TOUGH SKIN raises it).
+  hudFrame.health = (player.health * 100) / player.maxHealth;
   hudFrame.weapon = gun;
   hudFrame.ammo = gun ? (player.arsenal.ammo.get(gun) ?? 0) : 0;
   hudFrame.device = input.lastDevice;
@@ -937,11 +952,36 @@ const threats = new ThreatIndicators(document.body);
 const frontDoor = new FrontDoor(document.body, document.getElementById('paused')!, input, audio, {
   startGame,
   enterTitle,
-  restart: () => respawnPlayer(),
+  // A Chaos Run starts over as a fresh run; free roam respawns.
+  restart: () => {
+    if (!progress.restart()) respawnPlayer();
+  },
   setPaused: (p, reason) => setPaused(p, reason),
   isPaused: () => paused,
   pauseReason: () => pauseReason,
   applyUpdate: () => updates.atSafePoint(),
+});
+// Cash, saves, Chaos Run, activities and missions (adds CHAOS RUN to the title, PROGRESS / SHOP to the pause menu).
+const progress = new ProgressDirector({
+  bus: events,
+  player,
+  vehicles,
+  population,
+  heat,
+  score,
+  city,
+  rand,
+  look,
+  rig,
+  radar,
+  hud,
+  audio,
+  frontDoor,
+  input,
+  scene,
+  pinned: activityCars,
+  playing: () => !attract.active,
+  enterTitle: () => enterTitle(),
 });
 
 /**
@@ -960,6 +1000,7 @@ function warmShaders() {
 
 /** PLAY: from the attract city to a fresh run at the spawn corner. */
 function startGame() {
+  progress.startRun();
   attract.stop();
   hud.setScene('play');
   radar.visible = true;
@@ -975,6 +1016,7 @@ function startGame() {
 
 /** Quit to title: drop the run, hide the player, cruise over traffic. */
 function enterTitle() {
+  progress.enterTitle();
   respawnPlayer();
   playerModel.root.visible = false;
   attract.start(rig.focusX, rig.focusZ);
@@ -1083,6 +1125,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   audio,
   explode,
   heat,
+  progress,
   updates,
   hud,
   radar,

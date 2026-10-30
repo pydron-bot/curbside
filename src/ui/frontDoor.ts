@@ -126,13 +126,32 @@ export class FrontDoor {
     this.closeFrom(this.stack.indexOf(this.pause));
   }
 
-  /** Drop stack entries from `i` up, hiding any settings / how-to opened over them. */
+  /** Drop stack entries from `i` up, hiding any settings / how-to (or other panels) opened over them. */
   private closeFrom(i: number): void {
     if (i < 0) return;
     for (const p of this.stack.splice(i)) {
       if (p === this.settings && this.settings.isOpen) this.settings.root.hidden = true;
-      if (p === this.howTo && this.howTo.isOpen) this.howTo.root.hidden = true;
+      else if (p === this.howTo && this.howTo.isOpen) this.howTo.root.hidden = true;
+      else if (p !== this.pause) p.hide?.();
     }
+  }
+
+  /**
+   * A screen from another system (results, shop, progress, a mission card)
+   * takes keyboard / gamepad navigation until closePanel(). Opened from the
+   * pause menu it closes with it.
+   */
+  openPanel(panel: Panel): void {
+    if (!this.stack.includes(panel)) this.stack.push(panel);
+  }
+
+  closePanel(panel: Panel): void {
+    this.pop(panel);
+  }
+
+  /** The pause menu is showing (not the context-lost notice or the rotate pause). */
+  get pauseMenuOpen(): boolean {
+    return this.pause.menuOpen;
   }
 
   private route(cmd: NavCommand): void {
@@ -149,7 +168,7 @@ export class FrontDoor {
       return;
     }
     const top = this.stack[this.stack.length - 1];
-    if (top === this.settings || top === this.howTo) {
+    if (top === this.settings || top === this.howTo || top?.sheet) {
       top.back();
       return;
     }

@@ -709,7 +709,7 @@ export function fanfare(v: Voice, key: number): void {
 
 // --- UI ---
 
-export type UiSound = 'click' | 'confirm' | 'back' | 'countdown' | 'go' | 'success' | 'fail' | 'cash' | 'star';
+export type UiSound = 'click' | 'confirm' | 'back' | 'countdown' | 'go' | 'success' | 'fail' | 'cash' | 'star' | 'ring';
 
 export function ui(v: Voice, kind: UiSound, key: number): void {
   const t = v.t;
@@ -779,6 +779,25 @@ export function ui(v: Voice, kind: UiSound, key: number): void {
       v.chain(coins, bp, cg, v.input);
       cg.gain.setValueAtTime(1.5, bell);
       cg.gain.setTargetAtTime(0, bell + 0.2, 0.1);
+      return;
+    }
+    case 'ring': {
+      // A payphone's bell: two bursts of a struck pair of tones, rattled by a
+      // 20 Hz clapper (an LFO on the gain), "brrring-brrring".
+      for (const at of [t, t + 0.55]) {
+        const g = v.gain();
+        const lp = v.filter('lowpass', 5200, 0.8);
+        v.chain(lp, g, v.input);
+        for (const hz of [1180, 1480]) v.osc('triangle', hz, at, at + 0.45).connect(lp);
+        const lfo = v.osc('square', 20, at, at + 0.45);
+        const depth = v.gain(0.05);
+        lfo.connect(depth);
+        depth.connect(g.gain);
+        g.gain.setValueAtTime(0, at);
+        g.gain.linearRampToValueAtTime(0.06, at + 0.01);
+        g.gain.setValueAtTime(0.06, at + 0.36);
+        g.gain.linearRampToValueAtTime(0, at + 0.44);
+      }
       return;
     }
     case 'star': {

@@ -11,6 +11,31 @@ const COLORS: Record<PickupKind, string> = {
   health: '#5be36a',
 };
 
+/**
+ * The crates' material: lit, self-lit in each instance's colour, with a pale
+ * frame on every face. Shared (same program, no extra compile) by anything
+ * else drawn the same way: the progression props (render/progressLook.ts).
+ */
+export function createPickupMaterial(): MeshLambertMaterial {
+  const material = new MeshLambertMaterial();
+  // Self-lit in its own colour, with a light frame on every face.
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = after(
+      shader.fragmentShader,
+      '#include <emissivemap_fragment>',
+      `vec2 pickupUv = abs(vPickupUv - 0.5);
+        float pickupFrame = step(0.36, max(pickupUv.x, pickupUv.y));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95), pickupFrame * 0.8);
+        totalEmissiveRadiance += vColor.rgb * (0.55 + 0.35 * pickupFrame);`,
+    );
+    shader.fragmentShader = after(shader.fragmentShader, '#include <common>', 'varying vec2 vPickupUv;');
+    shader.vertexShader = after(shader.vertexShader, '#include <common>', 'varying vec2 vPickupUv;');
+    shader.vertexShader = after(shader.vertexShader, '#include <uv_vertex>', 'vPickupUv = uv;');
+  };
+  material.customProgramCacheKey = () => 'curbside-pickups';
+  return material;
+}
+
 /** Pickups this far outside the view still get their glow (it reaches in), m. */
 const GLOW_MARGIN = 4;
 
@@ -30,22 +55,7 @@ export class PickupMesh {
   private readonly colours: Color[];
 
   constructor(private readonly pickups: Pickup[]) {
-    const material = new MeshLambertMaterial();
-    // Self-lit in its own colour, with a light frame on every face.
-    material.onBeforeCompile = (shader) => {
-      shader.fragmentShader = after(
-        shader.fragmentShader,
-        '#include <emissivemap_fragment>',
-        `vec2 pickupUv = abs(vPickupUv - 0.5);
-        float pickupFrame = step(0.36, max(pickupUv.x, pickupUv.y));
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.95), pickupFrame * 0.8);
-        totalEmissiveRadiance += vColor.rgb * (0.55 + 0.35 * pickupFrame);`,
-      );
-      shader.fragmentShader = after(shader.fragmentShader, '#include <common>', 'varying vec2 vPickupUv;');
-      shader.vertexShader = after(shader.vertexShader, '#include <common>', 'varying vec2 vPickupUv;');
-      shader.vertexShader = after(shader.vertexShader, '#include <uv_vertex>', 'vPickupUv = uv;');
-    };
-    material.customProgramCacheKey = () => 'curbside-pickups';
+    const material = createPickupMaterial();
     this.mesh = new InstancedMesh(new BoxGeometry(0.75, 0.75, 0.75), material, pickups.length);
     this.colours = pickups.map((p) => new Color(COLORS[p.kind]));
     this.colours.forEach((c, i) => this.mesh.setColorAt(i, c));

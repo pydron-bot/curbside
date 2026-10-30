@@ -1,0 +1,890 @@
+/* --- Progression (play stream): cash, the activity card, banners, prompts,
+   the results card, shop, progress page and mission cards --- */
+
+:root {
+  --cash: #5dff9a;
+  --gold: #ffd23f;
+  --silver: #d7e3ee;
+  --bronze: #e0915a;
+  /* The activity card's height; the wanted stars step down by this much. */
+  --act-h: 50px;
+}
+
+/* --- Cash, under the score --- */
+.cash {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.cash-num {
+  font: italic 900 clamp(15px, 4.6vmin, 21px)/1 var(--display-font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: var(--cash);
+  text-shadow: 0 2px 0 rgb(0 40 16 / 0.7), 0 0 10px rgb(93 255 154 / 0.35);
+  transition: color 0.3s;
+}
+
+.cash.spending .cash-num {
+  color: #ff8a8a;
+  transition: color 1.2s 0.4s;
+}
+
+.cash-chip {
+  position: absolute;
+  right: 100%;
+  margin-right: 8px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  font: italic 900 13px/1.2 var(--display-font);
+  font-style: italic;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  text-shadow: none;
+}
+
+.cash-chip.up {
+  background: var(--cash);
+  color: #062a14;
+}
+
+.cash-chip.down {
+  background: #ff5a6a;
+  color: #2a0006;
+}
+
+.cash-chip.show {
+  animation: cash-chip 1.6s ease-out both;
+}
+
+@keyframes cash-chip {
+  0% {
+    opacity: 0;
+    transform: translateX(-14px) scale(0.7);
+  }
+  12% {
+    opacity: 1;
+    transform: translateX(0) scale(1.08);
+  }
+  20% {
+    transform: scale(1);
+  }
+  75% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* Left-handed touch: the score sits top left; the chip goes to the right. */
+body[data-device='touch'][data-hand='left'] .cash-chip {
+  right: auto;
+  left: 100%;
+  margin: 0 0 0 8px;
+}
+
+/* Feed lines for money and progress (ScoreHud.notice kinds). */
+.feed-cash {
+  --c: var(--cash);
+}
+
+.feed-lost {
+  --c: #ff6b7d;
+}
+
+.feed-progress {
+  --c: #c9a7ff;
+}
+
+.feed-package {
+  --c: #8dff6b;
+}
+
+/* --- The activity card: top centre, under the pause button --- */
+#activity {
+  position: fixed;
+  z-index: 21;
+  top: calc(max(4px, var(--safe-t)) + 50px);
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  min-width: 128px;
+  max-width: min(46vw, 330px);
+  padding: 4px 14px 5px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgb(20 14 34 / 0.82), rgb(10 8 18 / 0.72));
+  border: 1px solid rgb(255 255 255 / 0.16);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.4), inset 0 1px 0 rgb(255 255 255 / 0.06);
+  color: var(--ink);
+  font-family: var(--hud-font);
+  text-shadow: var(--hud-shadow);
+  transform: translateX(-50%);
+  transition: transform 0.35s cubic-bezier(0.2, 1.2, 0.4, 1);
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#activity[hidden],
+body:not([data-scene='play']) #activity {
+  display: none;
+}
+
+/* The radio's "now playing" card takes this spot for a few seconds. */
+body:has(#radio.in) #activity {
+  transform: translate(-50%, 46px);
+}
+
+/* The wanted stars step down under the card while it's up. */
+body[data-activity] #wanted {
+  top: calc(max(4px, var(--safe-t)) + 50px + var(--act-h) + 2px);
+}
+
+.act-top {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  white-space: nowrap;
+}
+
+.act-label {
+  font: 900 10px/1 var(--hud-font);
+  letter-spacing: 0.22em;
+  color: var(--neon-cyan);
+}
+
+.act-timer {
+  font: italic 900 clamp(18px, 5.6vmin, 24px)/1 var(--display-font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  color: #fff;
+}
+
+.act-timer:empty {
+  display: none;
+}
+
+.act-timer.urgent {
+  color: #ff4d5e;
+  animation: act-urgent 1s steps(1) infinite;
+}
+
+@keyframes act-urgent {
+  0% {
+    transform: scale(1.18);
+  }
+  25% {
+    transform: scale(1);
+  }
+}
+
+.act-bonus {
+  position: absolute;
+  left: 100%;
+  top: -2px;
+  margin-left: 6px;
+  font: italic 900 14px/1 var(--display-font);
+  font-style: italic;
+  color: var(--cash);
+  white-space: nowrap;
+  opacity: 0;
+}
+
+.act-bonus.show {
+  animation: act-bonus 1.3s ease-out both;
+}
+
+@keyframes act-bonus {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(1.6);
+  }
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+}
+
+.act-goal {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 800 clamp(10px, 3.1vmin, 12.5px)/1.25 var(--hud-font);
+  letter-spacing: 0.08em;
+  color: var(--neon-yellow);
+}
+
+.act-goal:empty {
+  display: none;
+}
+
+/* --- Banner: 3-2-1, PASSED, FAILED, bonuses --- */
+#act-banner {
+  --c: #fff;
+  position: fixed;
+  z-index: 30;
+  left: 50%;
+  top: 30%;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  text-align: center;
+  white-space: nowrap;
+}
+
+#act-banner[hidden],
+body:not([data-scene='play']) #act-banner {
+  display: none;
+}
+
+#act-banner b {
+  font: italic 900 clamp(30px, 11vmin, 64px)/1 var(--display-font);
+  letter-spacing: 0.05em;
+  color: var(--c);
+  -webkit-text-stroke: 1.5px rgb(0 0 0 / 0.55);
+  text-shadow: 0 0.06em 0 rgb(0 0 0 / 0.55), 0 0 0.4em color-mix(in srgb, var(--c) 60%, transparent);
+  transform: skewX(-8deg);
+  animation: banner-slam 0.5s cubic-bezier(0.2, 1.5, 0.35, 1) both;
+}
+
+#act-banner small {
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 0.55);
+  font: italic 900 clamp(13px, 4.4vmin, 20px)/1.1 var(--display-font);
+  letter-spacing: 0.06em;
+  color: var(--cash);
+  animation: banner-sub 0.4s 0.25s ease-out both;
+}
+
+#act-banner small[hidden] {
+  display: none;
+}
+
+#act-banner[data-tone='count'] b {
+  font-size: clamp(54px, 22vmin, 120px);
+  --c: var(--neon-yellow);
+  animation-duration: 0.35s;
+}
+
+#act-banner[data-tone='go'] b {
+  font-size: clamp(54px, 22vmin, 120px);
+  --c: var(--neon-green);
+}
+
+#act-banner[data-tone='pass'] {
+  --c: var(--neon-green);
+}
+
+#act-banner[data-tone='gold'] {
+  --c: var(--gold);
+}
+
+#act-banner[data-tone='fail'] {
+  --c: #ff4d5e;
+}
+
+#act-banner[data-tone='fail'] small {
+  color: #ffd0d4;
+}
+
+#act-banner[data-tone='info'] {
+  --c: var(--neon-cyan);
+}
+
+#act-banner[data-tone='info'] b {
+  font-size: clamp(22px, 7.5vmin, 40px);
+}
+
+@keyframes banner-slam {
+  0% {
+    transform: skewX(-8deg) scale(2.4);
+    opacity: 0;
+    filter: blur(6px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes banner-sub {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* --- Marker prompt: above the HUD's own prompt, between the thumbs --- */
+#act-prompt {
+  position: fixed;
+  z-index: 21;
+  left: 50%;
+  bottom: calc(var(--edge-b) + 60px);
+  max-width: min(44vw, 340px);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgb(10 10 14 / 0.72);
+  border: 1px solid rgb(255 210 63 / 0.55);
+  color: var(--neon-yellow);
+  font: 800 clamp(11px, 3.3vmin, 13px)/1.2 var(--hud-font);
+  letter-spacing: 0.1em;
+  text-align: center;
+  text-shadow: var(--hud-shadow);
+  transform: translateX(-50%);
+  pointer-events: none;
+  animation: prompt-in 0.25s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+#act-prompt[hidden],
+body:not([data-scene='play']) #act-prompt {
+  display: none;
+}
+
+/* --- Cards over the game: results, mission dialogue --- */
+.prog-overlay {
+  z-index: 48;
+  background: radial-gradient(ellipse at center, rgb(10 6 20 / 0.45), rgb(4 4 8 / 0.75));
+}
+
+.prog-card {
+  display: grid;
+  gap: 10px;
+  width: min(560px, 100%);
+  max-height: 100%;
+  padding: 14px 18px 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.prog-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prog-title {
+  font: italic 900 clamp(20px, 6.5vmin, 30px)/1 var(--display-font);
+  letter-spacing: 0.1em;
+  color: #fff;
+  text-shadow: 0 0 14px rgb(255 46 136 / 0.55), 0 3px 0 rgb(80 0 40 / 0.6);
+}
+
+.prog-sub {
+  font: 800 11px/1 var(--hud-font);
+  letter-spacing: 0.2em;
+  color: var(--ink-dim);
+}
+
+.prog-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.prog-actions .mbtn {
+  flex: 1;
+  justify-content: center;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+.prog-actions .mbtn.primary {
+  flex: 1.6;
+  font-size: 16px;
+}
+
+/* Results: the score, the medal, the breakdown. */
+.res-main {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+
+.res-score {
+  font: italic 900 clamp(30px, 10vmin, 50px)/1 var(--display-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--neon-yellow);
+  text-shadow: 0 3px 0 rgb(0 0 0 / 0.5), 0 0 18px rgb(255 210 63 / 0.35);
+}
+
+.res-side {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  font: 800 11px/1.2 var(--hud-font);
+  letter-spacing: 0.14em;
+  color: var(--ink-dim);
+}
+
+.res-side b {
+  color: var(--ink);
+  font: italic 900 14px/1 var(--display-font);
+  letter-spacing: 0.04em;
+}
+
+.res-new {
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--neon-yellow);
+  color: #1a1400;
+  font: italic 900 10px/1 var(--display-font);
+  letter-spacing: 0.1em;
+  transform: rotate(-4deg);
+  animation: badge-stamp 0.4s 0.6s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.res-new[hidden] {
+  display: none;
+}
+
+.medal {
+  --m: var(--gold);
+  display: grid;
+  place-items: center;
+  width: clamp(48px, 15vmin, 64px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff 0 8%, var(--m) 40%, color-mix(in srgb, var(--m) 55%, #000) 100%);
+  box-shadow: 0 0 0 3px rgb(0 0 0 / 0.45), 0 0 22px color-mix(in srgb, var(--m) 60%, transparent);
+  color: rgb(0 0 0 / 0.7);
+  font: italic 900 10px/1 var(--display-font);
+  letter-spacing: 0.06em;
+  text-shadow: 0 1px 0 rgb(255 255 255 / 0.4);
+  animation: medal-in 0.6s 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.medal[data-medal='silver'] {
+  --m: var(--silver);
+}
+
+.medal[data-medal='bronze'] {
+  --m: var(--bronze);
+}
+
+.medal[data-medal='none'] {
+  --m: #555;
+  color: var(--ink-dim);
+  text-shadow: none;
+  box-shadow: 0 0 0 2px rgb(255 255 255 / 0.15);
+  background: rgb(255 255 255 / 0.05);
+}
+
+@keyframes medal-in {
+  from {
+    transform: scale(2.6) rotate(-40deg);
+    opacity: 0;
+  }
+}
+
+.res-why {
+  text-align: center;
+  font: 800 11px/1 var(--hud-font);
+  letter-spacing: 0.2em;
+  color: #ff7a88;
+}
+
+.res-why:empty {
+  display: none;
+}
+
+.res-table {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 18px;
+  padding: 7px 12px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.35);
+}
+
+.res-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 800 11px/1.5 var(--hud-font);
+  letter-spacing: 0.12em;
+  animation: ws-in 0.3s ease-out both;
+}
+
+.res-row span {
+  flex: 1;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+.res-row i {
+  font-style: normal;
+  opacity: 0.6;
+  font-variant-numeric: tabular-nums;
+}
+
+.res-row b {
+  min-width: 52px;
+  text-align: right;
+  font: italic 900 13px/1.2 var(--display-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--neon-yellow);
+}
+
+.res-row.zero b {
+  color: var(--ink-dim);
+}
+
+/* --- Mission dialogue --- */
+.dlg-card {
+  width: min(520px, 100%);
+}
+
+.dlg-lines {
+  display: grid;
+  gap: 8px;
+}
+
+.dlg-line {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+  animation: ws-in 0.35s ease-out both;
+}
+
+.dlg-line:nth-child(2) {
+  animation-delay: 0.25s;
+}
+
+.dlg-line:nth-child(3) {
+  animation-delay: 0.5s;
+}
+
+.dlg-who {
+  --who: var(--neon-pink);
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--who) 25%, #000);
+  box-shadow: inset 0 0 0 2px var(--who);
+  color: #fff;
+  font: italic 900 13px/1 var(--display-font);
+}
+
+.dlg-line[data-who='tuna'] .dlg-who {
+  --who: var(--neon-yellow);
+}
+
+.dlg-line[data-who='pike'] .dlg-who {
+  --who: #a6b4c8;
+}
+
+.dlg-text {
+  display: grid;
+  gap: 2px;
+  font: 600 clamp(12.5px, 3.8vmin, 15px)/1.35 var(--hud-font);
+}
+
+.dlg-text b {
+  font: 900 10px/1 var(--hud-font);
+  letter-spacing: 0.22em;
+  color: var(--neon-cyan);
+}
+
+.dlg-reward {
+  text-align: center;
+  font: italic 900 clamp(18px, 6vmin, 26px)/1 var(--display-font);
+  color: var(--cash);
+  text-shadow: 0 2px 0 rgb(0 40 16 / 0.6);
+}
+
+.dlg-reward:empty {
+  display: none;
+}
+
+/* --- Sheets: shop and progress (over the pause menu too) --- */
+.sheet-cash {
+  margin-right: 6px;
+  font: italic 900 18px/1 var(--display-font);
+  color: var(--cash);
+}
+
+.shop-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px;
+  padding-top: 6px;
+}
+
+.shop-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.05);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.12);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--hud-font);
+  border: 0;
+  touch-action: manipulation;
+}
+
+.shop-item.nav-focus,
+.shop-item:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.shop-item b {
+  display: block;
+  font: italic 900 13px/1.2 var(--display-font);
+  letter-spacing: 0.06em;
+}
+
+.shop-item small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+
+.shop-price {
+  font: italic 900 15px/1 var(--display-font);
+  color: var(--cash);
+  white-space: nowrap;
+}
+
+.shop-item[data-state='broke'] .shop-price {
+  color: #ff7a88;
+}
+
+.shop-item[data-state='owned'] {
+  opacity: 0.55;
+}
+
+.shop-item[data-state='owned'] .shop-price {
+  color: var(--ink-dim);
+}
+
+.shop-item.bought {
+  animation: shop-bought 0.45s ease-out;
+}
+
+@keyframes shop-bought {
+  0% {
+    box-shadow: inset 0 0 0 2px var(--cash), 0 0 24px rgb(93 255 154 / 0.6);
+  }
+}
+
+/* Progress page. */
+.stats-top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 4px 10px;
+}
+
+.stats-ring {
+  position: relative;
+  flex: none;
+  width: 72px;
+  height: 72px;
+}
+
+.stats-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.stats-ring circle {
+  fill: none;
+  stroke-width: 7;
+}
+
+.stats-ring .track {
+  stroke: rgb(255 255 255 / 0.12);
+}
+
+.stats-ring .fill {
+  stroke: url(#stats-grad);
+  stroke-linecap: round;
+  stroke-dasharray: 0 200;
+}
+
+.stats-ring b {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font: italic 900 18px/1 var(--display-font);
+}
+
+.stats-headline {
+  display: grid;
+  gap: 4px;
+  font: 800 11px/1.3 var(--hud-font);
+  letter-spacing: 0.16em;
+  color: var(--ink-dim);
+}
+
+.stats-headline b {
+  font: italic 900 20px/1 var(--display-font);
+  color: var(--cash);
+  letter-spacing: 0.02em;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 4px 18px;
+}
+
+.stats-grid h3 {
+  grid-column: 1 / -1;
+  margin: 10px 4px 2px;
+  font: 900 10px/1 var(--hud-font);
+  letter-spacing: 0.3em;
+  color: var(--neon-cyan);
+}
+
+.stat {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 10px;
+  padding: 3px 6px;
+  font-size: 12.5px;
+}
+
+.stat span {
+  color: var(--ink-dim);
+}
+
+.stat b {
+  font: italic 900 13px/1 var(--display-font);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.stat-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.1);
+  overflow: hidden;
+}
+
+.stat-bar i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink));
+  transform-origin: left center;
+}
+
+.stat-medal {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 5px;
+  border-radius: 50%;
+  vertical-align: 0;
+  background: var(--gold);
+}
+
+.stat-medal[data-medal='silver'] {
+  background: var(--silver);
+}
+
+.stat-medal[data-medal='bronze'] {
+  background: var(--bronze);
+}
+
+.export-list {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 2px 4px;
+}
+
+.export-list span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.07);
+  font: 800 10.5px/1.2 var(--hud-font);
+  letter-spacing: 0.08em;
+}
+
+.export-list span.done {
+  background: rgb(93 255 154 / 0.18);
+  color: var(--cash);
+  text-decoration: line-through;
+}
+
+/* --- Title: cash beside the best score --- */
+.title-cash {
+  font: 800 11px/1 var(--hud-font);
+  letter-spacing: 0.28em;
+  color: var(--ink-dim);
+  animation: fade-up 0.5s 0.8s ease-out both;
+}
+
+.title-cash b {
+  margin-left: 0.4em;
+  font: italic 900 18px/1 var(--display-font);
+  letter-spacing: 0.04em;
+  color: var(--cash);
+  text-shadow: 0 0 12px rgb(93 255 154 / 0.35);
+}
+
+.title-cash[hidden] {
+  display: none;
+}
+
+/* Short phones: tighter cards. */
+@media (max-height: 360px) {
+  .prog-card {
+    gap: 7px;
+    padding: 10px 16px 12px;
+  }
+
+  .res-table {
+    padding: 5px 10px;
+  }
+
+  .res-row {
+    line-height: 1.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #act-banner b,
+  #act-banner small,
+  .medal,
+  .dlg-line,
+  .res-row {
+    animation: none;
+  }
+}

@@ -167,4 +167,8 @@ export interface Panel {
   readonly nav: MenuNav;
   /** Back / Esc / B. */
   back(): void;
+  /** Hide without the back action (the stack under it is closing). */
+  hide?(): void;
+  /** A sheet: Pause / Esc backs out of it (like settings) instead of pausing over it. */
+  readonly sheet?: boolean;
 }

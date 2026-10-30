@@ -124,6 +124,11 @@ export class TitleScreen implements Panel {
     this.modeItems.set(mode.id, { el, item });
   }
 
+  /** A line of another system's under the best score (e.g. cash). */
+  addInfo(el: HTMLElement): void {
+    this.root.querySelector('.title-main')!.append(el);
+  }
+
   removeMode(id: string): void {
     const m = this.modeItems.get(id);
     if (!m) return;
