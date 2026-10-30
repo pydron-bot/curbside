@@ -3,7 +3,17 @@
  * COMBO_WINDOW seconds of the last bumps the multiplier (up to MAX_COMBO).
  * Drifts accrue while sliding and are banked when the slide ends.
  */
-export type ScoreKind = 'drift' | 'nearMiss' | 'smash' | 'hitAndRun' | 'knockout' | 'carjack' | 'boom';
+export type ScoreKind =
+  | 'drift'
+  | 'nearMiss'
+  | 'smash'
+  | 'hitAndRun'
+  | 'knockout'
+  | 'carjack'
+  | 'boom'
+  | 'copRam'
+  | 'copWreck'
+  | 'evaded';
 
 export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   nearMiss: 100,
@@ -12,6 +22,10 @@ export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   knockout: 150,
   carjack: 250,
   boom: 500,
+  copRam: 200,
+  copWreck: 750,
+  // All bonus: see evadeBonus().
+  evaded: 0,
 };
 
 export const LABELS: Record<ScoreKind, string> = {
@@ -22,7 +36,18 @@ export const LABELS: Record<ScoreKind, string> = {
   knockout: 'KNOCKOUT',
   carjack: 'CARJACK',
   boom: 'KABOOM',
+  copRam: 'COP RAM',
+  copWreck: 'COP CAR WRECKED',
+  evaded: 'EVADED',
 };
+
+/** Shaking off a chase of this many stars or more earns the EVADED bonus. */
+export const EVADE_BONUS_FROM = 3;
+
+/** The EVADED bonus for losing a chase that peaked at `stars` (0 below EVADE_BONUS_FROM). */
+export function evadeBonus(stars: number): number {
+  return stars >= EVADE_BONUS_FROM ? 1000 * stars : 0;
+}
 
 export const COMBO_WINDOW = 3;
 export const MAX_COMBO = 10;
@@ -79,6 +104,20 @@ export class Score {
     this.driftPoints = 0;
     this.driftIdle = 0;
     return bank && pts >= MIN_DRIFT_BANK ? this.bank('drift', pts) : null;
+  }
+
+  /**
+   * Busted: the run keeps going but loses `fraction` of its points, and the
+   * combo and any slide in progress. Returns the points taken.
+   */
+  fine(fraction: number): number {
+    const taken = Math.round(this.total * Math.max(0, Math.min(1, fraction)));
+    this.total -= taken;
+    this.combo = 1;
+    this.comboTimer = 0;
+    this.driftPoints = 0;
+    this.driftIdle = 0;
+    return taken;
   }
 
   /** Start a fresh run (after dying); the best score is kept. */

@@ -8,7 +8,9 @@
  * Rules kept here: you can only get in while alive and on your feet; getting
  * out is a no-op on foot; dying gets you out of the car first; a knock-down
  * never shortens a stun (or death) already running; respawn always lands you
- * on foot. Each transition emits its GameEvent. Pure logic, no three.js.
+ * on foot. An arrest drags you out of the car and holds you, cuffed on the
+ * ground, until release. Each transition emits its GameEvent. Pure logic,
+ * no three.js.
  */
 import type { EventBus } from '../core/events';
 import { createPedState, type PedState } from '../entities/pedestrian';
@@ -19,6 +21,8 @@ import type { Vehicle } from './population';
 export const MAX_HEALTH = 100;
 /** Seconds lying "wasted" before respawning. */
 export const RESPAWN_SECONDS = 3;
+/** Seconds held after an arrest before release at the police station. */
+export const BUSTED_SECONDS = 3.5;
 /** Your own car blowing up under you: thrown clear, hurt and dazed (once, not also hit by the blast). */
 export const OWN_CAR_BLAST_DAMAGE = 35;
 const OWN_CAR_THROW_SPEED = 4;
@@ -40,6 +44,8 @@ export class Player {
   health = MAX_HEALTH;
   /** Seconds until respawn while "wasted"; 0 when alive. */
   dead = 0;
+  /** Seconds left in custody after an arrest; 0 when free. */
+  custody = 0;
   readonly arsenal = new Arsenal();
 
   constructor(
@@ -54,6 +60,11 @@ export class Player {
 
   get alive(): boolean {
     return this.dead <= 0;
+  }
+
+  /** Busted and being held (lying cuffed until release). */
+  get arrested(): boolean {
+    return this.custody > 0;
   }
 
   /** Alive and on their feet: free to punch, shoot, get in or out. */
@@ -80,7 +91,7 @@ export class Player {
   enter(v: Vehicle): boolean {
     if (!this.canEnter || v.damage.wrecked) return false;
     this.driving = v;
-    this.bus.emit({ type: 'enterVehicle', archetype: v.archetype });
+    this.bus.emit({ type: 'enterVehicle', archetype: v.archetype, police: v.archetype === 'police' || v.police === true });
     return true;
   }
 
@@ -100,9 +111,9 @@ export class Player {
     return v;
   }
 
-  /** Take damage. Returns true if it killed. */
+  /** Take damage (not while in custody). Returns true if it killed. */
   hurt(amount: number): boolean {
-    if (!this.alive || amount <= 0) return false;
+    if (!this.alive || this.arrested || amount <= 0) return false;
     this.health = Math.max(0, this.health - amount);
     this.bus.emit({ type: 'playerHurt', amount, health: this.health });
     if (this.health > 0) return false;
@@ -140,12 +151,35 @@ export class Player {
     this.hurt(OWN_CAR_BLAST_DAMAGE);
   }
 
-  /** Advance timers one sim step. Returns true when it's time to respawn. */
+  /**
+   * Busted: dragged out of the car, weapons taken, held on the ground for
+   * BUSTED_SECONDS. Refused while dead or already held. `fine` is the points
+   * the run lost, passed on in the 'busted' event.
+   */
+  arrest(fine = 0): boolean {
+    if (!this.alive || this.arrested) return false;
+    this.exit();
+    this.custody = BUSTED_SECONDS;
+    this.stunned = Math.max(this.stunned, BUSTED_SECONDS);
+    this.ped.vx = this.ped.vz = 0;
+    this.arsenal.clear();
+    this.bus.emit({ type: 'busted', fine });
+    return true;
+  }
+
+  /**
+   * Advance timers one sim step. Returns true when it's time to respawn
+   * (after dying) or be released (after an arrest; check `arrested` first).
+   */
   step(dt: number): boolean {
     this.punchCooldown = Math.max(0, this.punchCooldown - dt);
     // Stuns wear off on foot (nobody is stunned at the wheel).
     if (!this.driving && this.stunned > 0) this.stunned = Math.max(0, this.stunned - dt);
     this.arsenal.step(dt);
+    if (this.custody > 0) {
+      this.custody = Math.max(0, this.custody - dt);
+      return this.custody === 0;
+    }
     return this.dead > 0 && (this.dead -= dt) <= 0;
   }
 
@@ -153,6 +187,7 @@ export class Player {
   respawn(x: number, z: number, heading = Math.PI): void {
     this.driving = null;
     this.dead = 0;
+    this.custody = 0;
     this.stunned = 0;
     this.punchCooldown = 0;
     this.health = MAX_HEALTH;

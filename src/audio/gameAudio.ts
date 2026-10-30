@@ -13,7 +13,7 @@ import { onSettingsChange, settings, type Settings } from '../core/settings';
 import type { Award } from '../systems/score';
 import type { CarSound } from './carSound';
 import { ChaosMeter, MAX_INTENSITY } from './chaos';
-import { AmbientBed, EngineVoice, FireVoice, SirenVoice, TyreVoice, type SirenStyle } from './loops';
+import { AmbientBed, EngineVoice, FireVoice, RotorVoice, SirenVoice, TyreVoice, type SirenStyle } from './loops';
 import {
   AIR_FILTER_BELOW,
   Dip,
@@ -115,6 +115,7 @@ const FALLOFF = {
   near: { ref: 6, max: 35, floor: 0 },
   horn: { ref: 12, max: 160, floor: 0.04 },
   siren: { ref: 16, max: 280, floor: 0.05 },
+  rotor: { ref: 22, max: 320, floor: 0.04 },
   fire: { ref: 6, max: 70, floor: 0 },
   distant: { ref: 25, max: 400, floor: 0.08 },
 } satisfies Record<string, Falloff>;
@@ -205,6 +206,7 @@ export class GameAudio {
   private fire: FireVoice | null = null;
   private ambient: AmbientBed | null = null;
   private readonly sirens: SirenVoice[] = [];
+  private rotorVoice: RotorVoice | null = null;
   /** Released continuous voices, disconnected once they've faded. */
   private readonly retiring: Voice[] = [];
   private readonly limiter = new VoiceLimiter<Voice>(LIMITS, MAX_VOICES);
@@ -333,6 +335,26 @@ export class GameAudio {
     s.age = 0;
   }
 
+  /**
+   * A helicopter's rotor overhead at (x, z). Call every frame while it's
+   * there; call with on = false, or stop calling, and it fades out.
+   */
+  rotor(x: number, z: number, on = true): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.bank) return;
+    if (!on) {
+      if (this.rotorVoice) {
+        this.retire(this.rotorVoice.v, this.rotorVoice.release(ctx.currentTime));
+        this.rotorVoice = null;
+      }
+      return;
+    }
+    if (!this.rotorVoice) this.rotorVoice = new RotorVoice(ctx, this.bank, this.worldIn, ctx.currentTime);
+    this.rotorVoice.x = x;
+    this.rotorVoice.z = z;
+    this.rotorVoice.age = 0;
+  }
+
   /** A car horn at (x, z). */
   horn(x: number, z: number, duration = 0.4): void {
     const v = this.voice({ x, z }, FALLOFF.horn, 0.55, 0.25);
@@ -406,7 +428,10 @@ export class GameAudio {
     const newBest = e.type === 'award' && this.countAward(e.award);
     // Life and death change state even while the context is suspended, so the music comes back.
     if (e.type === 'playerDied') return this.onPlayerDied();
+    if (e.type === 'busted') return this.onBusted();
     if (e.type === 'respawn') return this.onRespawn();
+    // The wanted level is the music's floor (a chase ramps it up), audible or not yet.
+    if (e.type === 'wanted') this.setIntensity(e.level);
     if (e.type === 'carjack') this.carjackAt = performance.now();
     const ctx = this.ctx;
     if (!ctx || !this.bank || ctx.state !== 'running') return;
@@ -445,6 +470,12 @@ export class GameAudio {
         return this.onPlayerHurt(e);
       case 'pause':
         return; // main.ts calls setPaused directly, before this event fires
+      case 'wanted':
+        return this.onWanted(e);
+      case 'horn':
+        return this.horn(e.x, e.z, e.duration);
+      case 'respray':
+        return this.oneShot('door', e, FALLOFF.near, 0.8, 0.2, sfx.spray);
       default: {
         const unhandled: never = e;
         return unhandled;
@@ -467,6 +498,7 @@ export class GameAudio {
       nodes: nodeStats.live,
       nodesCreated: nodeStats.created,
       sirens: this.sirens.length,
+      rotor: this.rotorVoice !== null,
       fire: this.fire !== null,
       engine: m ? { archetype: this.engine!.archetype, rpm: Math.round(m.rpm), gear: m.gear, load: +m.load.toFixed(2), cranking: m.cranking } : null,
       music: music
@@ -512,6 +544,7 @@ export class GameAudio {
     this.retiring.length = 0;
     this.music?.dispose();
     for (const s of this.sirens) s.v.dispose();
+    this.rotorVoice?.v.dispose();
     for (const x of [this.engine, this.tyres, this.fire, this.ambient]) x?.v.dispose();
     this.ctx?.close().catch(() => {});
     this.ctx = null;
@@ -969,6 +1002,28 @@ export class GameAudio {
     automateDip(this.worldMuffle.frequency, this.muffleDip, now, 0.25);
   }
 
+  /** A star gained: the wanted sting. A chase shaken off (or resprayed away): relief. */
+  private onWanted(e: EventOf<'wanted'>): void {
+    if (e.level > e.prev) this.ui('star');
+    else if (e.level === 0 && (e.reason === 'evaded' || e.reason === 'respray')) this.ui('success');
+  }
+
+  /** BUSTED: like WASTED (world muffled, music off until release), with its own sting. */
+  private onBusted(): void {
+    this.dead = true;
+    this.chaos.reset();
+    if (!this.ctx || !this.bank) return;
+    const now = this.ctx.currentTime;
+    const v = this.voice(null, FALLOFF.near, 1, 0.1, 0, 'ui');
+    if (v) {
+      sfx.busted(v, this.station.key);
+      this.commit('player', v);
+    }
+    this.music?.setMode('off');
+    this.muffleDip.hold(600);
+    automateDip(this.worldMuffle.frequency, this.muffleDip, now, 0.25);
+  }
+
   private onRespawn(): void {
     this.dead = false;
     this.runPoints = 0;
@@ -1071,6 +1126,18 @@ export class GameAudio {
       const dx = s.x - this.listenerX;
       const d = Math.hypot(dx, s.z - this.listenerZ);
       s.place(distanceGain(d, FALLOFF.siren), panFor(dx), airCutoff(d), d, dt, now);
+    }
+    const r = this.rotorVoice;
+    if (r) {
+      r.age += dt;
+      if (r.age > SIREN_STALE) {
+        this.retire(r.v, r.release(now));
+        this.rotorVoice = null;
+      } else {
+        const dx = r.x - this.listenerX;
+        const d = Math.hypot(dx, r.z - this.listenerZ);
+        r.place(distanceGain(d, FALLOFF.rotor), panFor(dx), airCutoff(d), now);
+      }
     }
   }
 

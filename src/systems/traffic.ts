@@ -4,12 +4,19 @@
  * would, so AI cars use the exact same physics. Pure pursuit has no notion of
  * walls, so a driver that stops closing on its waypoint backs out and turns,
  * and one shoved far off its lane picks a fresh route from where it is.
+ *
+ * Drivers react to the player too: one hit hard may panic (drive flat out,
+ * honking, through corners and gaps it would normally wait for), fly into a
+ * road rage (the game hands it a pursuit controller) or bail out; anyone
+ * held up by the player leans on the horn; and a siren coming up behind
+ * makes them pull over to the kerb and slow.
  */
 import { forwardSpeed, wrapAngle, type VehicleControls, type VehicleState } from '../entities/vehicle';
 import { BLOCK_SIZE } from '../world/city';
 import {
   DIR_VEC,
   MAX_NODE,
+  rightOf,
   canLeave,
   chooseTurn,
   dirHeading,
@@ -45,13 +52,28 @@ export interface AiDriver {
   attempts: number;
   /** Closest it got to the waypoint before the current trouble, m. */
   bestProgress: number;
+  /** How they feel about the player: 'panic' drives flat out honking, 'rage' is chasing them. */
+  mood: Mood;
+  /** Seconds left in that mood. */
+  moodTimer: number;
+  /** Seconds left pulled over for a siren. */
+  yielding: number;
+  /** Seconds held up by the player (on foot or in a car) in its lane. */
+  blockedByPlayer: number;
+  hornCooldown: number;
+  /** Set when the driver honks this step (its length, s); the caller sounds it and clears it. */
+  honk: number;
 }
+
+export type Mood = 'calm' | 'panic' | 'rage';
 
 export interface Obstacle {
   x: number;
   z: number;
   /** Half-width used for the "is it in my lane" test. */
   halfWidth: number;
+  /** It's the player (or their car): being held up by it gets a honk. */
+  player?: boolean;
 }
 
 export const CRUISE_SPEED = 12;
@@ -72,6 +94,19 @@ const LOOKAHEAD = 10;
 /** Stuck this long, or backed out this often, without real progress: give up. */
 const HOPELESS_SECONDS = 10;
 const HOPELESS_ATTEMPTS = 6;
+/** Panicking drivers go this much over their cruise speed... */
+const PANIC_SPEED = 2;
+/** ...and leave half the usual gap. */
+const PANIC_GAP = 0.45;
+export const PANIC_SECONDS = 10;
+export const RAGE_SECONDS = 12;
+/** Held up by the player this long: honk, s. */
+export const HONK_AFTER = 1.5;
+/** Pulling over: this far toward the kerb from the lane centre, m, and no faster than this, m/s. */
+const YIELD_SHIFT = 3;
+const YIELD_SPEED = 3;
+/** A siren behind within this distance (same way) makes drivers pull over, m. */
+export const YIELD_RANGE = 40;
 
 /**
  * Place a new AI car on a random lane. Returns null if the pick was off-map.
@@ -90,25 +125,36 @@ export function spawnAi(
   const along = -BLOCK_SIZE * (1 - t) - 12 * t; // stay out of both intersections
   const p = lanePoint(ix, iz, dir, Math.min(-12, along));
   return {
-    driver: {
-      ix,
-      iz,
-      dir,
-      next: chooseTurn(ix, iz, dir, rand),
-      phase: 'approach',
-      waited: 0,
-      pushThrough: 0,
-      cruise: CRUISE_SPEED * (0.85 + rand() * 0.3),
-      progress: Infinity,
-      stuck: 0,
-      reversing: 0,
-      stalled: 0,
-      attempts: 0,
-      bestProgress: Infinity,
-    },
+    driver: createDriver(ix, iz, dir, rand),
     x: p.x,
     z: p.z,
     heading: dirHeading(dir),
+  };
+}
+
+/** A fresh driver heading for intersection (ix, iz) in `dir` (place the car yourself). */
+export function createDriver(ix: number, iz: number, dir: Dir, rand: () => number): AiDriver {
+  return {
+    ix,
+    iz,
+    dir,
+    next: chooseTurn(ix, iz, dir, rand),
+    phase: 'approach',
+    waited: 0,
+    pushThrough: 0,
+    cruise: CRUISE_SPEED * (0.85 + rand() * 0.3),
+    progress: Infinity,
+    stuck: 0,
+    reversing: 0,
+    stalled: 0,
+    attempts: 0,
+    bestProgress: Infinity,
+    mood: 'calm',
+    moodTimer: 0,
+    yielding: 0,
+    blockedByPlayer: 0,
+    hornCooldown: 0,
+    honk: 0,
   };
 }
 
@@ -133,6 +179,11 @@ export function driveAi(
   rand: () => number,
   dt: number,
 ): VehicleControls {
+  ai.hornCooldown = Math.max(0, ai.hornCooldown - dt);
+  ai.yielding = Math.max(0, ai.yielding - dt);
+  // Rage is timed by whoever is running the chase; panic wears off here.
+  if (ai.mood === 'panic' && (ai.moodTimer -= dt) <= 0) ai.mood = 'calm';
+  const panic = ai.mood === 'panic';
   if (ai.phase === 'approach' && offRoute(ai, car)) rerouteAi(ai, car, rand);
   let target = currentWaypoint(ai);
   if (Math.hypot(target.x - car.x, target.z - car.z) < WAYPOINT_RADIUS) {
@@ -164,6 +215,12 @@ export function driveAi(
     const ahead = Math.min(0, along + LOOKAHEAD);
     aim.x = target.x + v.x * ahead;
     aim.z = target.z + v.z * ahead;
+    if (ai.yielding > 0) {
+      // Pull over: hug the kerb.
+      const r = rightOf(ai.dir);
+      aim.x += r.x * YIELD_SHIFT;
+      aim.z += r.z * YIELD_SHIFT;
+    }
     ax = aim.x;
     az = aim.z;
   }
@@ -182,12 +239,18 @@ export function driveAi(
     return controls;
   }
 
-  // Slow for turns (and while about to make one).
+  // Slow for turns (and while about to make one); panic only slows for the sharpest.
   const turning = ai.next !== ai.dir;
-  let wantSpeed = ai.cruise;
-  if (ai.phase === 'turning' && turning) wantSpeed = TURN_SPEED;
-  else if (ai.phase === 'approach' && turning && distToWaypoint < 22) wantSpeed = TURN_SPEED + distToWaypoint * 0.3;
-  if (Math.abs(diff) > 0.6) wantSpeed = Math.min(wantSpeed, TURN_SPEED);
+  let wantSpeed = panic ? ai.cruise * PANIC_SPEED : ai.cruise;
+  if (panic) {
+    if (Math.abs(diff) > 0.9) wantSpeed = Math.min(wantSpeed, TURN_SPEED * 1.8);
+  } else {
+    if (ai.phase === 'turning' && turning) wantSpeed = TURN_SPEED;
+    else if (ai.phase === 'approach' && turning && distToWaypoint < 22) wantSpeed = TURN_SPEED + distToWaypoint * 0.3;
+    if (Math.abs(diff) > 0.6) wantSpeed = Math.min(wantSpeed, TURN_SPEED);
+  }
+  if (ai.yielding > 0 && ai.phase === 'approach') wantSpeed = Math.min(wantSpeed, YIELD_SPEED);
+  if (panic && ai.hornCooldown <= 0) honk(ai, 0.2 + rand() * 0.25, 0.8 + rand());
 
   // Brake for anything in our path.
   const vF = forwardSpeed(car);
@@ -195,10 +258,12 @@ export function driveAi(
     ai.pushThrough -= dt;
   } else {
     const gap = clearDistance(car, obstacles);
-    const safe = 3 + Math.max(0, vF) * 0.9;
+    const safe = 3 + Math.max(0, vF) * (panic ? PANIC_GAP : 0.9);
     if (gap < safe) {
       wantSpeed = 0;
       ai.waited += dt;
+      ai.blockedByPlayer = blockerIsPlayer ? ai.blockedByPlayer + dt : 0;
+      if (ai.blockedByPlayer > HONK_AFTER && ai.hornCooldown <= 0) honk(ai, 0.5 + rand() * 0.5, 2 + rand());
       if (ai.waited > 4) {
         // Gridlock breaker: ignore blockers briefly (physics still prevents overlap).
         ai.pushThrough = 1.5;
@@ -206,6 +271,7 @@ export function driveAi(
       }
     } else {
       ai.waited = 0;
+      ai.blockedByPlayer = 0;
       wantSpeed = Math.min(wantSpeed, Math.max(0, (gap - safe) * 0.8 + 2));
     }
   }
@@ -316,18 +382,78 @@ export function rerouteAi(ai: AiDriver, car: VehicleState, rand: () => number): 
   }
 }
 
+/** Whether the nearest obstacle the last clearDistance() found was the player. */
+let blockerIsPlayer = false;
+
 /** Distance to the nearest obstacle ahead within our lane width, or Infinity. */
 export function clearDistance(car: VehicleState, obstacles: Obstacle[]): number {
   const fx = Math.sin(car.heading);
   const fz = Math.cos(car.heading);
   let best = Infinity;
+  blockerIsPlayer = false;
   for (const o of obstacles) {
     const rx = o.x - car.x;
     const rz = o.z - car.z;
     const along = rx * fx + rz * fz;
     if (along <= 0.5 || along > 30) continue;
     const lateral = Math.abs(rx * fz - rz * fx);
-    if (lateral < 1.1 + o.halfWidth) best = Math.min(best, along - 2.4);
+    if (lateral < 1.1 + o.halfWidth && along - 2.4 < best) {
+      best = along - 2.4;
+      blockerIsPlayer = o.player === true;
+    }
   }
   return best;
+}
+
+function honk(ai: AiDriver, duration: number, cooldown: number): void {
+  ai.honk = duration;
+  ai.hornCooldown = cooldown;
+}
+
+export type HitReaction = 'panic' | 'rage' | 'bail';
+
+/**
+ * The player just hit this driver hard: 55% panic for PANIC_SECONDS, 25%
+ * road rage for RAGE_SECONDS (the caller hands the car a pursuit controller),
+ * 20% stop and bail out (the caller ejects them). Sets the mood; returns which.
+ */
+export function reactToHit(ai: AiDriver, rand: () => number): HitReaction {
+  const r = rand();
+  if (r < 0.55) {
+    ai.mood = 'panic';
+    ai.moodTimer = PANIC_SECONDS;
+    ai.hornCooldown = 0;
+    return 'panic';
+  }
+  if (r < 0.8) {
+    ai.mood = 'rage';
+    ai.moodTimer = RAGE_SECONDS;
+    return 'rage';
+  }
+  return 'bail';
+}
+
+/** Scared off by gunfire or a chase nearby: drive away fast (doesn't shorten a longer panic). */
+export function scareDriver(ai: AiDriver, seconds: number): void {
+  if (ai.mood === 'rage') return;
+  ai.mood = 'panic';
+  ai.moodTimer = Math.max(ai.moodTimer, seconds);
+}
+
+/**
+ * Should a driver in `car` pull over for a siren in `siren`? Yes if it's
+ * coming up behind in the same direction within YIELD_RANGE, or heading
+ * straight at us close ahead.
+ */
+export function shouldYield(car: VehicleState, siren: VehicleState): boolean {
+  const fx = Math.sin(car.heading);
+  const fz = Math.cos(car.heading);
+  const rx = siren.x - car.x;
+  const rz = siren.z - car.z;
+  const along = rx * fx + rz * fz;
+  const lateral = Math.abs(rx * fz - rz * fx);
+  if (lateral > 7) return false;
+  const turn = Math.abs(wrapAngle(siren.heading - car.heading));
+  if (along < -2 && along > -YIELD_RANGE) return turn < 0.8;
+  return along > 2 && along < 30 && turn > 2.3;
 }
