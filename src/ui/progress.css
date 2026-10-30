@@ -112,7 +112,8 @@ body[data-device='touch'][data-hand='left'] .cash-chip {
    activity card on a phone. */
 .feed-line.feed-cash,
 .feed-line.feed-lost,
-.feed-line.feed-progress {
+.feed-line.feed-progress,
+.feed-line.feed-police {
   max-width: calc(50vw - 100px);
   overflow: hidden;
   font-size: clamp(12px, 3.8vmin, 17px);
@@ -318,6 +319,23 @@ body:not([data-scene='play']) #act-banner {
 #act-banner[data-tone='go'] b {
   font-size: clamp(54px, 22vmin, 120px);
   --c: var(--neon-green);
+}
+
+/* A run's last seconds, counted while you drive: red, a size down, and
+   kept up here, off the car. */
+#act-banner[data-tone='final'] b {
+  font-size: clamp(44px, 15vmin, 96px);
+  --c: #ff4d5e;
+  animation-duration: 0.35s;
+}
+
+/* On a phone the big 3-2-1-GO digits would sit on the activity card (its
+   clock is what they're counting toward): drop them onto the held car. */
+@media (max-height: 500px) {
+  #act-banner[data-tone='count'],
+  #act-banner[data-tone='go'] {
+    top: 50%;
+  }
 }
 
 #act-banner[data-tone='pass'] {

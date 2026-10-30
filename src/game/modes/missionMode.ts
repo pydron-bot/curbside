@@ -195,6 +195,8 @@ export class MissionMode implements Mode {
     this.calling = true;
     ctx.busy = 'mission';
     ctx.deps.audio.ui('confirm');
+    // Nothing left over (a frenzy's PASSED) showing round the card.
+    ctx.ui.clearBanner();
     ctx.openModal(this.card);
     this.card.show('INCOMING CALL', m.title, m.intro, `PAYS $${fmt(m.reward)}`, "LET'S GO", ctx.focusRing, () => {
       ctx.closeModal(this.card);
@@ -244,6 +246,8 @@ export class MissionMode implements Mode {
         ctx.deps.audio.ui('success');
         ctx.progress.flush();
         const last = this.next === null;
+        // A step's objective line can still be up (a quick last step): not behind the debrief.
+        ctx.ui.clearBanner();
         ctx.openModal(this.card);
         this.card.show(last ? 'STORY COMPLETE' : 'MISSION PASSED', m.title, m.outro, `+$${fmt(paid)}`, 'CONTINUE', ctx.focusRing, () => ctx.closeModal(this.card));
         return;

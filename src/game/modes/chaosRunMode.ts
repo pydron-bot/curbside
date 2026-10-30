@@ -140,7 +140,7 @@ export class ChaosRunMode implements Mode {
       if (cue.kind === 'bonus') this.ctx.ui.bonus(`+${cue.seconds} S`);
       else if (cue.kind === 'count') {
         this.ctx.deps.audio.ui('countdown');
-        if (cue.n <= 5) this.ctx.ui.banner(String(cue.n), 'count', '', 0.8);
+        if (cue.n <= 5) this.ctx.ui.banner(String(cue.n), 'final', '', 0.8);
       } else this.finish(cue.reason);
     }
     run.cues.length = 0;

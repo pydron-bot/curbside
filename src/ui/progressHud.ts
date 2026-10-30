@@ -5,7 +5,8 @@ import { hiddenSetter, textSetter } from './domWrite';
 import { fmt } from './scoreHud';
 
 /** A banner's tone: colours and how hard it slams in (progress.css). */
-export type BannerTone = 'count' | 'go' | 'pass' | 'fail' | 'info' | 'gold';
+/** 'count' / 'go': a held 3-2-1; 'final': the last seconds of a run, while driving. */
+export type BannerTone = 'count' | 'go' | 'final' | 'pass' | 'fail' | 'info' | 'gold';
 
 /** How long a banner stays up, s (a countdown digit is replaced sooner). */
 const BANNER_SECONDS = 2.2;
