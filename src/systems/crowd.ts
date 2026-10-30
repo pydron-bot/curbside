@@ -293,9 +293,10 @@ function stepHostile(p: PedAgent, target: Target | undefined, dt: number): Crowd
   }
 
   // Shooter: hold a middle distance, face the target, fire on a cadence.
-  // Officers advance instead of backing off (they want the arrest).
-  if (d > 12) stepPedestrian(p.s, { x: ux * 0.8, y: -uz * 0.8, sprint: cop && d > 20 }, cop ? COP_SPEC : NPC_SPEC, dt);
-  else if (d < 6 && !cop) stepPedestrian(p.s, { x: -ux * 0.6, y: uz * 0.6, sprint: false }, NPC_SPEC, dt);
+  // Officers keep advancing instead (they want the arrest), at a run when far.
+  if (cop) stepPedestrian(p.s, d > 3 ? { x: ux * 0.8, y: -uz * 0.8, sprint: d > 16 } : still, COP_SPEC, dt);
+  else if (d > 12) stepPedestrian(p.s, { x: ux * 0.8, y: -uz * 0.8, sprint: false }, NPC_SPEC, dt);
+  else if (d < 6) stepPedestrian(p.s, { x: -ux * 0.6, y: uz * 0.6, sprint: false }, NPC_SPEC, dt);
   else stepPedestrian(p.s, still, NPC_SPEC, dt);
   p.s.heading = Math.atan2(ux, uz);
   if (p.attackCooldown > 0 || d > (cop ? COP_SHOOT_RANGE : SHOOT_RANGE)) return null;

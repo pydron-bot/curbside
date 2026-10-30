@@ -40,6 +40,8 @@ export interface AiDriver {
   waited: number;
   pushThrough: number;
   cruise: number;
+  /** Speed it takes corners at, m/s (police corner harder than traffic). */
+  turnSpeed: number;
   /** Closest the car has got to the current waypoint, m. */
   progress: number;
   /** Seconds trying to move without getting closer to the waypoint. */
@@ -143,6 +145,7 @@ export function createDriver(ix: number, iz: number, dir: Dir, rand: () => numbe
     waited: 0,
     pushThrough: 0,
     cruise: CRUISE_SPEED * (0.85 + rand() * 0.3),
+    turnSpeed: TURN_SPEED,
     progress: Infinity,
     stuck: 0,
     reversing: 0,
@@ -242,12 +245,13 @@ export function driveAi(
   // Slow for turns (and while about to make one); panic only slows for the sharpest.
   const turning = ai.next !== ai.dir;
   let wantSpeed = panic ? ai.cruise * PANIC_SPEED : ai.cruise;
+  const turnSpeed = ai.turnSpeed;
   if (panic) {
-    if (Math.abs(diff) > 0.9) wantSpeed = Math.min(wantSpeed, TURN_SPEED * 1.8);
+    if (Math.abs(diff) > 0.9) wantSpeed = Math.min(wantSpeed, turnSpeed * 1.8);
   } else {
-    if (ai.phase === 'turning' && turning) wantSpeed = TURN_SPEED;
-    else if (ai.phase === 'approach' && turning && distToWaypoint < 22) wantSpeed = TURN_SPEED + distToWaypoint * 0.3;
-    if (Math.abs(diff) > 0.6) wantSpeed = Math.min(wantSpeed, TURN_SPEED);
+    if (ai.phase === 'turning' && turning) wantSpeed = turnSpeed;
+    else if (ai.phase === 'approach' && turning && distToWaypoint < 22 + turnSpeed) wantSpeed = turnSpeed + distToWaypoint * 0.3;
+    if (Math.abs(diff) > 0.6) wantSpeed = Math.min(wantSpeed, turnSpeed);
   }
   if (ai.yielding > 0 && ai.phase === 'approach') wantSpeed = Math.min(wantSpeed, YIELD_SPEED);
   if (panic && ai.hornCooldown <= 0) honk(ai, 0.2 + rand() * 0.25, 0.8 + rand());

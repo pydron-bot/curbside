@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus, type GameEvent } from '../src/core/events';
 import { VEHICLE_HEALTH, createVehicleState } from '../src/entities/vehicle';
-import { MAX_HEALTH, OWN_CAR_BLAST_DAMAGE, Player, RESPAWN_SECONDS } from '../src/game/player';
+import { BUSTED_SECONDS, MAX_HEALTH, OWN_CAR_BLAST_DAMAGE, Player, RESPAWN_SECONDS } from '../src/game/player';
 import type { Vehicle } from '../src/game/population';
 import type { CarMesh } from '../src/render/carMesh';
 import { createDamage } from '../src/systems/damage';
@@ -149,5 +149,51 @@ describe('player transitions', () => {
     expect(log.filter((e) => e.type === 'pedDown' && e.isPlayer)).toHaveLength(2);
     for (let t = 0; t < 2.6; t += DT) player.step(DT);
     expect(player.ready).toBe(true);
+  });
+});
+
+describe('player: arrest', () => {
+  it('drags you out of the car, takes your guns, holds you, then releases you', () => {
+    const { player, log, types } = setup();
+    const v = car();
+    player.enter(v);
+    player.arsenal.pickUp('smg');
+    expect(player.arrest(123)).toBe(true);
+    expect(player.driving).toBeNull();
+    expect(player.arrested).toBe(true);
+    expect(player.ready).toBe(false);
+    expect(player.down).toBe(true);
+    expect(player.arsenal.current).toBeNull();
+    expect(types()).toContain('exitVehicle');
+    expect(log.find((e) => e.type === 'busted')).toEqual({ type: 'busted', fine: 123 });
+    // Can't be hurt, or arrested again, while held.
+    expect(player.hurt(500)).toBe(false);
+    expect(player.arrest()).toBe(false);
+    expect(player.enter(car())).toBe(false);
+    let released = -1;
+    for (let t = 0; t < 10; t += DT) {
+      if (player.step(DT)) {
+        released = t;
+        break;
+      }
+    }
+    expect(released).toBeCloseTo(BUSTED_SECONDS, 1);
+    expect(player.arrested).toBe(false);
+    player.respawn(0, 0);
+    expect(player.ready).toBe(true);
+  });
+
+  it('the dead can’t be arrested', () => {
+    const { player } = setup();
+    player.hurt(1000);
+    expect(player.arrest()).toBe(false);
+  });
+
+  it('says when you take a police car', () => {
+    const { player, log } = setup();
+    const v = car();
+    v.archetype = 'police';
+    player.enter(v);
+    expect(log.find((e) => e.type === 'enterVehicle')).toMatchObject({ police: true });
   });
 });

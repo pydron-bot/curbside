@@ -48,7 +48,7 @@ export interface PursuitDriver {
   cruise: number;
   /** Fastest it will chase, m/s (the car's own top speed still applies). */
   topSpeed: number;
-  /** Where to pull up when boxing in a car: 0 in front, 1 behind, 2 and 3 the sides. */
+  /** Where to pull up when boxing in a car: 0 the near end, 1 the far end, 2 and 3 the sides. */
   slot: number;
   /** Seconds trying to move without moving. */
   stuck: number;
@@ -87,6 +87,8 @@ const RAM_COOLDOWN = 1.4;
 const SWERVE = 3.4;
 /** Backed out this often without getting going: hopeless (recycle it when unseen). */
 const HOPELESS_ATTEMPTS = 6;
+/** Pursuers take corners this fast when following the roads, m/s (traffic: 6). */
+const PURSUIT_TURN_SPEED = 9;
 
 export function createPursuit(road: AiDriver, aggression: number, cruise: number, topSpeed: number, boxes = true): PursuitDriver {
   return {
@@ -213,7 +215,9 @@ export function drivePursuit(
 
   if (mode === 'route') {
     d.stuck = 0;
-    d.road.cruise = d.cruise;
+    // Flat out toward a sighting relayed over the radio; a steady search pace otherwise.
+    d.road.cruise = t.seen ? d.topSpeed : d.cruise;
+    d.road.turnSpeed = PURSUIT_TURN_SPEED;
     const c = driveAi(d.road, car, obstacles, rand, dt);
     // driveAi picks turns at random as it passes a junction: steer it toward the goal instead.
     if (d.road.phase === 'approach') d.road.next = routeToward(d.road.ix, d.road.iz, d.road.dir, t.x, t.z);
@@ -289,8 +293,10 @@ function boxSlot(d: PursuitDriver, car: VehicleState, t: PursuitTarget, out: Poi
     out.z = t.z + (dz / dist) * FOOT_STOP;
     return out;
   }
-  const fx = Math.sin(t.heading);
-  const fz = Math.cos(t.heading);
+  // Slot 0 is the end of their car nearest us, 1 the far end, 2 and 3 the sides.
+  const near = (car.x - t.x) * Math.sin(t.heading) + (car.z - t.z) * Math.cos(t.heading) >= 0 ? 1 : -1;
+  const fx = Math.sin(t.heading) * near;
+  const fz = Math.cos(t.heading) * near;
   switch (d.slot & 3) {
     case 0:
       out.x = t.x + fx * 5.6;

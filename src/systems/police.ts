@@ -35,6 +35,8 @@ const SPAWN_EVERY = [0, 5, 3, 2, 1.6, 1.2] as const;
 const FIRST_SPAWN = 0.6;
 /** New units appear this far away, m (off-screen, see VIEW_MARGIN). */
 export const SPAWN_RANGE = [65, 130] as const;
+/** New units arrive already doing this, m/s. */
+const SPAWN_SPEED = 16;
 /** Spawns stay this far outside the visible ground, m. */
 const VIEW_MARGIN = 8;
 /** A unit this far away and out of sight is recycled (it fell behind), m. */
@@ -152,6 +154,8 @@ export interface Suspect {
   vz: number;
   heading: number;
   inCar: boolean;
+  /** On foot with a gun out. */
+  armed: boolean;
   /** Their car, if driving. */
   car: VehicleState | null;
   /** In play (alive, free, not behind the title): otherwise nobody chases. */
@@ -364,18 +368,20 @@ export class PoliceForce {
     const s = ctx.suspect;
     const spot = policeSpawnPoint(s.x, s.z, s.vx, s.vz, ctx.view, ctx.rand, (x, z) => this.crowded(x, z));
     if (!spot) return null;
-    const v = this.borrowCar(kind, spot.x, spot.z, spot.heading);
-    const u = this.addUnit(v, kind, 'pursuit', spot.driver);
-    return u;
+    const v = this.borrowCar(kind, spot.x, spot.z, spot.heading, SPAWN_SPEED);
+    return this.addUnit(v, kind, 'pursuit', spot.driver);
   }
 
-  private borrowCar(kind: UnitKind, x: number, z: number, heading: number): Vehicle {
+  /** A car for a unit at (x, z), already rolling at `rolling` m/s (they arrive on the scene at speed). */
+  private borrowCar(kind: UnitKind, x: number, z: number, heading: number, rolling = 0): Vehicle {
     const v = this.depot.takeVehicle(kind === 'swat' ? 'van' : 'police', kind === 'swat' ? SWAT_PAINT : POLICE_PAINT);
     const sim = v.sim;
     sim.x = x;
     sim.z = z;
     sim.heading = heading;
-    sim.vx = sim.vz = sim.yawRate = 0;
+    sim.vx = Math.sin(heading) * rolling;
+    sim.vz = Math.cos(heading) * rolling;
+    sim.yawRate = 0;
     Object.assign(v.prev, sim);
     if (kind === 'swat') v.damage.health = v.damage.maxHealth = SWAT_HEALTH;
     else v.damage.health = v.damage.maxHealth = VEHICLE_HEALTH.police;
@@ -594,7 +600,11 @@ export class PoliceForce {
       a.goalZ = s.z - Math.sin(s.heading) * 1.6;
       return;
     }
-    a.mode = this.stars >= 2 && d > SHOOT_FROM ? 'shoot' : 'arrest';
+    // On foot: from 3 stars they shoot on sight; at 2 only at someone armed or running.
+    // Someone who stops and gives up just gets cuffed.
+    const running = Math.hypot(s.vx, s.vz) > 3.5;
+    const shoot = d > SHOOT_FROM && (this.stars >= 3 || (this.stars >= 2 && (s.armed || running)));
+    a.mode = shoot ? 'shoot' : 'arrest';
     a.goalX = s.x;
     a.goalZ = s.z;
   }
