@@ -101,6 +101,8 @@ export class ChaosRunMode implements Mode {
     const paint = PAINTS[Math.floor(rand() * PAINTS.length)];
     this.car = this.ctx.spawnCar('sports', paint, spot.x, spot.z, spot.heading);
     this.ctx.board(this.car);
+    // The run's own best on the BEST line (free roam's comes back in reset()).
+    deps.hud.setBest(this.ctx.progress.best(CHAOS_RUN_ID));
     this.run = new ChaosRun();
     this.phase = 'countdown';
     this.countdown = COUNTDOWN;
@@ -175,6 +177,11 @@ export class ChaosRunMode implements Mode {
   glow(_g: GlowSprites, _props: ProgressProps): void {}
 
   reset(): void {
+    if (this.phase !== 'off') {
+      // Leaving a run: its points mustn't carry into free roam (or its best).
+      this.ctx.deps.score.resetRun();
+      this.ctx.deps.hud.setBest(this.ctx.progress.best('free'));
+    }
     this.phase = 'off';
     this.run = null;
     this.awaitRespawn = false;
@@ -238,6 +245,8 @@ export class ChaosRunMode implements Mode {
     this.phase = 'results';
     const { ui, deps } = this.ctx;
     ui.clearBanner();
+    // The game is frozen now: the chain running when time ran out is earned (RETRY or TITLE would drop it).
+    this.ctx.bankChain();
     deps.audio.ui(r.medal ? 'success' : 'fail');
     this.ctx.openModal(this.results);
     this.results.show(

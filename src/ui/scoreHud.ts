@@ -114,6 +114,16 @@ export class ScoreHud {
     this.push(`${kind}:${text}`, text, 0, kind);
   }
 
+  /**
+   * Count from another best (sets the model's too): a mode with its own,
+   * like the Chaos Run, and free roam's again after it.
+   */
+  setBest(best: number): void {
+    this.score.best = best;
+    this.newRun();
+    this.bestEl.textContent = best > 0 ? `BEST ${fmt(best)}` : '';
+  }
+
   /** A fresh run after respawning: beating the best again is worth celebrating again. */
   newRun(): void {
     this.startBest = this.score.best;

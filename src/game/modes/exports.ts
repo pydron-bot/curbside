@@ -60,8 +60,20 @@ const NAMES: Readonly<Record<VehicleArchetype, string>> = {
   police: 'POLICE CAR',
 };
 
+/** Paints seen so far (a few palettes' worth): the export check asks every step. */
+const nameCache = new Map<ColorRepresentation, string>();
+
 /** The nearest named colour to a paint ('#e8b923' → 'YELLOW'). */
 export function colourName(paint: ColorRepresentation): string {
+  let name = nameCache.get(paint);
+  if (name === undefined) {
+    name = nearestColour(paint);
+    if (nameCache.size < 256) nameCache.set(paint, name);
+  }
+  return name;
+}
+
+function nearestColour(paint: ColorRepresentation): string {
   let rgb: [number, number, number];
   if (typeof paint === 'number') rgb = [(paint >> 16) & 255, (paint >> 8) & 255, paint & 255];
   else if (typeof paint === 'string' && /^#[0-9a-f]{6}$/i.test(paint)) {

@@ -1,6 +1,7 @@
 import './tokens.css';
 import './progress.css';
 import type { GameAudio } from '../audio/gameAudio';
+import type { NavCommand } from '../core/input';
 import type { DialogueLine } from '../systems/missions';
 import type { Medal } from '../game/progressSave';
 import { ICONS } from './icons';
@@ -29,6 +30,26 @@ export interface ResultsActions {
 
 const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
+/**
+ * Navigation for a page whose only button is its close: up / down scroll the
+ * page (keyboard and gamepad have no other way to reach the bottom of it).
+ */
+class ScrollNav extends MenuNav {
+  constructor(
+    root: HTMLElement,
+    private readonly page: () => HTMLElement,
+  ) {
+    super(root);
+  }
+
+  override handle(cmd: NavCommand): void {
+    if (cmd !== 'up' && cmd !== 'down') return super.handle(cmd);
+    this.showFocus(true);
+    const page = this.page();
+    page.scrollBy({ top: (cmd === 'down' ? 0.6 : -0.6) * page.clientHeight, behavior: 'smooth' });
+  }
+}
+
 /** Close button for a sheet header, registered with its nav. */
 function closeButton(nav: MenuNav, onClose: () => void): HTMLButtonElement {
   const close = document.createElement('button');
@@ -56,6 +77,8 @@ export class ResultsCard implements Panel {
   constructor(parent: HTMLElement) {
     const { root, card } = overlay('results', 'prog-overlay');
     card.classList.add('prog-card', 'results-card');
+    // Scrollable by touch if a short screen cuts it off (gestures.ts blocks the rest).
+    card.dataset.scroll = '';
     this.root = root;
     this.card = card;
     this.nav = new MenuNav(root);
@@ -138,6 +161,7 @@ export class DialogueCard implements Panel {
   ) {
     const { root, card } = overlay('dialogue', 'prog-overlay');
     card.classList.add('prog-card', 'dlg-card');
+    card.dataset.scroll = '';
     this.root = root;
     this.card = card;
     this.nav = new MenuNav(root);
@@ -318,7 +342,7 @@ export class StatsSheet implements Panel {
   ) {
     const { root, card } = overlay('progress', 'ui-sheet');
     this.root = root;
-    this.nav = new MenuNav(root);
+    this.nav = new ScrollNav(root, () => this.body);
     card.innerHTML = `
       <header class="sheet-head"><h2>PROGRESS</h2></header>
       <div class="sheet-body" data-scroll></div>`;
@@ -354,6 +378,7 @@ export class StatsSheet implements Panel {
         <div class="stats-headline"><span>COMPLETION</span><b>$${fmt(m.cash)}</b><span>CASH</span></div>
       </div>
       <div class="stats-grid">${sections}</div>`;
+    this.body.scrollTop = 0;
     this.root.hidden = false;
     this.nav.focus();
     this.nav.showFocus(showFocus);

@@ -170,10 +170,12 @@ export class Progress {
   }
 
   /**
-   * Count lifetime stats from the bus while `live()` (in play, not behind
-   * the title). Returns an unsubscribe function.
+   * Count lifetime stats from the bus while `live()` (alive, free, in play).
+   * Deaths and arrests are counted while `inPlay()` (not behind the title):
+   * by the time they're announced the player is no longer alive or free.
+   * Returns an unsubscribe function.
    */
-  track(bus: EventBus, live: () => boolean): () => void {
+  track(bus: EventBus, live: () => boolean, inPlay: () => boolean = live): () => void {
     const s = this.data.stats;
     const offs = [
       bus.on('award', (e) => {
@@ -192,12 +194,12 @@ export class Progress {
         if (live()) s.carjacks++;
       }),
       bus.on('playerDied', () => {
-        if (!live()) return;
+        if (!inPlay()) return;
         s.wasted++;
         this.dirty = true;
       }),
       bus.on('busted', () => {
-        if (!live()) return;
+        if (!inPlay()) return;
         s.busted++;
         this.dirty = true;
       }),

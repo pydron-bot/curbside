@@ -160,24 +160,29 @@ function storage(): SaveStorage | null {
   }
 }
 
-/** Read the save; never throws. */
+/**
+ * Read the save; never throws. The legacy best is only carried over into a
+ * fresh save: once a save exists it owns the bests (the score HUD still
+ * writes `curbside.best`, during a Chaos Run too, so it can't be trusted).
+ */
 export function loadSave(store: SaveStorage | null = storage()): SaveData {
   if (!store) return defaultSave();
-  let legacy = 0;
-  try {
-    legacy = Number(store.getItem(LEGACY_BEST_KEY)) || 0;
-  } catch {
-    // Ignore: no legacy best.
-  }
+  const legacy = (): number => {
+    try {
+      return Number(store.getItem(LEGACY_BEST_KEY)) || 0;
+    } catch {
+      return 0; // no legacy best
+    }
+  };
   let text: string | null = null;
   try {
     text = store.getItem(SAVE_KEY);
   } catch {
-    return migrateSave(null, legacy);
+    return migrateSave(null, legacy());
   }
-  if (!text) return migrateSave(null, legacy);
+  if (!text) return migrateSave(null, legacy());
   try {
-    return migrateSave(JSON.parse(text), legacy);
+    return migrateSave(JSON.parse(text));
   } catch {
     // Corrupt: keep it aside for a human to look at, start fresh.
     try {
@@ -185,7 +190,7 @@ export function loadSave(store: SaveStorage | null = storage()): SaveData {
     } catch {
       // Full or blocked: nothing more to do.
     }
-    return migrateSave(null, legacy);
+    return migrateSave(null, legacy());
   }
 }
 

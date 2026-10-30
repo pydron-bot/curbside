@@ -80,6 +80,13 @@ export class MissionMode implements Mode {
   /** Radar blips this mission put up (removed when it ends or moves on). */
   private readonly blips = new Set<string>();
   private readonly blipOpts: BlipOptions = { x: 0, z: 0, kind: 'objective', size: 6, pulse: true, edgeArrow: true, icon: '' };
+  /** The waypoint last sent to the radar (it's only told about changes). */
+  private wpX = NaN;
+  private wpZ = NaN;
+  /** Payphones by id. */
+  private readonly phoneById: Map<string, Spot>;
+  /** The next job, worked out again when one is passed (undefined: stale). */
+  private nextJob: MissionDef | null | undefined = undefined;
   private ringIn = 0;
   private armed = true;
   private near: Spot | null = null;
@@ -96,6 +103,7 @@ export class MissionMode implements Mode {
   ) {
     this.missions = buildMissions(docks, SAFEHOUSE);
     this.phones = placePayphones();
+    this.phoneById = new Map(this.phones.map((p) => [p.id, p]));
     const self = this;
     this.view = {
       x: 0,
@@ -130,10 +138,13 @@ export class MissionMode implements Mode {
     bus.on('busted', () => this.run && this.signal(this.run.fail('BUSTED')));
   }
 
-  /** The next job (null when the story is done). */
+  /** The next job (null when the story is done). Cached: it's asked every step and frame. */
   get next(): MissionDef | null {
-    const done = this.ctx.progress.data.missions;
-    return this.missions.find((m) => !done.includes(m.id)) ?? null;
+    if (this.nextJob === undefined) {
+      const done = this.ctx.progress.data.missions;
+      this.nextJob = this.missions.find((m) => !done.includes(m.id)) ?? null;
+    }
+    return this.nextJob;
   }
 
   get passed(): number {
@@ -144,7 +155,7 @@ export class MissionMode implements Mode {
     const ctx = this.ctx;
     if (!ctx.freeRoam || this.run || this.calling || ctx.busy) return null;
     const m = this.next;
-    return m ? (this.phones.find((p) => p.id === m.phone) ?? null) : null;
+    return m ? (this.phoneById.get(m.phone) ?? null) : null;
   }
 
   step(dt: number): void {
@@ -227,6 +238,7 @@ export class MissionMode implements Mode {
         const m = run.def;
         this.finish();
         ctx.progress.complete('missions', m.id);
+        this.nextJob = undefined;
         const paid = ctx.pay(m.reward, 'mission', 'MISSION');
         // The debrief card says MISSION PASSED and the pay (no banner under it).
         ctx.deps.audio.ui('success');
@@ -253,7 +265,6 @@ export class MissionMode implements Mode {
     this.calling = false;
     if (ctx.busy === 'mission') ctx.busy = null;
     this.clearBlips();
-    ctx.deps.radar.clearWaypoint();
     for (const c of this.carList) ctx.unpin(c.v);
     this.cars.clear();
     this.carList.length = 0;
@@ -402,12 +413,11 @@ export class MissionMode implements Mode {
     const run = this.run;
     const s = run?.step;
     if (!run || !s) return;
-    const radar = this.ctx.deps.radar;
     switch (s.kind) {
       case 'goto':
       case 'deliver':
         this.point('m-goal', s.x, s.z, 'objective', '');
-        radar.setWaypoint(s.x, s.z);
+        this.waypoint(s.x, s.z);
         if (s.kind === 'deliver' && s.tag && this.ctx.deps.player.driving !== this.cars.get(s.tag)?.v) this.carBlip(s.tag, 'objective');
         break;
       case 'enter':
@@ -420,8 +430,8 @@ export class MissionMode implements Mode {
         const x = m.ped ? m.ped.agent.s.x : m.x;
         const z = m.ped ? m.ped.agent.s.z : m.z;
         this.point(m.blipId, x, z, s.kind === 'knockOut' ? 'enemy' : 'objective', '');
-        if (!m.ped) radar.setWaypoint(x, z);
-        else radar.clearWaypoint();
+        if (!m.ped) this.waypoint(x, z);
+        else this.noWaypoint();
         break;
       }
       case 'destroy':
@@ -441,7 +451,7 @@ export class MissionMode implements Mode {
         const n = s.nodes[run.next];
         if (n) {
           this.point('m-goal', n[0] * BLOCK_SIZE, n[1] * BLOCK_SIZE, 'race', String(run.next + 1));
-          radar.setWaypoint(n[0] * BLOCK_SIZE, n[1] * BLOCK_SIZE);
+          this.waypoint(n[0] * BLOCK_SIZE, n[1] * BLOCK_SIZE);
         }
         break;
       }
@@ -473,6 +483,21 @@ export class MissionMode implements Mode {
   private clearBlips(): void {
     for (const id of this.blips) this.ctx.unblip(id);
     this.blips.clear();
+    this.wpX = this.wpZ = NaN;
+    this.ctx.deps.radar.clearWaypoint();
+  }
+
+  /** Route the radar to (x, z), telling it only when that changes (it allocates). */
+  private waypoint(x: number, z: number): void {
+    if (x === this.wpX && z === this.wpZ) return;
+    this.wpX = x;
+    this.wpZ = z;
+    this.ctx.deps.radar.setWaypoint(x, z);
+  }
+
+  private noWaypoint(): void {
+    if (Number.isNaN(this.wpX)) return;
+    this.wpX = this.wpZ = NaN;
     this.ctx.deps.radar.clearWaypoint();
   }
 

@@ -133,7 +133,6 @@ describe('progress: cash', () => {
     bus.emit({ type: 'explosion', x: 0, z: 0, distance: 0, byPlayer: true });
     bus.emit({ type: 'carjack', x: 0, z: 0 });
     bus.emit({ type: 'wanted', level: 3, prev: 2, reason: 'crime' });
-    bus.emit({ type: 'playerDied' });
     live = false;
     bus.emit({ type: 'carjack', x: 0, z: 0 });
     const s = p.stats;
@@ -143,7 +142,22 @@ describe('progress: cash', () => {
     expect(s.carsWrecked).toBe(1);
     expect(s.carjacks).toBe(1);
     expect(s.maxStars).toBe(3);
-    expect(s.wasted).toBe(1);
+  });
+
+  it('counts deaths and arrests though the player is no longer alive or free when they are announced', () => {
+    const bus = new EventBus();
+    let inPlay = true;
+    const p = new Progress(null, null);
+    // As in the game: Player.die() / arrest() set dead / custody before emitting.
+    p.track(bus, () => false, () => inPlay);
+    bus.emit({ type: 'playerDied' });
+    bus.emit({ type: 'busted', fine: 0 });
+    bus.emit({ type: 'busted', fine: 0 });
+    // Behind the title (attract mode) nothing counts.
+    inPlay = false;
+    bus.emit({ type: 'playerDied' });
+    expect(p.stats.wasted).toBe(1);
+    expect(p.stats.busted).toBe(2);
   });
 });
 

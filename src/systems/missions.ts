@@ -120,6 +120,8 @@ export const LOST_RANGE = 320;
 /** Heat must stay at zero this long to count as lost, s. */
 const CLEAN_FOR = 0.5;
 const BLOCK = 64;
+/** For steps without fail conditions (no new array every step). */
+const NO_FAILS: readonly MissionFail[] = [];
 
 export class MissionRun {
   index = -1;
@@ -157,7 +159,7 @@ export class MissionRun {
       this.timeLeft = Math.max(0, this.timeLeft - dt);
       if (this.timeLeft <= 0) return this.fail('OUT OF TIME');
     }
-    for (const f of s.fail ?? []) {
+    for (const f of s.fail ?? NO_FAILS) {
       if (f.wrecked) {
         const car = v.vehicle(f.wrecked);
         if (!car || car.wrecked) return this.fail(f.reason);

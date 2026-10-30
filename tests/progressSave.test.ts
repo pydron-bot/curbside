@@ -95,6 +95,14 @@ describe('save: storage', () => {
     expect(loadSave(memory({ 'curbside.best': '4321' })).best.free).toBe(4321);
   });
 
+  it('ignores the legacy best once a save exists (the HUD writes Chaos Run scores there too)', () => {
+    const s = defaultSave();
+    s.best.free = 500;
+    const store = memory({ 'curbside.best': '90000' });
+    storeSave(s, store);
+    expect(loadSave(store).best.free).toBe(500);
+  });
+
   it('a corrupt save starts fresh and is kept aside, not lost', () => {
     const store = memory({ [SAVE_KEY]: '{"cash": 12, "stats": {' });
     const s = loadSave(store);

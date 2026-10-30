@@ -92,7 +92,9 @@ export class ProgressDirector implements ModeCtx {
     this.deps = d;
     this.pinned = d.pinned;
     this.progress = new Progress();
-    this.progress.track(d.bus, () => this.live);
+    this.progress.track(d.bus, () => this.live, () => d.playing());
+    // The free-roam best is the save's (a Chaos Run swaps in its own).
+    d.hud.setBest(this.progress.best('free'));
     this.ui = new ProgressHud(document.body, d.hud.score.el, d.audio);
     this.ui.setCash(this.progress.cash);
     this.progress.onCash((c) => this.ui.setCash(c.total, c.amount));
@@ -178,6 +180,18 @@ export class ProgressDirector implements ModeCtx {
     return v;
   }
 
+  /** Bank the open chain now, live or not (a timed run is over: nothing can lose it any more). */
+  bankChain(): void {
+    if (!this.bank.open) return;
+    const links = this.bank.links;
+    const cash = this.bank.close(this.packages.bankBonus);
+    if (cash <= 0) return;
+    this.progress.earn(cash, 'chain');
+    const s = this.progress.stats;
+    s.bestChain = Math.max(s.bestChain, cash);
+    this.notice(links > 1 ? `BANKED $${fmt(cash)}` : `+$${fmt(cash)}`, 'cash');
+  }
+
   unpin(v: Vehicle): void {
     const i = this.pinned.indexOf(v);
     if (i >= 0) this.pinned.splice(i, 1);
@@ -235,8 +249,12 @@ export class ProgressDirector implements ModeCtx {
     if (!this.deps.playing()) return;
     this.progress.step(dt);
     for (const m of this.modes) m.step(dt);
-    this.stepBank();
+    // Bank the chain once the combo runs out.
+    if (this.bank.open && !chainLive(this.deps.score)) this.bankChain();
     this.stepShop(dt);
+    // Free roam's best as it's beaten (the Chaos Run records its own at the end).
+    const total = this.deps.score.total;
+    if (!this.chaos.active && total > this.progress.best('free')) this.progress.recordBest('free', total);
   }
 
   /** Per frame (real time, not while paused). */
@@ -292,7 +310,6 @@ export class ProgressDirector implements ModeCtx {
   // --- Internals ---
 
   private resetAll(): void {
-    this.recordFreeBest();
     for (const m of this.modes) m.reset();
     for (const p of [...this.modals]) {
       p.hide?.();
@@ -309,27 +326,9 @@ export class ProgressDirector implements ModeCtx {
     this.progress.flush();
   }
 
-  /** Bank the chain once the combo runs out. */
-  private stepBank(): void {
-    if (!this.bank.open || chainLive(this.deps.score)) return;
-    const links = this.bank.links;
-    const cash = this.bank.close(this.packages.bankBonus);
-    if (cash <= 0) return;
-    this.progress.earn(cash, 'chain');
-    const s = this.progress.stats;
-    s.bestChain = Math.max(s.bestChain, cash);
-    this.notice(links > 1 ? `BANKED $${fmt(cash)}` : `+$${fmt(cash)}`, 'cash');
-  }
-
-  /** A free-roam run's score counts toward its best when it ends (wasted, busted, restart, quit). */
-  private recordFreeBest(): void {
-    if (this.deps.playing() && !this.chaos.active) this.progress.recordBest('free', this.deps.score.total);
-  }
-
   /** WASTED or BUSTED: the open chain is lost, and the bill comes. */
   private lifeLost(busted: boolean): void {
     if (!this.deps.playing()) return;
-    this.recordFreeBest();
     const lost = this.bank.lose();
     if (lost > 0) this.notice(`CHAIN LOST · ${fmt(lost)}`, 'lost');
     const cash = this.progress.cash;

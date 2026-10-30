@@ -99,6 +99,8 @@ export interface ModeCtx {
   pay(amount: number, reason: string, label: string): number;
   /** A feed line without points. */
   notice(text: string, kind?: string): void;
+  /** Bank the open chain into cash now (a timed run is over: nothing can lose it any more). */
+  bankChain(): void;
   /** A parked car for an activity, kept from recycling until unpin(). */
   spawnCar(archetype: VehicleArchetype, paint: ColorRepresentation, x: number, z: number, heading: number): Vehicle;
   unpin(v: Vehicle): void;

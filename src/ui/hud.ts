@@ -218,6 +218,12 @@ export class Hud {
     });
   }
 
+  /** A mode's own best score on the BEST line and for the WASTED screen's NEW BEST (Chaos Run, free roam). */
+  setBest(best: number): void {
+    this.bestAtStart = best;
+    this.score.setBest(best);
+  }
+
   /** 'title' hides the game HUD and touch controls; 'play' shows them (body[data-scene]). */
   setScene(scene: 'title' | 'play'): void {
     this.playing = scene === 'play';
