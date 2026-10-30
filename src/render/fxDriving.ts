@@ -59,8 +59,9 @@ export interface SkidInput {
 
 /**
  * How hard the rear tyres are skidding, 0..1: sliding sideways past ~3 m/s,
- * the handbrake at speed, braking harder than ~15 m/s², or a launch with the
- * throttle floored (wheelspin).
+ * the handbrake at speed, braking harder than ~15 m/s², a launch with the
+ * throttle floored (wheelspin), or a burnout (handbrake and throttle at a
+ * standstill).
  */
 export function skidAmount(s: SkidInput): number {
   let a = 0;
@@ -68,6 +69,8 @@ export function skidAmount(s: SkidInput): number {
   if (s.handbrake && s.speed > 4.5) a = Math.max(a, 0.55 + Math.min(0.45, s.slip / 12));
   if (s.speed > 5 && s.accel < -15) a = Math.max(a, (-s.accel - 15) / 12);
   if (s.throttle > 0.75 && s.forward > -0.5 && s.forward < 7 && s.accel > 9) a = Math.max(a, 0.5);
+  // A burnout: held on the handbrake with the throttle floored, the rear wheels spin in place.
+  if (s.handbrake && s.throttle > 0.5 && s.speed < 3) a = Math.max(a, 0.9);
   return a < 0 ? 0 : a > 1 ? 1 : a;
 }
 

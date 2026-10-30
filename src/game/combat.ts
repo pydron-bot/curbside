@@ -158,6 +158,9 @@ export class Combat {
     { x: 0, z: 0 },
   ];
   private readonly dir = { x: 0, z: 0 };
+  /** Reused for autoAim (a view of the first candidateCount candidates) and ray tests. */
+  private readonly aimTargets: Candidate[] = [];
+  private readonly ray = { x: 0, z: 0, r: 0 };
   private readonly target = { x: 0, z: 0 };
   private readonly world: ProjectileWorld;
 
@@ -291,7 +294,9 @@ export class Combat {
       return;
     }
     this.gatherAll();
-    const targets = this.candidates.slice(0, this.candidateCount);
+    const targets = this.aimTargets;
+    targets.length = 0;
+    for (let i = 0; i < this.candidateCount; i++) targets.push(this.candidates[i]);
     const a = aimHeading !== null ? autoAim(p.x, p.z, aimHeading, targets, range, 0.26) : autoAim(p.x, p.z, p.heading, targets, range);
     out.x = a.x;
     out.z = a.z;
@@ -663,7 +668,7 @@ export class Combat {
     }
     for (const c of d.crowd) {
       if (c.agent.mode === 'down') continue;
-      const t = rayCircle(ox, oz, dx, dz, { x: c.agent.s.x, z: c.agent.s.z, r: PED_HIT_RADIUS });
+      const t = rayCircle(ox, oz, dx, dz, this.circle(c.agent.s.x, c.agent.s.z, PED_HIT_RADIUS));
       if (t > 0.3 && t < best) {
         best = t;
         hit = { kind: 'ped', ped: c };
@@ -673,7 +678,7 @@ export class Combat {
     for (const v of d.vehicles) {
       if (shooterIsPlayer && v === own) continue;
       for (const q of carCircles(v.sim, this.circles)) {
-        const t = rayCircle(ox, oz, dx, dz, { x: q.x, z: q.z, r: CAR_CIRCLE_RADIUS * 0.9 });
+        const t = rayCircle(ox, oz, dx, dz, this.circle(q.x, q.z, CAR_CIRCLE_RADIUS * 0.9));
         if (t > 0.3 && t < best) {
           best = t;
           hit = { kind: 'vehicle', v };
@@ -682,7 +687,7 @@ export class Combat {
     }
     const p = d.player;
     if (!shooterIsPlayer && !p.driving && p.alive && d.playing()) {
-      const t = rayCircle(ox, oz, dx, dz, { x: p.ped.x, z: p.ped.z, r: PED_HIT_RADIUS });
+      const t = rayCircle(ox, oz, dx, dz, this.circle(p.ped.x, p.ped.z, PED_HIT_RADIUS));
       if (t > 0.3 && t < best) {
         best = t;
         hit = { kind: 'player' };
@@ -699,6 +704,14 @@ export class Combat {
       police: hit?.kind === 'vehicle' && (hit.v.archetype === 'police' || hit.v.police === true),
     });
     return hit;
+  }
+
+  /** The reused ray-test circle, set to (x, z, r). */
+  private circle(x: number, z: number, r: number): { x: number; z: number; r: number } {
+    this.ray.x = x;
+    this.ray.z = z;
+    this.ray.r = r;
+    return this.ray;
   }
 
   private rocketHits(x: number, z: number, r: number, byPlayer: boolean): boolean {
