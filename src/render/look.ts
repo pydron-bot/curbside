@@ -74,6 +74,7 @@ export class Look {
     this.pickups = new PickupMesh(pickups);
     scene.add(this.characters.mesh, this.cars.root, this.pickups.mesh, this.contactShadows.mesh, this.glows.mesh);
     this.post = new PostEffects(renderer);
+    renderer.info.autoReset = false; // reset once per frame in render()
     mountVignette(overlayParent);
     onQualityChange(() => this.applyTier());
     this.applyTier();
@@ -106,6 +107,8 @@ export class Look {
     this.contactShadows.end();
     this.glows.end();
     this.sunShadow.update(view, this.lighting.toLight);
+    // Count the whole frame (shadow pass, scene, bloom), not just the last pass.
+    this.renderer.info.reset();
     this.renderer.render(this.scene, camera);
   }
 

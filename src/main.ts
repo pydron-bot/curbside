@@ -720,7 +720,7 @@ function frame(now: number) {
   if (paused) {
     // Resizing clears the canvas (rotating the phone while paused): redraw the
     // frozen scene behind the pause card.
-    if (resized && !contextLost) renderer.render(scene, rig.camera);
+    if (resized && !contextLost) look.render(rig.camera);
     return;
   }
 
