@@ -6,6 +6,7 @@ import { FixedStep } from './core/loop';
 import { UpdateGate } from './core/updateGate';
 import { PLAYER_ON_FOOT, copyPedState, stepPedestrian } from './entities/pedestrian';
 import {
+  CAR_BODY,
   GRAVITY,
   VEHICLE_BODIES,
   VEHICLE_HEALTH,
@@ -979,7 +980,7 @@ function frame(now: number) {
 const aimInput: AimInput = { heading: null, reach: 0, ground: null };
 const driveByOnly = (k: WeaponKind) => WEAPONS[k].driveBy;
 
-const playerView: PlayerView = { x: 0, z: 0, heading: 0, driving: false, speed: 0, alive: true };
+const playerView: PlayerView = { x: 0, z: 0, heading: 0, driving: false, speed: 0, alive: true, reach: 0 };
 /** Where the player marker goes this frame (the interpolated positions just set). */
 function viewOfPlayer(): PlayerView {
   const v = player.driving;
@@ -990,6 +991,7 @@ function viewOfPlayer(): PlayerView {
   playerView.driving = v !== null;
   playerView.speed = v ? speed(v.sim) : Math.hypot(player.ped.vx, player.ped.vz);
   playerView.alive = player.alive && !attract.active; // no marker over the title
+  playerView.reach = v ? (v.sim.body ?? CAR_BODY).reach : 0;
   return playerView;
 }
 
