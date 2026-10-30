@@ -186,11 +186,16 @@ export class Effects {
     this.recentBooms += 1;
     const budget = this.scale / Math.max(1, this.recentBooms * 0.6);
     const n = (count: number) => Math.max(1, Math.round(count * budget));
+    // Overlapping blasts in a chain add up: each extra one's lights and fire
+    // are dimmer and its fire covers more and adds less, so a stack settles
+    // on deep orange instead of summing to a white wall (worst with bloom).
+    const glow = 1 / Math.max(1, this.recentBooms);
+    const heat = 0.6 + 0.4 * glow;
 
     // Flash on the ground and a shockwave ring out to the blast radius (9 m).
-    this.light(x, 0.12, z, 2.5, 12, 2.1, 1.25, 0.5, 0.34, GLOW.disc);
-    this.light(x, 0.1, z, 1.5, 9.5, 1.9, 1.15, 0.55, 0.38, GLOW.ring);
-    this.light(x, 0.1, z, 1, 11.5, 0.6, 0.42, 0.28, 0.6, GLOW.ring);
+    this.light(x, 0.12, z, 2.5, 12, 2.1 * glow, 1.25 * glow, 0.5 * glow, 0.34, GLOW.disc);
+    this.light(x, 0.1, z, 1.5, 9.5, 1.9 * glow, 1.15 * glow, 0.55 * glow, 0.38, GLOW.ring);
+    this.light(x, 0.1, z, 1, 11.5, 0.5 * glow, 0.36 * glow, 0.24 * glow, 0.45, GLOW.ring);
     // A brief white pop high over the car (draws over its roof); once per chain, or they stack to white.
     if (this.recentBooms < 1.5) this.flare(x, 2.8, z, 4.6, 0.12, 2, 1.7, 1.2);
 
@@ -213,7 +218,7 @@ export class Effects {
         FRAME.flame,
       );
       if (i < 0) break;
-      this.fireLook(i, 1.75, 0.38);
+      this.fireLook(i, 1.75 * heat, 0.38 * glow);
       this.hot.flags[i] = FLAG.handoff;
       this.hot.drag[i] = 1.6;
     }
@@ -234,7 +239,7 @@ export class Effects {
         Math.random() < 0.5 ? FRAME.flame : FRAME.puffB,
       );
       if (i < 0) break;
-      this.fireLook(i, 1.55, 0.45);
+      this.fireLook(i, 1.55 * heat, 0.45 * glow);
       this.hot.drag[i] = 3.2;
       if (Math.random() < 0.35) this.hot.flags[i] = FLAG.handoff;
     }
@@ -583,7 +588,9 @@ export class Effects {
       const grow = 1 - (1 - t) * (1 - t) * (1 - t);
       const radius = this.lr0[i] + (r1 - this.lr0[i]) * grow;
       const ring = this.lShape[i] === GLOW.ring;
-      const k = ring ? (1 - t) * (1 - t * 0.5) : (1 - t) * (1 - t);
+      // Rings fade as fast as discs: one that lingers once it has spread
+      // leaves a band of light on a dark street (worse with a chain's overlaps).
+      const k = (1 - t) * (1 - t);
       // The ring shape sits at 0.82 of the quad's half-size.
       const size = ring ? (radius * 2) / 0.82 : radius * 2;
       glows.addFlat(x, this.ly[i], z, 0, size, size, this.lcr[i] * k, this.lcg[i] * k, this.lcb[i] * k, this.lShape[i] as GlowShape);

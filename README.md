@@ -374,7 +374,7 @@ then desktop 'high'):
 | Moment | iPhone | Desktop |
 |---|---|---|
 | One car exploding next to you (before → during) | 43 → 45 | 56 → 59 |
-| Five-car chain reaction, peak | 51 → 55 | 68 → 69 |
+| Five-car chain reaction, peak | 51 → 55 | 66 → 67 |
 | SMG and shotgun fight with two armed NPCs | 52 | 61–63 |
 | Mid-drift with skid marks and tyre smoke | 47–51 | 61–63 |
 | Rain, day / night | 44 / 48 | 57 / 63 |
