@@ -168,8 +168,9 @@ The wanted level and police are in (`src/systems/police.ts`, README
 
 ### Notes back to the code side
 
-_Blender session 2026-10-30, branch `blender/assets`. Items 1–6 are done
-except the `cop_bike` (lowest priority, needs its own physics). Run
+_Blender session 2026-10-30, branch `blender/assets`. Items 1–7 are done
+except the `cop_bike` (lowest priority, needs its own physics); §7 notes are
+at the end. Run
 `python3 blender/check_assets.py` after `npm run assets`: it parses every GLB
 and checks budgets, material names, bones and clip lengths against this file._
 
@@ -254,3 +255,35 @@ and `bus` (12 m), `ambulance` (6 m), `firetruck` (9.2 m), `garbage_truck`
 **6. `debris.glb`:** `door`, `hood`, `bumper`, `wheel`, `panel_a/b/c`, all
 18–56 tris. Origins are at the chunk centre so they can tumble, and they use
 only `paint` / `trim` / `tyre`.
+
+**7. Police (second pass, same day).**
+- **`heli.glb`**, its own file, because `VehicleModels` would merge the rotors
+  into the body.
+  - The root is `heli`: 476 tris, about 12.5 m long, with the nose toward
+    game +Z and the origin on the ground under the skids.
+  - `heli_rotor_main` (four blades, ~11 m disc) is a child node at the hub
+    (0, 3.15, −0.2): spin it about local Y. `heli_rotor_tail` sits at
+    (0.32, 2.35, −7.35): spin it about local X. Neither node is rotated, so
+    their local axes match the root's.
+  - The nose lamp uses material `searchlight`, and the belly strobes use
+    `siren_red` / `siren_blue`. Everything else is fixed colour (dark blue,
+    white tail boom and roof stripe, and the `glass` / `trim` materials).
+- **`swat`** is a new root in `vehicles.glb` with the usual car contract:
+  540 tris, 6 m long. It has a slab-sided armoured body with slit windows, a
+  push bar, side steps, a roof rack and a cab light bar (`siren_red` /
+  `siren_blue`). The body is `paint`, so paint it dark at spawn.
+- **`Arrested`** is a 1 s loop in every character GLB: kneeling, with hands
+  behind the head. The rig has no knees, so the hips drop 0.56 m and the
+  straight legs lie back along the ground. Like `Fall`, it moves the root
+  bone, so don't tip `CharacterModel.body` while it plays. The cop's peaked
+  cap and holster are already in `cop.glb` (§2).
+- **Props** (new roots in `props.glb`):
+  - `barrier` (216 tris): a 2.4 m sawhorse with orange/white striped boards,
+    facing ±Z.
+  - `spray_booth` (120 tris): an open-fronted shell 6 m wide × 9 m deep ×
+    4.5 m high, with **its mouth facing game −Z**. It has a magenta
+    `spray_sign` over the mouth and on the roof edge (readable from above),
+    a rolled-up door and a nozzle bar inside.
+  - `police_sign` (72 tris): origin on the ground at the wall face, with a
+    blue `police_lamp` at 3.4 m and a POLICE board at 3 m, both sticking out
+    toward +Z. Glow `police_lamp` at night, the way `lamp` glows.

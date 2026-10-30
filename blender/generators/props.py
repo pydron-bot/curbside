@@ -8,6 +8,8 @@ no textures. Front is Blender -Y (game +Z). Budget: <= 300 tris per prop.
 Materials with a meaning for the game:
   lamp                                 streetlamp head, glows at night
   light_red / light_amber / light_green traffic light lenses (for working lights)
+  police_lamp                          blue lamp on police_sign (glow it too)
+  spray_sign                           Pay 'n' Spray sign and stripes
 Everything else is a fixed colour.
 """
 from pathlib import Path
@@ -59,6 +61,12 @@ def mats():
         "leaf_dark": material("leaf_dark", (36, 96, 52), 0.85),
         "palm_leaf": material("palm_leaf", (88, 150, 60), 0.85),
         "ramp": material("ramp", (110, 116, 124), 0.5),
+        "barrier_orange": material("barrier_orange", (235, 110, 30), 0.6),
+        "booth_wall": material("booth_wall", (196, 190, 176), 0.9),
+        "booth_roof": material("booth_roof", (80, 84, 90), 0.7),
+        "spray_sign": material("spray_sign", (230, 60, 140), 0.4),
+        "police_lamp": material("police_lamp", (60, 120, 255), 0.3),
+        "police_blue": material("police_blue", (24, 48, 120), 0.5),
     }
 
 
@@ -312,6 +320,55 @@ def kicker(m):
     return ramp(m, "kicker", length=2.5, height=0.6, width=2.2)
 
 
+# ---------------------------------------------------------------- police
+
+def barrier(m):
+    # Police sawhorse, 2.4 m wide: two striped boards on A-frame legs.
+    parts = []
+    for b, z in enumerate((0.95, 0.6)):
+        for i in range(6):  # alternating orange / white blocks read as stripes
+            mat = m["barrier_orange"] if (i + b) % 2 == 0 else m["white"]
+            parts.append(box(f"barrier_board{b}_{i}", (0.4, 0.04, 0.2), (-1.0 + i * 0.4, -0.05, z), mat))
+    for x in (-1.0, 1.0):
+        for y in (-1, 1):
+            parts.append(rotate(box(f"barrier_leg{x:+.0f}{y:+d}", (0.06, 0.06, 1.12), (x, 0, 0.53), m["dark"]),
+                                (y * 14, 0, 0), pivot=(x, 0, 1.05)))
+        parts.append(box(f"barrier_foot{x:+.0f}", (0.1, 0.6, 0.04), (x, 0, 0.02), m["dark"]))
+    return parts
+
+
+def spray_booth(m):
+    # Open-fronted garage shell 6 m wide x 9 m deep x 4.5 m; the mouth faces game -Z (Blender +Y).
+    W, D, H, t = 6.0, 9.0, 4.5, 0.25
+    parts = [
+        box("spray_booth_back", (W, t, H), (0, -D / 2 + t / 2, H / 2), m["booth_wall"]),
+        box("spray_booth_roof", (W + 0.3, D + 0.3, 0.3), (0, 0, H + 0.15), m["booth_roof"]),
+        box("spray_booth_door", (W - 2 * t, 0.5, 0.6), (0, D / 2 - 0.3, H - 0.3), m["metal"]),
+        box("spray_booth_sign", (W * 0.75, 0.15, 0.9), (0, D / 2 + 0.1, H + 0.45), m["spray_sign"]),
+        box("spray_booth_signtop", (W * 0.75, 1.2, 0.08), (0, D / 2 - 0.45, H + 0.94), m["spray_sign"]),
+        box("spray_booth_nozzles", (W - 1.0, 0.25, 0.25), (0, 0, H - 0.4), m["dark"]),
+    ]
+    for x in (-1, 1):
+        parts.append(box(f"spray_booth_wall{x:+d}", (t, D, H), (x * (W / 2 - t / 2), 0, H / 2), m["booth_wall"]))
+        parts.append(box(f"spray_booth_stripe{x:+d}", (t + 0.02, D, 0.4), (x * (W / 2 - t / 2), 0, 1.0),
+                         m["spray_sign"]))
+    return parts
+
+
+def police_sign(m):
+    # Blue lamp and POLICE board over a station door: origin on the ground at the wall face,
+    # everything sticks out toward the front (game +Z), the lamp at ~3.4 m.
+    return [
+        box("police_sign_board", (2.4, 0.12, 0.55), (0, -0.08, 3.0), m["police_blue"]),
+        box("police_sign_border", (2.5, 0.1, 0.65), (0, -0.04, 3.0), m["white"]),
+        box("police_sign_letters", (1.8, 0.02, 0.18), (0, -0.15, 3.0), m["white"]),
+        box("police_sign_bracket", (0.08, 0.7, 0.08), (0, -0.35, 3.6), m["dark"]),
+        box("police_sign_lamp", (0.34, 0.34, 0.42), (0, -0.7, 3.4), m["police_lamp"]),
+        cylinder("police_sign_cap", 0.26, 0.14, (0, -0.7, 3.68), m["dark"], verts=4, radius2=0.05,
+                 rotation=(0, 0, 45)),
+    ]
+
+
 PROPS = {
     "streetlamp": streetlamp, "traffic_light": traffic_light, "hydrant": hydrant, "bench": bench,
     "trash_bin": trash_bin, "dumpster": dumpster, "bollard": bollard, "newspaper_box": newspaper_box,
@@ -320,6 +377,7 @@ PROPS = {
     "rooftop_door": rooftop_door, "antenna": antenna,
     "tree_round": tree_round, "tree_tall": tree_tall, "palm": palm,
     "ramp": ramp, "kicker": kicker,
+    "barrier": barrier, "spray_booth": spray_booth, "police_sign": police_sign,
 }
 
 
