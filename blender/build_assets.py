@@ -1,6 +1,7 @@
 """Build all game assets headless.
 
     blender -b --factory-startup -P blender/build_assets.py -- --out public/assets [--only characters] [--thumbs]
+    python blender/build_assets.py -- --out public/assets   (with the pip `bpy` module, no --thumbs)
 
 Each module in generators/ exposes build(out_dir: Path, thumbs: bool).
 """
@@ -9,6 +10,8 @@ import importlib
 import sys
 import time
 from pathlib import Path
+
+import bpy  # noqa: F401 (pip bpy: registers bmesh/mathutils)
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))

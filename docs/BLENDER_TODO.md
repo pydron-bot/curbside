@@ -9,6 +9,19 @@ order, with the exact contracts the game code now relies on. Everything
 stays procedural in `blender/generators/` and is rebuilt with
 `npm run assets`.
 
+**Without the Blender app** (a cloud container), the pip `bpy` module
+(Blender 5.2 LTS as a Python module, about 400 MB) builds the same GLBs, to
+within 1 ULP. Keep the venv outside the repo:
+
+```sh
+python3 -m venv /tmp/bpy && /tmp/bpy/bin/pip install bpy==5.2.3   # Python 3.13
+/tmp/bpy/bin/python blender/build_assets.py -- --out public/assets
+python3 blender/check_assets.py
+```
+
+`--thumbs` doesn't work there (EEVEE needs libEGL); check the look in the
+game instead (Playwright + SwiftShader).
+
 **Please work on your own branch off `claude/game-overhaul`** (e.g.
 `blender/assets`) and keep to `blender/`, `public/assets/` and this file, so
 the code streams and the asset work merge without conflicts. Note anything the
