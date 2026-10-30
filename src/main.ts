@@ -301,10 +301,16 @@ events.on('exitVehicle', () => {
   input.resetActions();
 });
 events.on('playerHurt', () => rig.shake(0.4));
-events.on('playerDied', () => {
-  // Nobody keeps fighting a dead man.
-  for (const c of population.crowd) if (c.agent.mode === 'fight' || c.agent.mode === 'shoot') resumeWalking(c.agent);
-});
+// Nobody keeps fighting a dead man.
+events.on('playerDied', () => calmHostiles());
+
+/** Everyone fighting or shooting the player goes back to walking (death, a fresh run, the title). */
+function calmHostiles() {
+  for (const c of population.crowd) {
+    c.agent.provoked = false;
+    if (c.agent.mode === 'fight' || c.agent.mode === 'shoot') resumeWalking(c.agent);
+  }
+}
 
 /** Announce weapon changes from any cause (switch, pickup, running dry, death). */
 let shownWeapon: WeaponKind | null = null;
@@ -362,6 +368,8 @@ function leaveVehicle() {
 
 function respawnPlayer() {
   score.resetRun();
+  // A new run (or the title) starts with nobody after you.
+  calmHostiles();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true);
@@ -420,7 +428,7 @@ function simulate(dt: number) {
     const wasDown = c.agent.mode === 'down';
     const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, target);
     if (!wasDown && c.agent.mode === 'down') pedHitByCar(c, driving);
-    if (event?.kind === 'punch' && !driving && player.alive) {
+    if (event?.kind === 'punch' && !driving && player.alive && !attract.active) {
       const hit = Math.hypot(player.ped.x - c.agent.s.x, player.ped.z - c.agent.s.z) < PUNCH_REACH + 0.4;
       events.emit({ type: 'punch', x: c.agent.s.x, z: c.agent.s.z, hit, byPlayer: false });
       if (hit) {
@@ -579,7 +587,8 @@ function explode(source: Vehicle) {
 
 function playerTarget(): Target {
   const at = player.position;
-  return { x: at.x, z: at.z, inCar: player.driving !== null, alive: player.alive };
+  // Behind the title the player is hidden and out of play: nobody comes for them.
+  return { x: at.x, z: at.z, inCar: player.driving !== null, alive: player.alive && !attract.active };
 }
 
 type BulletHit = { kind: 'ped'; ped: CrowdPed } | { kind: 'vehicle'; v: Vehicle } | { kind: 'player' } | null;
@@ -622,7 +631,7 @@ function traceBullet(ox: number, oz: number, dx: number, dz: number, range: numb
       }
     }
   }
-  if (!shooterIsPlayer && !player.driving && player.alive) {
+  if (!shooterIsPlayer && !player.driving && player.alive && !attract.active) {
     const t = rayCircle(ox, oz, dx, dz, { x: player.ped.x, z: player.ped.z, r: 0.45 });
     if (t > 0.3 && t < best) {
       best = t;
