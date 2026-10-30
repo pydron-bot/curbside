@@ -107,6 +107,14 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
   engine with a gearbox, tyres, guns, impacts, explosions, fire, sirens,
   city ambience, stingers tuned to the music, and an adaptive procedural
   soundtrack on three radio stations. See *Audio* below.
+- **Look** (`src/render/look.ts` and friends): ACES tone mapping with a
+  light grade, a sun shadow map fitted to the view every frame, a 12-minute
+  day/night cycle (starts late afternoon → golden hour → night), analytic
+  ground and building shaders (road markings, kerbs, paving, roofs by type,
+  windows, shopfronts, five district palettes), rooftop props, street lamps
+  that light the ground at night, neon, headlights, desktop bloom — with
+  every person, car and glow batched into a handful of draw calls. See
+  *Look* below.
 - Next: **M6 Heat** (wanted level, police).
 
 ## Layout
@@ -199,3 +207,60 @@ To audition sounds without playing, render them offline: every recipe takes
 a `Voice` on any `BaseAudioContext`, so an `OfflineAudioContext` in the dev
 page can render and analyse them (`window.__ub.audio` and `__ub.events` are
 exposed for emitting test events).
+
+## Look
+
+Everything visual outside the HUD hangs off one `Look` object
+(`src/render/look.ts`): `main.ts` creates it, calls `look.update(dt, player)`
+and `look.render(camera)` each frame. No real-time light is ever added or
+removed (that would recompile every lit material), every program is compiled
+on the first frame (night-only meshes included), and quality-tier changes
+only resize or idle things.
+
+- **Draw calls.** All people are one GPU-skinned `InstancedMesh`
+  (`characterModel.ts`: the GLB's 13 rigid parts merged at load, bones and
+  outfit palette per person in a float texture), all cars one instanced mesh
+  per model (`vehicleBatch.ts`: paint, steering, brake lights, charring and
+  sirens are per-instance attributes), all contact shadows one mesh
+  (`contactShadows.ts`) and all faked lights one additive mesh
+  (`glowSprites.ts`: headlight beams, tail/brake lights, siren wash, the
+  player marker, pickup rings). The city is ~5 instanced meshes per 256 m
+  chunk. Measured in Chromium (whole frame, incl. shadow pass), iPhone
+  15 Pro profile ('medium'): 40 draw calls on foot at spawn, 42–48 driving
+  a busy street, 42–48 at night; desktop ('high') is 54–59 including ~14
+  for bloom; 'low' (no shadow map) 23–27. About 160–250k triangles, most of
+  it the instanced city in both passes.
+- **Light.** `timeOfDay.ts` (pure, tested) keyframes sun/moon direction,
+  colour and strength, sky and ground fill, fog, exposure, reflection
+  strength and a shared `uNight`; `sceneLighting.ts` applies it to one
+  `DirectionalLight`, one `HemisphereLight` and a faint ambient.
+  `sunShadow.ts` fits an orthographic PCF shadow box to the visible ground
+  every frame, snapped to whole texels (no shimmer); map size comes from the
+  tier (2048 / 1024 / off). Tone mapping is ACES plus a grade
+  (`post.ts`, installed as `CustomToneMapping`: no extra pass).
+- **Surfaces.** `shaderLib.ts` holds the shared uniforms (`uTime`,
+  `uNight`, `uWetness` for rain later) and GLSL (integer hash, noise,
+  anti-aliased lines, and `ubStreetLight`, which lights ground, walls, cars
+  and people from the lamp layout in `world/streetLamps.ts` analytically).
+  `world/ground.ts` draws the whole ground in one shader that follows the
+  city constants exactly; `world/cityMesh.ts` draws buildings, roofs,
+  rooftop props, awnings, neon, lamps and trees; `world/districts.ts` and
+  `world/buildingPlans.ts` (pure, tested) decide districts, heights,
+  palettes, roof types, props and shopfronts.
+- **Phones vs desktop.** Phones render straight to the canvas: no
+  full-screen passes, glow comes from additive sprites, a CSS vignette
+  frames the view. Desktops render into a half-float buffer so the 'high'
+  tier can bloom (threshold follows the time of day: only real lights bloom
+  by day). Cars' paint and glass alone reflect a PMREM studio environment.
+
+API for other systems:
+
+```ts
+look.time.set(22); look.time.speed = 0   // pin the clock (missions); speed is game hours per second
+look.time.hour                           // current hour, 0..24
+look.cars.setSiren(vehicle, on)          // police light bar + red/blue wash on the road
+look.lighting.sky                        // current SkyState (night, exposure, ...)
+worldUniforms.uWetness.value = 0..1      // wet roads (shaderLib.ts)
+look.addGlowSource((glows, view) => …)   // add faked lights each frame: glows.addFlat / addUpright (glowSprites.ts)
+```
+
