@@ -1013,6 +1013,7 @@ function updateHud(frameSeconds: number) {
   hudFrame.car = v ? hudCar : null;
   const nearCar = v || attract.active || progress.blocksInput ? null : nearestEnterable();
   hudFrame.nearCar = nearCar ? (nearCar.ai ? 'jack' : 'enter') : null;
+  hudFrame.nearBike = nearCar !== null && isBike(nearCar.archetype);
   hudFrame.mouseAim = !v && !attract.active && input.mouseAimLive();
   hudFrame.driveBy = v !== null && gun !== null && WEAPONS[gun].driveBy;
   hud.update(frameSeconds, hudFrame);

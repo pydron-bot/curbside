@@ -24,6 +24,8 @@ export interface HudFrame {
   car: CarHud | null;
   /** A car in reach on foot: 'enter' (empty) or 'jack' (someone's driving). */
   nearCar: 'enter' | 'jack' | null;
+  /** That vehicle is a two-wheeler: the prompt says bike / get on. */
+  nearBike: boolean;
   device: InputDevice;
   /** Aiming with the mouse on foot: the cursor becomes a crosshair. */
   mouseAim: boolean;
@@ -42,7 +44,7 @@ export interface CarHud {
 }
 
 export function createHudFrame(): HudFrame {
-  return { health: 100, weapon: null, ammo: 0, car: null, nearCar: null, device: 'keyboard', mouseAim: false, driveBy: false };
+  return { health: 100, weapon: null, ammo: 0, car: null, nearCar: null, nearBike: false, device: 'keyboard', mouseAim: false, driveBy: false };
 }
 
 /**
@@ -315,7 +317,8 @@ export class Hud {
     let text = '';
     if (f.nearCar && !f.car && f.device !== 'touch') {
       key = f.device === 'gamepad' ? 'Y' : 'E';
-      text = f.nearCar === 'jack' ? 'STEAL THIS CAR' : 'GET IN';
+      if (f.nearCar === 'jack') text = f.nearBike ? 'STEAL THIS BIKE' : 'STEAL THIS CAR';
+      else text = f.nearBike ? 'GET ON' : 'GET IN';
     }
     // Compare the parts, not a joined string: this runs every frame.
     if (f.device === this.promptDevice && key === this.promptKeyText && text === this.shownPrompt) return;
