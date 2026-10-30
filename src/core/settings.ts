@@ -4,9 +4,11 @@
  */
 export type QualityPreset = 'auto' | 'high' | 'medium' | 'low';
 export type SteeringMode = 'directional' | 'classic';
+export type PerfOverlay = 'off' | 'fps' | 'full';
 
 export const QUALITY_PRESETS: readonly QualityPreset[] = ['auto', 'high', 'medium', 'low'];
 export const STEERING_MODES: readonly SteeringMode[] = ['directional', 'classic'];
+export const PERF_OVERLAYS: readonly PerfOverlay[] = ['off', 'fps', 'full'];
 
 export interface Settings {
   /** 0..1 */
@@ -23,7 +25,8 @@ export interface Settings {
   /** Mirror the touch layout for left-handed play. */
   leftHanded: boolean;
   haptics: boolean;
-  showFps: boolean;
+  /** Frame-time overlay over the game: off, one fps line, or full stats. */
+  perfOverlay: PerfOverlay;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -35,7 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   steering: 'directional',
   leftHanded: false,
   haptics: true,
-  showFps: false,
+  perfOverlay: 'off',
 };
 
 const KEY = 'curbside.settings';
@@ -59,12 +62,15 @@ export function sanitizeSettings(raw: unknown): Settings {
     const v = raw[k];
     if (typeof v === 'number' && Number.isFinite(v)) out[k] = Math.min(1, Math.max(0, v));
   }
-  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics', 'showFps'] as const) {
+  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics'] as const) {
     const v = raw[k];
     if (typeof v === 'boolean') out[k] = v;
   }
   if (QUALITY_PRESETS.includes(raw.quality as QualityPreset)) out.quality = raw.quality as QualityPreset;
   if (STEERING_MODES.includes(raw.steering as SteeringMode)) out.steering = raw.steering as SteeringMode;
+  // The old Show FPS switch becomes the one-line overlay (its key is carried through for older builds).
+  if (PERF_OVERLAYS.includes(raw.perfOverlay as PerfOverlay)) out.perfOverlay = raw.perfOverlay as PerfOverlay;
+  else if (raw.showFps === true) out.perfOverlay = 'fps';
   return out;
 }
 
