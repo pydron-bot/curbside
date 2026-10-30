@@ -1,5 +1,6 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import type { Rect } from '../world/city';
+import { Spring, Trauma, smoothNoise, softClamp } from './fxMotion';
 
 /** NDC corners of the screen, for projecting the view onto the ground. */
 const SCREEN_CORNERS = [
@@ -9,18 +10,58 @@ const SCREEN_CORNERS = [
   [-1, 1],
 ] as const;
 
+/** Look-ahead: how far ahead the camera leads, per screen axis. */
+export interface LeadSettings {
+  /** Seconds of velocity to lead by (before the soft limit). */
+  seconds: number;
+  /** Most lead across the screen, as a fraction of the visible half-width. */
+  maxX: number;
+  /** Most lead up/down the screen, as a fraction of the visible half-height. */
+  maxZ: number;
+}
+
+/** Driving: ~1.5 s of road ahead up the screen without the car dropping under the thumbs. */
+export const LEAD_CAR: LeadSettings = { seconds: 1.25, maxX: 0.38, maxZ: 0.55 };
+/** On foot: a gentle nudge toward where you're going. */
+export const LEAD_FOOT: LeadSettings = { seconds: 0.45, maxX: 0.22, maxZ: 0.28 };
+
+const DEG = Math.PI / 180;
+
 /**
  * Near-overhead chase camera: looks almost straight down with a slight tilt
- * (so building sides show a little parallax), leads in the direction of travel,
- * and climbs as speed rises so you can see what's coming.
+ * (so building sides show a little parallax), leads in the direction of
+ * travel, and climbs as speed rises so you can see what's coming.
+ *
+ * Feel:
+ *  - Look-ahead per screen axis, soft-limited to a fraction of what's visible
+ *    on that axis (a landscape phone has far more room across than up), with
+ *    velocity feed-forward so the camera doesn't trail the car at speed.
+ *  - Shake from trauma (addTrauma): smooth noise scaled by trauma², with a
+ *    slight roll; a directional kick (kick) that springs back; a short FOV
+ *    punch (punchFov) on big hits. Reduced motion keeps a third of the shake
+ *    and drops roll and FOV punches.
+ *  - `lift` raises the camera (eased) for an on-foot fight.
  */
 export class CameraRig {
   readonly camera: PerspectiveCamera;
   private x = 0;
   private z = 0;
   private height: number;
-  private shakeAmount = 0;
   private readonly corner = new Vector3();
+  private lead: LeadSettings = LEAD_CAR;
+  private leadX = 0;
+  private leadZ = 0;
+  private baseFov = 45;
+  private readonly trauma = new Trauma(1.5);
+  private readonly kickX = new Spring(150, 13);
+  private readonly kickZ = new Spring(150, 13);
+  private readonly fov = new Spring(170, 16);
+  private noiseTime = 0;
+  private liftNow = 0;
+  /** Extra height wanted (m), e.g. while armed on foot; eased in and out. */
+  lift = 0;
+  /** Gentler camera: less shake, no roll, no FOV punches. */
+  reducedMotion = false;
 
   constructor(
     aspect: number,
@@ -28,13 +69,18 @@ export class CameraRig {
       minHeight: 26,
       maxHeight: 58,
       /** Height gained per m/s of speed. */
-      heightPerSpeed: 0.9,
-      /** Seconds of velocity to look ahead. */
-      leadSeconds: 0.55,
+      heightPerSpeed: 1.05,
       /** Camera sits this fraction of its height behind (toward screen-bottom, +Z). */
       tilt: 0.12,
+      /** How fast the camera closes on its target, 1/s (on top of velocity feed-forward). */
       followRate: 6,
       zoomRate: 1.6,
+      /** How fast the look-ahead swings to a new direction, 1/s. */
+      leadRate: 2.2,
+      /** Biggest shake offset, as a fraction of the height. */
+      shakeOffset: 0.045,
+      /** Biggest shake roll, radians. */
+      shakeRoll: 1.8 * DEG,
     },
   ) {
     this.camera = new PerspectiveCamera(45, aspect, 0.5, 400);
@@ -48,33 +94,85 @@ export class CameraRig {
     this.opts.maxHeight = max;
   }
 
-  /** Add screen shake (metres of jitter), e.g. for explosions. */
+  /** How far ahead to lead (LEAD_CAR, LEAD_FOOT, or custom). */
+  setLead(lead: LeadSettings): void {
+    this.lead = lead;
+  }
+
+  /** Legacy shake (metres of jitter, e.g. 2.5 for a close blast): adds trauma. */
   shake(amount: number): void {
-    this.shakeAmount = Math.min(3, this.shakeAmount + amount);
+    this.addTrauma(amount / 3);
+  }
+
+  /** Add trauma 0..1 (0.1 a bump, 0.5 a heavy crash, 1 your own car exploding). */
+  addTrauma(amount: number): void {
+    this.trauma.add(this.reducedMotion ? amount * 0.5 : amount);
+  }
+
+  /** Current trauma 0..1 (debug, tests). */
+  get traumaLevel(): number {
+    return this.trauma.level;
+  }
+
+  /** Jolt the view `metres` along (dirX, dirZ) (normalised here); it springs back. */
+  kick(dirX: number, dirZ: number, metres: number): void {
+    const len = Math.hypot(dirX, dirZ);
+    if (len < 1e-6 || metres <= 0) return;
+    const m = this.reducedMotion ? metres * 0.4 : metres;
+    // A spring kicked with velocity v peaks near v / sqrt(stiffness).
+    const v = m * Math.sqrt(this.kickX.stiffness) * 1.6;
+    this.kickX.kick((dirX / len) * v);
+    this.kickZ.kick((dirZ / len) * v);
+  }
+
+  /** Narrow the FOV by `degrees` for a moment (negative widens: a whoosh). */
+  punchFov(degrees: number): void {
+    if (this.reducedMotion) return;
+    this.fov.kick(-degrees * Math.sqrt(this.fov.stiffness) * 2.4);
   }
 
   snapTo(x: number, z: number): void {
     this.x = x;
     this.z = z;
+    this.leadX = this.leadZ = 0;
+    this.kickX.reset();
+    this.kickZ.reset();
     this.apply();
   }
 
   update(dt: number, targetX: number, targetZ: number, vx: number, vz: number): void {
     const o = this.opts;
     const speed = Math.hypot(vx, vz);
-    const lx = targetX + vx * o.leadSeconds;
-    const lz = targetZ + vz * o.leadSeconds;
-    const follow = 1 - Math.exp(-o.followRate * dt);
-    this.x += (lx - this.x) * follow;
-    this.z += (lz - this.z) * follow;
-
     const wantHeight = Math.min(o.maxHeight, o.minHeight + speed * o.heightPerSpeed);
     this.height += (wantHeight - this.height) * (1 - Math.exp(-o.zoomRate * dt));
-    this.shakeAmount *= Math.exp(-5 * dt);
+    this.liftNow += (this.lift - this.liftNow) * (1 - Math.exp(-2 * dt));
+
+    // Lead per axis, limited to a share of what's visible on that axis.
+    const halfH = (this.height + this.liftNow) * Math.tan((this.baseFov * DEG) / 2);
+    const halfW = halfH * this.camera.aspect;
+    const l = this.lead;
+    const wantX = softClamp(vx * l.seconds, halfW * l.maxX);
+    const wantZ = softClamp(vz * l.seconds, halfH * l.maxZ);
+    const lk = 1 - Math.exp(-o.leadRate * dt);
+    this.leadX += (wantX - this.leadX) * lk;
+    this.leadZ += (wantZ - this.leadZ) * lk;
+
+    // Velocity feed-forward, then close the remaining gap: no trailing at speed.
+    this.x += vx * dt;
+    this.z += vz * dt;
+    const follow = 1 - Math.exp(-o.followRate * dt);
+    this.x += (targetX + this.leadX - this.x) * follow;
+    this.z += (targetZ + this.leadZ - this.z) * follow;
+
+    this.trauma.step(dt);
+    this.noiseTime += dt;
+    this.kickX.step(dt);
+    this.kickZ.step(dt);
+    this.fov.step(dt);
     this.apply();
   }
 
-  /** Ground point the camera is centred on (the player plus look-ahead). */
+  /** Ground point the camera is centred on (the player plus look-ahead), without shake. */
   get focusX(): number {
     return this.x;
   }
@@ -83,9 +181,9 @@ export class CameraRig {
     return this.z;
   }
 
-  /** Current camera height, m. */
+  /** Current camera height, m (including any lift). */
   get currentHeight(): number {
-    return this.height;
+    return this.height + this.liftNow;
   }
 
   /**
@@ -117,15 +215,27 @@ export class CameraRig {
   resize(aspect: number): void {
     this.camera.aspect = aspect;
     // In portrait, widen the vertical FOV so the horizontal view isn't cramped.
-    this.camera.fov = aspect < 1 ? 62 : 45;
+    this.baseFov = aspect < 1 ? 62 : 45;
+    this.camera.fov = this.baseFov;
     this.camera.updateProjectionMatrix();
   }
 
   private apply(): void {
-    const back = this.height * this.opts.tilt;
-    const jx = (Math.random() - 0.5) * this.shakeAmount;
-    const jz = (Math.random() - 0.5) * this.shakeAmount;
-    this.camera.position.set(this.x + jx, this.height, this.z + back + jz);
+    const h = this.height + this.liftNow;
+    const back = h * this.opts.tilt;
+    const s = this.trauma.shake * (this.reducedMotion ? 0.35 : 1);
+    const t = this.noiseTime;
+    const amp = s * h * this.opts.shakeOffset;
+    const jx = amp * smoothNoise(t, 1) + this.kickX.value;
+    const jz = amp * smoothNoise(t, 2) + this.kickZ.value;
+    this.camera.position.set(this.x + jx, h, this.z + back + jz);
+    const roll = this.reducedMotion ? 0 : s * this.opts.shakeRoll * smoothNoise(t * 0.8, 3);
+    this.camera.up.set(Math.sin(roll), 0, -Math.cos(roll));
     this.camera.lookAt(this.x + jx, 0, this.z + jz);
+    const fov = this.baseFov + this.fov.value;
+    if (Math.abs(fov - this.camera.fov) > 1e-4) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
   }
 }
