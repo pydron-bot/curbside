@@ -63,41 +63,70 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
-1. **Real-device pass on an iPhone 15 Pro** (nothing here was run on real
-   hardware): frame rate and heat (Settings → Show FPS), Safari toolbar vs
-   home-screen app, silent switch + audio, haptics, a Bluetooth controller
-   (rumble probably unsupported in iOS Safari), touch feel of point-to-steer
-   and the pedal pad. Tune from what you find.
-2. **Tune from real play:** Chaos Run medal lines (15k / 40k / 80k), race
-   developer times (`DEV_SPEED` / `DEV_CORNER`), and whether 5 stars is too
-   hard to escape (currently survivable via the helicopter's refuel window,
-   resprays or wrecking pursuers).
-3. **Blender adjustment pass:** look at the new art in game and fix scale /
-   readability from 20–60 m up — see the "Code side integrated" notes at the
-   end of `docs/BLENDER_TODO.md` (e.g. guns in hand are tiny, the helicopter
-   silhouette is large at night on phones, a `GetUpFast` clip and an earlier
-   `Throw` release were requested). The `rocket` projectile model isn't used
-   yet.
-4. **deeek.org landing page:** replace the placeholder `index.html` in
-   `pydron-bot/pydron-bot.github.io` with a hub for all projects (Curbside
-   first; any other Pages-enabled repo on the account lives at
-   `deeek.org/<repo>/`).
-5. **Known minor issues** (from the stream reviews; none block play):
-   - SMASH is awarded when another car hits a stopped player.
-   - Settings sheet scrolls slightly at 852×340 (Safari toolbar showing).
-   - The context-lost "reload" button isn't reachable by keyboard/pad.
-   - The radio "now playing" card can briefly overlap long score-feed lines.
-   - No FRENZY FAILED banner if a frenzy ends behind the WASTED card.
-   - Knock-over street furniture isn't solid to people; a bike at full
-     nitro can tunnel through the thinnest props (0.4 m posts).
-   - The HUD prompt says "STEAL THIS CAR" for bikes; the car marker ring is
-     oversized around a scooter.
-   - Long vehicles turning at junctions can still clip queued cars.
-   - Desktop V8 sees ~10 KB/frame of number-boxing garbage in animation
-     sampling (not expected on iPhone's JavaScriptCore).
-6. **Ideas not started:** police radio chatter, more districts/landmarks,
-   gangs/respect, a proper store of missions beyond the first eight, online
-   leaderboard (would need a small backend; the game itself is static).
+Re-planned 2026-10-30 after a scoping pass: every item below was checked
+against the code. **`docs/BACKLOG.md` has the details for each one** (cause
+with file:line, proposed fix, risks, how to verify, what the user must
+decide), under the id in brackets here.
+
+**Done in the 2026-10-30 session:** settings sheet fits at 852×340; the
+context-lost RELOAD button is reachable by keyboard/pad; long score-feed
+lines wrap clear of the radio card; FRENZY FAILED queues behind
+WASTED/BUSTED; bikes say STEAL THIS BIKE / GET ON and the marker ring fits
+small vehicles; SMASH and bike HIT & RUN only when the player did the
+ramming (head-ons still count); a build id in Settings and on the pause card;
+the screen stays awake while playing; GLBs get precache revisions, so an
+installed app picks up new art; stored settings are sanitised at boot.
+
+1. **Diagnostics for the device pass** (cloud, ~1 session): frame-time
+   percentiles and a fuller overlay — today's FPS readout shows 0 or a stale
+   value most of the time [`perf-overlay`]; overlay reachable in the
+   home-screen app [`overlay-in-app`]; a persisted session log with a
+   Share/Copy diagnostics report [`diag-report`]; haptics / rumble / pad
+   probes [`input-probes`]; optionally live touch tuning [`touch-tuning`].
+   With it, the cheap perf fixes that also help JavaScriptCore:
+   [`pose-offscreen`], [`upload-ranges`], [`shadow-depth-flip`].
+2. **Real-device pass on an iPhone 15 Pro** (the user, ~1.5–2 h): follow
+   [`device-checklist`] and send back the diagnostics report. Decide on
+   [`update-reloads-midrun`] first (an update can reload mid-run on any app
+   switch, which will bite during the session).
+3. **Play telemetry and races** (cloud): local play log [`tune-telemetry`];
+   the Old Town race leg runs into the back of a stunt ramp, add the
+   bot-vs-dev-time and ramp-on-course tests [`tune-race-dev-times`]; commit
+   the `__ub` bot harnesses [`tune-chaos-medals`, `tune-five-star-escape`].
+   Re-tune medals and 5-star escape only from logged real play.
+4. **Blender adjustment pass** (cloud): the pip `bpy` 5.2.3 module rebuilds
+   every committed GLB to 1 ULP headless, after a one-line `import bpy` in
+   `build_assets.py` [`toolchain-bpy`]. Then: fly the `rocket` model
+   [`rocket-projectile`], GetUp/Throw timing [`clips-getup-throw`], held
+   weapons [`weapons-held`], cop badge / backpack / Pike / pigeons
+   [`characters-looks`], rooftop tops, lamp and signal heads, police sign,
+   gantry span [`props-world`].
+5. **deeek.org landing page** (cloud, after the user picks branding, the
+   project list and the image): [`hub-screenshots`], [`hub-page`],
+   [`hub-social-meta`], [`curbside-og-meta`], [`curbside-linkback`];
+   same-origin rules [`shared-origin-landing`]; live HTTPS/domain check is
+   the user's [`pages-domain-check`].
+6. **Remaining minor issues:** furniture solid to people and substepped
+   static collision so fast bikes stop tunnelling [`minor-props`]; left
+   turns give way to the opposite queue (the real cause of the junction
+   clipping) [`minor-junction-turns`]; animation sampling garbage
+   [`anim-bake`], `Math.hypot` and call boxing in the sim
+   [`hypot-hot-loops`, `sim-call-boxing`] (V8 only; wait for the device
+   timeline). Also: a committed browser smoke test in CI [`smoke-ci`],
+   branch/worktree cleanup [`repo-hygiene`], close out M8 in PLAN.md
+   [`m8-closeout`], a real home-screen icon [`icons-splash`].
+7. **Ideas:** district names + an area card first [`districts-landmarks`
+   phase A], since chatter and gang turf need them; then police radio
+   chatter [`police-chatter`]; missions after the eighth (payphones never
+   ring again today; the `drive` spawn option is ignored) [`missions-store`];
+   gangs [`gangs-respect`]; leaderboard needs a decision on any backend
+   [`online-leaderboard`].
+
+Smaller bugs found on the way (details in BACKLOG.md): the Chaos Run result
+can show less than the HUD did in its last second; races don't reset nitro;
+the radar's district tint doesn't match the real districts; README still
+describes an `AnimationMixer` that's gone; `check_assets.py` lacks the
+`badge` slot; muzzle flashes sit at grip height.
 
 ## Working conventions that worked
 
