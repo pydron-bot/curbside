@@ -1098,6 +1098,7 @@ const progress = new ProgressDirector({
 function warmShaders() {
   try {
     precompile(renderer, scene, rig.camera);
+    look.cars.precompileDepth(scene, rig.camera);
     resolution.holdOff(1);
   } catch {
     // A lost context mid-compile: the first frames compile instead.
