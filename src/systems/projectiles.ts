@@ -76,6 +76,8 @@ const ROLL_FRICTION = 9;
 export const ROCKET_SPEED = 26;
 export const ROCKET_HEIGHT = 1.2;
 const ROCKET_RADIUS = 0.45;
+/** Rockets arm after this much flight, m: until then only walls stop them (no point-blank blasts). */
+export const ROCKET_ARMING = 3;
 /** Rockets that hit nothing go off at the end of their flight, m. */
 export const MAX_ROCKET_FLIGHT = 75;
 /** A molotov's fire: radius (m) and how long it burns (s). */
@@ -211,7 +213,8 @@ export class Projectiles {
     scratchPos.x = p.x;
     scratchPos.z = p.z;
     const wall = world.grid.resolveCircle(scratchPos, 0.2);
-    if (wall || p.flown >= MAX_ROCKET_FLIGHT || world.rocketHits(p.x, p.z, ROCKET_RADIUS, p.byPlayer)) {
+    const armed = p.flown >= ROCKET_ARMING;
+    if (wall || p.flown >= MAX_ROCKET_FLIGHT || (armed && world.rocketHits(p.x, p.z, ROCKET_RADIUS, p.byPlayer))) {
       p.alive = false;
       world.explode('rocket', p.x, p.z, p.byPlayer);
     }

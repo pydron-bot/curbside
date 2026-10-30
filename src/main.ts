@@ -50,7 +50,7 @@ import {
   stepDamage,
 } from './systems/damage';
 import { StuntTracker } from './systems/stunts';
-import { RAMP_HEIGHT, placeRamps, rampSolids, rideRamps } from './world/ramps';
+import { RAMP_HEIGHT, enteringRamp, placeRamps, rampSolids, rideRamps } from './world/ramps';
 import { RampMesh } from './render/rampMesh';
 import {
   collidePedStatic,
@@ -504,7 +504,7 @@ function simulate(dt: number) {
   for (const v of vehicles) {
     let impact = collideVehicleStatic(v.sim, collision, contact);
     // A ramp's sides and back are solid to anything not riding up it.
-    if (!v.sim.airborne && v.sim.y <= 0) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact));
+    if (!v.sim.airborne && v.sim.y <= 0 && !enteringRamp(v.sim, ramps)) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact));
     if (impact <= 0) continue;
     const hit = impactDamage(impact);
     applyDamage(v.damage, hit);

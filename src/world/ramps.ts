@@ -9,8 +9,9 @@
  * slope (its height follows the surface); over the lip it flies, kicked up
  * in proportion to its speed (a real launch above LAUNCH_SPEED, a mere drop
  * off the end at a crawl). Coming at it from the sides or the back, the
- * wedge is solid (rampSolids, for the ordinary wall collision). Pure data
- * and maths, no three.js.
+ * wedge is solid (rampSolids, for the ordinary wall collision) unless the
+ * car is lined up on its front (enteringRamp). Pure data and maths, no
+ * three.js.
  */
 import { launch, type VehicleState } from '../entities/vehicle';
 import { BLOCK_SIZE, ROAD_WIDTH, type Rect } from './city';
@@ -104,6 +105,26 @@ export function rampSolids(ramps: readonly Ramp[]): Rect[] {
   });
 }
 
+/**
+ * Is this car lined up to drive onto a ramp from the front (moving up the
+ * slope, square to it, between its edges, about to reach or on the low end)?
+ * Such a car skips the ramp's solid parts: its nose is over the slope well
+ * before its centre (where it starts to ride) is.
+ */
+export function enteringRamp(s: VehicleState, ramps: readonly Ramp[]): boolean {
+  for (const r of ramps) {
+    if (Math.abs(s.x - r.x) > RAMP_LENGTH + 6 || Math.abs(s.z - r.z) > RAMP_LENGTH + 6) continue;
+    const v = DIR_VEC[r.dir];
+    start(r, scratch);
+    const along = (s.x - scratch.x) * v.x + (s.z - scratch.z) * v.z;
+    const across = Math.abs((s.x - r.x) * -v.z + (s.z - r.z) * v.x);
+    const forward = s.vx * v.x + s.vz * v.z;
+    const square = Math.sin(s.heading) * v.x + Math.cos(s.heading) * v.z;
+    if (along > -5 && along < ENTRY + 1 && across < RAMP_WIDTH / 2 + 0.4 && forward > 0.5 && square > 0.7) return true;
+  }
+  return false;
+}
+
 /** Height of the slope `along` m up the ramp. */
 export function rampHeight(along: number): number {
   return RAMP_HEIGHT * Math.min(1, Math.max(0, along / RAMP_LENGTH));
@@ -133,7 +154,7 @@ export function rideRamps(s: VehicleState, ramps: readonly Ramp[]): RampEvent {
     if (onSlope) {
       // Only from the front: the low edge, moving up the slope (or already on it).
       const forward = s.vx * v.x + s.vz * v.z;
-      if (!riding && !(along < ENTRY && forward > 0)) continue;
+      if (!riding && !(along < ENTRY + 1 && forward > 0)) continue;
       s.y = rampHeight(along);
       return 'riding';
     }

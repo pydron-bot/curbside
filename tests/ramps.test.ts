@@ -5,7 +5,7 @@ import { collideVehicleStatic } from '../src/systems/physics';
 import { MIN_AIRTIME, StuntTracker, stuntLabel, stuntPoints, type StuntResult } from '../src/systems/stunts';
 import { BLOCK_SIZE, generateCity } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
-import { KICK, RAMP_COUNT, RAMP_HEIGHT, RAMP_LENGTH, RAMP_WIDTH, placeRamps, rampAt, rampSolids, rideRamps } from '../src/world/ramps';
+import { KICK, RAMP_COUNT, RAMP_HEIGHT, RAMP_LENGTH, RAMP_WIDTH, enteringRamp, placeRamps, rampAt, rampSolids, rideRamps } from '../src/world/ramps';
 import { DIR_VEC, LANE_OFFSET, MAX_NODE } from '../src/world/roads';
 
 const DT = 1 / 60;
@@ -17,6 +17,7 @@ function jump(v0: number, spec = SEDAN, runUp = 30, throttle = 1) {
   const s = createVehicleState(ramp.x - runUp, 0, ramp.heading);
   s.vx = v0;
   const tracker = new StuntTracker();
+  const solid = new StaticGrid(rampSolids([ramp]));
   let launched = false;
   let maxY = 0;
   let landing = 0;
@@ -25,6 +26,8 @@ function jump(v0: number, spec = SEDAN, runUp = 30, throttle = 1) {
   for (let i = 0; i < 60 * 6 && !stunt; i++) {
     const hit = stepVehicle(s, { ...full, throttle }, spec, DT);
     if (hit > 0) landing = hit;
+    // As main.ts: the solid parts stop anyone not lined up on the front.
+    if (!s.airborne && s.y <= 0 && !enteringRamp(s, [ramp])) expect(collideVehicleStatic(s, solid)).toBe(0);
     const ev = rideRamps(s, [ramp]);
     if (ev === 'launch') {
       launched = true;
@@ -110,6 +113,7 @@ describe('riding a ramp', () => {
     let hit = 0;
     for (let i = 0; i < 60; i++) {
       stepVehicle(back, full, SEDAN, DT);
+      expect(enteringRamp(back, [ramp])).toBe(false);
       expect(rideRamps(back, [ramp])).toBe('none');
       hit = Math.max(hit, collideVehicleStatic(back, grid));
     }

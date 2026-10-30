@@ -16,16 +16,16 @@ export const PED_RADIUS = 0.35;
 
 const WALL_RESTITUTION = 0.25;
 /**
- * Wall friction scrubs the speed *along* the wall, in proportion to how hard
- * the car hit it: a glancing touch keeps nearly all its pace and slides
- * along, a head-on hit (|vn| ≥ WALL_HARD) loses this share of it.
+ * Wall friction scrubs the speed *along* the wall, growing with the square
+ * of how hard the car hit it: a glancing touch keeps nearly all its pace
+ * and slides along, a head-on hit (|vn| ≥ WALL_HARD) loses this share of it.
  */
 const WALL_SCRUB = 0.45;
 const WALL_HARD = 10;
 /** Nose into the wall at less than this (sin of the angle, ~40°): swing it along the wall. */
 const GLANCE_MAX = 0.64;
 /** Yaw kick per radian of glancing angle, rad/s: the car turns parallel rather than grinding. */
-const GLANCE_ALIGN = 5;
+const GLANCE_ALIGN = 7;
 const CAR_RESTITUTION = 0.35;
 /** Cars this high above the road (ramps, jumps) pass over other cars, m. */
 export const CLEARANCE = 1.1;
@@ -99,7 +99,7 @@ export function collideVehicleStatic(s: VehicleState, grid: StaticGrid, contact?
     const vn = s.vx * c.nx + s.vz * c.nz;
     if (vn < 0) {
       const hard = Math.min(1, -vn / WALL_HARD);
-      const keep = 1 - WALL_SCRUB * hard;
+      const keep = 1 - WALL_SCRUB * hard * hard;
       const tx = (s.vx - vn * c.nx) * keep;
       const tz = (s.vz - vn * c.nz) * keep;
       s.vx = tx - WALL_RESTITUTION * vn * c.nx;

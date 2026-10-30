@@ -118,6 +118,14 @@ describe('rockets', () => {
     expect(t).toBeCloseTo(30 / ROCKET_SPEED, 1); // visibly slow: over a second for 30 m
   });
 
+  it('arm after a few metres: someone right in front of the launcher is flown past', () => {
+    const { w, booms } = world([], (x) => x > 0.5 && x < 2);
+    const pr = new Projectiles();
+    pr.fireRocket(0, 0, 1, 0, true);
+    for (let t = 0; t < 0.5; t += DT) pr.step(DT, w);
+    expect(booms).toHaveLength(0);
+  });
+
   it('hit walls, or go off at the end of their flight', () => {
     const wall = world([{ minX: 20, minZ: -5, maxX: 22, maxZ: 5 }]);
     const pr = new Projectiles();

@@ -74,7 +74,7 @@ export class RampMesh {
         float rampMark = 0.0;
         if (vFace < 0.5) {
           // Chevrons pointing up the slope, a white lip at the top.
-          float c = fract(vRampUv.y * 3.0 - abs(vRampUv.x - 0.5) * 1.6);
+          float c = fract(vRampUv.y * 3.0 + abs(vRampUv.x - 0.5) * 1.6);
           rampMark = step(0.5, c);
           float edge = step(0.9, vRampUv.y) + step(vRampUv.x, 0.06) + step(0.94, vRampUv.x);
           diffuseColor.rgb = mix(mix(rampDark, rampYellow, rampMark), vec3(0.95), clamp(edge, 0.0, 1.0));
