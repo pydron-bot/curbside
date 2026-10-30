@@ -287,9 +287,10 @@ geometry is uploaded at load, not when that model first drives into view.
   tier (2048 / 1024 / off). Tone mapping is ACES plus a grade
   (`post.ts`, installed as `CustomToneMapping`: no extra pass).
 - **Surfaces.** `shaderLib.ts` holds the shared uniforms (`uTime`,
-  `uNight`, `uWetness` for rain later) and GLSL (integer hash, noise,
-  anti-aliased lines, and `ubStreetLight`, which lights ground, walls, cars
-  and people from the lamp layout in `world/streetLamps.ts` analytically).
+  `uNight`, and `uWetness`, which the weather in `fxWeather.ts` drives)
+  and GLSL (integer hash, noise, anti-aliased lines, and `ubStreetLight`,
+  which lights ground, walls, cars and people from the lamp layout in
+  `world/streetLamps.ts` analytically).
   `world/ground.ts` draws the whole ground in one shader that follows the
   city constants exactly; `world/cityMesh.ts` draws buildings, roofs,
   rooftop props, awnings, neon, lamps and trees; `world/districts.ts` and
@@ -345,9 +346,11 @@ focusZ, playing)` once per frame after placing cars and people.
   crashes (by impact), explosions (by distance), gunfire (a little recoil)
   and getting hurt. Look-ahead per screen axis, soft-limited to a share of
   what's visible on that axis, with velocity feed-forward so it never
-  trails the car: ~1.3–1.5 s of road up the screen at cruising speed with
-  the car kept out of the bottom quarter (away from the thumbs). On foot
-  the camera lifts 5 m with a gun out and 3.5 m in a recent fight.
+  trails the car. Measured on the iPhone profile at 86 km/h: 1.45 s of road
+  ahead driving up the screen (car at 79% of the height), 1.36 s driving
+  down (car at 23%), 2.8 s across (car at 32% / 68% of the width); the car
+  never reaches the bottom corners where the thumbs are. On foot the
+  camera lifts 5 m with a gun out and 3.5 m in a recent fight.
   `prefers-reduced-motion` keeps a third of the shake, no roll or FOV
   punches.
 - **Hit-stop** (`HitStop` in `fxMotion.ts`): 40–80 ms of near-frozen sim on
@@ -363,8 +366,21 @@ focusZ, playing)` once per frame after placing cars and people.
   ×5 and ×10 combo, animated with the Web Animations API.
 
 Budget: at most 5 draw calls for all of it (fire, smoke, debris, ground
-marks, rain), each skipped when empty. Measured with `?debug` in the
-iPhone 15 Pro profile: see the numbers in *Look* plus the ones below.
+marks, rain), each but the ground marks skipped when empty, and no program
+compiled after start-up (they are all built at warm-up). Measured in
+Chromium with `?debug`, whole frame (iPhone 15 Pro profile, 'medium' tier,
+then desktop 'high'):
+
+| Moment | iPhone | Desktop |
+|---|---|---|
+| One car exploding next to you (before → during) | 43 → 45 | 56 → 59 |
+| Five-car chain reaction, peak | 51 → 55 | 68 → 69 |
+| SMG and shotgun fight with two armed NPCs | 52 | 61–63 |
+| Mid-drift with skid marks and tyre smoke | 47–51 | 61–63 |
+| Rain, day / night | 44 / 48 | 57 / 63 |
+
+A five-car chain peaks at ~280 fire, ~180 smoke and ~60 debris particles
+on the phone tier (pools hold 900 / 700 / 128).
 
 API for other systems:
 
