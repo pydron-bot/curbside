@@ -62,6 +62,12 @@ export class CameraRig {
   lift = 0;
   /** Gentler camera: less shake, no roll, no FOV punches. */
   reducedMotion = false;
+  /**
+   * How fast the world moves this frame relative to real time (hit-stop
+   * slows it). The velocity feed-forward is scaled by it, or the view would
+   * run on ahead of a frozen car and spring back; shake keeps real time.
+   */
+  timeScale = 1;
 
   constructor(
     aspect: number,
@@ -135,6 +141,7 @@ export class CameraRig {
     this.x = x;
     this.z = z;
     this.leadX = this.leadZ = 0;
+    this.timeScale = 1;
     this.kickX.reset();
     this.kickZ.reset();
     this.apply();
@@ -158,8 +165,8 @@ export class CameraRig {
     this.leadZ += (wantZ - this.leadZ) * lk;
 
     // Velocity feed-forward, then close the remaining gap: no trailing at speed.
-    this.x += vx * dt;
-    this.z += vz * dt;
+    this.x += vx * dt * this.timeScale;
+    this.z += vz * dt * this.timeScale;
     const follow = 1 - Math.exp(-o.followRate * dt);
     this.x += (targetX + this.leadX - this.x) * follow;
     this.z += (targetZ + this.leadZ - this.z) * follow;

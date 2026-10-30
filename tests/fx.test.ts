@@ -422,6 +422,30 @@ describe('camera feel', () => {
     expect(moved).toBeLessThan(0.4);
   });
 
+  it('freezes with the action during hit-stop instead of running on ahead of the car', () => {
+    const run = (timeScale: number) => {
+      const rig = new CameraRig(852 / 393);
+      rig.setLead(LEAD_CAR);
+      rig.snapTo(0, 0);
+      let x = 0;
+      for (let i = 0; i < 180; i++) {
+        x += 30 * DT;
+        rig.update(DT, x, 0, 30, 0);
+      }
+      const before = rig.focusX - x;
+      // Hit-stop: the car crawls at timeScale of its speed for 80 ms of real time.
+      rig.timeScale = timeScale;
+      for (let i = 0; i < 5; i++) {
+        x += 30 * DT * timeScale;
+        rig.update(DT, x, 0, 30, 0);
+      }
+      return rig.focusX - x - before;
+    };
+    expect(Math.abs(run(1))).toBeLessThan(0.2);
+    // The view holds still with the car (less than half a metre of drift).
+    expect(Math.abs(run(0.06))).toBeLessThan(0.5);
+  });
+
   it('eases a lift in for an on-foot fight', () => {
     const rig = new CameraRig(16 / 9);
     rig.setHeights(20, 24);

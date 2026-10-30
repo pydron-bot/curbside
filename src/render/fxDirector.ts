@@ -35,6 +35,8 @@ const ARMED_LIFT = 5;
 /** Shot at or punched recently: lift a little even with bare fists. */
 const FIGHT_LIFT = 3.5;
 const FIGHT_SECONDS = 4;
+/** Where crash sparks, flares and chips start, m: just over a car's roof. */
+const CRASH_Y = 1.6;
 
 /** What the director needs from the player (the game's Player fits). */
 export interface FxPlayer {
@@ -144,6 +146,8 @@ export class FxDirector {
     const dt = realDt * this.hitStop.scale;
 
     // Camera framing: lead for driving, a nudge on foot, lift when armed or fighting.
+    // During hit-stop the follow slows with the sim, so the view freezes with the action.
+    d.rig.timeScale = this.hitStop.scale;
     const driving = playing ? d.player.driving : null;
     d.rig.setLead(!playing || driving ? LEAD_CAR : LEAD_FOOT);
     let lift = 0;
@@ -181,17 +185,19 @@ export class FxDirector {
     const scale = fx.scale;
     const hit = this.driving.crash(this.d.vehicles, e.x, e.z, e.impact);
     const sparks = Math.round(Math.min(26, Math.max(3, (e.impact - 2) * 1.1)) * scale);
-    fx.sparks(e.x, 0.7, e.z, sparks, 4, 8 + e.impact * 0.6, 0, 0);
-    if (e.impact > 7) fx.flare(e.x, 1, e.z, 0.6 + e.impact * 0.05, 0.07, 2.4, 2.1, 1.6);
-    if (e.impact > 5) fx.puff(e.x, 0.5, e.z, 0.5, 0.6, 1.6 + e.impact * 0.05, 0.35);
+    // Born just above roof height: lower, the near-overhead camera would see the
+    // contact's first frames (hit-stop included) hidden inside the two bodies.
+    fx.sparks(e.x, CRASH_Y, e.z, sparks, 4, 8 + e.impact * 0.6, 0, 0);
+    if (e.impact > 7) fx.flare(e.x, CRASH_Y + 0.2, e.z, 0.6 + e.impact * 0.05, 0.07, 2.4, 2.1, 1.6);
+    if (e.impact > 5) fx.puff(e.x, CRASH_Y - 0.3, e.z, 0.5, 0.6, 1.6 + e.impact * 0.05, 0.35);
     if (e.impact > 12) {
-      fx.glass(e.x, 1, e.z, Math.round((3 + e.impact / 4) * scale), 3 + e.impact * 0.2);
+      fx.glass(e.x, CRASH_Y - 0.1, e.z, Math.round((3 + e.impact / 4) * scale), 3 + e.impact * 0.2);
       if (hit) {
         const p = hit.mesh.paint;
         for (let k = Math.round(2 + e.impact / 10); k > 0; k--) {
           const a = Math.random() * Math.PI * 2;
           const sp = 2 + Math.random() * 4;
-          fx.debris.throw(e.x, 0.8, e.z, Math.cos(a) * sp, 3 + Math.random() * 4, Math.sin(a) * sp, 0.18 + Math.random() * 0.2, 0.03, 0.14 + Math.random() * 0.2, p.r, p.g, p.b, 4, 10);
+          fx.debris.throw(e.x, CRASH_Y - 0.2, e.z, Math.cos(a) * sp, 3 + Math.random() * 4, Math.sin(a) * sp, 0.18 + Math.random() * 0.2, 0.03, 0.14 + Math.random() * 0.2, p.r, p.g, p.b, 4, 10);
         }
       }
     }
@@ -214,8 +220,11 @@ export class FxDirector {
     this.driving.blast(this.d.vehicles, e.x, e.z, BLAST_RADIUS + 3);
 
     const close = e.ownCar ? 1 : Math.max(0, 1 - e.distance / 55);
-    this.flash = Math.max(this.flash, 0.12 + 0.75 * close);
     const rig = this.d.rig;
+    // A blast out of sight doesn't flash the screen; reduced motion keeps flashes soft.
+    if (close > 0) this.flash = Math.max(this.flash, (0.12 + 0.75 * close) * (rig.reducedMotion ? 0.4 : 1));
+    // Behind the title the attract camera stays steady.
+    if (!this.playing) return;
     rig.addTrauma(close > 0 ? 0.2 + 0.75 * close : 0.08);
     // A chain reaction going off in one frame jolts the view once, not five times over.
     if (this.realTime - this.lastBoomKick > 0.15) {
@@ -223,7 +232,7 @@ export class FxDirector {
       if (close > 0.05) rig.kick(rig.focusX - e.x, rig.focusZ - e.z, 1.6 * close);
       if (close > 0.35) rig.punchFov(5 * close);
     }
-    if (this.playing && (e.byPlayer || e.ownCar ? close > 0.25 : close > 0.6)) this.hitStop.hit(0.075, 0.06);
+    if (e.byPlayer || e.ownCar ? close > 0.25 : close > 0.6) this.hitStop.hit(0.075, 0.06);
   }
 
   private onShot(e: EventOf<'shot'>): void {

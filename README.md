@@ -326,7 +326,9 @@ focusZ, playing)` once per frame after placing cars and people.
 - **Ground marks** (`fxDecals.ts`): skid ribbons, scorches, bullet pocks
   and scrapes are quads in one ring-buffered mesh that fades them in the
   vertex shader (skids ~22 s, scorches ~75 s in their own 32-slot ring).
-  Transparent and drawn first among transparents, i.e. after the ground.
+  Transparent and drawn first among transparents, i.e. after the ground;
+  not drawn at all while no mark is alive. Scrapes dim at night (they're
+  unlit).
 - **Debris** (`fxDebris.ts`): panels in the exploding car's paint, chips,
   glass and brass casings as one instanced lit box mesh with bounce,
   friction and spin.
@@ -344,7 +346,7 @@ focusZ, playing)` once per frame after placing cars and people.
 - **Camera** (`cameraRig.ts`, `fxMotion.ts`): trauma shake (smooth noise ×
   trauma², slight roll), directional kicks on springs, FOV punches; fed by
   crashes (by impact), explosions (by distance), gunfire (a little recoil)
-  and getting hurt. Look-ahead per screen axis, soft-limited to a share of
+  and getting hurt; behind the title only the flash plays. Look-ahead per screen axis, soft-limited to a share of
   what's visible on that axis, with velocity feed-forward so it never
   trails the car. Measured on the iPhone profile at 86 km/h: 1.45 s of road
   ahead driving up the screen (car at 79% of the height), 1.36 s driving
@@ -352,11 +354,15 @@ focusZ, playing)` once per frame after placing cars and people.
   never reaches the bottom corners where the thumbs are. On foot the
   camera lifts 5 m with a gun out and 3.5 m in a recent fight.
   `prefers-reduced-motion` keeps a third of the shake, no roll or FOV
-  punches.
+  punches, and softer exposure and combo-edge flashes. A blast out of
+  sight (over 55 m from the view centre) doesn't flash the screen.
 - **Hit-stop** (`HitStop` in `fxMotion.ts`): 40–80 ms of near-frozen sim on
   close or player-caused explosions, heavy crashes and knockouts; overlaps
   keep the longest hold and a cooldown stops chains turning into slow
-  motion. The camera, shake and HUD keep real time.
+  motion. Shake and the HUD keep real time; the camera's follow slows with
+  the sim (`rig.timeScale`), so the view freezes with the car instead of
+  running on ahead of it. Crash sparks start just above roof height so the
+  hit's first frames aren't hidden inside the two cars.
 - **Weather** (`fxWeather.ts`): every few minutes a shower of a minute or
   two eases in; streets get wet behind it (`uWetness`) and dry slowly. Rain
   is one instanced draw animated in the vertex shader (world-anchored
@@ -366,7 +372,7 @@ focusZ, playing)` once per frame after placing cars and people.
   ×5 and ×10 combo, animated with the Web Animations API.
 
 Budget: at most 5 draw calls for all of it (fire, smoke, debris, ground
-marks, rain), each but the ground marks skipped when empty, and no program
+marks, rain), each skipped when empty, and no program
 compiled after start-up (they are all built at warm-up). Measured in
 Chromium with `?debug`, whole frame (iPhone 15 Pro profile, 'medium' tier,
 then desktop 'high'):
