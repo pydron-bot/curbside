@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createVehicleState } from '../src/entities/vehicle';
 import { blockAt, cornerPoint, scare, spawnPed, stepCrowdPed } from '../src/systems/crowd';
 import { collidePedStatic } from '../src/systems/physics';
-import { ROAD_WIDTH, generateCity } from '../src/world/city';
+import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, generateCity } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
 import { random } from './helpers';
 
@@ -133,5 +133,26 @@ describe('fighting back', () => {
     const target = on(p.s.x - 2, p.s.z);
     for (let i = 0; i < 60 * 3; i++) stepCrowdPed(p, [], rand, DT2, target);
     expect(p.mode).toBe('fight');
+  });
+});
+
+describe('sidewalk corners', () => {
+  it('cornerPoint walks a block clockwise from (left, top) and writes into a reused point', () => {
+    const inset = ROAD_WIDTH / 2 + SIDEWALK / 2;
+    const x0 = -HALF_EXTENT + 3 * BLOCK_SIZE;
+    const z0 = -HALF_EXTENT + 5 * BLOCK_SIZE;
+    const lo = (v: number) => v + inset;
+    const hi = (v: number) => v + BLOCK_SIZE - inset;
+    const out = { x: 0, z: 0 };
+    const want = [
+      [lo(x0), lo(z0)],
+      [hi(x0), lo(z0)],
+      [hi(x0), hi(z0)],
+      [lo(x0), hi(z0)],
+    ];
+    for (let c = 0; c < 8; c++) {
+      expect(cornerPoint(3, 5, c, out)).toBe(out);
+      expect([out.x, out.z]).toEqual(want[c & 3]);
+    }
   });
 });

@@ -4,11 +4,12 @@ import { events } from './core/events';
 import { Input } from './core/input';
 import { FixedStep } from './core/loop';
 import { UpdateGate } from './core/updateGate';
-import { PLAYER_ON_FOOT, stepPedestrian } from './entities/pedestrian';
+import { PLAYER_ON_FOOT, copyPedState, stepPedestrian } from './entities/pedestrian';
 import {
   GRAVITY,
   VEHICLE_HEALTH,
   VEHICLE_SPECS,
+  copyVehicleState,
   createVehicleState,
   driverDoorPosition,
   forwardSpeed,
@@ -388,12 +389,14 @@ function syncWeapon() {
 function nearestEnterable(): Vehicle | null {
   if (!player.canEnter) return null;
   let best: Vehicle | null = null;
-  let bestDist = ENTER_RANGE;
+  let bestD2 = ENTER_RANGE * ENTER_RANGE;
   for (const v of vehicles) {
-    const d = Math.hypot(v.sim.x - player.ped.x, v.sim.z - player.ped.z);
-    if (d < bestDist && speed(v.sim) < ENTER_MAX_SPEED && !v.damage.wrecked && !v.exported) {
+    const dx = v.sim.x - player.ped.x;
+    const dz = v.sim.z - player.ped.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestD2 && speed(v.sim) < ENTER_MAX_SPEED && !v.damage.wrecked && !v.exported) {
       best = v;
-      bestDist = d;
+      bestD2 = d2;
     }
   }
   return best;
@@ -490,7 +493,7 @@ function simulate(dt: number) {
   for (const c of population.crowd) addObstacle(c.agent.s.x, c.agent.s.z, 0.4);
 
   for (const v of vehicles) {
-    Object.assign(v.prev, v.sim);
+    copyVehicleState(v.prev, v.sim);
     let controls = NO_CONTROLS;
     if (v.damage.wrecked) controls = NO_CONTROLS;
     else if (v === driving) controls = playerControls;
@@ -501,7 +504,7 @@ function simulate(dt: number) {
     if (rideRamps(v.sim, ramps) === 'launch') carJumped(v, v === driving);
   }
 
-  Object.assign(player.prev, player.ped);
+  copyPedState(player.prev, player.ped);
   if (!driving) {
     stepPedestrian(player.ped, player.down || attract.active ? NO_MOVE : input.readMove(), PLAYER_ON_FOOT, dt);
     // Twin-stick: face the lock-on or the aim while walking (strafe), not the way you walk.
@@ -516,7 +519,7 @@ function simulate(dt: number) {
   for (const v of vehicles) if (v.sim.y < 0.8) vehicleStates.push(v.sim);
   const target = playerTarget();
   for (const c of population.crowd) {
-    Object.assign(c.prev, c.agent.s);
+    copyPedState(c.prev, c.agent.s);
     const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, target);
     if (event?.kind === 'struck') pedHitByCar(c, driving !== null && event.car === driving.sim ? driving : null);
     else if (event?.kind === 'punch') {
@@ -593,8 +596,10 @@ function simulate(dt: number) {
     if (speed(ds) > NEAR_MISS_SPEED) {
       for (const v of vehicles) {
         if (v === driving || v.damage.wrecked) continue;
-        const d = Math.hypot(v.sim.x - ds.x, v.sim.z - ds.z);
-        if (d > NEAR_MISS_DIST || d < 2.05) continue;
+        const dx = v.sim.x - ds.x;
+        const dz = v.sim.z - ds.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 > NEAR_MISS_DIST * NEAR_MISS_DIST || d2 < 2.05 * 2.05) continue;
         if (Math.hypot(v.sim.vx - ds.vx, v.sim.vz - ds.vz) < NEAR_MISS_SPEED) continue;
         if (simTime - (nearMissAt.get(v) ?? -99) < 2.5) continue;
         nearMissAt.set(v, simTime);
