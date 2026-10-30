@@ -57,18 +57,23 @@ export const TRAFFIC_AHEAD_BIAS = 0.7;
 /** Half-angle of the "ahead" cone, radians. */
 const AHEAD_SPREAD = Math.PI / 3;
 /** Crowd appears this far from the player, m (always off-screen). */
-export const CROWD_SPAWN = [25, 60] as const;
-export const CROWD_SEED_SPAWN = [20, 60] as const;
+export const CROWD_SPAWN = [20, 60] as const;
+export const CROWD_SEED_SPAWN = [16, 60] as const;
 /** Peds further than this (and off-screen) are recycled, m. */
 export const CROWD_DESPAWN = 80;
 /** Peds spawn in little groups... */
 export const CROWD_CLUSTER = [2, 4] as const;
-/** ...about half of them gathered at street corners. */
+/** ...about half of them gathered at street corners... */
 export const CORNER_SHARE = 0.5;
+/** ...and most heading the player's way, so they walk into view. */
+export const TOWARD_PLAYER_SHARE = 0.75;
 /** Parked, abandoned and wrecked cars kept at most; older ones are recycled off-screen. */
 export const MAX_IDLE_VEHICLES = 8;
-/** Spawns stay this far outside the visible ground rectangle, m. */
-export const VIEW_MARGIN = 6;
+/**
+ * Spawns stay this far outside the visible ground rectangle, m. The camera
+ * moves well under a metre per frame even at top speed, so this is plenty.
+ */
+export const VIEW_MARGIN = 4;
 /** New traffic placed per maintain() call (outside the seed pass), to spread the cost. */
 const TRAFFIC_SPAWNS_PER_CALL = 4;
 const CROWD_TRIES_PER_CALL = 24;
@@ -334,7 +339,9 @@ export class Population {
   private trySpawnCluster(ctx: MaintainContext, target: number): void {
     const [lo, hi] = ctx.seed ? CROWD_SEED_SPAWN : CROWD_SPAWN;
     const a = this.rand() * Math.PI * 2;
-    const r = lo + this.rand() * (hi - lo);
+    // Favour the near end of the ring: the far end has far more pavement,
+    // so uniform picks would leave the streets right around you empty.
+    const r = lo + this.rand() ** 2 * (hi - lo);
     const tx = ctx.x + Math.cos(a) * r;
     const tz = ctx.z + Math.sin(a) * r;
     const bx = Math.floor((tx + HALF_EXTENT) / BLOCK_SIZE);
@@ -358,18 +365,21 @@ export class Population {
     const az = from.z + (to.z - from.z) * t;
     const d = Math.hypot(ax - ctx.x, az - ctx.z);
     if (d < lo - 2 || d > hi + 4) return;
-    // The group spreads a few metres either way.
-    if (inRect(ax, az, ctx.view, VIEW_MARGIN + 4)) return;
+    // The group spreads up to ~2.5 m either way.
+    if (inRect(ax, az, ctx.view, VIEW_MARGIN + 3)) return;
 
     const [cmin, cmax] = CROWD_CLUSTER;
     const n = Math.min(target - this.crowd.length, cmin + Math.floor(this.rand() * (cmax - cmin + 1)));
     const runsAlongZ = edge === 1 || edge === 3;
+    // Which way round the block leads toward the player (so most walk into view).
+    const towardPlayer = (to.x - from.x) * (ctx.x - ax) + (to.z - from.z) * (ctx.z - az) > 0;
     for (let i = 0; i < n; i++) {
       // A pace or so apart along the sidewalk...
       const along = ((i - (n - 1) / 2) * 1.3 + (this.rand() - 0.5) * 0.6) / EDGE_LENGTH;
       const agent = spawnPed(bx, bz, edge, Math.max(0.01, Math.min(0.99, t + along)), this.rand);
-      if (this.rand() < 0.5) {
-        // ...some walking the other way round the block...
+      const clockwise = this.rand() < TOWARD_PLAYER_SHARE ? towardPlayer : !towardPlayer;
+      if (!clockwise) {
+        // ...walking either way round the block...
         agent.corner = edge;
         agent.clockwise = false;
       }

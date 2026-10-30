@@ -40,8 +40,8 @@ describe('input', () => {
     expect(input.consumeAction()).toBe(false);
     send('keydown', { code: 'KeyP' });
     send('keydown', { code: 'KeyP', repeat: true });
-    expect(input.consumePause()).toBe(true);
-    expect(input.consumePause()).toBe(false);
+    expect(input.consumePause()).toBe(1);
+    expect(input.consumePause()).toBe(0);
   });
 
   it('resetAll drops pending presses and held keys until they are pressed afresh', () => {
@@ -131,7 +131,7 @@ describe('input', () => {
     usePad(pad);
     pad.buttons[9].pressed = true;
     input.pollGamepad();
-    expect(input.consumePause()).toBe(true);
+    expect(input.consumePause()).toBe(1);
     pad.buttons[2].pressed = true; // X held through the pause
     input.resetAll();
     input.pollGamepad();
@@ -144,6 +144,19 @@ describe('input', () => {
     expect(input.fireHeld).toBe(true);
     expect(input.consumePunch()).toBe(true);
     expect(input.lastDevice).toBe('gamepad');
+  });
+
+  it('a pad connected after a reset counts the press that woke it', () => {
+    const { win } = fakeWindow();
+    const input = new Input(win);
+    usePad(null);
+    input.resetAll();
+    input.pollGamepad();
+    const pad = fakePad();
+    pad.buttons[9].pressed = true;
+    usePad(pad);
+    input.pollGamepad();
+    expect(input.consumePause()).toBe(1);
   });
 
   it('uses a rescaled radial deadzone on the stick', () => {

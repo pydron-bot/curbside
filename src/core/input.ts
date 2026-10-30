@@ -218,8 +218,10 @@ export class Input {
     g.handbrake = g.sprint = g.fireHeld = false;
     const pad = firstPad();
     if (!pad) {
-      // Disconnected mid-press: nothing may stay held.
+      // Disconnected mid-press: nothing may stay held. A pad that turns up
+      // later starts fresh (it's often woken by the very press that counts).
       this.padWasDown.fill(false);
+      this.padLatched.fill(false);
       return;
     }
     radialDeadzone(pad.axes[0] ?? 0, pad.axes[1] ?? 0, STICK_DEADZONE, this.stick);
@@ -301,9 +303,9 @@ export class Input {
     return this.drain('actionPresses') > 0;
   }
 
-  /** True once per pause toggle (P, Esc, gamepad Start). */
-  consumePause(): boolean {
-    return this.drain('pausePresses') > 0;
+  /** Pause toggles (P, Esc, gamepad Start) since the last call; two in one frame cancel out. */
+  consumePause(): number {
+    return this.drain('pausePresses');
   }
 
   /** True once per confirm press (gamepad A). */

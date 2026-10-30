@@ -372,6 +372,15 @@ function respawnPlayer() {
 
 // --- Simulation ---
 const obstacles: Obstacle[] = [];
+/** Obstacle records reused every step (one per car and ped). */
+const obstaclePool: Obstacle[] = [];
+function addObstacle(x: number, z: number, halfWidth: number) {
+  const o = obstaclePool[obstacles.length] ?? (obstaclePool[obstacles.length] = { x: 0, z: 0, halfWidth: 0 });
+  o.x = x;
+  o.z = z;
+  o.halfWidth = halfWidth;
+  obstacles.push(o);
+}
 const vehicleStates: Array<Vehicle['sim']> = [];
 const contact = { x: 0, z: 0 };
 
@@ -381,9 +390,9 @@ function simulate(dt: number) {
 
   // What AI drivers need to avoid this step.
   obstacles.length = 0;
-  for (const v of vehicles) obstacles.push({ x: v.sim.x, z: v.sim.z, halfWidth: 1 });
-  if (!driving) obstacles.push({ x: player.ped.x, z: player.ped.z, halfWidth: 0.4 });
-  for (const c of population.crowd) obstacles.push({ x: c.agent.s.x, z: c.agent.s.z, halfWidth: 0.4 });
+  for (const v of vehicles) addObstacle(v.sim.x, v.sim.z, 1);
+  if (!driving) addObstacle(player.ped.x, player.ped.z, 0.4);
+  for (const c of population.crowd) addObstacle(c.agent.s.x, c.agent.s.z, 0.4);
 
   for (const v of vehicles) {
     Object.assign(v.prev, v.sim);
@@ -715,7 +724,7 @@ function frame(now: number) {
   const frameSeconds = Math.min(0.25, (now - last) / 1000);
   last = now;
   input.pollGamepad();
-  if (input.consumePause() || (paused && input.consumeConfirm())) setPaused(!paused);
+  if (input.consumePause() % 2 === 1 || (paused && input.consumeConfirm())) setPaused(!paused);
   if (paused) return;
 
   const pressed = input.consumePunch();
@@ -770,11 +779,12 @@ function frame(now: number) {
   for (const v of vehicles) {
     if (Math.abs(v.sim.x - focus.x) > 120 || Math.abs(v.sim.z - focus.z) > 120) continue;
     const stage = damageStage(v.damage);
-    const hood = { x: v.sim.x + Math.sin(v.sim.heading) * 1.4, z: v.sim.z + Math.cos(v.sim.heading) * 1.4 };
-    if (stage === 'smoking' && rand() < frameSeconds * 14) effects.emitSmoke(hood.x, hood.z, 1.2, 0.2);
+    const hoodX = v.sim.x + Math.sin(v.sim.heading) * 1.4;
+    const hoodZ = v.sim.z + Math.cos(v.sim.heading) * 1.4;
+    if (stage === 'smoking' && rand() < frameSeconds * 14) effects.emitSmoke(hoodX, hoodZ, 1.2, 0.2);
     else if (stage === 'burning') {
-      if (rand() < frameSeconds * 45) effects.emitFire(hood.x, hood.z, 1.2);
-      if (rand() < frameSeconds * 16) effects.emitSmoke(hood.x, hood.z, 1.8, 0.9);
+      if (rand() < frameSeconds * 45) effects.emitFire(hoodX, hoodZ, 1.2);
+      if (rand() < frameSeconds * 16) effects.emitSmoke(hoodX, hoodZ, 1.8, 0.9);
     } else if (stage === 'wrecked' && v.wreckAge < 25) {
       v.wreckAge += frameSeconds;
       if (rand() < frameSeconds * 6) effects.emitSmoke(v.sim.x, v.sim.z, 1, 0.8);
