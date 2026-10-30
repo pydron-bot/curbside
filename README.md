@@ -474,7 +474,9 @@ are `src/game/modes/*Mode.ts`.
   pays. `Progress` (`game/progress.ts`) owns it: `earn`, `spend`, `charge`,
   bests, medals, unlocks, and lifetime stats counted off the bus.
 - **First run** (`game/tutorial.ts`): three pointers on the marker
-  prompt, one at a time, whenever nothing nearer to hand has a prompt:
+  prompt, one at a time, whenever nothing nearer to hand has a prompt
+  (on a phone, in a car only while it's stopped: the look-ahead puts a car
+  driving up the screen right under the pill, from 5 m/s on, `pointerWaits`):
   STEAL A CAR (in the device's words: E, Y, the door button) until you
   drive one; DRIFT · NEAR MISS · SMASH · JUMP — CHAINS BANK AS CASH until
   the first chain banks; ANSWER THE RINGING PAYPHONE with the radar routed

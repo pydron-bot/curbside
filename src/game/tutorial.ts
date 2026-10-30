@@ -48,3 +48,25 @@ const TEXT: Record<InputDevice, readonly string[]> = {
 export function tutorialText(step: number, device: InputDevice): string | null {
   return step < TUTORIAL_DONE ? (TEXT[device][step] ?? null) : null;
 }
+
+/** Once the car is moving faster than this the pointer waits (m/s)... */
+export const POINTER_HIDE_SPEED = 3;
+/** ...until it has (nearly) stopped again (hysteresis: no blinking at the line). */
+export const POINTER_SHOW_SPEED = 1.5;
+
+/**
+ * Should the pointer wait for now? On a phone the prompt pill sits low on
+ * the screen, where the camera's look-ahead puts the car whenever it drives
+ * up the screen (measured at 852×393: under the pill from 5 m/s on), and a
+ * pointer stays up for a whole first session: it would hide the player's
+ * own car. So in a car it shows while stopped (the car sits mid-screen,
+ * clear of it) and waits while moving. `waiting` is the last answer,
+ * `carSpeed` null on foot. Marker prompts aren't affected (they're brief,
+ * and you slow down for them).
+ */
+export function pointerWaits(waiting: boolean, carSpeed: number | null): boolean {
+  if (carSpeed === null) return false;
+  if (carSpeed > POINTER_HIDE_SPEED) return true;
+  if (carSpeed < POINTER_SHOW_SPEED) return false;
+  return waiting;
+}

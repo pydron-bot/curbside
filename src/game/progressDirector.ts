@@ -15,6 +15,7 @@ import type { ColorRepresentation, Scene } from 'three';
 import { createVehicleState, type VehicleArchetype } from '../entities/vehicle';
 import type { GlowSprites } from '../render/glowSprites';
 import { MARK, ProgressProps, beacon, chevrons, groundRing, nearView } from '../render/progressLook';
+import { getDevice } from '../render/quality';
 import { worldUniforms } from '../render/shaderLib';
 import type { Panel } from '../ui/menu';
 import { ProgressHud } from '../ui/progressHud';
@@ -46,7 +47,7 @@ import { Progress, bustFine, hospitalBill } from './progress';
 import { ChainBank, chainLive } from './progressBank';
 import { pruneSave } from './progressSave';
 import { TAXI_GOAL, completion } from './progressStats';
-import { TUTORIAL_DONE, advanceTutorial, tutorialText, type TutorialEvent } from './tutorial';
+import { TUTORIAL_DONE, advanceTutorial, pointerWaits, tutorialText, type TutorialEvent } from './tutorial';
 
 /** Stand on the safehouse door this long to open the shop, s. */
 const SHOP_HOLD = 0.4;
@@ -93,6 +94,8 @@ export class ProgressDirector implements ModeCtx {
   private homeBlip = false;
   /** The first-run pointer has the radar routing to the ringing phone. */
   private tutorialRoute = false;
+  /** On a phone, the first-run pointer is waiting for the car to stop (tutorial.ts pointerWaits). */
+  private pointerWaiting = false;
 
   constructor(d: DirectorDeps) {
     this.deps = d;
@@ -289,8 +292,10 @@ export class ProgressDirector implements ModeCtx {
     if (!this.blocksInput) {
       if (this.nearShop && this.freeRoam && !this.busy) prompt = 'SAFEHOUSE SHOP · STEP ON THE DOOR';
       for (let i = 0; i < this.modes.length && prompt === null; i++) prompt = this.modes[i].prompt();
-      // Nothing nearer to hand: the first run's next pointer.
-      if (prompt === null && this.freeRoam && !this.busy && this.live) prompt = tutorialText(this.progress.data.tutorial, this.deps.input.lastDevice);
+      // Nothing nearer to hand: the first run's next pointer (on a phone, not over a moving car).
+      const car = this.deps.player.driving;
+      this.pointerWaiting = getDevice().handheld && pointerWaits(this.pointerWaiting, car ? Math.hypot(car.sim.vx, car.sim.vz) : null);
+      if (prompt === null && this.freeRoam && !this.busy && this.live && !this.pointerWaiting) prompt = tutorialText(this.progress.data.tutorial, this.deps.input.lastDevice);
     }
     ui.prompt(prompt);
     this.sprayNotice();

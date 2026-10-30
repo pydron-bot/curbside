@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TUTORIAL_DONE, advanceTutorial, tutorialText } from '../src/game/tutorial';
+import { POINTER_HIDE_SPEED, POINTER_SHOW_SPEED, TUTORIAL_DONE, advanceTutorial, pointerWaits, tutorialText } from '../src/game/tutorial';
 
 describe('first-run pointers', () => {
   it('steal a car, bank a chain, answer the phone, in that order', () => {
@@ -28,5 +28,16 @@ describe('first-run pointers', () => {
     expect(tutorialText(1, 'keyboard')).toContain('BANK AS CASH');
     expect(tutorialText(2, 'touch')).toContain('PAYPHONE');
     expect(tutorialText(TUTORIAL_DONE, 'touch')).toBeNull();
+  });
+
+  it('waits while the car is moving (it would sit over the car on a phone), with hysteresis', () => {
+    expect(pointerWaits(true, null)).toBe(false); // on foot: always shown
+    expect(pointerWaits(false, 0)).toBe(false); // stopped: the car sits mid-screen
+    expect(pointerWaits(false, POINTER_HIDE_SPEED + 1)).toBe(true);
+    // Between the two lines it keeps its last answer: no blinking at a steady speed.
+    const mid = (POINTER_HIDE_SPEED + POINTER_SHOW_SPEED) / 2;
+    expect(pointerWaits(true, mid)).toBe(true);
+    expect(pointerWaits(false, mid)).toBe(false);
+    expect(pointerWaits(true, POINTER_SHOW_SPEED - 1)).toBe(false);
   });
 });
