@@ -217,6 +217,29 @@ The code side will wire these in by name when they land, falling back to
 today's stand-ins until then. Badge on the cop: the code side will add a
 sixth fixed-colour slot so `*_badge` works; until then leave it out.
 
+## 9. Two-wheelers (code side adds the physics)
+
+The code side is adding bike handling (lean into turns, quick acceleration,
+low health, rider thrown off in a hard crash), so the models can be built
+now against this contract:
+
+- **`scooter`** (civilian, ~1.8 m long, 0.7 m wide) and **`cop_bike`** (police
+  motorbike, ~2.2 m, `siren_red` / `siren_blue` lights front and back) as new
+  roots in `vehicles.glb`, with the usual car contract (`paint`, `trim`,
+  `tyre`, `headlight`, `taillight` material names; origin on the ground at the
+  centre; nose toward game +Z). ≤ 600 tris each.
+- **Wheels:** name the front wheel `<arch>_wheel_FL` (one wheel on the centre
+  line; the existing loader already steers anything matching `_wheel_F[LR]`)
+  and the rear `<arch>_wheel_RL`. Origins at the hubs.
+- **No rider in the model.** The rider is a normal character from the
+  character batch, placed on the seat by the game. Add an empty named
+  `<arch>_seat` at the hips position so the game knows where to put them.
+- **Clip `Ride`** (1 s loop, in every character GLB): seated with the hips at
+  the seat height of a scooter (~0.75 m), hands forward on the bars, feet on
+  the deck. Barely moving, a slight sway is enough. The game leans the whole
+  bike and rider together by rolling the root, so don't lean in the clip.
+- Optional: `cop_bike` saddlebags in `trim`, and a windscreen in `glass`.
+
 ---
 
 ### Notes back to the code side
