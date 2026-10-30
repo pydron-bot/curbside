@@ -30,7 +30,8 @@ export const RACES: readonly RaceDef[] = [
   {
     id: 'race-oldtown',
     name: 'OLD TOWN SCRAMBLE',
-    nodes: [[-2, -2], [-2, -5], [-4, -5], [-4, -3], [-6, -3], [-6, -6], [-3, -6], [-3, -7], [-7, -7]],
+    // Up x = -5, not -6: a stunt ramp faces south on -6 just short of (-6, -6), its solid back to the race.
+    nodes: [[-2, -2], [-2, -5], [-4, -5], [-4, -3], [-5, -3], [-5, -6], [-2, -6], [-2, -7], [-7, -7]],
   },
   {
     id: 'race-arts',
