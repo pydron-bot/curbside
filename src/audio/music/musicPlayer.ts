@@ -19,6 +19,8 @@ const KEYS_LEVEL = 0.2;
 const ARP_LEVEL = 0.1;
 const BASS_LEVEL = 0.17;
 const LEAD_LEVEL = 0.1;
+/** Paused, the music drops back to this fraction of the station's trim. */
+const PAUSE_TRIM = 0.6;
 
 export class MusicPlayer {
   readonly arranger: Arranger;
@@ -34,6 +36,7 @@ export class MusicPlayer {
   private running = false;
   /** Faded out by setMode('off'), waiting to come back. */
   private off = false;
+  private paused = false;
   private readonly duckDip = new Dip(1);
 
   private readonly duckGain: GainNode;
@@ -250,9 +253,10 @@ export class MusicPlayer {
 
   /** Paused: the music drops back and goes muffled, like it's in the next room. */
   setPaused(paused: boolean): void {
+    this.paused = paused;
     const now = this.ctx.currentTime;
     this.pauseLp.frequency.setTargetAtTime(paused ? 650 : 20000, now, paused ? 0.08 : 0.15);
-    this.trim.gain.setTargetAtTime(this.sound.trim * (paused ? 0.6 : 1), now, 0.1);
+    this.trim.gain.setTargetAtTime(this.sound.trim * (paused ? PAUSE_TRIM : 1), now, 0.1);
   }
 
   dispose(): void {
@@ -266,7 +270,7 @@ export class MusicPlayer {
 
   private applySound(s: StationSound, t: number): void {
     this.sound = s;
-    this.trim.gain.setTargetAtTime(s.trim, t, 0.05);
+    this.trim.gain.setTargetAtTime(s.trim * (this.paused ? PAUSE_TRIM : 1), t, 0.05);
     this.bassA.type = s.bass === 'round' ? 'triangle' : 'sawtooth';
     this.bassB.type = s.bass === 'saw' ? 'square' : s.bass === 'reese' ? 'sawtooth' : 'sine';
     this.bassB.detune.setValueAtTime(s.bass === 'reese' ? 22 : 0, t);
