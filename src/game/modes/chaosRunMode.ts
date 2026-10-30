@@ -13,7 +13,7 @@ import type { ResultsCard, ResultsData } from '../../ui/progressScreens';
 import { fmt } from '../../ui/scoreHud';
 import type { TitleMode } from '../../ui/titleScreen';
 import type { Vehicle } from '../population';
-import { CHAOS_CATEGORIES, CHAOS_RUN_ID, CHAOS_RUN_SECONDS, ChaosRun, FINAL_COUNT, chaosMedal, nextMedal, type ChaosEnd } from './chaosRun';
+import { CHAOS_CATEGORIES, CHAOS_MEDALS, CHAOS_RUN_ID, CHAOS_RUN_SECONDS, ChaosRun, FINAL_COUNT, chaosMedal, nextMedal, type ChaosEnd } from './chaosRun';
 import type { Mode, ModeCtx } from './context';
 
 const PAINTS = ['#e8b923', '#ff2e88', '#2ee6ff', '#ff6a3d', '#3ddc84', '#f6f1e4'];
@@ -23,6 +23,13 @@ const FREEZE_SECONDS = 1.1;
 /** ...and the results come up this long after time's up. */
 const RESULTS_AFTER = 1.6;
 const MEDAL_WORD = { bronze: 'BRONZE', silver: 'SILVER', gold: 'GOLD' } as const;
+/** The card's goal line by medal reached (none, bronze, silver, gold), built once. */
+const GOALS = [
+  `BRONZE AT ${fmt(CHAOS_MEDALS.bronze)}`,
+  `SILVER AT ${fmt(CHAOS_MEDALS.silver)}`,
+  `GOLD AT ${fmt(CHAOS_MEDALS.gold)}`,
+  'GOLD! KEEP GOING',
+];
 
 type Phase = 'off' | 'countdown' | 'live' | 'ending' | 'results';
 
@@ -156,8 +163,8 @@ export class ChaosRunMode implements Mode {
     if (!run || this.phase === 'off' || this.phase === 'results') return false;
     ui.activity('CHAOS RUN');
     ui.timer(this.phase === 'countdown' ? CHAOS_RUN_SECONDS : run.timeLeft, run.timeLeft <= FINAL_COUNT && this.phase === 'live');
-    const next = nextMedal(this.ctx.deps.score.total);
-    ui.goal(next ? `${MEDAL_WORD[next.medal]} AT ${fmt(next.at)}` : 'GOLD! KEEP GOING');
+    const score = this.ctx.deps.score.total;
+    ui.goal(GOALS[score >= CHAOS_MEDALS.gold ? 3 : score >= CHAOS_MEDALS.silver ? 2 : score >= CHAOS_MEDALS.bronze ? 1 : 0]);
     return true;
   }
 

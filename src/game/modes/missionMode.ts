@@ -22,7 +22,7 @@ import type { BlipOptions } from '../../ui/radar';
 import { fmt } from '../../ui/scoreHud';
 import { BLOCK_SIZE, type Rect } from '../../world/city';
 import type { CrowdPed, Vehicle } from '../population';
-import type { Mode, ModeCtx } from './context';
+import { KeyedText, type Mode, type ModeCtx } from './context';
 import { SAFEHOUSE, placePayphones, type Spot } from './places';
 
 /** Answering: on foot this close, or stopped in a car this close, m. */
@@ -34,11 +34,15 @@ const RING_EVERY = 2.4;
 const PROMPT_RANGE = 16;
 /** People a job needs appear when you're this close to their spot, m. */
 const MATERIALISE = 60;
+/** Radar ids for a collect step's points. */
+const COLLECT_IDS = Array.from({ length: 16 }, (_, i) => `m-c${i}`);
 /** Hostile targets turn on you this close, m. */
 const HOSTILE_RANGE = 18;
 
 interface MissionCar {
   tag: string;
+  /** Its radar blip id. */
+  blipId: string;
   v: Vehicle;
   /** What the engine reads (refreshed on each query). */
   view: { x: number; z: number; wrecked: boolean };
@@ -46,6 +50,7 @@ interface MissionCar {
 
 interface MissionPed {
   tag: string;
+  blipId: string;
   x: number;
   z: number;
   shirt: string;
@@ -66,6 +71,12 @@ export class MissionMode implements Mode {
   private run: MissionRun | null = null;
   private readonly cars = new Map<string, MissionCar>();
   private readonly peds = new Map<string, MissionPed>();
+  /** The same, as arrays: per-step loops without iterator garbage. */
+  private readonly carList: MissionCar[] = [];
+  private readonly pedList: MissionPed[] = [];
+  private readonly goal = new KeyedText();
+  /** A one-tag list for marking an 'enter' step's car (reused). */
+  private readonly oneTag: string[] = [''];
   /** Radar blips this mission put up (removed when it ends or moves on). */
   private readonly blips = new Set<string>();
   private readonly blipOpts: BlipOptions = { x: 0, z: 0, kind: 'objective', size: 6, pulse: true, edgeArrow: true, icon: '' };
@@ -184,6 +195,7 @@ export class MissionMode implements Mode {
   private begin(m: MissionDef): void {
     const ctx = this.ctx;
     this.run = new MissionRun(m);
+    this.goal.reset();
     ctx.busy = 'mission';
     if (m.hour !== undefined) {
       const time = ctx.deps.look.time;
@@ -242,12 +254,14 @@ export class MissionMode implements Mode {
     if (ctx.busy === 'mission') ctx.busy = null;
     this.clearBlips();
     ctx.deps.radar.clearWaypoint();
-    for (const c of this.cars.values()) ctx.unpin(c.v);
+    for (const c of this.carList) ctx.unpin(c.v);
     this.cars.clear();
-    for (const m of this.peds.values()) {
+    this.carList.length = 0;
+    for (const m of this.pedList) {
       if (m.ped && ctx.deps.population.crowd.includes(m.ped) && m.ped.agent.mode === 'arrest') resumeWalking(m.ped.agent);
     }
     this.peds.clear();
+    this.pedList.length = 0;
     if (this.savedClock !== null) {
       ctx.deps.look.time.speed = this.savedClock;
       this.savedClock = null;
@@ -263,12 +277,15 @@ export class MissionMode implements Mode {
       switch (a.do) {
         case 'spawnCar': {
           const v = ctx.spawnCar(a.archetype, a.paint, a.x, a.z, a.heading);
-          this.cars.set(a.tag, { tag: a.tag, v, view: { x: a.x, z: a.z, wrecked: false } });
+          const car: MissionCar = { tag: a.tag, blipId: `m-${a.tag}`, v, view: { x: a.x, z: a.z, wrecked: false } };
+          this.cars.set(a.tag, car);
+          this.carList.push(car);
           break;
         }
         case 'spawnPed':
-          this.peds.set(a.tag, {
+          const ped: MissionPed = {
             tag: a.tag,
+            blipId: `m-${a.tag}`,
             x: a.x,
             z: a.z,
             shirt: a.shirt ?? '#e5e5e5',
@@ -279,7 +296,9 @@ export class MissionMode implements Mode {
             aboard: false,
             view: { x: a.x, z: a.z, down: false },
             wave: 0,
-          });
+          };
+          this.peds.set(a.tag, ped);
+          this.pedList.push(ped);
           break;
         case 'wanted':
           heat.wanted.force(a.stars);
@@ -324,7 +343,7 @@ export class MissionMode implements Mode {
     v.z = at.z;
     v.inCar = car !== null && !car.damage.wrecked;
     v.carTag = null;
-    if (car) for (const c of this.cars.values()) if (c.v === car) v.carTag = c.tag;
+    if (car) for (const c of this.carList) if (c.v === car) v.carTag = c.tag;
     v.carArchetype = car ? (car.archetype as VehicleArchetype) : null;
     v.carHealth = car ? car.damage.health / car.damage.maxHealth : 0;
     v.speed = Math.hypot(at.vx, at.vz);
@@ -336,7 +355,7 @@ export class MissionMode implements Mode {
     const ctx = this.ctx;
     const pop = ctx.deps.population;
     const at = ctx.deps.player.position;
-    for (const m of this.peds.values()) {
+    for (const m of this.pedList) {
       if (m.aboard || m.down) continue;
       if (m.ped && !pop.crowd.includes(m.ped)) {
         // Recycled out of sight: they'll be back where they were.
@@ -400,7 +419,7 @@ export class MissionMode implements Mode {
         if (!m) break;
         const x = m.ped ? m.ped.agent.s.x : m.x;
         const z = m.ped ? m.ped.agent.s.z : m.z;
-        this.point(`m-${s.tag}`, x, z, s.kind === 'knockOut' ? 'enemy' : 'objective', '');
+        this.point(m.blipId, x, z, s.kind === 'knockOut' ? 'enemy' : 'objective', '');
         if (!m.ped) radar.setWaypoint(x, z);
         else radar.clearWaypoint();
         break;
@@ -409,13 +428,13 @@ export class MissionMode implements Mode {
         for (const tag of s.tags) {
           const c = this.cars.get(tag);
           if (c && !c.v.damage.wrecked) this.carBlip(tag, 'enemy');
-          else this.drop(`m-${tag}`);
+          else if (c) this.drop(c.blipId);
         }
         break;
       case 'collect':
         for (let i = 0; i < s.points.length; i++) {
-          if (run.collected[i]) this.drop(`m-c${i}`);
-          else this.point(`m-c${i}`, s.points[i][0], s.points[i][1], 'objective', '');
+          if (run.collected[i]) this.drop(COLLECT_IDS[i]);
+          else this.point(COLLECT_IDS[i], s.points[i][0], s.points[i][1], 'objective', '');
         }
         break;
       case 'race': {
@@ -433,7 +452,7 @@ export class MissionMode implements Mode {
 
   private carBlip(tag: string, kind: 'objective' | 'enemy'): void {
     const c = this.cars.get(tag);
-    if (c) this.point(`m-${tag}`, c.v.sim.x, c.v.sim.z, kind, '');
+    if (c) this.point(c.blipId, c.v.sim.x, c.v.sim.z, kind, '');
   }
 
   private point(id: string, x: number, z: number, kind: 'objective' | 'enemy' | 'race', icon: string): void {
@@ -473,14 +492,20 @@ export class MissionMode implements Mode {
     ui.activity(run.def.title);
     if (s.kind === 'survive') ui.timer(Math.max(0, s.seconds - run.stepTime), false, 0);
     else ui.timer(run.timeLeft, run.timeLeft !== null && run.timeLeft <= 10, 0);
-    ui.goal(this.goalText(run, s));
+    // The step's text, with a count for the steps that have one; rebuilt when either changes.
+    let n = 0;
+    if (s.kind === 'collect') for (const got of run.collected) n += got ? 1 : 0;
+    else if (s.kind === 'destroy') n = run.destroyed;
+    else if (s.kind === 'race') n = run.next;
+    if (this.goal.stale(run.index * 1000 + n)) this.goal.text = this.goalText(s, n);
+    ui.goal(this.goal.text);
     return true;
   }
 
-  private goalText(run: MissionRun, s: MissionStep): string {
-    if (s.kind === 'collect') return `${s.text} · ${run.collected.filter(Boolean).length}/${s.points.length}`;
-    if (s.kind === 'destroy') return `${s.text} · ${run.destroyed}/${s.tags.length}`;
-    if (s.kind === 'race') return `${s.text} · ${run.next}/${s.nodes.length}`;
+  private goalText(s: MissionStep, n: number): string {
+    if (s.kind === 'collect') return `${s.text} · ${n}/${s.points.length}`;
+    if (s.kind === 'destroy') return `${s.text} · ${n}/${s.tags.length}`;
+    if (s.kind === 'race') return `${s.text} · ${n}/${s.nodes.length}`;
     return s.text;
   }
 
@@ -539,7 +564,11 @@ export class MissionMode implements Mode {
       }
       case 'enter':
       case 'destroy': {
-        const tags = s.kind === 'destroy' ? s.tags : s.tag ? [s.tag] : [];
+        let tags: readonly string[] = s.kind === 'destroy' ? s.tags : [];
+        if (s.kind === 'enter' && s.tag) {
+          this.oneTag[0] = s.tag;
+          tags = this.oneTag;
+        }
         for (const tag of tags) {
           const car = this.cars.get(tag)?.v;
           if (!car || car.damage.wrecked || !nearView(car.sim.x, car.sim.z, view)) continue;

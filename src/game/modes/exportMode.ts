@@ -14,7 +14,7 @@ import { fmt } from '../../ui/scoreHud';
 import type { City, Rect } from '../../world/city';
 import { inShop, type SprayShop } from '../../world/landmarks';
 import type { Vehicle } from '../population';
-import type { Mode, ModeCtx } from './context';
+import { KeyedText, type Mode, type ModeCtx } from './context';
 import { EXPORT_MIN_HEALTH, LIST_BONUS, exportList, exportPayout, openOrderFor, type ExportOrder } from './exports';
 import { placeDocks } from './places';
 
@@ -24,10 +24,13 @@ const STOP_SPEED = 3;
 /** The car is craned away this long after the sale, s. */
 const TAKE_AFTER = 1.4;
 const PROMPT_RANGE = 22;
+/** Why the buyer won't take a car (prompt lines). */
+const REFUSALS = ['NOT ON THE LIST', 'LOSE THE HEAT FIRST', `TOO DAMAGED · NEEDS ${Math.round(EXPORT_MIN_HEALTH * 100)}%`] as const;
 
 export class ExportMode implements Mode {
   readonly docks: SprayShop;
   private list: ExportOrder[];
+  private listNo = 0;
   private held = 0;
   /** The car just sold, taken away shortly. */
   private sold: Vehicle | null = null;
@@ -35,7 +38,8 @@ export class ExportMode implements Mode {
   /** The wanted car being driven (for the radar), if any. */
   private wanted: ExportOrder | null = null;
   private blip = '';
-  private refused = '';
+  private refused: (typeof REFUSALS)[number] | '' = '';
+  private readonly promptText = new KeyedText();
 
   constructor(
     private readonly ctx: ModeCtx,
@@ -43,6 +47,7 @@ export class ExportMode implements Mode {
   ) {
     this.docks = placeDocks(city);
     this.list = exportList(ctx.progress.data.exports.lists);
+    this.listNo = ctx.progress.data.exports.lists;
     ctx.deps.bus.on('enterVehicle', () => {
       if (!ctx.freeRoam) return;
       const v = ctx.deps.player.driving;
@@ -86,9 +91,9 @@ export class ExportMode implements Mode {
     }
     const order = this.wanted;
     const health = car.damage.health / car.damage.maxHealth;
-    if (!order) this.refused = 'NOT ON THE LIST';
-    else if (ctx.deps.heat.wanted.level > 0) this.refused = 'LOSE THE HEAT FIRST';
-    else if (health < EXPORT_MIN_HEALTH) this.refused = `TOO DAMAGED · NEEDS ${Math.round(EXPORT_MIN_HEALTH * 100)}%`;
+    if (!order) this.refused = REFUSALS[0];
+    else if (ctx.deps.heat.wanted.level > 0) this.refused = REFUSALS[1];
+    else if (health < EXPORT_MIN_HEALTH) this.refused = REFUSALS[2];
     if (this.refused || (this.held += dt) < HOLD) return;
     this.held = 0;
     this.deliver(car, order!, health);
@@ -112,6 +117,7 @@ export class ExportMode implements Mode {
       save.exports.lists++;
       save.exports.done = [];
       this.list = exportList(save.exports.lists);
+      this.listNo = save.exports.lists;
     }
     ctx.progress.markDirty();
     ctx.progress.flush();
@@ -124,13 +130,21 @@ export class ExportMode implements Mode {
   prompt(): string | null {
     const ctx = this.ctx;
     if (!ctx.freeRoam || ctx.busy === 'mission') return null;
-    if (this.refused) return `DOCKS EXPORTS · ${this.refused}`;
     const at = ctx.deps.player.position;
-    if (Math.hypot(at.x - this.docks.x, at.z - this.docks.z) > PROMPT_RANGE) return null;
-    if (this.wanted) return `DOCKS EXPORTS · STOP IN THE BAY TO SELL THE ${this.wanted.label.replace(/^(A|ANY) /, '')}`;
+    if (!this.refused && Math.hypot(at.x - this.docks.x, at.z - this.docks.z) > PROMPT_RANGE) return null;
+    // Rebuilt only when what it says changes.
     const done = ctx.progress.data.exports.done;
-    const open = this.list.filter((o) => !done.includes(o.id)).slice(0, 3).map((o) => o.label);
-    return `DOCKS EXPORTS ${done.length}/${this.list.length} · WANTED: ${open.join(', ')}`;
+    const key = (this.refused ? 1 + REFUSALS.indexOf(this.refused) : 0) * 1000 + (this.wanted ? 1 + this.list.indexOf(this.wanted) : 0) * 100 + done.length + this.listNo * 10000;
+    const p = this.promptText;
+    if (p.stale(key)) {
+      if (this.refused) p.text = `DOCKS EXPORTS · ${this.refused}`;
+      else if (this.wanted) p.text = `DOCKS EXPORTS · STOP IN THE BAY TO SELL THE ${this.wanted.label.replace(/^(A|ANY) /, '')}`;
+      else {
+        const open = this.list.filter((o) => !done.includes(o.id)).slice(0, 3).map((o) => o.label);
+        p.text = `DOCKS EXPORTS ${done.length}/${this.list.length} · WANTED: ${open.join(', ')}`;
+      }
+    }
+    return p.text;
   }
 
   glow(g: GlowSprites, _props: ProgressProps, view: Rect, t: number): void {

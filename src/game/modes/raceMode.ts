@@ -14,7 +14,7 @@ import type { Rect } from '../../world/city';
 import { dirHeading } from '../../world/roads';
 import type { Vehicle } from '../population';
 import type { Medal } from '../progressSave';
-import type { Mode, ModeCtx } from './context';
+import { KeyedText, type Mode, type ModeCtx } from './context';
 import { MEDAL_FACTORS, MEDAL_PAY, RACES, RaceRun, START_RADIUS, formatRaceTime, legDir, nodeX, nodeZ, raceMedal, startGrid, type RaceDef } from './races';
 
 /** Out of the car this long and the race is off, s. */
@@ -33,6 +33,9 @@ export class RaceMode implements Mode {
   private blipsOn = false;
   /** The car the race started in: wreck it and the race is over. */
   private car: Vehicle | null = null;
+  private readonly goal = new KeyedText();
+  private readonly promptText = new KeyedText();
+  private gold = '';
 
   constructor(private readonly ctx: ModeCtx) {
     for (const r of RACES) this.armed.set(r.id, true);
@@ -107,6 +110,8 @@ export class RaceMode implements Mode {
     Object.assign(car.prev, car.sim);
     ctx.deps.rig.snapTo(g.x, g.z);
     this.run = new RaceRun(def);
+    this.gold = formatRaceTime(this.run.dev * MEDAL_FACTORS.gold);
+    this.goal.reset();
     this.car = car;
     this.shownCount = 0;
     this.outOfCar = 0;
@@ -161,8 +166,10 @@ export class RaceMode implements Mode {
     const ui = this.ctx.ui;
     ui.activity(run.def.name);
     ui.timer(run.time, false, Infinity);
-    const gold = formatRaceTime(run.dev * MEDAL_FACTORS.gold);
-    ui.goal(this.outOfCar > 0 ? `GET BACK IN THE CAR · ${Math.ceil(OUT_OF_CAR - this.outOfCar)}` : `CHECKPOINT ${run.passed}/${run.checkpoints} · GOLD ${gold}`);
+    const back = this.outOfCar > 0 ? Math.ceil(OUT_OF_CAR - this.outOfCar) : 0;
+    const g = this.goal;
+    if (g.stale(run.passed * 100 + back)) g.text = back ? `GET BACK IN THE CAR · ${back}` : `CHECKPOINT ${run.passed}/${run.checkpoints} · GOLD ${this.gold}`;
+    ui.goal(g.text);
     return true;
   }
 
@@ -170,8 +177,13 @@ export class RaceMode implements Mode {
     const def = this.near;
     if (!def || this.run || this.ctx.busy) return null;
     const best = this.ctx.progress.data.raceTimes[def.id];
-    const tail = best !== undefined ? ` · BEST ${formatRaceTime(best)}` : '';
-    return this.ctx.deps.player.driving ? `RACE · ${def.name} · DRIVE ONTO THE LINE${tail}` : `RACE · ${def.name} · NEEDS A CAR${tail}`;
+    const driving = this.ctx.deps.player.driving !== null;
+    const p = this.promptText;
+    if (p.stale(RACES.indexOf(def) * 2 + (driving ? 1 : 0) + (best ?? 0) * 100)) {
+      const tail = best !== undefined ? ` · BEST ${formatRaceTime(best)}` : '';
+      p.text = driving ? `RACE · ${def.name} · DRIVE ONTO THE LINE${tail}` : `RACE · ${def.name} · NEEDS A CAR${tail}`;
+    }
+    return p.text;
   }
 
   glow(g: GlowSprites, _props: ProgressProps, view: Rect, t: number): void {

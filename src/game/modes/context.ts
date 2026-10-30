@@ -25,6 +25,26 @@ import type { Player } from '../player';
 import type { Population, Vehicle } from '../population';
 import type { Progress } from '../progress';
 
+/**
+ * HUD text rebuilt only when what it shows changes: the per-frame HUD code
+ * asks stale(key) with a number standing for the content, and builds the
+ * string only then (no garbage per frame while nothing visible changes).
+ */
+export class KeyedText {
+  text = '';
+  private key: number | null = null;
+
+  stale(key: number): boolean {
+    if (key === this.key) return false;
+    this.key = key;
+    return true;
+  }
+
+  reset(): void {
+    this.key = null;
+  }
+}
+
 /** The game objects the progress director needs (main.ts hands these over). */
 export interface ProgressDeps {
   bus: EventBus;

@@ -10,7 +10,7 @@ import type { GlowSprites } from '../../render/glowSprites';
 import { MARK, beacon, groundRing, nearView, type ProgressProps } from '../../render/progressLook';
 import { fmt } from '../../ui/scoreHud';
 import type { Rect } from '../../world/city';
-import type { Mode, ModeCtx } from './context';
+import { KeyedText, type Mode, type ModeCtx } from './context';
 import { FRENZIES, FRENZY_PAY, FRENZY_REPLAY, FrenzyRun, type FrenzyDef } from './frenzies';
 import { placeFrenzyTokens, type Spot } from './places';
 
@@ -26,6 +26,9 @@ interface Token {
   def: FrenzyDef;
   spot: Spot;
   armed: boolean;
+  /** Its prompt, on foot and in a car (built once). */
+  prompt: string;
+  promptOnFoot: string;
 }
 
 export class FrenzyMode implements Mode {
@@ -35,10 +38,14 @@ export class FrenzyMode implements Mode {
   private shownCount = 0;
   private near: Token | null = null;
   private blipsOn = false;
+  private readonly goal = new KeyedText();
 
   constructor(private readonly ctx: ModeCtx) {
     const spots = placeFrenzyTokens();
-    this.tokens = FRENZIES.map((def) => ({ def, spot: spots.find((s) => s.id === def.id)!, armed: true }));
+    this.tokens = FRENZIES.map((def) => {
+      const prompt = `FRENZY · ${def.title} IN ${def.seconds} S`;
+      return { def, spot: spots.find((s) => s.id === def.id)!, armed: true, prompt, promptOnFoot: def.needsCar ? `${prompt} · NEEDS A CAR` : prompt };
+    });
     const bus = ctx.deps.bus;
     bus.onAny((e) => {
       const run = this.run;
@@ -102,6 +109,7 @@ export class FrenzyMode implements Mode {
 
   private begin(t: Token): void {
     this.token = t;
+    this.goal.reset();
     this.run = new FrenzyRun(t.def);
     this.shownCount = 0;
     this.ctx.busy = 'frenzy';
@@ -137,15 +145,18 @@ export class FrenzyMode implements Mode {
     ui.activity('FRENZY');
     ui.timer(run.phase === 'countdown' ? run.def.seconds : run.timeLeft, run.phase === 'live' && run.timeLeft <= 10, 0);
     const d = run.def;
-    ui.goal(d.goal === 'drift' ? `DRIFT ${fmt(Math.floor(run.count))} / ${fmt(d.target)}` : d.goal === 'combo' ? `${d.title} · ×${Math.max(1, run.count)}` : `${d.title} · ${run.count}/${d.target}`);
+    const g = this.goal;
+    if (g.stale(Math.floor(run.count))) {
+      g.text = d.goal === 'drift' ? `DRIFT ${fmt(Math.floor(run.count))} / ${fmt(d.target)}` : d.goal === 'combo' ? `${d.title} · ×${Math.max(1, run.count)}` : `${d.title} · ${run.count}/${d.target}`;
+    }
+    ui.goal(g.text);
     return true;
   }
 
   prompt(): string | null {
     const t = this.near;
     if (!t || this.run || this.ctx.busy || !t.armed) return null;
-    const needsCar = t.def.needsCar && !this.ctx.deps.player.driving;
-    return `FRENZY · ${t.def.title} IN ${t.def.seconds} S${needsCar ? ' · NEEDS A CAR' : ''}`;
+    return this.ctx.deps.player.driving ? t.prompt : t.promptOnFoot;
   }
 
   glow(g: GlowSprites, props: ProgressProps, view: Rect, t: number): void {

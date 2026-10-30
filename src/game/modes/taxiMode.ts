@@ -14,7 +14,7 @@ import type { BlipOptions } from '../../ui/radar';
 import { fmt } from '../../ui/scoreHud';
 import { BLOCKS_PER_SIDE, type Rect } from '../../world/city';
 import type { CrowdPed, Vehicle } from '../population';
-import type { Mode, ModeCtx } from './context';
+import { KeyedText, type Mode, type ModeCtx } from './context';
 import { pavement } from './places';
 import { TRIP_RANGE, TaxiDuty, fareFor, type TaxiInput } from './taxi';
 
@@ -33,6 +33,8 @@ export class TaxiMode implements Mode {
   private wave = 0;
   private cab: Vehicle | null = null;
   /** The hailing fare's radar blip, moved with them (reused: no garbage per step). */
+  private readonly label = new KeyedText();
+  private readonly goal = new KeyedText();
   private readonly fareBlip: BlipOptions = { x: 0, z: 0, kind: 'objective', icon: 'T', size: 5.5, pulse: true, edgeArrow: true };
 
   constructor(private readonly ctx: ModeCtx) {
@@ -204,12 +206,16 @@ export class TaxiMode implements Mode {
     const d = this.duty;
     if (d.phase === 'off') return false;
     const ui = this.ctx.ui;
-    ui.activity(d.streak > 0 ? `TAXI · STREAK ${d.streak}` : 'TAXI');
+    if (this.label.stale(d.streak)) this.label.text = d.streak > 0 ? `TAXI · STREAK ${d.streak}` : 'TAXI';
+    ui.activity(this.label.text);
     if (d.phase === 'trip') {
       ui.timer(d.timeLeft, d.timeLeft <= 10, 0);
       const at = this.ctx.deps.player.position;
-      const left = Math.hypot(d.dest.x - at.x, d.dest.z - at.z);
-      ui.goal(`DROP-OFF ${Math.round(left)} M · $${fmt(fareFor(d.tripDist, d.timeLeft, d.timeTotal))}`);
+      // To the nearest 10 m, and the fare as it stands.
+      const left = Math.round(Math.hypot(d.dest.x - at.x, d.dest.z - at.z) / 10) * 10;
+      const fare = fareFor(d.tripDist, d.timeLeft, d.timeTotal);
+      if (this.goal.stale(left * 100000 + fare)) this.goal.text = `DROP-OFF ${left} M · $${fmt(fare)}`;
+      ui.goal(this.goal.text);
     } else {
       ui.timer(null);
       ui.goal(d.phase === 'cruising' ? 'ON DUTY · LOOK FOR A HAIL' : 'STOP BESIDE THE FARE');
