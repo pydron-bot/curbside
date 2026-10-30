@@ -91,7 +91,8 @@ export class MissionMode implements Mode {
   private armed = true;
   private near: Spot | null = null;
   private ringBlip = '';
-  private savedClock: number | null = null;
+  /** The clock before a job pinned it (MIDNIGHT EXPRESS): its speed, and the hour a failed job puts back. */
+  private savedClock: { speed: number; hour: number } | null = null;
   /** Waiting for the intro card to be dismissed. */
   private calling = false;
   private readonly view: MissionView;
@@ -217,7 +218,7 @@ export class MissionMode implements Mode {
     ctx.busy = 'mission';
     if (m.hour !== undefined) {
       const time = ctx.deps.look.time;
-      this.savedClock = time.speed;
+      this.savedClock = { speed: time.speed, hour: time.hour };
       time.set(m.hour);
       time.speed = 0;
     }
@@ -243,7 +244,7 @@ export class MissionMode implements Mode {
       case 'passed': {
         this.act(s.prev.done);
         const m = run.def;
-        this.finish();
+        this.finish(true);
         ctx.progress.complete('missions', m.id);
         this.nextJob = undefined;
         const paid = ctx.pay(m.reward, 'mission', 'MISSION');
@@ -267,8 +268,12 @@ export class MissionMode implements Mode {
     }
   }
 
-  /** The mission is over either way: tidy up its people, cars, markers and the clock. */
-  private finish(): void {
+  /**
+   * The mission is over either way: tidy up its people, cars, markers and the
+   * clock (a pass keeps the night it ran in; a fail or quit puts the hour back,
+   * so one failed attempt doesn't jump the city hours into the night).
+   */
+  private finish(passed = false): void {
     const ctx = this.ctx;
     this.run = null;
     this.calling = false;
@@ -283,7 +288,9 @@ export class MissionMode implements Mode {
     this.peds.clear();
     this.pedList.length = 0;
     if (this.savedClock !== null) {
-      ctx.deps.look.time.speed = this.savedClock;
+      const time = ctx.deps.look.time;
+      if (!passed) time.set(this.savedClock.hour);
+      time.speed = this.savedClock.speed;
       this.savedClock = null;
     }
     this.armed = false;
