@@ -380,6 +380,9 @@ export class Population {
     v.mesh.siren = false;
     v.mesh.root.visible = false;
     v.sim.vx = v.sim.vz = v.sim.yawRate = 0;
+    // Whoever borrows it next (police) places it by x/z/heading only: no jump or drift may carry over.
+    v.sim.y = v.sim.vy = v.sim.slide = v.sim.burnout = v.sim.launchTime = 0;
+    v.sim.airborne = false;
     this.spareVehicles.push(v);
   }
 

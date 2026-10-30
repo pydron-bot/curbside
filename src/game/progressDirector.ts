@@ -38,7 +38,7 @@ import { RaceMode } from './modes/raceMode';
 import { RACES, formatRaceTime } from './modes/races';
 import { SHOP_ITEMS, TOUGH_SKIN_HEALTH, canBuy, sprayPrice } from './modes/shop';
 import { TaxiMode } from './modes/taxiMode';
-import { MAX_HEALTH } from './player';
+import { MAX_ARMOUR, MAX_HEALTH } from './player';
 import type { Vehicle } from './population';
 import { Progress, bustFine, hospitalBill } from './progress';
 import { ChainBank, chainLive } from './progressBank';
@@ -374,7 +374,8 @@ export class ProgressDirector implements ModeCtx {
 
   private openShop(fromStreet = false): void {
     const progress = this.progress;
-    const owned = (id: string) => progress.has(id);
+    const player = this.deps.player;
+    const owned = (id: string) => (item(id).kind === 'armour' ? player.armour >= MAX_ARMOUR : progress.has(id));
     const item = (id: string) => SHOP_ITEMS.find((i) => i.id === id)!;
     if (fromStreet) this.openModal(this.shop);
     else this.deps.frontDoor.openPanel(this.shop);
@@ -389,6 +390,8 @@ export class ProgressDirector implements ModeCtx {
           if (it.kind === 'upgrade') {
             progress.unlock(it.id);
             this.applyUpgrades();
+          } else if (it.kind === 'armour') {
+            player.addArmour(MAX_ARMOUR);
           } else if (it.weapon) {
             const a = this.deps.player.arsenal;
             a.pickUp(it.weapon);

@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   ATTRIBUTION_SECONDS,
+  BLASTS,
   applyDamage,
+  crashDamage,
+  ignite,
+  landingDamage,
   blamesPlayer,
   blastDamage,
   createDamage,
@@ -13,8 +17,51 @@ import {
 
 describe('vehicle damage', () => {
   it('ignores gentle bumps but punishes real crashes', () => {
-    expect(impactDamage(3)).toBe(0);
-    expect(impactDamage(14)).toBeGreaterThan(40);
+    expect(impactDamage(5)).toBe(0);
+    expect(impactDamage(14)).toBeGreaterThan(20);
+    // A 28 m/s head-on into a wall leaves a sedan smoking, not burning.
+    const d = createDamage(100);
+    applyDamage(d, impactDamage(28));
+    expect(damageStage(d)).toBe('smoking');
+  });
+
+  it('a car survives a couple of solid crashes; real abuse sets it alight', () => {
+    const d = createDamage(100);
+    applyDamage(d, impactDamage(20));
+    applyDamage(d, impactDamage(20));
+    expect(damageStage(d)).toBe('smoking');
+    applyDamage(d, impactDamage(20));
+    expect(damageStage(d)).toBe('burning');
+  });
+
+  it('splits car-on-car damage: the rammer takes less, a head-on shares it', () => {
+    // 23.8 m/s head-on between two sedans: both smoking, neither on fire.
+    const each = crashDamage(23.8, 11.9, 11.9);
+    expect(each).toBeLessThan(100 * 0.42);
+    // Ramming a parked car: it takes the full hit, the rammer 40% of it.
+    const rammed = crashDamage(20, 0, 20);
+    const rammer = crashDamage(20, 20, 0);
+    expect(rammed).toBeCloseTo(impactDamage(20));
+    expect(rammer).toBeCloseTo(impactDamage(20) * 0.4);
+    // A 13 m/s shunt costs a sports car well under a third of its health.
+    expect(crashDamage(13, 0, 13) / 90).toBeLessThan(0.3);
+    // Heavier takes less.
+    expect(crashDamage(20, 10, 10, 1.6, 0.85)).toBeLessThan(crashDamage(20, 10, 10, 0.85, 1.6));
+  });
+
+  it('a blast close by sets a car alight on a short fuse', () => {
+    const d = createDamage(100);
+    ignite(d, 1.5);
+    expect(d.burning).toBe(true);
+    let t = 0;
+    while (!stepDamage(d, 1 / 60)) t += 1 / 60;
+    expect(t).toBeCloseTo(1.5, 1);
+  });
+
+  it('hard landings hurt, ordinary hops do not', () => {
+    expect(landingDamage(8)).toBe(0);
+    expect(landingDamage(16)).toBeGreaterThan(10);
+    expect(landingDamage(16)).toBeLessThan(25);
   });
 
   it('goes ok → smoking → burning → explodes → wrecked', () => {
@@ -58,9 +105,13 @@ describe('vehicle damage', () => {
   });
 
   it('blast damage falls off with distance', () => {
-    expect(blastDamage(0)).toBe(70);
-    expect(blastDamage(4.5)).toBeCloseTo(35);
+    expect(blastDamage(0)).toBe(85);
+    expect(blastDamage(4.5)).toBeCloseTo(42.5);
     expect(blastDamage(20)).toBe(0);
+    // Rockets hit hardest and furthest, grenades in between.
+    expect(BLASTS.rocket.carDamage).toBeGreaterThan(BLASTS.grenade.carDamage);
+    expect(BLASTS.grenade.carDamage).toBeGreaterThan(BLASTS.car.carDamage);
+    expect(BLASTS.rocket.radius).toBeGreaterThan(BLASTS.car.radius);
   });
 });
 

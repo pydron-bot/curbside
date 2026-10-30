@@ -8,7 +8,12 @@ const COLORS: Record<PickupKind, string> = {
   pistol: '#4fa3ff',
   smg: '#ffa040',
   shotgun: '#ff4d4d',
+  grenade: '#8fd14f',
+  molotov: '#ff7a1a',
+  rocket: '#d94dff',
   health: '#5be36a',
+  armour: '#3fd2ff',
+  ammo: '#ffd23f',
 };
 
 /**
@@ -40,7 +45,7 @@ export function createPickupMaterial(): MeshLambertMaterial {
 const GLOW_MARGIN = 4;
 
 /**
- * Weapon and health crates: glowing, colour-coded boxes that spin and bob
+ * Weapon, ammo, armour and health crates: glowing, colour-coded boxes that spin and bob
  * (one instanced draw call for all of them), each standing in a pulsing
  * light ring with a soft shaft of light so they read from 20–60 m up. The
  * ring and shaft are GlowSprites quads, drawn with every other glow.

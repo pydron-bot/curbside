@@ -31,11 +31,14 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Walk / run (on foot) | WASD / arrows, Shift sprints | left stick (appears under the thumb): push further to run | left stick, A sprints |
 | Aim (on foot) | mouse (crosshair cursor) | right half: drag the aim stick | right stick |
 | Punch / fire (hold for SMG) | left click, Space / J | FIRE button; push the aim stick past half-way; tap the right half | RT or X |
-| Switch weapon | wheel, right click, Q / Tab (Shift+Tab back) | ⇄ | RB / LB |
+| Throw a grenade / molotov | aim with the mouse (it lands at the cursor), click | aim stick (further = further), FIRE | right stick, RT / X |
+| Drive-by (pistol / SMG) | left click / J in a car | car FIRE button (inboard of the pedals) | X |
+| Switch weapon (also in a car) | wheel, right click, Q / Tab (Shift+Tab back) | ⇄ | RB / LB |
 | Enter / exit car | E / F / Enter | door button (pulses next to a car) | Y |
 | Steer | A/D, ←/→ | **Point** (default): stick = where to go, push further = more gas; **Classic**: stick left/right | left stick |
 | Gas / brake-reverse | W/S, ↑/↓ | pedal pad: GAS / BRAKE — slide between them without lifting | RT / LT |
-| Handbrake | Space | HAND, or the DRIFT band (GAS + HAND with one thumb) | A |
+| Handbrake (+ gas from a stop: burnout) | Space | HAND, or the DRIFT band (GAS + HAND with one thumb) | A |
+| Nitro | Shift in a car | NOS (fills the button) | B |
 | Pause | P / Esc | ❚❚ top centre (also automatic on app switch / portrait) | Start (B resumes) |
 | Menus | arrows + Enter, Esc / Backspace back | tap | D-pad / left stick + A, B back |
 | Next radio station | R | tap the "now playing" card | — |
@@ -76,16 +79,18 @@ vibration, show FPS.
   Car models are merged per material on load (~8 draw calls per car).
 - **Damage** (`src/systems/damage.ts`, `src/render/effects.ts`): crashes
   cost health (bar under the speedo); smoking → burning → explosion →
-  charred wreck; blasts damage/shove cars and knock people down; NPC
-  drivers bail out of burning cars; your own car throws you clear.
-- **Punching**: knocks down whoever is in front, scares bystanders.
+  charred wreck; blasts damage/shove cars, set close ones alight and knock
+  people down; NPC drivers bail out of burning cars; your own car throws
+  you clear. Tuned in *Driving and combat* below.
+- **Punching**: jab, jab, hook combos; the hook knocks down.
 - **Chaos score** (`src/systems/score.ts`, `src/ui/scoreHud.ts`): drifts,
   near misses, smashes, hit-and-runs, knockouts, carjacks and explosions
   score points; anything within 3 s of the last event raises a ×2…×10
   combo. Best score is kept in localStorage (`curbside.best`).
 - **Weapons** (`src/systems/weapons.ts`, `src/world/pickups.ts`): pistol,
-  SMG, shotgun and health crates on sidewalks (respawn 30 s); hitscan with
-  aim assist, tracers, walls stop bullets, cars take damage.
+  SMG, shotgun, grenades, molotovs and rockets, plus health, armour and
+  ammo crates on sidewalks (respawn 30 s); hitscan with lock-on and spread
+  bloom, tracers, walls stop bullets, cars take damage; drive-bys.
 - **Fighting back** (`src/systems/crowd.ts`): peds are calm (70%),
   fighters (20%) or armed (10%); provoke one and they punch or shoot back
   (shooters hit your car too). Player health; at 0 → WASTED, respawn, lose
@@ -171,7 +176,130 @@ vibration, show FPS.
   2:00 mode with medals and a results card; frenzies, hidden packages,
   checkpoint races, hot-car exports, taxi fares and eight payphone missions
   in free roam; a safehouse shop; PROGRESS in the pause menu.
+- **Feel** (`src/entities/vehicle.ts`, `src/game/combat.ts`,
+  `src/systems/projectiles.ts`, `src/world/ramps.ts`, see *Driving and
+  combat* below): exact top speeds, a cornering limit, drifts, burnouts,
+  glancing walls, nitro; rebalanced damage and body armour; ped hit
+  points, knockouts, punch combos, lock-on; grenades, molotovs, rockets;
+  drive-bys; optional character clips; stunt ramps with STUNT awards.
 - Next: **M8 Ship** (offline caching, install prompt, performance pass).
+
+## Driving and combat
+
+Numbers come from scratch sims of the real `stepVehicle` /
+`collideVehicleStatic` (and the tests pin them).
+
+**Driving** (`entities/vehicle.ts`, pure). Each car reaches exactly its
+`maxSpeed` flat out (the engine's taper is solved against drag 0.04):
+sedan 33 m/s, compact 30, sports 42, van 27, taxi 32, pickup 31, police 34
+(0–100 km/h: sports 2.3 s, police 3.4, sedan 4.3). Grip turns a car only
+as fast as its lateral limit (`latAccel`, 16 van … 26 sports, yaw ≤ a/v):
+a right angle flat out at 28 m/s runs 36 m on and scrubs speed, so brake
+or drift; town speeds don't notice. The handbrake kicks the rear loose
+(`slide` = 1): on the throttle the drift holds (sedan ~28°, sports ~37°,
+van ~17°), countersteer straightens it, lifting off grips it up in a
+fraction of a second, and part of the scrubbed sideways speed goes into
+forward speed so drifts keep their pace. Handbrake + throttle from a stop
+is a burnout (smoke, donuts with the wheel) that charges in 0.9 s and
+launches the car ~40% quicker to 20 m/s. Per archetype: steering response
+15 sports … 6 van (twitchy vs heavy), mass 0.85 compact … 1.6 van (who
+shoves whom). Nitro (`game/nitro.ts`): ×1.7 power and ×1.25 top speed for
+3.2 s a tank; the tank fills by drifting (0.14/s), near misses (+0.15)
+and stunts (+0.3). Directional touch steering brakes into corners it
+can't take on grip (16 m/s for a right angle, more for gentle bends).
+
+**Walls and crashes** (`systems/physics.ts`, `systems/damage.ts`). A wall
+stops only the speed into it; the speed along it is scrubbed by up to 45%
+with the square of the hit, and a nose-in glance swings the car parallel:
+at 25 m/s a 5° glance keeps its pace, 15° keeps ~20 m/s, head-on stops.
+Crashes cost nothing below 6 m/s, then 2.6 HP per m/s: a sedan (100 HP)
+smokes after one 28 m/s head-on and burns after a third 20 m/s hit. In a
+car-on-car crash the rammer takes 40% of what the car it hits takes (70%
+each head-on), scaled by mass. Health: sedan 100, compact and sports 90,
+van 140, police 130, taxi 100, pickup 125; fire at 20%, burning 4.5 s.
+Blasts (`BLASTS`): a car going up does 85 at the centre to 0 at 9 m and
+sets cars within 4.8 m (of their nearest part) alight on a 0.5–1.9 s fuse
+instead, so a jam goes up in a rippling chain (your own car gets 3–4 s to
+bail out); grenades 105 / 8 m, rockets 160 / 10 m. Landing a jump
+costs 3 HP per m/s of vertical speed over 10. NPC bullets do 8 to the
+player (6 beyond 14 m) and 45% of that to cars, so 4★ chases are
+survivable, and spread 60% wider at a running target.
+
+**The player** (`game/player.ts`): body armour (0–100) soaks every hit
+first and is lost on death; health creeps back to 40 at 4/s after 6 s
+unhurt. Crates: health +50, armour +50, ammo (half a clip for each gun
+owned), weapons (capped: pistol 120, SMG 300, shotgun 48, grenades 12,
+molotovs 10, rockets 8).
+
+**On foot** (`game/combat.ts`, `systems/crowd.ts`, `systems/weapons.ts`).
+Everyone, officers included, has 100 HP: pistol 34 (3 hits), SMG 15 (~7),
+shotgun 7 × 16 (one blast up close, thinner at range). A hit staggers for
+0.3 s (no walking, no attacking, the next attack pushed back); 0 HP is a
+knockout: down 8 s, then they run with no grudge. Only a knockout scores
+KNOCKOUT. Punches chain jab (22), jab (22), hook (40, knocks down) within
+0.75 s. Firing locks on: hostiles (fighters, shooters, police while
+wanted) at any angle first, else the best target in a 90° cone; with a
+deliberate aim only within ~20° of it; it lets go 0.6 s after the last
+shot, and you strafe while locked (a red ring marks the target). Spread
+blooms per shot (pistol +0.04, SMG +0.03 rad) and settles in about a
+second; running widens it. Grenades land where you aim (the cursor, the
+stick's reach, or a target near the aim line; unaimed, a lob of half the
+range or onto someone in front within it), bounce and go off after
+2 s; molotovs burst into a 3.2 m fire for 6 s that sets people running
+alight (22 HP/s) and cooks cars (12 HP/s); rockets fly at 26 m/s, arm
+after 3 m and blow up on the first thing they touch (75 m max); their
+lock-on and aim assist ignore anything within 8 m (inside their own blast). While a
+grenade or molotov is in hand, a landing ring and a dotted arc show
+where it will land (a touch tap on FIRE throws right there).
+
+**Drive-bys**: in a car, FIRE shoots a pistol or SMG (picking one if
+something else is held) out of whichever side window has the best target
+within 1.2 rad of square (hostiles first), with ×1.5 spread; an aim
+(mouse, right stick) picks the window. Never hits your own car; heat
+applies like any gunfire.
+
+**Stunts** (`world/ramps.ts`, `systems/stunts.ts`). Ten kicker ramps
+(7 × 3.6 m, 1.5 m lip) on road centrelines just past a junction (one a
+block east of the spawn corner); traffic in its lanes never touches them.
+A car lined up on the front climbs the slope and flies off the lip with
+vy = 0.36 × speed (a drop at a crawl): ~1 s and ~28 m at 28 m/s.
+A ramp's sides and back are solid to cars and people alike.
+Airborne: gravity 22, no grip or steering, cars pass over people and
+other cars, the body pitches with the arc, the contact shadow stays on
+the road. STUNT = 1000/s of airtime + 20/m + 500 per half-turn of spin
+(GREAT ≥ 2000, INSANE ≥ 3500, 180/360 prefixes); jumps over 0.9 s get a
+beat of slow motion near the top.
+
+**Animation hooks** (`render/characterModel.ts`): clips are found by name
+(`Run`, `Punch`, `Aim`, `Shoot`, `Fall`, `Down`, `GetUp`, see
+`docs/BLENDER_TODO.md`); each missing one falls back to a procedural fake.
+Locomotion blends Idle/Walk/Run by speed; Aim/Shoot/Punch play on the
+arms, chest and head over the legs. Still one instanced draw call.
+
+**Budget**: ramps +1 draw call (+1 in the shadow pass) when in view,
+projectiles +1 only while something flies; rings, arcs, fire glows and
+shadows go into the shared glow and shadow meshes. Measured with
+`?debug`: 43–53 calls on the iPhone profile in fights, chases and jumps,
+56–66 on desktop. Nothing is allocated per frame or per bullet.
+
+API for other systems:
+
+```ts
+player.armour / player.addArmour(n)        // 0..MAX_ARMOUR (100); returns what was taken (a shop can sell it)
+combat.collect(kind)                        // apply a pickup (false = can't use it now)
+combat.blast('grenade' | 'rocket' | 'car', x, z, byPlayer)   // an explosion through the normal blast path
+combat.projectiles.throw('grenade' | 'molotov', x, z, toX, toZ, byPlayer) / .fireRocket(x, z, dx, dz, byPlayer)
+combat.projectiles.addFire(x, z, byPlayer)  // a fire patch
+combat.lock / combat.marker                 // the lock-on target, the throw marker
+nitro.charge / nitro.add(amount)            // 0..1 tank
+hurtPed(agent, damage, fromX, fromZ, knock?) // systems/crowd.ts: 'none' | 'hit' | 'down' | 'ko'
+ramps (world/ramps.ts: placeRamps, rampAt, rideRamps) · StuntTracker (systems/stunts.ts)
+// Bus: { type: 'jump', x, z, speed, airtime, involvesPlayer } · { type: 'land', x, z, impact, involvesPlayer }
+//      { type: 'stunt', x, z, airtime, distance, spin, points, label } · { type: 'boost', on, x, z }
+//      { type: 'throw', x, z, toX, toZ, weapon, byPlayer } · { type: 'ignite', x, z, radius, byPlayer }
+//      explosion.source ('vehicle' | 'grenade' | 'rocket'), shot.driveBy, punch.combo, pedDown.ko / cause 'fire',
+//      playerHurt.armour / .absorbed.
+```
 
 ## Heat
 

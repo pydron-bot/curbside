@@ -13,6 +13,7 @@ import type { Vehicle } from '../game/population';
 import { damageStage } from '../systems/damage';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type City } from '../world/city';
 import type { Effects } from './effects';
+import { RAMP_HEIGHT, RAMP_LENGTH } from '../world/ramps';
 import { CarBody, applyBody } from './fxCarBody';
 import { DECAL, type GroundDecals } from './fxDecals';
 
@@ -37,6 +38,8 @@ const SEGMENT = 0.4;
 const FX_RANGE = 110;
 /** Most burning cars that get a fire glow in one frame. */
 const MAX_FIRE_GLOWS = 12;
+/** Nose-up pitch on a ramp's slope, rad. */
+const RAMP_PITCH = -Math.atan2(RAMP_HEIGHT, RAMP_LENGTH);
 
 /** What makes a skid. */
 export interface SkidInput {
@@ -56,8 +59,9 @@ export interface SkidInput {
 
 /**
  * How hard the rear tyres are skidding, 0..1: sliding sideways past ~3 m/s,
- * the handbrake at speed, braking harder than ~15 m/s², or a launch with the
- * throttle floored (wheelspin).
+ * the handbrake at speed, braking harder than ~15 m/s², a launch with the
+ * throttle floored (wheelspin), or a burnout (handbrake and throttle at a
+ * standstill).
  */
 export function skidAmount(s: SkidInput): number {
   let a = 0;
@@ -65,6 +69,8 @@ export function skidAmount(s: SkidInput): number {
   if (s.handbrake && s.speed > 4.5) a = Math.max(a, 0.55 + Math.min(0.45, s.slip / 12));
   if (s.speed > 5 && s.accel < -15) a = Math.max(a, (-s.accel - 15) / 12);
   if (s.throttle > 0.75 && s.forward > -0.5 && s.forward < 7 && s.accel > 9) a = Math.max(a, 0.5);
+  // A burnout: held on the handbrake with the throttle floored, the rear wheels spin in place.
+  if (s.handbrake && s.throttle > 0.5 && s.speed < 3) a = Math.max(a, 0.9);
   return a < 0 ? 0 : a > 1 ? 1 : a;
 }
 
@@ -250,6 +256,8 @@ export class DrivingFx {
       // Body motion (also for far cars, so they don't snap when they come into view).
       rec.body.step(s, dt);
       applyBody(root, rec.body);
+      // Up a ramp the nose lifts; in the air it follows the arc (nose up rising, down falling).
+      if (s.y > 0) root.rotation.x += s.airborne ? Math.max(-0.35, Math.min(0.3, -s.vy * 0.03)) : RAMP_PITCH;
       if (dt <= 0) continue;
       const near = Math.abs(s.x - focusX) < FX_RANGE && Math.abs(s.z - focusZ) < FX_RANGE;
       // Forward acceleration, smoothed like the body's.
@@ -263,7 +271,8 @@ export class DrivingFx {
         continue;
       }
       this.damage(v, rec, dt, scale);
-      if (v.damage.wrecked) {
+      // Wrecks and cars off the ground leave no marks.
+      if (v.damage.wrecked || s.y > 0.05) {
         rec.left.reset();
         rec.right.reset();
         continue;

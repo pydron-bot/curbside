@@ -263,6 +263,8 @@ describe('driving effects logic', () => {
     expect(skidAmount({ ...base, accel: -10 })).toBe(0);
     expect(skidAmount({ ...base, speed: 2, forward: 2, accel: 14, throttle: 1 })).toBe(0.5);
     expect(skidAmount({ ...base, slip: 100 })).toBe(1);
+    // A burnout: on the handbrake, floored, standing still.
+    expect(skidAmount({ ...base, speed: 0, forward: 0, handbrake: true, throttle: 1 })).toBeGreaterThan(0.8);
   });
 
   it('drift smoke warms from grey to gold to pink with points', () => {

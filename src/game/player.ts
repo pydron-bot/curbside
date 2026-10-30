@@ -19,6 +19,12 @@ import { Arsenal } from '../systems/weapons';
 import type { Vehicle } from './population';
 
 export const MAX_HEALTH = 100;
+/** Body armour soaks up damage before health does, up to this much. */
+export const MAX_ARMOUR = 100;
+/** Out of the fight this long (s), health creeps back up to REGEN_TO at REGEN_RATE per second. */
+export const REGEN_DELAY = 6;
+export const REGEN_TO = 40;
+const REGEN_RATE = 4;
 /** Seconds lying "wasted" before respawning. */
 export const RESPAWN_SECONDS = 3;
 /** Seconds held after an arrest before release at the police station. */
@@ -28,7 +34,7 @@ export const OWN_CAR_BLAST_DAMAGE = 35;
 const OWN_CAR_THROW_SPEED = 4;
 const OWN_CAR_STUN = 2.5;
 
-export type KnockCause = 'vehicle' | 'punch' | 'shot' | 'blast';
+export type KnockCause = 'vehicle' | 'punch' | 'shot' | 'blast' | 'fire';
 
 export class Player {
   readonly ped: PedState;
@@ -44,6 +50,10 @@ export class Player {
   health = MAX_HEALTH;
   /** Health a life starts with (raised by the shop's TOUGH SKIN upgrade). */
   maxHealth = MAX_HEALTH;
+  /** Body armour, 0..MAX_ARMOUR: takes every hit first. Lost on death. */
+  armour = 0;
+  /** Seconds since the last hit (for the slow regen). */
+  sinceHurt = Infinity;
   /** Seconds until respawn while "wasted"; 0 when alive. */
   dead = 0;
   /** Seconds left in custody after an arrest; 0 when free. */
@@ -113,11 +123,27 @@ export class Player {
     return v;
   }
 
-  /** Take damage (not while in custody). Returns true if it killed. */
+  /**
+   * Put on body armour (a pickup; a shop later). Returns how much was taken,
+   * 0 when already full, so a pickup can stay put for later.
+   */
+  addArmour(amount: number): number {
+    const added = Math.max(0, Math.min(amount, MAX_ARMOUR - this.armour));
+    this.armour += added;
+    return added;
+  }
+
+  /**
+   * Take damage (not while in custody); armour soaks it up first. Returns
+   * true if it killed.
+   */
   hurt(amount: number): boolean {
     if (!this.alive || this.arrested || amount <= 0) return false;
-    this.health = Math.max(0, this.health - amount);
-    this.bus.emit({ type: 'playerHurt', amount, health: this.health });
+    const absorbed = Math.min(this.armour, amount);
+    this.armour -= absorbed;
+    this.health = Math.max(0, this.health - (amount - absorbed));
+    this.sinceHurt = 0;
+    this.bus.emit({ type: 'playerHurt', amount, health: this.health, armour: this.armour, absorbed });
     if (this.health > 0) return false;
     this.die();
     return true;
@@ -175,6 +201,11 @@ export class Player {
    */
   step(dt: number): boolean {
     this.punchCooldown = Math.max(0, this.punchCooldown - dt);
+    // Left alone for a while, a wounded player gets back on their feet a little.
+    this.sinceHurt += dt;
+    if (this.alive && this.sinceHurt > REGEN_DELAY && this.health < REGEN_TO) {
+      this.health = Math.min(REGEN_TO, this.health + REGEN_RATE * dt);
+    }
     // Stuns wear off on foot (nobody is stunned at the wheel).
     if (!this.driving && this.stunned > 0) this.stunned = Math.max(0, this.stunned - dt);
     this.arsenal.step(dt);
@@ -185,14 +216,18 @@ export class Player {
     return this.dead > 0 && (this.dead -= dt) <= 0;
   }
 
-  /** Back on your feet at (x, z) with full health (maxHealth). Always on foot. */
+  /** Back on your feet at (x, z) with full health (maxHealth) and no armour. Always on foot. */
   respawn(x: number, z: number, heading = Math.PI): void {
-    this.driving = null;
+    // Restarting (or quitting to the title) at the wheel: get out properly, so
+    // everything that follows enter/exit (camera, controls, the body) hears it.
+    this.exit();
     this.dead = 0;
     this.custody = 0;
     this.stunned = 0;
     this.punchCooldown = 0;
     this.health = this.maxHealth;
+    this.armour = 0;
+    this.sinceHurt = Infinity;
     Object.assign(this.ped, { x, z, vx: 0, vz: 0, heading });
     Object.assign(this.prev, this.ped);
     this.bus.emit({ type: 'respawn' });

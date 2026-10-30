@@ -44,6 +44,16 @@ export const DIRECTIONAL = {
   liftThrottle: 0.45,
   /** ...when faster than this, m/s (slow cars need the power to turn). */
   liftSpeed: 8,
+  /**
+   * Corners: grip only turns a car so fast (VehicleSpec.latAccel), so for a
+   * turn of more than cornerAngle (rad) the helper brakes down toward a
+   * corner speed: cornerSpeed (m/s) for a right angle or more, rising to
+   * cornerSpeed + cornerSlack for gentler bends. Full brake cornerBrake m/s over.
+   */
+  cornerAngle: 0.6,
+  cornerSpeed: 16,
+  cornerSlack: 11,
+  cornerBrake: 8,
   /** Target this far behind (rad) while faster than brakeSpeed: brake into the turn. */
   brakeAngle: 2.0,
   brakeSpeed: 9,
@@ -68,6 +78,13 @@ export function createDirectionalState(): DirectionalState {
 export function resetDirectionalState(state: DirectionalState): void {
   state.reversing = false;
   state.stalled = state.unstick = 0;
+}
+
+/** Fastest the helper takes a turn of `err` radians on grip, m/s. */
+export function cornerSpeed(err: number): number {
+  const d = DIRECTIONAL;
+  const k = Math.min(1, Math.max(0, (err - d.cornerAngle) / (Math.PI / 2 - d.cornerAngle)));
+  return d.cornerSpeed + d.cornerSlack * (1 - k);
 }
 
 /** World heading for a screen-relative direction (heading h points the nose along (sin h, cos h)). */
@@ -112,7 +129,10 @@ export function directionalControls(
   else {
     throttle = input.gas ? 1 : mag;
     if (err > d.brakeAngle && vF > d.brakeSpeed) throttle = -d.brakeAmount;
-    else if (err > d.liftAngle && vF > d.liftSpeed && !input.gas) throttle = Math.min(throttle, d.liftThrottle);
+    else if (!input.gas && !input.handbrake && err > d.cornerAngle && vF > cornerSpeed(err)) {
+      // Too fast for this corner on grip: brake into it (a drift is the GAS + HAND way round).
+      throttle = -Math.min(1, (vF - cornerSpeed(err)) / d.cornerBrake);
+    } else if (err > d.liftAngle && vF > d.liftSpeed && !input.gas) throttle = Math.min(throttle, d.liftThrottle);
   }
 
   // Nose in a wall (or another car): pushing on would just grind, and with

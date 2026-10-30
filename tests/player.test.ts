@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { EventBus, type GameEvent } from '../src/core/events';
 import { VEHICLE_HEALTH, createVehicleState } from '../src/entities/vehicle';
-import { BUSTED_SECONDS, MAX_HEALTH, OWN_CAR_BLAST_DAMAGE, Player, RESPAWN_SECONDS } from '../src/game/player';
+import { BUSTED_SECONDS, MAX_ARMOUR, MAX_HEALTH, OWN_CAR_BLAST_DAMAGE, Player, REGEN_DELAY, REGEN_TO, RESPAWN_SECONDS } from '../src/game/player';
 import type { Vehicle } from '../src/game/population';
 import type { CarMesh } from '../src/render/carMesh';
 import { createDamage } from '../src/systems/damage';
@@ -130,14 +130,50 @@ describe('player transitions', () => {
     expect(types().slice(-1)).toEqual(['respawn']);
   });
 
+  it('a restart at the wheel gets out first (exitVehicle), then respawns on foot', () => {
+    const { player, types } = setup();
+    player.enter(car());
+    player.respawn(9.5, 9.5);
+    expect(player.driving).toBeNull();
+    expect(player.ped.x).toBe(9.5);
+    expect(types().slice(-2)).toEqual(['exitVehicle', 'respawn']);
+  });
+
   it('reports hurt with the remaining health, and ignores damage when dead', () => {
     const { player, log } = setup();
     player.hurt(30);
-    expect(log[0]).toEqual({ type: 'playerHurt', amount: 30, health: 70 });
+    expect(log[0]).toEqual({ type: 'playerHurt', amount: 30, health: 70, armour: 0, absorbed: 0 });
     player.hurt(100);
     const n = log.length;
     player.hurt(10);
     expect(log.length).toBe(n);
+  });
+
+  it('armour soaks up hits before health, and is lost on death', () => {
+    const { player, log } = setup();
+    expect(player.addArmour(60)).toBe(60);
+    expect(player.addArmour(60)).toBe(MAX_ARMOUR - 60); // tops up to the cap
+    expect(player.addArmour(10)).toBe(0); // full: a pickup can stay put
+    player.hurt(30);
+    expect(player.health).toBe(MAX_HEALTH);
+    expect(player.armour).toBe(MAX_ARMOUR - 30);
+    player.hurt(MAX_ARMOUR); // the rest of the armour, then 30 off health
+    expect(player.armour).toBe(0);
+    expect(player.health).toBe(MAX_HEALTH - 30);
+    expect(log.at(-1)).toMatchObject({ type: 'playerHurt', amount: MAX_ARMOUR, absorbed: MAX_ARMOUR - 30, armour: 0 });
+    player.addArmour(50);
+    player.hurt(1000);
+    player.respawn(0, 0);
+    expect(player.armour).toBe(0);
+  });
+
+  it('a badly hurt player recovers a little when left alone', () => {
+    const { player } = setup();
+    player.hurt(90);
+    for (let t = 0; t < REGEN_DELAY - 0.5; t += DT) player.step(DT);
+    expect(player.health).toBe(10);
+    for (let t = 0; t < 15; t += DT) player.step(DT);
+    expect(player.health).toBe(REGEN_TO);
   });
 
   it('stuns wear off on foot and knock-downs never shorten one', () => {

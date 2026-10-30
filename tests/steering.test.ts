@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DIRECTIONAL, createDirectionalState, directionalControls, screenHeading, type DirectionalInput } from '../src/core/steering';
-import { SEDAN, createVehicleState, forwardSpeed, stepVehicle, wrapAngle, type VehicleControls } from '../src/entities/vehicle';
+import { DIRECTIONAL, cornerSpeed, createDirectionalState, directionalControls, screenHeading, type DirectionalInput } from '../src/core/steering';
+import { SEDAN, VEHICLE_SPECS, createVehicleState, forwardSpeed, speed, stepVehicle, wrapAngle, type VehicleControls } from '../src/entities/vehicle';
 
 const stick = (x: number, y: number, extra: Partial<DirectionalInput> = {}): DirectionalInput => ({
   x,
@@ -82,6 +82,31 @@ describe('directional steering', () => {
     car.vz = -20;
     const c = directionalControls(stick(1, 0), car, createDirectionalState(), out()); // 90° right
     expect(c.throttle).toBeLessThanOrEqual(DIRECTIONAL.liftThrottle);
+  });
+
+  it('brakes into a right-angle corner taken flat out, so it makes the turn', () => {
+    // Up the screen at top speed, stick pushed right: like turning off at a junction.
+    for (const spec of [SEDAN, VEHICLE_SPECS.sports, VEHICLE_SPECS.van]) {
+      const car = createVehicleState(0, 0, Math.PI);
+      car.vz = -spec.maxSpeed;
+      const state = createDirectionalState();
+      const c = out();
+      const first = directionalControls(stick(1, 0), car, state, c);
+      expect(first.throttle).toBeLessThan(0);
+      let overshoot = 0;
+      for (let t = 0; t < 4 && Math.abs(wrapAngle(car.heading - Math.PI / 2)) > 0.1; t += 1 / 60) {
+        directionalControls(stick(1, 0), car, state, c, 1 / 60);
+        stepVehicle(car, c, spec, 1 / 60);
+        overshoot = Math.max(overshoot, -car.z);
+      }
+      expect(overshoot).toBeLessThan(36); // past the junction, but round it inside the next block
+      expect(speed(car)).toBeGreaterThan(cornerSpeed(Math.PI / 2) - 2); // not stopped dead
+    }
+    // Gentle bends keep more speed; GAS (or the drift chord) overrides it.
+    expect(cornerSpeed(0.7)).toBeGreaterThan(cornerSpeed(1.5) + 5);
+    const car = createVehicleState(0, 0, Math.PI);
+    car.vz = -30;
+    expect(directionalControls(stick(1, 0, { gas: true, handbrake: true }), car, createDirectionalState(), out()).throttle).toBe(1);
   });
 
   it('BRAKE brakes and then reverses; GAS forces full throttle', () => {

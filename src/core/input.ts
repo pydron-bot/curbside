@@ -35,6 +35,8 @@ export interface InputSource {
   cyclePrevPresses: number;
   /** Pause toggles (P / Esc / gamepad Start) not yet consumed. */
   pausePresses: number;
+  /** Driving: nitro held. */
+  boost: boolean;
 }
 
 export type InputDevice = 'keyboard' | 'touch' | 'gamepad';
@@ -58,12 +60,13 @@ export const emptySource = (): InputSource => ({
   cyclePresses: 0,
   cyclePrevPresses: 0,
   pausePresses: 0,
+  boost: false,
 });
 
 /** Clear a source back to "nothing held, nothing pending". */
 export function clearSource(s: InputSource): void {
   s.steer = s.throttle = s.moveX = s.moveY = s.aimX = s.aimY = 0;
-  s.handbrake = s.sprint = s.fireHeld = s.aimFire = false;
+  s.handbrake = s.sprint = s.fireHeld = s.aimFire = s.boost = false;
   s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.pausePresses = 0;
 }
 
@@ -158,7 +161,7 @@ export class Input {
   private readonly resetHooks: Array<() => void> = [];
   private readonly stick = { x: 0, y: 0 };
   private readonly aimStick = { x: 0, y: 0 };
-  private readonly vehicleOut: VehicleControls = { steer: 0, throttle: 0, handbrake: false };
+  private readonly vehicleOut: VehicleControls = { steer: 0, throttle: 0, handbrake: false, boost: false };
   private readonly directionalOut: VehicleControls = { steer: 0, throttle: 0, handbrake: false };
   private readonly directionalIn: DirectionalInput = { x: 0, y: 0, gas: false, brake: false, handbrake: false };
   private readonly directional = createDirectionalState();
@@ -181,6 +184,11 @@ export class Input {
   private mouseUsedAt = -Infinity;
   private mouseTravel = 0;
   private wheelAt = -Infinity;
+  /**
+   * In a car Space is the handbrake and RT the throttle, not fire: drive-bys
+   * fire on J, the mouse, X or the touch FIRE button; Shift and B are nitro.
+   */
+  private driving = false;
 
   constructor(target: Window = window) {
     this.device = initialDevice(target);
@@ -196,7 +204,7 @@ export class Input {
       if (!e.repeat) {
         const kb = this.keyboard;
         if (e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'Enter') kb.actionPresses++;
-        if (e.code === 'Space' || e.code === 'KeyJ') kb.punchPresses++;
+        if ((e.code === 'Space' && !this.driving) || e.code === 'KeyJ') kb.punchPresses++;
         if (e.code === 'KeyQ' || e.code === 'Tab') {
           if (e.shiftKey) kb.cyclePrevPresses++;
           else kb.cyclePresses++;
@@ -237,6 +245,12 @@ export class Input {
   /** The device the player used last, for prompts ("tap" vs "press P"). Mouse counts as keyboard. */
   get lastDevice(): InputDevice {
     return this.device;
+  }
+
+  /** On foot or in a car: changes which keys and buttons fire (see `driving`). */
+  setDriving(driving: boolean): void {
+    this.driving = driving;
+    this.updateKeyboard();
   }
 
   /** Run `fn` on every resetAll(), e.g. to release on-screen buttons. */
@@ -354,14 +368,15 @@ export class Input {
     kb.throttle = kb.moveY = (up ? 1 : 0) - (down ? 1 : 0);
     kb.handbrake = k.has('Space');
     kb.sprint = k.has('ShiftLeft') || k.has('ShiftRight');
-    kb.fireHeld = k.has('Space') || k.has('KeyJ');
+    kb.boost = kb.sprint;
+    kb.fireHeld = (k.has('Space') && !this.driving) || k.has('KeyJ');
   }
 
   /** Call once per frame before reading (also while paused, to catch Start and menu navigation). */
   pollGamepad(now = performance.now()): void {
     const g = this.gamepad;
     g.steer = g.throttle = g.moveX = g.moveY = g.aimX = g.aimY = 0;
-    g.handbrake = g.sprint = g.fireHeld = false;
+    g.handbrake = g.sprint = g.fireHeld = g.boost = false;
     const pad = firstPad();
     if (!pad) {
       // Disconnected mid-press: nothing may stay held. A pad that turns up
@@ -405,11 +420,14 @@ export class Input {
       this.padWasDown[i] = down;
       if (!down) continue;
       if (edge) active = true;
+      // RT is the throttle in a car: there only X fires (drive-bys) and B boosts.
+      const fires = i === PAD_X || (i === PAD_RT && !this.driving);
       if (i === PAD_A) g.handbrake = g.sprint = true;
-      else if (i === PAD_X || i === PAD_RT) g.fireHeld = true;
+      else if (fires) g.fireHeld = true;
+      else if (i === PAD_B && this.driving) g.boost = true;
       if (!edge) continue;
       if (i === PAD_Y) g.actionPresses++;
-      else if (i === PAD_X || i === PAD_RT) g.punchPresses++;
+      else if (fires) g.punchPresses++;
       else if (i === PAD_RB) g.cyclePresses++;
       else if (i === PAD_LB) g.cyclePrevPresses++;
       else if (i === PAD_START) g.pausePresses++;
@@ -470,8 +488,10 @@ export class Input {
     const out = this.vehicleOut;
     out.steer = out.throttle = 0;
     out.handbrake = false;
+    out.boost = false;
     const directional = car !== undefined && settings.steering === 'directional';
     for (const s of this.sources) {
+      if (s.boost) out.boost = true;
       if (directional && s === this.touch) continue;
       merge(out, s.steer, s.throttle, s.handbrake);
     }

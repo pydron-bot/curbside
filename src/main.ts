@@ -6,6 +6,7 @@ import { FixedStep } from './core/loop';
 import { UpdateGate } from './core/updateGate';
 import { PLAYER_ON_FOOT, stepPedestrian } from './entities/pedestrian';
 import {
+  GRAVITY,
   VEHICLE_HEALTH,
   VEHICLE_SPECS,
   createVehicleState,
@@ -18,7 +19,9 @@ import {
   type VehicleArchetype,
   type VehicleControls,
 } from './entities/vehicle';
+import { Combat, type AimInput } from './game/combat';
 import { Heat } from './game/heat';
+import { NITRO_DRIFT, NITRO_MIN, NITRO_NEAR_MISS, NITRO_STUNT, Nitro } from './game/nitro';
 import { HeatPresenter } from './game/heatPresenter';
 import { Player } from './game/player';
 import { ProgressDirector } from './game/progressDirector';
@@ -29,44 +32,49 @@ import { CameraRig } from './render/cameraRig';
 import { DynamicResolution } from './render/dynamicResolution';
 import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
+import { CombatLook } from './render/combatLook';
 import { createRenderer, precompile } from './render/post';
 import { getQuality } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
 import { charVehicle, restoreVehicleLook } from './render/vehicleLooks';
-import { PUNCH_REACH, knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
-import { VEHICLE_SHARE, WEAPONS, WEAPON_ORDER, autoAim, rayCircle, rayRect, type WeaponKind } from './systems/weapons';
-import { HEALTH_PICKUP, PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
+import { provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
+import { WEAPONS, WEAPON_ORDER, type WeaponKind } from './systems/weapons';
+import { PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
   applyDamage,
-  blamesPlayer,
-  blastDamage,
   createDamage,
+  crashDamage,
   damageStage,
   impactDamage,
+  landingDamage,
   markPlayerHit,
   stepDamage,
 } from './systems/damage';
+import { StuntTracker } from './systems/stunts';
+import { RAMP_HEIGHT, enteringRamp, placeRamps, rampSolids, rideRamps } from './world/ramps';
+import { RampMesh } from './render/rampMesh';
 import {
-  CAR_CIRCLE_RADIUS,
-  carCircles,
   collidePedStatic,
   collidePedVehicle,
   collideVehicleStatic,
   collideVehicles,
+  type CarContact,
 } from './systems/physics';
 import { Score, type Award } from './systems/score';
 import type { Obstacle } from './systems/traffic';
 import type { PauseReason } from './ui/pauseOverlay';
 import { loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
-import { AIM_SNAP, AIM_TURN_RATE, aimHeading, approachAngle } from './core/aim';
+import { mountCarButtons } from './ui/carButtons';
+import { CombatHud } from './ui/combatHud';
+import { AIM_TURN_RATE, aimHeading, approachAngle } from './core/aim';
 import { getDevice } from './render/quality';
 import { AttractCamera } from './ui/attract';
 import { FrontDoor } from './ui/frontDoor';
 import { blockBrowserGestures } from './ui/gestures';
 import { Haptics } from './ui/haptics';
 import { Hud, createHudFrame, gaugeTopSpeed, type CarHud } from './ui/hud';
-import { updateMouseAim } from './ui/mouseAim';
+import { mouseGround, updateMouseAim } from './ui/mouseAim';
 import { Radar } from './ui/radar';
 import { ThreatIndicators } from './ui/threats';
 import { enterGameMode } from './ui/titleScreen';
@@ -87,20 +95,10 @@ const CAMERA_FOOT = [20, 24] as const;
 const CAMERA_CAR = [26, 64] as const;
 /** The title screen's slow cruise over traffic. */
 const CAMERA_ATTRACT = [34, 46] as const;
-const BLAST_RADIUS = 9;
-const PUNCH_RANGE = 1.5;
-const PUNCH_COOLDOWN = 0.4;
 /** Passing this close (centre to centre) at speed without touching is a near miss. */
 const NEAR_MISS_DIST = 3.4;
 const NEAR_MISS_SPEED = 10;
-/** Explosions further than this from the player don't score. */
-const BOOM_SCORE_RANGE = 60;
 const SPAWN_POINT = { x: 9.5, z: 9.5 };
-const NPC_PUNCH_DAMAGE = 9;
-const NPC_SHOT_DAMAGE = 8;
-const NPC_SHOT_RANGE = 26;
-/** Random aim error of NPC shooters, radians. */
-const NPC_SPREAD = 0.14;
 /** Crashes slower than this (m/s closing speed) aren't worth an event. */
 const CRASH_EVENT_MIN = 2.5;
 
@@ -119,6 +117,11 @@ const rig = new CameraRig(1);
 // Lights, time of day, ground, city, and the batched people/car/glow renderers.
 const look = new Look(renderer, scene, city, rig, pickups, app);
 const effects = new Effects(scene);
+/** Stunt ramps: drawn as one instanced mesh; their sides and backs are solid. */
+const ramps = placeRamps(1337);
+const rampGrid = new StaticGrid(rampSolids(ramps));
+scene.add(new RampMesh(ramps, look).mesh);
+const stunts = new StuntTracker();
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
@@ -274,6 +277,25 @@ const heat = new Heat({
 });
 addHeatLook(look, heat);
 
+// --- Combat: guns, fists, throws, rockets, drive-bys, blasts, fire ---
+const combat = new Combat({
+  bus: events,
+  player,
+  vehicles,
+  crowd: population.crowd,
+  grid: collision,
+  rand,
+  score,
+  award,
+  ejectDriver,
+  now: () => simTime,
+  playing: () => !attract.active,
+  focus: () => ({ x: rig.focusX, z: rig.focusZ }),
+  stars: () => heat.wanted.level,
+  pose: playerModel,
+});
+const combatLook = new CombatLook(scene, look, effects, combat, population.crowd, player);
+
 // --- Audio (unlocks on the first tap / click / key) ---
 const audio = new GameAudio({ best: score.best });
 const audioFrame = createAudioFrame(vehicles);
@@ -286,6 +308,10 @@ input.attachMouse(renderer.domElement);
 const haptics = new Haptics(input, events);
 const touch = mountTouchControls(document.body, input.touch, haptics);
 input.addResetHook(() => touch.reset());
+const carButtons = mountCarButtons(touch.layer, input.touch, haptics);
+input.addResetHook(() => carButtons.reset());
+/** The player's nitro tank (fills by drifting, near misses and stunts). */
+const nitro = new Nitro(events);
 blockBrowserGestures([renderer.domElement, touch.layer]);
 /** World heading the player is aiming this frame (stick, mouse or pad), or null. */
 let aimHeadingNow: number | null = null;
@@ -313,11 +339,13 @@ const fx = new FxDirector({
 events.on('enterVehicle', () => {
   playerModel.root.visible = false;
   rig.setHeights(...CAMERA_CAR);
+  input.setDriving(true);
   input.resetActions();
 });
 events.on('exitVehicle', () => {
   playerModel.root.visible = true;
   rig.setHeights(...CAMERA_FOOT);
+  input.setDriving(false);
   input.resetActions();
 });
 // Nobody keeps fighting a dead man.
@@ -378,10 +406,11 @@ function boardVehicle(v: Vehicle) {
   player.enter(v);
 }
 
-/** Step out of the car; a slide in progress is banked. */
+/** Step out of the car; a slide in progress is banked. Not in mid-air. */
 function leaveVehicle() {
-  if (!player.driving) return;
+  if (!player.driving || player.driving.sim.airborne) return;
   award(score.endDrift(true));
+  stunts.cancel();
   player.exit();
 }
 
@@ -390,6 +419,9 @@ function respawnPlayer() {
   // A new run (or the title) starts with nobody after you.
   calmHostiles();
   heat.reset();
+  combat.reset();
+  nitro.reset();
+  stunts.cancel();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true);
@@ -421,12 +453,16 @@ function addObstacle(x: number, z: number, halfWidth: number, isPlayer = false) 
   obstacles.push(o);
 }
 const vehicleStates: Array<Vehicle['sim']> = [];
-const contact = { x: 0, z: 0 };
+const contact: CarContact = { x: 0, z: 0, nx: 0, nz: 0, closingA: 0, closingB: 0 };
 
 function simulate(dt: number) {
   const driving = player.driving;
   // A race or Chaos Run 3-2-1 holds the car on the line.
   const playerControls = driving && !progress.holdControls ? input.readVehicle(driving.sim, dt) : NO_CONTROLS;
+  // Nitro burns only while held, lit and in the tank.
+  const boosting = nitro.step(dt, driving !== null && playerControls.boost === true && !attract.active, driving ? driving.sim : null);
+  // NO_CONTROLS is shared: only the frame's own read gets the boost flag.
+  if (playerControls !== NO_CONTROLS) playerControls.boost = boosting;
 
   // What AI drivers need to avoid this step.
   obstacles.length = 0;
@@ -441,42 +477,43 @@ function simulate(dt: number) {
     else if (v === driving) controls = playerControls;
     // Traffic, police and road ragers. (A car's own entry sits at distance 0, which clearDistance ignores.)
     else if (v.ai || v.pursuit) controls = heat.drive(v, obstacles, dt);
-    stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt);
+    const landed = stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt);
+    if (landed > 0) carLanded(v, landed, v === driving);
+    if (rideRamps(v.sim, ramps) === 'launch') carJumped(v, v === driving);
   }
 
   Object.assign(player.prev, player.ped);
   if (!driving) {
     stepPedestrian(player.ped, player.down || attract.active ? NO_MOVE : input.readMove(), PLAYER_ON_FOOT, dt);
-    // Twin-stick: face the aim while walking (strafe), not the way you walk.
-    if (aimHeadingNow !== null && !player.down) {
-      player.ped.heading = approachAngle(player.ped.heading, aimHeadingNow, AIM_TURN_RATE * dt);
+    // Twin-stick: face the lock-on or the aim while walking (strafe), not the way you walk.
+    const face = combat.lockHeading() ?? aimHeadingNow;
+    if (face !== null && !player.down) {
+      player.ped.heading = approachAngle(player.ped.heading, face, AIM_TURN_RATE * dt);
     }
   }
 
+  // Cars flying over people don't touch them.
   vehicleStates.length = 0;
-  for (const v of vehicles) vehicleStates.push(v.sim);
+  for (const v of vehicles) if (v.sim.y < 0.8) vehicleStates.push(v.sim);
   const target = playerTarget();
   for (const c of population.crowd) {
     Object.assign(c.prev, c.agent.s);
     const wasDown = c.agent.mode === 'down';
     const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, target);
     if (!wasDown && c.agent.mode === 'down') pedHitByCar(c, driving);
-    if (event?.kind === 'punch' && !driving && player.alive && !attract.active) {
-      const hit = Math.hypot(player.ped.x - c.agent.s.x, player.ped.z - c.agent.s.z) < PUNCH_REACH + 0.4;
-      events.emit({ type: 'punch', x: c.agent.s.x, z: c.agent.s.z, hit, byPlayer: false });
-      if (hit) {
-        c.model.punch();
-        player.hurt(NPC_PUNCH_DAMAGE);
-      }
+    if (event?.kind === 'punch') {
+      combat.npcPunch(c);
     } else if (event?.kind === 'shoot') {
-      c.model.punch(); // same arm raise reads as aiming
+      c.model.shoot();
       npcShoot(c.agent.s.x, c.agent.s.z, event.dirX, event.dirZ);
     }
   }
 
   // --- Collisions ---
   for (const v of vehicles) {
-    const impact = collideVehicleStatic(v.sim, collision, contact);
+    let impact = collideVehicleStatic(v.sim, collision, contact);
+    // A ramp's sides and back are solid to anything not riding up it.
+    if (!v.sim.airborne && v.sim.y <= 0 && !enteringRamp(v.sim, ramps)) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact));
     if (impact <= 0) continue;
     const hit = impactDamage(impact);
     applyDamage(v.damage, hit);
@@ -489,13 +526,17 @@ function simulate(dt: number) {
     for (let j = i + 1; j < vehicles.length; j++) {
       const a = vehicles[i];
       const b = vehicles[j];
-      const impact = collideVehicles(a.sim, b.sim, contact);
+      const ma = VEHICLE_SPECS[a.archetype].mass;
+      const mb = VEHICLE_SPECS[b.archetype].mass;
+      const impact = collideVehicles(a.sim, b.sim, contact, ma, mb);
       if (impact <= 0) continue;
-      const hit = impactDamage(impact);
-      applyDamage(a.damage, hit);
-      applyDamage(b.damage, hit);
+      // The rammer takes less than the car it hits, the heavier car less than the lighter.
+      const hitA = crashDamage(impact, contact.closingA, contact.closingB, ma, mb);
+      const hitB = crashDamage(impact, contact.closingB, contact.closingA, mb, ma);
+      applyDamage(a.damage, hitA);
+      applyDamage(b.damage, hitB);
       const involvesPlayer = driving !== null && (a === driving || b === driving);
-      if (involvesPlayer && hit > 0) {
+      if (involvesPlayer && hitA + hitB > 0) {
         markPlayerHit(a.damage, simTime);
         markPlayerHit(b.damage, simTime);
       }
@@ -515,9 +556,22 @@ function simulate(dt: number) {
   // --- Stunt scoring ---
   simTime += dt;
   score.step(dt);
-  if (driving && !driving.damage.wrecked) {
+  if (driving) {
+    const stunt = stunts.step(driving.sim, dt);
+    if (stunt && !driving.damage.wrecked) {
+      const a = score.award('stunt', stunt.points);
+      a.label = stunt.label;
+      award(a);
+      nitro.add(NITRO_STUNT);
+      const ds = driving.sim;
+      events.emit({ type: 'stunt', x: ds.x, z: ds.z, airtime: stunt.airtime, distance: stunt.distance, spin: stunt.spin, points: a.points, label: stunt.label });
+    }
+  } else stunts.cancel(); // thrown out mid-air (the car blew up): that jump is void
+  if (driving && !driving.damage.wrecked && !driving.sim.airborne) {
     const ds = driving.sim;
-    award(score.drift(Math.abs(lateralSpeed(ds)), speed(ds), dt));
+    const slip = Math.abs(lateralSpeed(ds));
+    award(score.drift(slip, speed(ds), dt));
+    if (slip > 3.5 && speed(ds) > 8) nitro.add(NITRO_DRIFT * dt);
     if (speed(ds) > NEAR_MISS_SPEED) {
       for (const v of vehicles) {
         if (v === driving || v.damage.wrecked) continue;
@@ -527,6 +581,7 @@ function simulate(dt: number) {
         if (simTime - (nearMissAt.get(v) ?? -99) < 2.5) continue;
         nearMissAt.set(v, simTime);
         award(score.award('nearMiss'));
+        nitro.add(NITRO_NEAR_MISS);
       }
     }
   }
@@ -535,18 +590,14 @@ function simulate(dt: number) {
   respawnPickups(pickups, simTime);
   if (!driving && player.alive && !attract.active) {
     const pk = pickupAt(pickups, player.ped.x, player.ped.z);
-    if (pk && (pk.kind !== 'health' || player.health < player.maxHealth)) {
+    // A crate you can't use (full health, armour or ammo) stays for later.
+    if (pk && combat.collect(pk.kind)) {
       pk.respawnAt = simTime + PICKUP_RESPAWN;
-      if (pk.kind === 'health') {
-        player.health = Math.min(player.maxHealth, player.health + HEALTH_PICKUP);
-      } else {
-        player.arsenal.pickUp(pk.kind);
-        player.arsenal.current = pk.kind;
-      }
       events.emit({ type: 'pickup', kind: pk.kind, x: pk.x, z: pk.z });
     }
   }
   heat.step(dt);
+  combat.step(dt);
   // Cash, the Chaos Run clock and the free-roam activities.
   progress.step(dt);
   // Back on your feet: after dying a fresh run; after a bust, released at the station.
@@ -564,14 +615,29 @@ function simulate(dt: number) {
   }
   if (!player.driving) {
     for (const s of vehicleStates) collidePedVehicle(player.ped, s);
-    // Static last so a car can't shove the player into a wall.
+    // Static last so a car can't shove the player into a wall (or a ramp).
     collidePedStatic(player.ped, collision);
+    collidePedStatic(player.ped, rampGrid);
   }
   for (const c of population.crowd) {
     if (c.agent.mode !== 'down') for (const s of vehicleStates) collidePedVehicle(c.agent.s, s);
     collidePedStatic(c.agent.s, collision);
+    collidePedStatic(c.agent.s, rampGrid);
   }
   syncWeapon();
+}
+
+/** A car came off a ramp: report the take-off and the flight time to expect. */
+function carJumped(v: Vehicle, isPlayer: boolean) {
+  const s = v.sim;
+  const airtime = (s.vy + Math.sqrt(s.vy * s.vy + 2 * GRAVITY * RAMP_HEIGHT)) / GRAVITY;
+  events.emit({ type: 'jump', x: s.x, z: s.z, speed: speed(s), airtime, involvesPlayer: isPlayer });
+}
+
+/** A car came down from a jump at `impact` m/s: hard landings hurt it. */
+function carLanded(v: Vehicle, impact: number, isPlayer: boolean) {
+  applyDamage(v.damage, landingDamage(impact));
+  if (impact > 3) events.emit({ type: 'land', x: v.sim.x, z: v.sim.z, impact, involvesPlayer: isPlayer });
 }
 
 /** A ped was knocked over by a car this step: if it was the player's, that's a hit and run. */
@@ -585,47 +651,11 @@ function pedHitByCar(c: CrowdPed, driving: Vehicle | null) {
   }
 }
 
+/** A car blew up: char it, then the blast (Combat) does the rest. */
 function explode(source: Vehicle) {
-  const { x, z } = source.sim;
-  const ownCar = player.driving === source;
-  const byPlayer = ownCar || blamesPlayer(source.damage, simTime);
   charVehicle(source);
   source.wreckAge = 0;
-  const distance = Math.hypot(rig.focusX - x, rig.focusZ - z);
-  events.emit({ type: 'explosion', x, z, distance, byPlayer, ownCar, police: source.archetype === 'police' || source.police === true });
-  const at = player.position;
-  if (!attract.active && Math.hypot(at.x - x, at.z - z) < BOOM_SCORE_RANGE) award(score.award('boom'));
-
-  if (ownCar) {
-    // The slide (if any) dies with the car; you're thrown clear and hurt once.
-    score.endDrift(false);
-    player.ownCarExploded();
-  } else if (!player.driving && !attract.active) {
-    const d = Math.hypot(player.ped.x - x, player.ped.z - z);
-    if (d < BLAST_RADIUS) {
-      player.hurt(blastDamage(d, BLAST_RADIUS, 60));
-      player.knockDown(x, z, 6, 2, 'blast', byPlayer);
-    }
-  }
-  for (const v of vehicles) {
-    if (v === source) continue;
-    const d = Math.hypot(v.sim.x - x, v.sim.z - z);
-    const dmg = blastDamage(d, BLAST_RADIUS);
-    if (dmg <= 0) continue;
-    applyDamage(v.damage, dmg);
-    // A chain reaction is still the player's doing.
-    if (byPlayer) markPlayerHit(v.damage, simTime);
-    const push = (dmg / 70) * 8;
-    v.sim.vx += ((v.sim.x - x) / (d || 1)) * push;
-    v.sim.vz += ((v.sim.z - z) / (d || 1)) * push;
-  }
-  for (const c of population.crowd) {
-    const d = Math.hypot(c.agent.s.x - x, c.agent.s.z - z);
-    if (d < BLAST_RADIUS) {
-      if (c.agent.mode !== 'down') events.emit({ type: 'pedDown', x: c.agent.s.x, z: c.agent.s.z, cause: 'blast', byPlayer, cop: c.agent.role === 'cop' });
-      knockDown(c.agent, x, z, 6, 3);
-    } else if (d < 30) scare(c.agent, x, z, 4);
-  }
+  combat.vehicleExploded(source);
 }
 
 function playerTarget(): Target {
@@ -634,141 +664,9 @@ function playerTarget(): Target {
   return { x: at.x, z: at.z, inCar: player.driving !== null, alive: player.alive && !player.arrested && !attract.active };
 }
 
-type BulletHit = { kind: 'ped'; ped: CrowdPed } | { kind: 'vehicle'; v: Vehicle } | { kind: 'player' } | null;
-const bulletCircles = [
-  { x: 0, z: 0 },
-  { x: 0, z: 0 },
-  { x: 0, z: 0 },
-];
-
-/**
- * Nearest thing a bullet from (ox, oz) along unit (dx, dz) hits within range.
- * Reports where it stopped as a bulletHit event.
- */
-function traceBullet(ox: number, oz: number, dx: number, dz: number, range: number, shooterIsPlayer: boolean): BulletHit {
-  let best = range;
-  let wall = false;
-  let hit: BulletHit = null;
-  for (const r of collision.near(ox + (dx * range) / 2, oz + (dz * range) / 2, range / 2 + 1)) {
-    const t = rayRect(ox, oz, dx, dz, r);
-    if (t < best) {
-      best = t;
-      wall = true;
-    }
-  }
-  for (const c of population.crowd) {
-    if (c.agent.mode === 'down') continue;
-    const t = rayCircle(ox, oz, dx, dz, { x: c.agent.s.x, z: c.agent.s.z, r: 0.45 });
-    if (t > 0.3 && t < best) {
-      best = t;
-      hit = { kind: 'ped', ped: c };
-    }
-  }
-  for (const v of vehicles) {
-    if (shooterIsPlayer && v === player.driving) continue;
-    for (const c of carCircles(v.sim, bulletCircles)) {
-      const t = rayCircle(ox, oz, dx, dz, { x: c.x, z: c.z, r: CAR_CIRCLE_RADIUS * 0.9 });
-      if (t > 0.3 && t < best) {
-        best = t;
-        hit = { kind: 'vehicle', v };
-      }
-    }
-  }
-  if (!shooterIsPlayer && !player.driving && player.alive && !attract.active) {
-    const t = rayCircle(ox, oz, dx, dz, { x: player.ped.x, z: player.ped.z, r: 0.45 });
-    if (t > 0.3 && t < best) {
-      best = t;
-      hit = { kind: 'player' };
-    }
-  }
-  events.emit({
-    type: 'bulletHit',
-    x: ox + dx * best,
-    z: oz + dz * best,
-    target: hit ? hit.kind : wall ? 'wall' : 'none',
-    fromX: ox,
-    fromZ: oz,
-    byPlayer: shooterIsPlayer,
-    police: hit?.kind === 'vehicle' && (hit.v.archetype === 'police' || hit.v.police === true),
-  });
-  return hit;
-}
-
-function fireWeapon() {
-  const kind = player.arsenal.tryFire();
-  if (!kind) return;
-  const w = WEAPONS[kind];
-  const { x, z, heading } = player.ped;
-  const targets = [
-    ...population.crowd.filter((c) => c.agent.mode !== 'down').map((c) => c.agent.s),
-    ...vehicles.filter((v) => !v.damage.wrecked).map((v) => v.sim),
-  ];
-  // A deliberate aim (stick, mouse, right stick) snaps within ~15°; otherwise assist around the facing.
-  const aim =
-    aimHeadingNow !== null ? autoAim(x, z, aimHeadingNow, targets, w.range, AIM_SNAP) : autoAim(x, z, heading, targets, w.range);
-  player.ped.heading = Math.atan2(aim.x, aim.z);
-  const ox = x + aim.x * 0.6;
-  const oz = z + aim.z * 0.6;
-  playerModel.punch();
-  events.emit({ type: 'shot', x: ox, z: oz, dirX: aim.x, dirZ: aim.z, weapon: kind, byPlayer: true });
-  for (let i = 0; i < w.pellets; i++) {
-    const a = Math.atan2(aim.x, aim.z) + (rand() * 2 - 1) * w.spread;
-    const hit = traceBullet(ox, oz, Math.sin(a), Math.cos(a), w.range, true);
-    if (hit?.kind === 'ped') {
-      const s = hit.ped.agent.s;
-      if (hit.ped.agent.mode !== 'down') events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'shot', byPlayer: true, cop: hit.ped.agent.role === 'cop' });
-      knockDown(hit.ped.agent, x, z, 4, 5);
-      provoke(hit.ped.agent, x, z);
-      award(score.award('knockout'));
-    } else if (hit?.kind === 'vehicle') {
-      applyDamage(hit.v.damage, w.damage * VEHICLE_SHARE);
-      markPlayerHit(hit.v.damage, simTime);
-      if (hit.v.ai && rand() < 0.25) ejectDriver(hit.v, x, z);
-    }
-  }
-  // Gunfire: most people run; armed ones nearby join in.
-  for (const c of population.crowd) {
-    const d = Math.hypot(c.agent.s.x - x, c.agent.s.z - z);
-    if (d > 25) continue;
-    if (c.agent.temper === 'armed' && d < 18 && rand() < 0.5) provoke(c.agent, x, z);
-    else scare(c.agent, x, z, 4);
-  }
-}
-
+/** An NPC (an armed ped, the police) shot from (sx, sz) along unit (dirX, dirZ). */
 function npcShoot(sx: number, sz: number, dirX: number, dirZ: number) {
-  const a = Math.atan2(dirX, dirZ) + (rand() * 2 - 1) * NPC_SPREAD;
-  const dx = Math.sin(a);
-  const dz = Math.cos(a);
-  const ox = sx + dx * 0.6;
-  const oz = sz + dz * 0.6;
-  events.emit({ type: 'shot', x: ox, z: oz, dirX: dx, dirZ: dz, weapon: null, byPlayer: false });
-  const hit = traceBullet(ox, oz, dx, dz, NPC_SHOT_RANGE, false);
-  if (hit?.kind === 'player') player.hurt(NPC_SHOT_DAMAGE);
-  else if (hit?.kind === 'vehicle') applyDamage(hit.v.damage, NPC_SHOT_DAMAGE);
-}
-
-function tryPunch() {
-  if (player.driving || !player.ready || player.punchCooldown > 0) return;
-  player.punchCooldown = PUNCH_COOLDOWN;
-  playerModel.punch();
-  if (aimHeadingNow !== null) player.ped.heading = aimHeadingNow;
-  const { x, z, heading } = player.ped;
-  const fx = Math.sin(heading);
-  const fz = Math.cos(heading);
-  let landed = false;
-  for (const c of population.crowd) {
-    const dx = c.agent.s.x - x;
-    const dz = c.agent.s.z - z;
-    const d = Math.hypot(dx, dz);
-    if (d < PUNCH_RANGE && (dx * fx + dz * fz) / (d || 1) > 0.4 && c.agent.mode !== 'down') {
-      landed = true;
-      events.emit({ type: 'pedDown', x: c.agent.s.x, z: c.agent.s.z, cause: 'punch', byPlayer: true, cop: c.agent.role === 'cop' });
-      knockDown(c.agent, x, z);
-      provoke(c.agent, x, z);
-      award(score.award('knockout'));
-    } else if (d < 10) scare(c.agent, x, z, 3);
-  }
-  events.emit({ type: 'punch', x: x + fx * 0.6, z: z + fz * 0.6, hit: landed, byPlayer: true });
+  combat.npcShoot(sx, sz, dirX, dirZ);
 }
 
 // --- Loop ---
@@ -797,23 +695,34 @@ function frame(now: number) {
   }
 
   // Aim: the mouse needs the camera to find the ground under the cursor.
-  updateMouseAim(input, rig.camera, player.ped.x, player.ped.z, viewW, viewH);
+  const me = player.position;
+  updateMouseAim(input, rig.camera, me.x, me.z, viewW, viewH);
   const aim = input.readAim();
   const playing = !attract.active;
   // A card over the game (results, a phone call, the shop) takes the input.
   const control = playing && !progress.blocksInput;
-  aimHeadingNow = control && !player.driving && player.ready && aim.active ? aimHeading(aim.x, aim.y) : null;
+  const aiming = control && player.ready && aim.active ? aimHeading(aim.x, aim.y) : null;
+  aimHeadingNow = player.driving ? null : aiming;
   const pressed = input.consumePunch();
   const cycle = input.consumeCycle();
   const acted = input.consumeAction();
   if (control) {
-    if (cycle !== 0 && !player.driving) player.arsenal.cycle(cycle);
-    if (!player.driving && player.ready) {
-      const gun = player.arsenal.current;
+    // In a car, only what fires out of a window is on offer.
+    if (cycle !== 0) player.arsenal.cycle(cycle, player.driving ? driveByOnly : undefined);
+    const gun = player.arsenal.current;
+    if (player.driving) {
+      const auto = gun !== null && WEAPONS[gun].driveBy && WEAPONS[gun].automatic;
+      if (pressed || (auto && input.fireHeld)) combat.driveBy(aiming);
+      combat.updateAim(false, aimInput);
+    } else if (player.ready) {
+      aimInput.heading = aimHeadingNow;
+      aimInput.reach = aim.active ? Math.min(1, Math.hypot(aim.x, aim.y)) : 0;
+      aimInput.ground = input.mouseAimLive() && mouseGround.valid ? mouseGround : null;
+      combat.updateAim(pressed || aim.fire || input.fireHeld, aimInput);
       if (gun) {
-        if (pressed || aim.fire || (WEAPONS[gun].automatic && input.fireHeld)) fireWeapon();
-      } else if (pressed || aim.fire) tryPunch();
-    }
+        if (pressed || aim.fire || (WEAPONS[gun].automatic && input.fireHeld)) combat.fire(aimInput);
+      } else if (pressed || aim.fire) combat.punch(aimHeadingNow);
+    } else combat.updateAim(false, aimInput);
     if (acted && player.ready) {
       if (player.driving) leaveVehicle();
       else {
@@ -838,7 +747,7 @@ function frame(now: number) {
   const controls = player.driving ? input.readVehicle(player.driving.sim) : null;
   const steer = controls ? controls.steer : 0;
   for (const v of vehicles) {
-    v.mesh.root.position.set(lerp(v.prev.x, v.sim.x, alpha), 0, lerp(v.prev.z, v.sim.z, alpha));
+    v.mesh.root.position.set(lerp(v.prev.x, v.sim.x, alpha), lerp(v.prev.y, v.sim.y, alpha), lerp(v.prev.z, v.sim.z, alpha));
     v.mesh.root.rotation.y = lerpAngle(v.prev.heading, v.sim.heading, alpha);
     for (const w of v.mesh.frontWheels) w.rotation.y = v === player.driving ? -steer * 0.5 : 0;
   }
@@ -846,6 +755,9 @@ function frame(now: number) {
     const s = c.agent.s;
     c.model.root.position.set(lerp(c.prev.x, s.x, alpha), 0, lerp(c.prev.z, s.z, alpha));
     c.model.root.rotation.y = lerpAngle(c.prev.heading, s.heading, alpha);
+    // Shooters hold their gun up; a hit makes them reel.
+    c.model.armed = c.agent.mode === 'shoot' ? 'one' : false;
+    if (c.agent.stagger > 0) c.model.stagger(c.agent.stagger);
     c.model.update(frameSeconds, Math.hypot(s.vx, s.vz), c.agent.mode === 'down');
   }
 
@@ -855,11 +767,14 @@ function frame(now: number) {
   const pz = lerp(prev.z, ped.z, alpha);
   playerModel.root.position.set(px, 0, pz);
   playerModel.root.rotation.y = lerpAngle(prev.heading, ped.heading, alpha);
+  const held = player.arsenal.current;
+  playerModel.armed = held === null || WEAPONS[held].mode === 'throw' ? false : held === 'pistol' ? 'one' : 'two';
   playerModel.update(frameSeconds, Math.hypot(ped.vx, ped.vz), player.down);
 
   // Body motion, tyre marks, damaged-car smoke and fire, weather, particles.
   const focus = attract.active ? attract : player.position;
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
+  combatLook.update(frameSeconds * fx.hitStop.scale);
   updateHud(frameSeconds);
   progress.update(frameSeconds);
   heatPresenter.update(frameSeconds, focus.x, focus.z, playing);
@@ -888,6 +803,10 @@ function frame(now: number) {
   look.render(rig.camera);
   resolution.sample(elapsed);
 }
+
+/** This frame's aim, for Combat (reused). */
+const aimInput: AimInput = { heading: null, reach: 0, ground: null };
+const driveByOnly = (k: WeaponKind) => WEAPONS[k].driveBy;
 
 const playerView: PlayerView = { x: 0, z: 0, heading: 0, driving: false, speed: 0, alive: true };
 /** Where the player marker goes this frame (the interpolated positions just set). */
@@ -924,7 +843,10 @@ function updateHud(frameSeconds: number) {
   const nearCar = v || attract.active || progress.blocksInput ? null : nearestEnterable();
   hudFrame.nearCar = nearCar ? (nearCar.ai ? 'jack' : 'enter') : null;
   hudFrame.mouseAim = !v && !attract.active && input.mouseAimLive();
+  hudFrame.driveBy = v !== null && gun !== null && WEAPONS[gun].driveBy;
   hud.update(frameSeconds, hudFrame);
+  combatHud.update(player.armour, nitro.charge, nitro.boosting, nitro.charge >= NITRO_MIN);
+  carButtons.update(v ? (gun && WEAPONS[gun].driveBy ? gun : player.arsenal.driveByGun()) : null, nitro.charge, nitro.charge >= NITRO_MIN || nitro.boosting);
   touch.setWeapon(gun, gun !== null || ownsGun());
   touch.setMode(v ? 'car' : 'foot', nearCar !== null);
 }
@@ -945,6 +867,7 @@ const hud = new Hud(document.body, score, events, {
   onPause: () => frontDoor.openPause(),
   debugText: () => `${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`,
 });
+const combatHud = new CombatHud(document.getElementById('hud')!);
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
 const wantedHud = new WantedHud(document.body, events);
 const heatPresenter = new HeatPresenter(heat, audio, radar, wantedHud, hud.score, events);
@@ -1126,6 +1049,10 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   explode,
   heat,
   progress,
+  combat,
+  nitro,
+  ramps,
+  stunts,
   updates,
   hud,
   radar,

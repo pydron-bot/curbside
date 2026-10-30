@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SEDAN, speed, stepVehicle, type VehicleState } from '../src/entities/vehicle';
+import { SEDAN, createVehicleState, speed, stepVehicle, type VehicleState } from '../src/entities/vehicle';
 import { collideVehicleStatic, collideVehicles } from '../src/systems/physics';
 import { clearDistance, driveAi, isHopeless, reactToHit, rerouteAi, scareDriver, shouldYield, spawnAi } from '../src/systems/traffic';
 import { BLOCK_SIZE, generateCity } from '../src/world/city';
@@ -36,7 +36,7 @@ describe('AI driving', () => {
   function makeCar(ix: number, iz: number, dir: Dir, seed: number) {
     const rand = random(seed);
     const s = spawnAi(ix, iz, dir, 0.3, rand)!;
-    const car: VehicleState = { x: s.x, z: s.z, heading: s.heading, vx: 0, vz: 0, yawRate: 0 };
+    const car: VehicleState = { ...createVehicleState(), x: s.x, z: s.z, heading: s.heading, vx: 0, vz: 0, yawRate: 0 };
     return { car, ai: s.driver, rand };
   }
 
@@ -122,7 +122,7 @@ describe('AI getting unstuck', () => {
     const wall = new StaticGrid([{ minX: 0, minZ: -60, maxX: 8, maxZ: -58 }]);
     const s = spawnAi(0, -1, 0, 0.9, rand)!; // heading north (-Z) on x = +4
     s.driver.next = 0;
-    const car: VehicleState = { x: s.x, z: -50, heading: s.heading, vx: 0, vz: 0, yawRate: 0 };
+    const car: VehicleState = { ...createVehicleState(), x: s.x, z: -50, heading: s.heading, vx: 0, vz: 0, yawRate: 0 };
     let reversed = false;
     for (let i = 0; i < 60 * 4; i++) {
       const c = driveAi(s.driver, car, [], rand, DT);
@@ -146,7 +146,7 @@ describe('AI getting unstuck', () => {
       const x = s.x + (rand() * 2 - 1) * 12;
       const z = s.z + (rand() * 2 - 1) * 12;
       if (nearObstacle(x, z)) continue;
-      const car: VehicleState = { x, z, heading: rand() * Math.PI * 2, vx: 0, vz: 0, yawRate: 0 };
+      const car: VehicleState = { ...createVehicleState(), x, z, heading: rand() * Math.PI * 2, vx: 0, vz: 0, yawRate: 0 };
       trials++;
       if (drive(car, s.driver, rand, 40) < 2) stuck++;
     }
@@ -159,7 +159,7 @@ describe('AI getting unstuck', () => {
     const rand = random(8);
     const s = spawnAi(0, -2, 0, 0.5, rand)!; // northbound on x = +4
     // Blasted onto the east-west road at z = -64, pointing east.
-    const car: VehicleState = { x: 40, z: -BLOCK_SIZE + 4, heading: Math.PI / 2, vx: 0, vz: 0, yawRate: 0 };
+    const car: VehicleState = { ...createVehicleState(), x: 40, z: -BLOCK_SIZE + 4, heading: Math.PI / 2, vx: 0, vz: 0, yawRate: 0 };
     driveAi(s.driver, car, [], rand, DT);
     expect(s.driver.dir).toBe(1); // now heading east along the road it's on
     const entry = entryPoint(s.driver.ix, s.driver.iz, s.driver.dir);
@@ -171,7 +171,7 @@ describe('AI getting unstuck', () => {
   it('turns round at the edge of the map when re-routed', () => {
     const rand = random(9);
     const s = spawnAi(0, 0, 0, 0.5, rand)!;
-    const car: VehicleState = { x: MAX_NODE * BLOCK_SIZE - 30, z: 4, heading: Math.PI / 2, vx: 0, vz: 0, yawRate: 0 };
+    const car: VehicleState = { ...createVehicleState(), x: MAX_NODE * BLOCK_SIZE - 30, z: 4, heading: Math.PI / 2, vx: 0, vz: 0, yawRate: 0 };
     rerouteAi(s.driver, car, rand);
     expect(Math.abs(s.driver.ix)).toBeLessThanOrEqual(MAX_NODE);
     expect(Math.abs(s.driver.iz)).toBeLessThanOrEqual(MAX_NODE);
@@ -187,7 +187,7 @@ describe('AI getting unstuck', () => {
       { minX: -2, minZ: -60, maxX: 0, maxZ: -38 },
       { minX: 8, minZ: -60, maxX: 10, maxZ: -38 },
     ]);
-    const car: VehicleState = { x: 4, z: -49, heading: s.heading, vx: 0, vz: 0, yawRate: 0 };
+    const car: VehicleState = { ...createVehicleState(), x: 4, z: -49, heading: s.heading, vx: 0, vz: 0, yawRate: 0 };
     for (let i = 0; i < 60 * 20; i++) {
       stepVehicle(car, driveAi(s.driver, car, [], rand, DT), SEDAN, DT);
       collideVehicleStatic(car, box);
@@ -196,7 +196,7 @@ describe('AI getting unstuck', () => {
 
     const q = spawnAi(0, -3, 0, 0.3, rand)!;
     q.driver.next = 0;
-    const queued: VehicleState = { x: q.x, z: q.z, heading: q.heading, vx: 0, vz: 0, yawRate: 0 };
+    const queued: VehicleState = { ...createVehicleState(), x: q.x, z: q.z, heading: q.heading, vx: 0, vz: 0, yawRate: 0 };
     const blocker = { ...lanePoint(0, -3, 0, -20), halfWidth: 1 };
     for (let i = 0; i < 60 * 20; i++) {
       stepVehicle(queued, driveAi(q.driver, queued, [blocker], rand, DT), SEDAN, DT);
@@ -210,7 +210,7 @@ describe('traffic reactions', () => {
   function onRoad(seed = 1) {
     const rand = random(seed);
     const s = spawnAi(0, -2, 0, 0.3, rand)!;
-    const car: VehicleState = { x: s.x, z: s.z, heading: s.heading, vx: 0, vz: 0, yawRate: 0 };
+    const car: VehicleState = { ...createVehicleState(), x: s.x, z: s.z, heading: s.heading, vx: 0, vz: 0, yawRate: 0 };
     return { car, ai: s.driver, rand };
   }
 
@@ -251,7 +251,7 @@ describe('traffic reactions', () => {
     for (let i = 0; i < 60 * 1.5; i++) stepVehicle(car, driveAi(ai, car, [], rand, DT), SEDAN, DT);
     const fx = Math.sin(car.heading);
     const fz = Math.cos(car.heading);
-    const siren = { x: car.x - fx * 20, z: car.z - fz * 20, heading: car.heading, vx: 0, vz: 0, yawRate: 0 };
+    const siren = { ...createVehicleState(), x: car.x - fx * 20, z: car.z - fz * 20, heading: car.heading, vx: 0, vz: 0, yawRate: 0 };
     expect(shouldYield(car, siren)).toBe(true);
     // Head-on, close: yes. Behind but on a crossing road: no.
     expect(shouldYield(car, { ...siren, x: car.x + fx * 20, z: car.z + fz * 20, heading: car.heading + Math.PI })).toBe(true);

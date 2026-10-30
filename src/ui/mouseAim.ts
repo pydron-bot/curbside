@@ -12,6 +12,12 @@ const hit = { x: 0, z: 0 };
 const dir = { x: 0, y: 0 };
 
 /**
+ * The ground point under the cursor as of the last updateMouseAim, while the
+ * mouse is aiming (`valid`): where a thrown grenade lands.
+ */
+export const mouseGround = { x: 0, z: 0, valid: false };
+
+/**
  * Ground point under client pixel (cx, cy) of a `w`×`h` view, written into
  * `out`. Returns false when the ray never reaches the ground.
  */
@@ -45,6 +51,7 @@ export function updateMouseAim(
   h: number,
 ): void {
   const m = input.mouse;
+  mouseGround.valid = false;
   if (!input.mouseAimLive()) {
     m.aimX = m.aimY = 0;
     return;
@@ -54,6 +61,9 @@ export function updateMouseAim(
     m.aimX = m.aimY = 0;
     return;
   }
+  mouseGround.x = hit.x;
+  mouseGround.z = hit.z;
+  mouseGround.valid = true;
   aimToward(px, pz, hit.x, hit.z, dir);
   m.aimX = dir.x;
   m.aimY = dir.y;

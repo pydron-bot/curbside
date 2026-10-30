@@ -67,9 +67,14 @@ export interface FxDeps {
 
 const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
   health: { r: 0.35, g: 1, b: 0.45 },
+  armour: { r: 0.3, g: 0.8, b: 1 },
+  ammo: { r: 1, g: 0.85, b: 0.3 },
   pistol: { r: 1, g: 0.78, b: 0.3 },
   smg: { r: 1, g: 0.65, b: 0.2 },
   shotgun: { r: 1, g: 0.5, b: 0.2 },
+  grenade: { r: 0.6, g: 1, b: 0.35 },
+  molotov: { r: 1, g: 0.5, b: 0.15 },
+  rocket: { r: 0.9, g: 0.35, b: 1 },
 };
 
 export class FxDirector {
@@ -85,6 +90,12 @@ export class FxDirector {
   private lastCombat = -Infinity;
   private lastBoomKick = -Infinity;
   private lastShot: TracerKind = 'pistol';
+  /** Real seconds until a big jump's slow motion starts (near the top of the arc). */
+  private slowMoIn = 0;
+  private slowMoFor = 0;
+  /** The player's nitro is burning (exhaust flames each frame). */
+  private boosting = false;
+  private exhaustDebt = 0;
   private readonly paint: Rgb = { r: 0, g: 0, b: 0 };
   private readonly view: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
   private readonly size = new Vector2();
@@ -113,6 +124,19 @@ export class FxDirector {
       this.d.effects.burst(e.x, e.z, c.r, c.g, c.b, Math.round(14 * this.d.effects.scale), 2.6);
     });
     bus.on('award', (e) => this.onAward(e));
+    bus.on('ignite', (e) => this.onIgnite(e));
+    bus.on('jump', (e) => this.onJump(e));
+    bus.on('land', (e) => this.onLand(e));
+    bus.on('stunt', (e) => this.onStunt(e));
+    bus.on('boost', (e) => {
+      this.boosting = e.on;
+      if (!e.on || !this.playing) return;
+      // The kick of it lighting: the view widens and jolts back.
+      this.d.rig.punchFov(-5);
+      this.d.rig.addTrauma(0.18);
+      const car = this.d.player.driving;
+      if (car) this.d.rig.kick(-car.sim.vx, -car.sim.vz, 0.5);
+    });
     bus.on('playerHurt', (e) => {
       this.d.rig.addTrauma(0.2 + Math.min(0.4, e.amount / 50));
       this.d.playerModel.flash(0.1);
@@ -120,6 +144,8 @@ export class FxDirector {
     });
     bus.on('playerDied', () => this.d.rig.addTrauma(0.5));
     bus.on('respawn', () => {
+      this.boosting = false;
+      this.slowMoIn = 0;
       this.flash = 0;
       this.hitStop.reset();
       this.driving.reset();
@@ -146,6 +172,9 @@ export class FxDirector {
     this.playing = playing;
     this.realTime += realDt;
     const dt = realDt * this.hitStop.scale;
+
+    // A big jump: slow motion as the car nears the top of its arc.
+    if (this.slowMoIn > 0 && (this.slowMoIn -= realDt) <= 0) this.hitStop.hit(this.slowMoFor, 0.3);
 
     // Camera framing: lead for driving, a nudge on foot, lift when armed or fighting.
     // During hit-stop the follow slows with the sim, so the view freezes with the action.
@@ -176,6 +205,7 @@ export class FxDirector {
     this.rain.update(realDt, rainShown, d.rig.visibleGround(this.view), d.rig.currentHeight, this.size.x, this.size.y, worldUniforms.uNight.value);
 
     this.driving.update(dt, d.vehicles, driving, controls, d.score.driftPoints, focusX, focusZ);
+    if (this.boosting && driving) this.exhaust(driving, dt);
     d.effects.update(dt);
   }
 
@@ -242,11 +272,25 @@ export class FxDirector {
   }
 
   private onShot(e: EventOf<'shot'>): void {
-    const power = e.weapon === 'shotgun' ? 1.6 : e.weapon === 'smg' ? 0.85 : e.weapon ? 1 : 0.65;
+    const rocket = e.weapon === 'rocket';
+    const power = rocket ? 1.9 : e.weapon === 'shotgun' ? 1.6 : e.weapon === 'smg' ? 0.85 : e.weapon ? 1 : 0.65;
     const fx = this.d.effects;
     fx.muzzleFlash(e.x, e.z, e.dirX, e.dirZ, power);
-    this.lastShot = e.weapon ?? 'npc';
+    this.lastShot = e.weapon === 'pistol' || e.weapon === 'smg' || e.weapon === 'shotgun' ? e.weapon : 'npc';
     const p = this.d.player;
+    if (rocket) {
+      // Backblast: a cone of smoke out of the back of the tube.
+      for (let k = 0; k < 7; k++) {
+        const sp = 3 + Math.random() * 5;
+        fx.puff(e.x - e.dirX * 1.3, 1.2, e.z - e.dirZ * 1.3, 0.72, 0.5, 2.4, 0.6, -e.dirX * sp + (Math.random() - 0.5) * 2, 0.6, -e.dirZ * sp + (Math.random() - 0.5) * 2, 1.2);
+      }
+      if (this.playing && e.byPlayer) {
+        this.d.rig.addTrauma(0.3);
+        this.d.rig.kick(-e.dirX, -e.dirZ, 0.7);
+        this.lastCombat = this.realTime;
+      }
+      return;
+    }
     if (e.byPlayer) {
       this.lastCombat = this.realTime;
       // Spent casing out of the right side of the gun (the right is (-dirZ, dirX)).
@@ -323,6 +367,73 @@ export class FxDirector {
     }
   }
 
+  /** Off a ramp: dust off the lip, and for the player's big jumps a beat of slow motion. */
+  private onJump(e: EventOf<'jump'>): void {
+    this.d.effects.dustRing(e.x, e.z, Math.max(3, Math.round(6 * this.d.effects.scale)), 0.8, 2.5);
+    if (!e.involvesPlayer || !this.playing) return;
+    this.d.rig.punchFov(3);
+    if (e.airtime >= 0.9) {
+      this.slowMoIn = e.airtime * 0.3;
+      this.slowMoFor = Math.min(0.55, 0.25 + (e.airtime - 0.9) * 0.4);
+    }
+  }
+
+  /** Coming down: the body slams and bounces, dust flies, the camera thumps. */
+  private onLand(e: EventOf<'land'>): void {
+    const fx = this.d.effects;
+    const car = this.vehicleNear(e.x, e.z);
+    if (car) this.driving.body(car).land(e.impact);
+    fx.dustRing(e.x, e.z, Math.max(4, Math.round((5 + e.impact * 0.6) * fx.scale)), 1.2, 2 + e.impact * 0.25);
+    if (e.impact > 10) fx.sparks(e.x, 0.3, e.z, Math.round(8 * fx.scale), 3, 9, 0, 0);
+    if (!e.involvesPlayer || !this.playing) return;
+    this.slowMoIn = 0;
+    this.d.rig.addTrauma(Math.min(0.6, 0.1 + e.impact / 30));
+    this.d.rig.kick(0, -1, Math.min(0.8, e.impact * 0.05));
+  }
+
+  /** A STUNT award: a burst over the car, and an edge flash for a really big one. */
+  private onStunt(e: EventOf<'stunt'>): void {
+    if (!this.playing) return;
+    const big = e.points >= 3500;
+    this.d.effects.burst(e.x, e.z, 0.3, 0.9, 1, Math.round((big ? 28 : 16) * this.d.effects.scale), big ? 6 : 4);
+    if (big) this.overlay.edgeFlash('rgb(46 230 255 / 0.75)', 0.8);
+  }
+
+  /** Nitro burning: blue-white flames out of the exhaust, the odd puff of smoke. */
+  private exhaust(car: Vehicle, dt: number): void {
+    const fx = this.d.effects;
+    const s = car.sim;
+    const root = car.mesh.root.position;
+    const fx0 = Math.sin(s.heading);
+    const fz0 = Math.cos(s.heading);
+    const bx = root.x - fx0 * 2.5;
+    const bz = root.z - fz0 * 2.5;
+    this.exhaustDebt += dt * 70;
+    while (this.exhaustDebt >= 1) {
+      this.exhaustDebt -= 1;
+      const side = Math.random() < 0.5 ? 0.45 : -0.45;
+      const x = bx + Math.cos(s.heading) * side;
+      const z = bz - Math.sin(s.heading) * side;
+      if (Math.random() < 0.75) fx.flare(x, 0.55 + root.y, z, 0.45 + Math.random() * 0.35, 0.06, 1.4, 1.9, 3);
+      else fx.flare(x - fx0 * 0.5, 0.6 + root.y, z - fz0 * 0.5, 0.6, 0.08, 2.8, 1.5, 0.6);
+    }
+    if (Math.random() < dt * 10) fx.puff(bx, 0.6, bz, 0.7, 0.4, 1.6, 0.35, -s.vx * 0.1, 0.4, -s.vz * 0.1, 0.8);
+  }
+
+  /** A molotov bursting: a whoosh of flame, glass and a flash of light on the ground. */
+  private onIgnite(e: EventOf<'ignite'>): void {
+    const fx = this.d.effects;
+    fx.flare(e.x, 0.8, e.z, 2.2, 0.12, 2.8, 1.6, 0.6);
+    fx.light(e.x, 0.1, e.z, 1, e.radius * 1.8, 1.8, 0.9, 0.3, 0.45, GLOW.disc);
+    for (let k = Math.round(14 * fx.scale); k > 0; k--) {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.random() * e.radius * 0.8;
+      fx.emitFire(e.x + Math.cos(a) * d, e.z + Math.sin(a) * d, 0.2);
+    }
+    fx.glass(e.x, 0.4, e.z, Math.round(6 * fx.scale), 4);
+    if (this.playing && Math.hypot(this.d.rig.focusX - e.x, this.d.rig.focusZ - e.z) < 30) this.d.rig.addTrauma(0.15);
+  }
+
   private onAward(e: EventOf<'award'>): void {
     if (!this.playing) return;
     const a = e.award;
@@ -369,6 +480,20 @@ export class FxDirector {
       glows.addFlat(x, 0.09, z, 0, 11, 11, 1.0 * k, 0.42 * k, 0.1 * k, GLOW.disc);
       glows.addFlat(x, 1.9, z, 0, 3.4, 3.4, 1.2 * k, 0.6 * k, 0.16 * k, GLOW.disc);
     }
+  }
+
+  /** The car closest to (x, z) within 3 m (who just landed there). */
+  private vehicleNear(x: number, z: number): Vehicle | null {
+    let best: Vehicle | null = null;
+    let bestD = 3;
+    for (const v of this.d.vehicles) {
+      const d = Math.hypot(v.sim.x - x, v.sim.z - z);
+      if (d < bestD) {
+        bestD = d;
+        best = v;
+      }
+    }
+    return best;
   }
 
   private vehicleAt(x: number, z: number): Vehicle | null {

@@ -167,7 +167,9 @@ export class CarBatch {
       const d = am.dims;
       const heading = Math.atan2(sin, cos);
       const mid = (d.front - d.rear) / 2;
-      shadows.add(x + sin * mid, z + cos * mid, heading, d.halfWidth * 0.98, (d.front + d.rear) / 2, 0.45, 0.62);
+      // Off the ground (a ramp, a jump) the shadow stays on the road, softer and fainter with height.
+      const lift = Math.max(0, e[13]);
+      shadows.add(x + sin * mid, z + cos * mid, heading, d.halfWidth * 0.98, (d.front + d.rear) / 2, 0.45 + lift * 0.25, 0.62 / (1 + lift * 0.35));
       this.addLights(glows, car, rec, d, x, z, sin, cos, heading, night * lights, time);
     }
     for (let k = 0; k < list.length; k++) {

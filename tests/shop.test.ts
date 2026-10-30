@@ -11,6 +11,12 @@ describe('shop', () => {
     expect(canBuy(ammo, 99999, () => true)).toBe('ok');
   });
 
+  it('a vest can be bought again once it is no longer full', () => {
+    const vest = SHOP_ITEMS.find((i) => i.kind === 'armour')!;
+    expect(canBuy(vest, 99999, () => true)).toBe('owned'); // still full
+    expect(canBuy(vest, 99999, () => false)).toBe('ok');
+  });
+
   it('a 20-minute session (~$8k) can afford a couple of upgrades', () => {
     const upgrades = SHOP_ITEMS.filter((i) => i.kind === 'upgrade').map((i) => i.price).sort((a, b) => a - b);
     expect(upgrades[0] + upgrades[1]).toBeLessThanOrEqual(8000);

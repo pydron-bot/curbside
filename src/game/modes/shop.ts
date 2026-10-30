@@ -7,7 +7,8 @@
 import type { WeaponKind } from '../../systems/weapons';
 import { SPRAY_COST } from '../heat';
 
-export type ShopItemKind = 'upgrade' | 'ammo';
+/** upgrade: permanent unlock; ammo: a bundle for a gun; armour: a vest that tops armour up to full. */
+export type ShopItemKind = 'upgrade' | 'ammo' | 'armour';
 
 export interface ShopItem {
   id: string;
@@ -22,7 +23,7 @@ export interface ShopItem {
 /** Pay 'n' Spray's usual price (heat.ts), and with the spray card. */
 export const SPRAY_PRICE = SPRAY_COST;
 export const SPRAY_PRICE_CARD = 100;
-/** Extra max health from the TOUGH SKIN upgrade (the stand-in for body armour). */
+/** Extra max health from the TOUGH SKIN upgrade. */
 export const TOUGH_SKIN_HEALTH = 50;
 
 export const SHOP_ITEMS: readonly ShopItem[] = [
@@ -47,16 +48,18 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
     blurb: 'Hidden packages show on the radar',
     price: 2000,
   },
+  { id: 'vest', kind: 'armour', name: 'BODY ARMOUR', blurb: 'A full vest: soaks up hits before health', price: 600 },
   { id: 'ammo-pistol', kind: 'ammo', name: 'PISTOL ROUNDS', blurb: '+24 rounds (and the pistol)', price: 150, weapon: 'pistol' },
   { id: 'ammo-smg', kind: 'ammo', name: 'SMG DRUM', blurb: '+90 rounds (and the SMG)', price: 400, weapon: 'smg' },
   { id: 'ammo-shotgun', kind: 'ammo', name: 'SHOTGUN SHELLS', blurb: '+12 shells (and the shotgun)', price: 300, weapon: 'shotgun' },
+  { id: 'ammo-grenade', kind: 'ammo', name: 'GRENADES', blurb: 'A bag of grenades', price: 500, weapon: 'grenade' },
 ];
 
 export type BuyCheck = 'ok' | 'owned' | 'broke';
 
-/** Can `item` be bought with `cash`, given the unlocks held? */
+/** Can `item` be bought with `cash`, given the unlocks held (for armour: a vest already full)? */
 export function canBuy(item: ShopItem, cash: number, owned: (id: string) => boolean): BuyCheck {
-  if (item.kind === 'upgrade' && owned(item.id)) return 'owned';
+  if ((item.kind === 'upgrade' || item.kind === 'armour') && owned(item.id)) return 'owned';
   return cash >= item.price ? 'ok' : 'broke';
 }
 

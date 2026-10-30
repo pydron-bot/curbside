@@ -15,8 +15,20 @@ export const CAR_CIRCLE_OFFSETS = [-1.38, 0, 1.38] as const;
 export const PED_RADIUS = 0.35;
 
 const WALL_RESTITUTION = 0.25;
-const WALL_FRICTION = 0.85;
+/**
+ * Wall friction scrubs the speed *along* the wall, growing with the square
+ * of how hard the car hit it: a glancing touch keeps nearly all its pace
+ * and slides along, a head-on hit (|vn| ≥ WALL_HARD) loses this share of it.
+ */
+const WALL_SCRUB = 0.45;
+const WALL_HARD = 10;
+/** Nose into the wall at less than this (sin of the angle, ~40°): swing it along the wall. */
+const GLANCE_MAX = 0.64;
+/** Yaw kick per radian of glancing angle, rad/s: the car turns parallel rather than grinding. */
+const GLANCE_ALIGN = 7;
 const CAR_RESTITUTION = 0.35;
+/** Cars this high above the road (ramps, jumps) pass over other cars, m. */
+export const CLEARANCE = 1.1;
 /** Centre distance beyond which two cars can't touch. */
 const CAR_REACH = (CAR_CIRCLE_OFFSETS[2] + CAR_CIRCLE_RADIUS) * 2;
 /** Centre distance beyond which a ped can't touch a car. */
@@ -25,6 +37,18 @@ const PED_CAR_REACH = CAR_CIRCLE_OFFSETS[2] + CAR_CIRCLE_RADIUS + PED_RADIUS;
 export interface Point {
   x: number;
   z: number;
+}
+
+/**
+ * Where two cars touched, plus what damage needs: the contact normal (from b
+ * toward a) and how much of the closing speed each car brought (pre-impulse,
+ * m/s along the normal; the rammer brings most of it).
+ */
+export interface CarContact extends Point {
+  nx: number;
+  nz: number;
+  closingA: number;
+  closingB: number;
 }
 
 const newCircles = (): Point[] => [
@@ -53,6 +77,11 @@ export function carCircles(s: VehicleState, out: Point[] = newCircles()): Point[
 /**
  * Push a car out of walls and bounce it. If `contact` is given and the car
  * hit something, it receives the point of impact (on the wall surface).
+ *
+ * Only the part of the velocity into the wall is stopped (and bounced); the
+ * part along it is scrubbed in proportion to how hard the hit was, and a
+ * glancing nose-in swings the car parallel, so a glance slides along the
+ * wall instead of sticking.
  */
 export function collideVehicleStatic(s: VehicleState, grid: StaticGrid, contact?: Point): number {
   let impact = 0;
@@ -69,11 +98,21 @@ export function collideVehicleStatic(s: VehicleState, grid: StaticGrid, contact?
     s.z = pos.z - fz * offset;
     const vn = s.vx * c.nx + s.vz * c.nz;
     if (vn < 0) {
-      s.vx -= (1 + WALL_RESTITUTION) * vn * c.nx;
-      s.vz -= (1 + WALL_RESTITUTION) * vn * c.nz;
-      s.vx *= WALL_FRICTION;
-      s.vz *= WALL_FRICTION;
-      s.yawRate *= 0.6;
+      const hard = Math.min(1, -vn / WALL_HARD);
+      const keep = 1 - WALL_SCRUB * hard * hard;
+      const tx = (s.vx - vn * c.nx) * keep;
+      const tz = (s.vz - vn * c.nz) * keep;
+      s.vx = tx - WALL_RESTITUTION * vn * c.nx;
+      s.vz = tz - WALL_RESTITUTION * vn * c.nz;
+      // Nose-in at a shallow angle: turn along the wall (toward the side the
+      // normal points to; +yaw swings the nose toward the car's left).
+      const noseIn = -(fx * c.nx + fz * c.nz);
+      if (noseIn > 0 && noseIn < GLANCE_MAX) {
+        const left = Math.cos(s.heading) * c.nx - Math.sin(s.heading) * c.nz;
+        s.yawRate = s.yawRate * (1 - 0.5 * hard) + Math.sign(left) * Math.asin(noseIn) * GLANCE_ALIGN;
+      } else {
+        s.yawRate *= 1 - 0.4 * hard;
+      }
       if (-vn > impact) {
         impact = -vn;
         if (contact) {
@@ -87,16 +126,24 @@ export function collideVehicleStatic(s: VehicleState, grid: StaticGrid, contact?
 }
 
 /**
- * Separate two overlapping cars and exchange momentum (equal masses). If
- * `contact` is given and they hit, it receives the point where they touched.
+ * Separate two overlapping cars and exchange momentum, the heavier car
+ * (`massA`, `massB`: relative masses) moving less. If `contact` is given
+ * and they hit, it receives where they touched, the normal and each car's
+ * share of the closing speed. Cars more than CLEARANCE apart in height
+ * (one flying over the other) don't touch.
  */
-export function collideVehicles(a: VehicleState, b: VehicleState, contact?: Point): number {
+export function collideVehicles(a: VehicleState, b: VehicleState, contact?: Point | CarContact, massA = 1, massB = 1): number {
   // Cheap reject: centres further apart than the cars' full lengths.
   if (Math.abs(a.x - b.x) > CAR_REACH || Math.abs(a.z - b.z) > CAR_REACH) return 0;
+  if (Math.abs(a.y - b.y) > CLEARANCE) return 0;
 
   let impact = 0;
   const ca = carCircles(a, scratchA);
   const cb = carCircles(b, scratchB);
+  const ia = 1 / massA;
+  const ib = 1 / massB;
+  const shareA = ia / (ia + ib);
+  const shareB = 1 - shareA;
   for (const p of ca) {
     for (const q of cb) {
       let dx = p.x - q.x;
@@ -111,22 +158,30 @@ export function collideVehicles(a: VehicleState, b: VehicleState, contact?: Poin
         dx = 1;
         dz = 0;
       }
+      // Separate (the lighter car gives way more), then exchange momentum along the normal.
+      a.x += dx * overlap * shareA;
+      a.z += dz * overlap * shareA;
+      b.x -= dx * overlap * shareB;
+      b.z -= dz * overlap * shareB;
+      const closingA = -(a.vx * dx + a.vz * dz);
+      const closingB = b.vx * dx + b.vz * dz;
+      const vrel = -(closingA + closingB);
       if (contact) {
         contact.x = (p.x + q.x) / 2;
         contact.z = (p.z + q.z) / 2;
+        if ('nx' in contact) {
+          contact.nx = dx;
+          contact.nz = dz;
+          contact.closingA = closingA;
+          contact.closingB = closingB;
+        }
       }
-      // Separate equally, then exchange momentum along the normal (equal masses).
-      a.x += dx * overlap * 0.5;
-      a.z += dz * overlap * 0.5;
-      b.x -= dx * overlap * 0.5;
-      b.z -= dz * overlap * 0.5;
-      const vrel = (a.vx - b.vx) * dx + (a.vz - b.vz) * dz;
       if (vrel < 0) {
-        const j = (-(1 + CAR_RESTITUTION) * vrel) / 2;
-        a.vx += j * dx;
-        a.vz += j * dz;
-        b.vx -= j * dx;
-        b.vz -= j * dz;
+        const j = (-(1 + CAR_RESTITUTION) * vrel) / (ia + ib);
+        a.vx += j * ia * dx;
+        a.vz += j * ia * dz;
+        b.vx -= j * ib * dx;
+        b.vz -= j * ib * dz;
         a.yawRate *= 0.7;
         b.yawRate *= 0.7;
         impact = Math.max(impact, -vrel);

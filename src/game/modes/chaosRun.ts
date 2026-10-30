@@ -37,7 +37,7 @@ export function nextMedal(score: number): { medal: Medal; at: number } | null {
 }
 
 /** How the results card groups the score kinds. */
-export type ChaosCategory = 'drift' | 'nearMiss' | 'smash' | 'hitAndRun' | 'knockout' | 'carjack' | 'boom' | 'cops';
+export type ChaosCategory = 'drift' | 'nearMiss' | 'smash' | 'hitAndRun' | 'knockout' | 'carjack' | 'boom' | 'stunt' | 'cops';
 export const CHAOS_CATEGORIES: ReadonlyArray<{ id: ChaosCategory; label: string }> = [
   { id: 'drift', label: 'DRIFT' },
   { id: 'nearMiss', label: 'NEAR MISS' },
@@ -46,6 +46,7 @@ export const CHAOS_CATEGORIES: ReadonlyArray<{ id: ChaosCategory; label: string 
   { id: 'knockout', label: 'KO' },
   { id: 'carjack', label: 'CARJACK' },
   { id: 'boom', label: 'BOOM' },
+  { id: 'stunt', label: 'STUNTS' },
   { id: 'cops', label: 'COPS' },
 ];
 

@@ -1,0 +1,155 @@
+/* --- Combat and driving additions to the HUD and touch controls
+   (src/ui/combatHud.ts, src/ui/carButtons.ts) --- */
+
+/* Body armour: a cyan strip over the top of the health bar. */
+.hp-armour {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 4px;
+  transform-origin: left center;
+  background: linear-gradient(180deg, #b8f4ff, #29c6ff);
+  box-shadow: 0 0 6px rgb(41 198 255 / 0.8);
+  transition: transform 0.15s ease-out;
+}
+
+.hp-armour[hidden] {
+  display: none;
+}
+
+/* In a car with a drive-by gun: the weapon sits beside the speedometer. */
+body[data-mode='car'] .hud-status:not(.in-car) .weapon {
+  position: absolute;
+  top: 26px;
+  left: calc(clamp(80px, 24vmin, 140px) + 14px);
+  height: 26px;
+}
+
+/* Nitro: a slim upright gauge on the speedometer's right. */
+.nitro {
+  position: absolute;
+  right: -11px;
+  top: 16%;
+  bottom: 22%;
+  width: 6px;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.5);
+  border: 1px solid rgb(255 255 255 / 0.3);
+  overflow: hidden;
+}
+
+.nitro > i {
+  position: absolute;
+  inset: 0;
+  transform-origin: center bottom;
+  background: linear-gradient(0deg, #2e7dff, #2ee6ff);
+  transition: transform 0.1s linear;
+}
+
+.nitro.ready > i {
+  box-shadow: 0 0 8px rgb(46 230 255 / 0.9);
+}
+
+.nitro.boosting > i {
+  background: linear-gradient(0deg, #ff2e88, #ffd23f);
+  animation: nitro-burn 0.12s steps(2, jump-none) infinite;
+}
+
+.nitro-icon {
+  position: absolute;
+  right: -15px;
+  bottom: 6%;
+  width: 14px;
+  height: 14px;
+  color: #2ee6ff;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.8));
+}
+
+.nitro-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+@keyframes nitro-burn {
+  50% {
+    filter: brightness(1.5);
+  }
+}
+
+/* --- Touch, in a car: FIRE (drive-by) and NITRO, inboard of the pedals --- */
+.btn-carfire,
+.btn-nitro {
+  visibility: hidden;
+}
+
+.btn-carfire.available,
+.btn-nitro.available {
+  visibility: visible;
+}
+
+.btn-carfire {
+  --accent: #ff3b4f;
+  right: calc(var(--edge-r) + var(--pad-w) + 14px);
+  bottom: calc(var(--edge-b) + 4px);
+  width: 66px;
+  height: 66px;
+  padding: 14px;
+}
+
+.btn-carfire .fire-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.btn-nitro {
+  --accent: #2ee6ff;
+  right: calc(var(--edge-r) + var(--pad-w) + 20px);
+  bottom: calc(var(--edge-b) + 82px);
+  width: 54px;
+  height: 54px;
+  padding: 9px;
+}
+
+.btn-nitro svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* The tank's level fills the button from the bottom. */
+.btn-nitro::before {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: linear-gradient(0deg, rgb(46 230 255 / 0.55) calc(var(--fill, 0) * 100%), transparent calc(var(--fill, 0) * 100%));
+  pointer-events: none;
+}
+
+.btn-nitro.empty {
+  opacity: 0.45;
+}
+
+.touch-layer[data-hand='left'] .btn-carfire {
+  right: auto;
+  left: calc(var(--edge-l) + var(--pad-w) + 14px);
+}
+
+.touch-layer[data-hand='left'] .btn-nitro {
+  right: auto;
+  left: calc(var(--edge-l) + var(--pad-w) + 20px);
+}
+
+@media (max-height: 360px) {
+  .btn-carfire {
+    width: 60px;
+    height: 60px;
+    padding: 12px;
+  }
+
+  .btn-nitro {
+    width: 50px;
+    height: 50px;
+    bottom: calc(var(--edge-b) + 74px);
+  }
+}
