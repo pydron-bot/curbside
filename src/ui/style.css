@@ -4,6 +4,12 @@
   box-sizing: border-box;
 }
 
+/* `hidden` always wins: component rules like `.mbtn { display: flex }` would
+   otherwise override the UA rule and show a button the code has hidden. */
+[hidden] {
+  display: none !important;
+}
+
 html,
 body {
   margin: 0;

@@ -75,8 +75,12 @@ export function generatePickups(seed: number, count = 56): Pickup[] {
 
 /** The available pickup within reach of (x, z), if any. */
 export function pickupAt(pickups: Pickup[], x: number, z: number): Pickup | null {
+  // Squared distances: this runs over every crate each step (Math.hypot isn't inlined).
   for (const p of pickups) {
-    if (p.respawnAt === 0 && Math.hypot(p.x - x, p.z - z) < PICKUP_RADIUS) return p;
+    if (p.respawnAt !== 0) continue;
+    const dx = p.x - x;
+    const dz = p.z - z;
+    if (dx * dx + dz * dz < PICKUP_RADIUS * PICKUP_RADIUS) return p;
   }
   return null;
 }

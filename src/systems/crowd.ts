@@ -25,7 +25,11 @@ export type PedRole = 'civilian' | 'cop';
 export type Temper = 'calm' | 'fighter' | 'armed';
 
 /** Something a hostile ped did this step, for the game to resolve. */
-export type CrowdEvent = { kind: 'punch' } | { kind: 'shoot'; dirX: number; dirZ: number };
+export type CrowdEvent =
+  | { kind: 'punch' }
+  | { kind: 'shoot'; dirX: number; dirZ: number }
+  /** Knocked down by `car` this step (who's to blame is the caller's call). */
+  | { kind: 'struck'; car: VehicleState };
 
 /** Who hostile peds go after. */
 export interface Target {
@@ -100,20 +104,22 @@ const GIVE_UP_DISTANCE = 40;
 const WALK_INSET = ROAD_WIDTH / 2 + SIDEWALK / 2;
 const CROSS_CHANCE = 0.3;
 
-export function cornerPoint(bx: number, bz: number, corner: number): { x: number; z: number } {
+/**
+ * A block's sidewalk corner, 0..3 clockwise from (left, top). Written into
+ * `out` (the walking peds pass a shared one: this runs for each of them
+ * every step, and must not allocate).
+ */
+export function cornerPoint(bx: number, bz: number, corner: number, out: { x: number; z: number } = { x: 0, z: 0 }): { x: number; z: number } {
+  const c = corner & 3;
   const x0 = -HALF_EXTENT + bx * BLOCK_SIZE;
   const z0 = -HALF_EXTENT + bz * BLOCK_SIZE;
-  const left = x0 + WALK_INSET;
-  const right = x0 + BLOCK_SIZE - WALK_INSET;
-  const top = z0 + WALK_INSET;
-  const bottom = z0 + BLOCK_SIZE - WALK_INSET;
-  return [
-    { x: left, z: top },
-    { x: right, z: top },
-    { x: right, z: bottom },
-    { x: left, z: bottom },
-  ][corner & 3];
+  out.x = c === 1 || c === 2 ? x0 + BLOCK_SIZE - WALK_INSET : x0 + WALK_INSET;
+  out.z = c >= 2 ? z0 + BLOCK_SIZE - WALK_INSET : z0 + WALK_INSET;
+  return out;
 }
+
+/** cornerPoint's scratch for the per-step walk (read at once, never kept). */
+const cornerAt = { x: 0, z: 0 };
 
 export function blockAt(x: number, z: number): { bx: number; bz: number } {
   const clamp = (v: number) => Math.max(0, Math.min(BLOCKS_PER_SIDE - 1, v));
@@ -251,6 +257,7 @@ export function stepCrowdPed(
 ): CrowdEvent | null {
   p.attackCooldown = Math.max(0, p.attackCooldown - dt);
   // --- Hit or about to be hit by a car? ---
+  let struck: VehicleState | null = null;
   for (const v of vehicles) {
     const sp = speed(v);
     if (sp < 3 || p.mode === 'down') continue;
@@ -272,6 +279,7 @@ export function stepCrowdPed(
         p.provoked = false;
         p.timer = KO_SECONDS;
       }
+      struck = v;
       break;
     }
     if (sp > 7) dodge(p, v, sp);
@@ -307,7 +315,8 @@ export function stepCrowdPed(
         provoke(p, target.x, target.z);
       }
     }
-    return null;
+    // Only the car that hit them is to blame (the caller decides whose it was).
+    return struck ? { kind: 'struck', car: struck } : null;
   }
 
   // Reeling from a hit: slide to a stop, no walking, no attacking.
@@ -348,10 +357,10 @@ export function stepCrowdPed(
   }
 
   // --- Walking the sidewalk loop ---
-  const corner = cornerPoint(p.bx, p.bz, p.corner);
-  const dx = corner.x - p.s.x;
-  const dz = corner.z - p.s.z;
-  const d = Math.hypot(dx, dz);
+  cornerPoint(p.bx, p.bz, p.corner, cornerAt);
+  const dx = cornerAt.x - p.s.x;
+  const dz = cornerAt.z - p.s.z;
+  const d = Math.sqrt(dx * dx + dz * dz);
   if (d < 0.8) {
     arriveAtCorner(p, rand);
     return null;
@@ -437,8 +446,11 @@ const circles = [
 
 /** Is the ped within reach of any of the car's collision circles? */
 function touchesCar(s: PedState, v: VehicleState): boolean {
+  const reach = CAR_CIRCLE_RADIUS + PED_RADIUS + 0.1;
   for (const c of carCircles(v, circles)) {
-    if (Math.hypot(c.x - s.x, c.z - s.z) < CAR_CIRCLE_RADIUS + PED_RADIUS + 0.1) return true;
+    const dx = c.x - s.x;
+    const dz = c.z - s.z;
+    if (dx * dx + dz * dz < reach * reach) return true;
   }
   return false;
 }
@@ -470,7 +482,7 @@ export function resumeWalking(p: PedAgent) {
   let best = 0;
   let bestD = Infinity;
   for (let c = 0; c < 4; c++) {
-    const pt = cornerPoint(bx, bz, c);
+    const pt = cornerPoint(bx, bz, c, cornerAt);
     const dd = Math.hypot(pt.x - p.s.x, pt.z - p.s.z);
     if (dd < bestD) {
       bestD = dd;

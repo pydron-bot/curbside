@@ -4,6 +4,7 @@ import {
   GRAVITY,
   SEDAN,
   VEHICLE_SPECS,
+  copyVehicleState,
   createVehicleState,
   launch,
   driverDoorPosition,
@@ -292,5 +293,16 @@ describe('angle helpers', () => {
   it('lerpAngle takes the short way round', () => {
     const r = lerpAngle(Math.PI - 0.1, -Math.PI + 0.1, 0.5);
     expect(Math.abs(wrapAngle(r - Math.PI))).toBeLessThan(1e-9);
+  });
+});
+
+describe('vehicle state copy', () => {
+  it('copyVehicleState copies every field (a new field must be added there too)', () => {
+    const src = createVehicleState(1, 2, 3) as unknown as Record<string, number | boolean>;
+    let n = 1;
+    for (const k of Object.keys(src)) src[k] = typeof src[k] === 'boolean' ? !src[k] : (n += 1.5);
+    const dst = createVehicleState();
+    copyVehicleState(dst, src as unknown as VehicleState);
+    expect(dst).toEqual(src);
   });
 });

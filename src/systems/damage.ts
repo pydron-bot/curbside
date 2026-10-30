@@ -31,7 +31,16 @@ export const ATTRIBUTION_SECONDS = 10;
 const IMPACT_THRESHOLD = 6;
 const DAMAGE_PER_MS = 2.6;
 /** In a car-on-car crash each car takes at least this share; the rest by who brought the speed. */
-const RAMMER_SHARE = 0.4;
+const RAMMER_SHARE = 0.3;
+/**
+ * The player's own car takes this share of crash damage (walls and cars;
+ * not landings, blasts or bullets). The game scores smashing, so the car
+ * you smash with has to last: a 21 m/s wall hit costs a sports car a
+ * quarter of its health instead of 43%, ramming a parked car at 28 m/s
+ * about 10 HP. Everyone else's cars keep the full table (they're for
+ * wrecking).
+ */
+export const PLAYER_CRASH_SHARE = 0.6;
 /** Landings softer than this (vertical m/s) are free; a car is built for a kerb, not a jump. */
 const LANDING_THRESHOLD = 10;
 const LANDING_PER_MS = 3;
@@ -58,8 +67,8 @@ export function impactDamage(impactSpeed: number): number {
 /**
  * One car's damage from a car-on-car crash: `own` and `other` are the
  * closing speed each car brought (CarContact.closingA/B), masses relative.
- * Ramming a parked car costs the rammer 40% of what the parked car takes; a
- * head-on between equals costs each 70%; a van shrugs off a compact.
+ * Ramming a parked car costs the rammer 30% of what the parked car takes; a
+ * head-on between equals costs each 65%; a van shrugs off a compact.
  */
 export function crashDamage(impact: number, own: number, other: number, ownMass = 1, otherMass = 1): number {
   const base = impactDamage(impact);

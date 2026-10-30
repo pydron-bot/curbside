@@ -23,6 +23,11 @@ export interface InputSource {
   aimY: number;
   /** Twin-stick fire: the aim stick is pushed far enough to shoot. */
   aimFire: boolean;
+  /**
+   * The aim stick was let go while aiming a throwable: throw along the last
+   * aim (aimX/aimY still hold it). Read once by readAim(), which clears it.
+   */
+  aimRelease: boolean;
   /** Enter/exit presses not yet consumed by the game. */
   actionPresses: number;
   /** Punch/fire presses (on foot) not yet consumed. */
@@ -54,6 +59,7 @@ export const emptySource = (): InputSource => ({
   aimX: 0,
   aimY: 0,
   aimFire: false,
+  aimRelease: false,
   actionPresses: 0,
   punchPresses: 0,
   fireHeld: false,
@@ -66,7 +72,7 @@ export const emptySource = (): InputSource => ({
 /** Clear a source back to "nothing held, nothing pending". */
 export function clearSource(s: InputSource): void {
   s.steer = s.throttle = s.moveX = s.moveY = s.aimX = s.aimY = 0;
-  s.handbrake = s.sprint = s.fireHeld = s.aimFire = s.boost = false;
+  s.handbrake = s.sprint = s.fireHeld = s.aimFire = s.aimRelease = s.boost = false;
   s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.pausePresses = 0;
 }
 
@@ -166,7 +172,7 @@ export class Input {
   private readonly directionalIn: DirectionalInput = { x: 0, y: 0, gas: false, brake: false, handbrake: false };
   private readonly directional = createDirectionalState();
   private readonly moveOut: MoveInput = { x: 0, y: 0, sprint: false };
-  private readonly aimOut: AimState = { x: 0, y: 0, active: false, fire: false };
+  private readonly aimOut: AimState = { x: 0, y: 0, active: false, fire: false, release: false };
   /** Stick and trigger readings when the pad last counted as in use. */
   private readonly padAnchor = { x: 0, y: 0, ax: 0, ay: 0, throttle: 0 };
   private readonly navQueue: NavCommand[] = [];
@@ -350,7 +356,7 @@ export class Input {
     this.updateKeyboard();
     for (const s of this.sources) {
       s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = 0;
-      s.fireHeld = s.aimFire = false;
+      s.fireHeld = s.aimFire = s.aimRelease = false;
     }
     this.padLatched[PAD_A] = this.padLatched[PAD_X] = this.padLatched[PAD_RT] = true;
     this.gamepad.handbrake = this.gamepad.sprint = false;
@@ -533,7 +539,7 @@ export class Input {
    */
   readAim(now = performance.now()): AimState {
     const out = this.aimOut;
-    out.active = out.fire = false;
+    out.active = out.fire = out.release = false;
     const src =
       this.device === 'touch' ? this.touch : this.device === 'gamepad' ? this.gamepad : this.mouseAimLive(now) ? this.mouse : null;
     if (src && (src.aimX !== 0 || src.aimY !== 0)) {
@@ -541,6 +547,12 @@ export class Input {
       out.y = src.aimY;
       out.active = true;
       out.fire = src.aimFire;
+      out.release = src.aimRelease;
+    }
+    // A release is one frame's aim: the stick is back at rest after it.
+    if (this.touch.aimRelease) {
+      this.touch.aimRelease = false;
+      this.touch.aimX = this.touch.aimY = 0;
     }
     return out;
   }

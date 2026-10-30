@@ -15,6 +15,7 @@ import type { Look } from '../../render/look';
 import type { ProgressProps } from '../../render/progressLook';
 import type { Score } from '../../systems/score';
 import type { FrontDoor } from '../../ui/frontDoor';
+import type { Haptics } from '../../ui/haptics';
 import type { Hud } from '../../ui/hud';
 import type { Panel } from '../../ui/menu';
 import type { ProgressHud } from '../../ui/progressHud';
@@ -62,6 +63,8 @@ export interface ProgressDeps {
   audio: GameAudio;
   frontDoor: FrontDoor;
   input: Input;
+  /** Haptic ticks for the cards (a refused purchase). */
+  haptics?: Haptics;
   /** False behind the title (attract mode). */
   playing(): boolean;
   /** Quit to the title screen. */

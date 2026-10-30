@@ -4,6 +4,7 @@ import type { GameAudio } from '../audio/gameAudio';
 import type { NavCommand } from '../core/input';
 import type { DialogueLine } from '../systems/missions';
 import type { Medal } from '../game/progressSave';
+import type { Haptics } from './haptics';
 import { ICONS } from './icons';
 import { MenuNav, menuButton, overlay, type Panel } from './menu';
 import { fmt } from './scoreHud';
@@ -114,7 +115,7 @@ export class ResultsCard implements Panel {
       <div class="prog-head"><div class="prog-title">${escapeHtml(d.title)}</div><div class="prog-sub">${d.why ? 'RUN OVER' : "TIME'S UP"}</div></div>
       <div class="res-why">${escapeHtml(d.why)}</div>
       <div class="res-main">
-        <div class="medal" data-medal="${medal}">${medal === 'none' ? 'NO MEDAL' : medal.toUpperCase()}</div>
+        <div class="medal" data-medal="${medal}">${medal === 'none' ? 'NO<br>MEDAL' : medal.toUpperCase()}</div>
         <div class="res-score">${fmt(d.score)}</div>
         <div class="res-side">
           <span>BEST <b>${fmt(d.best)}</b></span>
@@ -246,6 +247,7 @@ export class ShopSheet implements Panel {
     parent: HTMLElement,
     private readonly audio: GameAudio,
     entries: readonly ShopEntry[],
+    private readonly haptics: Haptics | null = null,
   ) {
     const { root, card } = overlay('shop', 'ui-sheet');
     this.root = root;
@@ -300,11 +302,15 @@ export class ShopSheet implements Panel {
     const h = this.hooks;
     if (!h) return;
     const el = this.items.get(id)!;
-    if (h.buy(id)) {
-      el.classList.remove('bought');
-      void el.offsetWidth;
-      el.classList.add('bought');
-    } else this.audio.ui('fail');
+    if (h.buy(id)) restartClass(el, 'bought');
+    else {
+      // Can't have it: the card shakes and the cash flashes red (the sound alone was easy to miss).
+      this.audio.ui('fail');
+      restartClass(el, 'denied');
+      restartClass(this.cashEl, 'denied');
+      this.haptics?.pulse(0.5, 60);
+      this.haptics?.touch();
+    }
     this.refresh();
   }
 
@@ -325,7 +331,12 @@ export interface StatsModel {
   completion: number;
   cash: number;
   /** Groups of rows: [label, value, optional 0..1 bar, optional medal]. */
-  sections: ReadonlyArray<{ title: string; rows: ReadonlyArray<{ label: string; value: string; bar?: number; medal?: Medal | null }>; chips?: ReadonlyArray<{ text: string; done: boolean }> }>;
+  sections: ReadonlyArray<{
+    title: string;
+    rows: ReadonlyArray<{ label: string; value: string; bar?: number; medal?: Medal | null }>;
+    /** A labelled list of chips (the export orders) under the rows. */
+    chips?: { label: string; items: ReadonlyArray<{ text: string; done: boolean }> };
+  }>;
 }
 
 /** PROGRESS: completion, cash, bests and medals, activities and lifetime stats. */
@@ -368,14 +379,16 @@ export class StatsSheet implements Panel {
               }</div>`,
           )
           .join('');
-        const chips = s.chips ? `<div class="export-list">${s.chips.map((c) => `<span${c.done ? ' class="done"' : ''}>${escapeHtml(c.text)}</span>`).join('')}</div>` : '';
+        const chips = s.chips
+          ? `<div class="export-list"><em>${escapeHtml(s.chips.label)}</em>${s.chips.items.map((c) => `<span${c.done ? ' class="done"' : ''}>${escapeHtml(c.text)}</span>`).join('')}</div>`
+          : '';
         return `<h3>${escapeHtml(s.title)}</h3>${rows}${chips}`;
       })
       .join('');
     this.body.innerHTML = `
       <div class="stats-top">
-        <div class="stats-ring"><svg viewBox="0 0 80 80" aria-hidden="true"><defs><linearGradient id="stats-grad"><stop offset="0" stop-color="#2ee6ff"/><stop offset="1" stop-color="#ff2e88"/></linearGradient></defs><circle class="track" cx="40" cy="40" r="32" pathLength="100"/><circle class="fill" cx="40" cy="40" r="32" pathLength="100" style="stroke-dasharray:${pct} 200"/></svg><b>${pct}%</b></div>
-        <div class="stats-headline"><span>COMPLETION</span><b>$${fmt(m.cash)}</b><span>CASH</span></div>
+        <div class="stats-done"><div class="stats-ring"><svg viewBox="0 0 80 80" aria-hidden="true"><defs><linearGradient id="stats-grad"><stop offset="0" stop-color="#2ee6ff"/><stop offset="1" stop-color="#ff2e88"/></linearGradient></defs><circle class="track" cx="40" cy="40" r="32" pathLength="100"/><circle class="fill" cx="40" cy="40" r="32" pathLength="100" style="stroke-dasharray:${pct} 200"/></svg><b>${pct}%</b></div><span>COMPLETION</span></div>
+        <div class="stats-headline"><span>CASH</span><b>$${fmt(m.cash)}</b></div>
       </div>
       <div class="stats-grid">${sections}</div>`;
     this.body.scrollTop = 0;
@@ -394,4 +407,11 @@ export class StatsSheet implements Panel {
     this.audio.ui('back');
     this.onClose();
   }
+}
+
+/** Play a one-shot CSS animation class again from the start. */
+function restartClass(el: HTMLElement, cls: string): void {
+  el.classList.remove(cls);
+  void el.offsetWidth;
+  el.classList.add(cls);
 }

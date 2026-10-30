@@ -3,6 +3,7 @@ import type { InputDevice } from '../core/input';
 import { settings, type Settings } from '../core/settings';
 import { ICONS } from './icons';
 import { MenuNav, overlay, type Panel } from './menu';
+import { RADAR_LEGEND_LINE } from './radarLegend';
 
 type Binding = readonly [action: string, keys: string];
 
@@ -21,6 +22,7 @@ function touchRows(s: Settings): Binding[] {
     ['Drift', 'The DRIFT band presses gas + handbrake; stopped, it\'s a burnout'],
     ['Nitro', 'Hold NOS (fills as you drift, near-miss and jump)'],
     ['Aim & shoot', `${other} thumb anywhere: drag to aim, push far to fire, tap to fire`],
+    ['Grenade · molotov', 'Drag to aim (further = further), let go to throw'],
     ['Punch / fire', 'The big button (punches combo: jab, jab, hook)'],
     ['Drive-by', 'The car FIRE button (pistol or SMG)'],
     ['Switch weapon', '[[⇄]]'],
@@ -67,7 +69,13 @@ const CONTROLS: Record<Exclude<InputDevice, 'touch'>, { title: string; rows: rea
 const TIPS = [
   ['Chain it', 'Anything within 3 s of the last stunt builds a combo, up to ×10.'],
   ['Score', 'Drifts, near misses, smashes, hit & runs, knockouts, carjacks, explosions and ramp jumps.'],
-  ['Survive', 'Grab health and armour crates. Get WASTED and the run is over — your best is kept.'],
+  ['Bank it', 'When a chain ends its points bank as cash (more with stars on). WASTED or BUSTED first and the chain is lost.'],
+  ['Heat', "Crimes the police see earn stars. Get out of sight until they fade, or pay for a Pay 'n' Spray ('S' on the radar)."],
+  ['Busted', 'Caught by the police: a fine, your guns gone and the chain lost. Stand still with empty hands and they cuff you rather than shoot.'],
+  ['Survive', 'Grab health and armour crates. WASTED costs the chain, your guns and a hospital bill; your best score is kept.'],
+  ['Cash & shop', "Spend it at the safehouse door ('H' on the radar): armour, ammo, upgrades. SHOP is in the pause menu nearby."],
+  ['Activities', "Purple gems start frenzies; ringing payphones ('M') give jobs; 'R' starts a race; '$' buys the cars on its list; a taxi earns fares; 40 packages hide in alleys. PROGRESS in the pause menu tracks it all."],
+  ['Radar', RADAR_LEGEND_LINE],
 ] as const;
 
 /**

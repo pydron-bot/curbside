@@ -60,6 +60,11 @@ export class CameraRig {
   private liftNow = 0;
   /** Extra height wanted (m), e.g. while armed on foot; eased in and out. */
   lift = 0;
+  /** Look-ahead toward the aim (world m from the target), wanted and eased (aimAt). */
+  private aimWantX = 0;
+  private aimWantZ = 0;
+  private aimLeadX = 0;
+  private aimLeadZ = 0;
   /** Gentler camera: less shake, no roll, no FOV punches. */
   reducedMotion = false;
   /**
@@ -83,6 +88,8 @@ export class CameraRig {
       zoomRate: 1.6,
       /** How fast the look-ahead swings to a new direction, 1/s. */
       leadRate: 2.2,
+      /** How fast the aim look-ahead (aimAt) follows the aim, 1/s. */
+      aimLeadRate: 3,
       /** Biggest shake offset, as a fraction of the height. */
       shakeOffset: 0.045,
       /** Biggest shake roll, radians. */
@@ -98,6 +105,15 @@ export class CameraRig {
   setHeights(min: number, max: number): void {
     this.opts.minHeight = min;
     this.opts.maxHeight = max;
+  }
+
+  /**
+   * Lead the view (dx, dz) metres off the target toward where the player
+   * aims (mouse aim: see what you shoot at); (0, 0) to stop. Eased.
+   */
+  aimAt(dx: number, dz: number): void {
+    this.aimWantX = dx;
+    this.aimWantZ = dz;
   }
 
   /** How far ahead to lead (LEAD_CAR, LEAD_FOOT, or custom). */
@@ -141,6 +157,7 @@ export class CameraRig {
     this.x = x;
     this.z = z;
     this.leadX = this.leadZ = 0;
+    this.aimLeadX = this.aimLeadZ = this.aimWantX = this.aimWantZ = 0;
     this.timeScale = 1;
     this.kickX.reset();
     this.kickZ.reset();
@@ -163,13 +180,16 @@ export class CameraRig {
     const lk = 1 - Math.exp(-o.leadRate * dt);
     this.leadX += (wantX - this.leadX) * lk;
     this.leadZ += (wantZ - this.leadZ) * lk;
+    const ak = 1 - Math.exp(-o.aimLeadRate * dt);
+    this.aimLeadX += (this.aimWantX - this.aimLeadX) * ak;
+    this.aimLeadZ += (this.aimWantZ - this.aimLeadZ) * ak;
 
     // Velocity feed-forward, then close the remaining gap: no trailing at speed.
     this.x += vx * dt * this.timeScale;
     this.z += vz * dt * this.timeScale;
     const follow = 1 - Math.exp(-o.followRate * dt);
-    this.x += (targetX + this.leadX - this.x) * follow;
-    this.z += (targetZ + this.leadZ - this.z) * follow;
+    this.x += (targetX + this.leadX + this.aimLeadX - this.x) * follow;
+    this.z += (targetZ + this.leadZ + this.aimLeadZ - this.z) * follow;
 
     this.trauma.step(dt);
     this.noiseTime += dt;

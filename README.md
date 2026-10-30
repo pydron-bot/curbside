@@ -31,7 +31,7 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Walk / run (on foot) | WASD / arrows, Shift sprints | left stick (appears under the thumb): push further to run | left stick, A sprints |
 | Aim (on foot) | mouse (crosshair cursor) | right half: drag the aim stick | right stick |
 | Punch / fire (hold for SMG) | left click, Space / J | FIRE button; push the aim stick past half-way; tap the right half | RT or X |
-| Throw a grenade / molotov | aim with the mouse (it lands at the cursor), click | aim stick (further = further), FIRE | right stick, RT / X |
+| Throw a grenade / molotov | aim with the mouse (it lands at the cursor), click | drag the aim stick (further = further, full push = full range) and let go; or FIRE | right stick, RT / X |
 | Drive-by (pistol / SMG) | left click / J in a car | car FIRE button (inboard of the pedals) | X |
 | Switch weapon (also in a car) | wheel, right click, Q / Tab (Shift+Tab back) | ⇄ | RB / LB |
 | Enter / exit car | E / F / Enter | door button (pulses next to a car) | Y |
@@ -94,7 +94,8 @@ vibration, show FPS.
 - **Fighting back** (`src/systems/crowd.ts`): peds are calm (70%),
   fighters (20%) or armed (10%); provoke one and they punch or shoot back
   (shooters hit your car too). Player health; at 0 → WASTED, respawn, lose
-  weapons, run score resets (best kept).
+  weapons, run score resets (best kept). A fresh run (PLAY, RESTART, quit
+  to title) also starts empty-handed; package perks re-arm on `respawn`.
 - Traffic 24 cars incl. new **taxi** and **pickup**; crowd 22, spawned
   just off-screen (never inside the camera's ground rectangle) and
   concentrated near the player; parked/abandoned cars are capped and
@@ -112,7 +113,10 @@ vibration, show FPS.
   steps that don't help a fill-bound GPU, and treats a steady 30 Hz (Low
   Power Mode) as a cap, not overload.
 - App updates wait for respawn, the page being hidden, or "restart now" on
-  the pause screen; a lost WebGL context pauses until it's restored.
+  the pause screen; a lost WebGL context pauses until it's restored (back
+  on the pause menu, the city is redrawn and every program compiled behind
+  it at once, not on RESUME), and offers RELOAD THE GAME (save flushed
+  first) if no restore comes within 6 s.
   `?debug` in the URL shows fps / pixel ratio / draw calls.
 - **Audio** (`src/audio/`): fully synthesised Web Audio, no sound files —
   engine with a gearbox, tyres, guns, impacts, explosions, fire, sirens,
@@ -140,7 +144,8 @@ vibration, show FPS.
   area; continuous walk → run; *point-where-you-want-to-go* steering
   (`src/core/steering.ts`: heading error → steer, lift on sharp turns,
   three-point turns, backs off walls) with auto-gas; one pedal pad you can
-  slide across, with a GAS+HAND drift band; twin-stick aim with auto-aim
+  slide across, with a GAS+HAND drift band (~59 × 52 px, reaching into
+  both pedals); twin-stick aim with auto-aim
   snapping within ~15°; inline-SVG icons; left-handed mirror; iOS gesture
   blocking; haptics (gamepad rumble, Android vibrate, the iOS 18 switch
   tick) driven by bus events. Mouse aim and gamepad right-stick aim on
@@ -148,7 +153,8 @@ vibration, show FPS.
 - **HUD**: score with a punch on every award and a draining combo ring, a
   two-line feed that merges repeats; segmented health; an arc speedometer
   with the car's health inside it; weapon and ammo; a vmin-sized damage
-  vignette; a WASTED screen with the life's stats. Circular north-up radar
+  vignette; a WASTED screen with the life's stats and what it cost
+(POINTS LOST on a bust, the HOSPITAL bill or CASH FINE). Circular north-up radar
   (the city pre-rendered once, traffic, pickups, hostiles, blips and a
   waypoint route, zooming out with speed, ≤30 Hz) and red edge chevrons for
   off-screen attackers.
@@ -212,10 +218,15 @@ can't take on grip (16 m/s for a right angle, more for gentle bends).
 stops only the speed into it; the speed along it is scrubbed by up to 45%
 with the square of the hit, and a nose-in glance swings the car parallel:
 at 25 m/s a 5° glance keeps its pace, 15° keeps ~20 m/s, head-on stops.
-Crashes cost nothing below 6 m/s, then 2.6 HP per m/s: a sedan (100 HP)
-smokes after one 28 m/s head-on and burns after a third 20 m/s hit. In a
-car-on-car crash the rammer takes 40% of what the car it hits takes (70%
-each head-on), scaled by mass. Health: sedan 100, compact and sports 90,
+Crashes cost nothing below 6 m/s, then 2.6 HP per m/s: a traffic sedan
+(100 HP) smokes after one 28 m/s head-on and burns after a third 20 m/s
+hit. In a car-on-car crash the rammer takes 30% of what the car it hits
+takes (65% each head-on), scaled by mass. The player's own car takes
+`PLAYER_CRASH_SHARE` (60%) of crash damage, since smashing is what scores:
+a 21 m/s wall hit costs a sports car 26% instead of 43%, ramming a parked
+car at 28 m/s ~10 HP (6 such rams and a sedan still isn't on fire), two
+28 m/s head-ons into buildings leave it smoking. The Chaos Run's sports car
+has ×1.5 health (135). Health: sedan 100, compact and sports 90,
 van 140, police 130, taxi 100, pickup 125; fire at 20%, burning 4.5 s.
 Blasts (`BLASTS`): a car going up does 85 at the centre to 0 at 9 m and
 sets cars within 4.8 m (of their nearest part) alight on a 0.5–1.9 s fuse
@@ -250,7 +261,11 @@ alight (22 HP/s) and cooks cars (12 HP/s); rockets fly at 26 m/s, arm
 after 3 m and blow up on the first thing they touch (75 m max); their
 lock-on and aim assist ignore anything within 8 m (inside their own blast). While a
 grenade or molotov is in hand, a landing ring and a dotted arc show
-where it will land (a touch tap on FIRE throws right there).
+where it will land, 1 m short of any wall on the way (`clampThrowToWalls`:
+it would bounce back off it; the ring turns red when a wall cuts it short,
+and a throw a wall would drop within 3 m of your own feet doesn't go) (a touch tap on FIRE throws right there). On touch
+the aim stick only aims a throwable (it never auto-fires one): let go to
+throw where the ring is, or slide back to the centre first to cancel.
 
 **Drive-bys**: in a car, FIRE shoots a pistol or SMG (picking one if
 something else is held) out of whichever side window has the best target
@@ -279,8 +294,14 @@ arms, chest and head over the legs. Still one instanced draw call.
 **Budget**: ramps +1 draw call (+1 in the shadow pass) when in view,
 projectiles +1 only while something flies; rings, arcs, fire glows and
 shadows go into the shared glow and shadow meshes. Measured with
-`?debug`: 43–53 calls on the iPhone profile in fights, chases and jumps,
-56–66 on desktop. Nothing is allocated per frame or per bullet.
+`?debug`: 43–56 calls on the iPhone profile in fights, chases, jumps and
+night rain, 55–69 on desktop (a 5-star chase with grenade spam). Combat
+allocates nothing per bullet. The sim's per-step hot paths avoid garbage
+too (sidewalk corners into a reused point, squared distances instead of
+`Math.hypot` in the per-car / per-crate loops, last-step state copied
+field by field); what remains per frame is mostly three.js's per-person
+`AnimationMixer` and V8 number boxing (JSC NaN-boxes doubles, so less on
+the iPhone).
 
 API for other systems:
 
@@ -290,7 +311,7 @@ combat.collect(kind)                        // apply a pickup (false = can't use
 combat.blast('grenade' | 'rocket' | 'car', x, z, byPlayer)   // an explosion through the normal blast path
 combat.projectiles.throw('grenade' | 'molotov', x, z, toX, toZ, byPlayer) / .fireRocket(x, z, dx, dz, byPlayer)
 combat.projectiles.addFire(x, z, byPlayer)  // a fire patch
-combat.lock / combat.marker                 // the lock-on target, the throw marker
+combat.lock / combat.marker                 // the lock-on target, the throw marker (.blocked: a wall cut it short)
 nitro.charge / nitro.add(amount)            // 0..1 tank
 hurtPed(agent, damage, fromX, fromZ, knock?) // systems/crowd.ts: 'none' | 'hit' | 'down' | 'ko'
 ramps (world/ramps.ts: placeRamps, rampAt, rideRamps) · StuntTracker (systems/stunts.ts)
@@ -305,9 +326,12 @@ ramps (world/ramps.ts: placeRamps, rampAt, rideRamps) · StuntTracker (systems/s
 
 Mayhem has a cost now. **Wanted level** (`systems/wanted.ts`, pure): heat
 0–5, stars = floor(heat). A crime counts if it's on screen or within 60 m
-of any police (car, officer, helicopter): knocking someone down +0.3,
+of any police (car, officer, helicopter): knocking someone down +0.3
+(with your own car: `stepCrowdPed` reports the car that hit them, so a
+unit running down its officer beside you isn't on you),
 carjack +0.35, a shot +0.05 (at most +0.5 per 5 s), an explosion you
-caused +0.6 (not your own car going up), clearly ramming a police car
+caused +0.6 (not your own car going up, even after you bail out of it
+burning: `explosion.ownCar`), clearly ramming a police car
 +0.6 (bumps in a chase don't count, nor does smashing through a roadblock
 or a chasing cop driving into you), bullets into one +0.15 (capped),
 knocking down an officer +1 (at most +1 per 5 s), wrecking a police car
@@ -361,8 +385,11 @@ over your speed every 2.6 s and PIT the rear quarter; box in a stopped car
 **Busted** (`systems/arrest.ts`): on foot, an officer within 1.3 m for 1 s
 while you're slower than 2.8 m/s (0.5 s if you're knocked down); in a car,
 under 1 m/s for 2 s with a police car touching or an officer at your door.
-A meter under the stars shows the grip. Busted: 25% of the run score
-fined, weapons taken, held 3.5 s (BUSTED screen, blue), then released on
+A meter under the stars shows the grip; it waits while a 3-2-1 holds the
+car (`HeatDeps.held`). Busted: 25% of the run score
+fined (`HeatDeps.bustFine`; none in a Chaos Run, where being cut short is
+the cost, so its results add up), weapons taken, held 3.5 s (BUSTED
+screen, blue: points lost and the cash fine), then released on
 the steps of the police station (blue marker, ★ on the radar). Dying also
 clears the heat.
 
@@ -431,9 +458,13 @@ are `src/game/modes/*Mode.ts`.
 - **Save** (`game/progressSave.ts`): one versioned JSON record,
   `curbside.save`: cash, lifetime stats, best score per mode, medals, race
   times, packages found, frenzies beaten, export orders, taxi streak,
-  missions passed, unlocks. Every field is sanitised on load (a bad value
+  missions passed, unlocks, the first-run pointer reached. Every field is sanitised on load (a bad value
   falls back alone, NaN or negative cash can't get in, a newer save keeps
-  what this build understands); corrupt JSON is kept aside as
+  what this build understands and carries the rest through untouched,
+  never lowering `v`, so an older tab or a stale PWA can't wipe it; ids
+  this build doesn't have, such as a package past 40 or an unknown
+  frenzy, mission or export order, are dropped at boot by `pruneSave`
+  so they can't count); corrupt JSON is kept aside as
   `curbside.save.corrupt`; blocked storage never throws. The old
   `curbside.best` carries over into a fresh save only (the score HUD still
   writes it, Chaos Runs included, so a save never reads it again); the
@@ -442,6 +473,19 @@ are `src/game/modes/*Mode.ts`.
   and flushed on pause, app switch, page hide and the end of anything that
   pays. `Progress` (`game/progress.ts`) owns it: `earn`, `spend`, `charge`,
   bests, medals, unlocks, and lifetime stats counted off the bus.
+- **First run** (`game/tutorial.ts`): three pointers on the marker
+  prompt, one at a time, whenever nothing nearer to hand has a prompt
+  (on a phone, in a car only while it's stopped: the look-ahead puts a car
+  driving up the screen right under the pill, from 5 m/s on, `pointerWaits`):
+  STEAL A CAR (in the device's words: E, Y, the door button) until you
+  drive one; DRIFT · NEAR MISS · SMASH · JUMP — CHAINS BANK AS CASH until
+  the first chain banks; ANSWER THE RINGING PAYPHONE with the radar routed
+  to it until a call is answered (which ends them all). Saved
+  (`save.tutorial`); a save from before them with 2+ minutes of play skips
+  them. The yellow sports car at the spawn waits on the centreline lined
+  up on the ramp a block east. How to Play adds banking, heat, BUSTED,
+  cash and the shop, where the activities are, and a radar
+  legend (`ui/radarLegend.ts`, also at the foot of PROGRESS).
 - **Bank your chaos** (`game/progressBank.ts`): when a combo chain ends (the
   combo window has run out and no drift is sliding), its points become cash:
   points / 10 × (1 + 0.5 × the highest wanted level during the chain), with
@@ -458,10 +502,14 @@ are `src/game/modes/*Mode.ts`.
   within 45 m of it. TOUGH SKIN (+50 max health, the stand-in for body
   armour: `Player.maxHealth`, the health bar shows the share) $3,000;
   PAY 'N' SPRAY CARD $1,500; PACKAGE SCANNER $2,000; pistol / SMG / shotgun
-  ammo $150 / $400 / $300 (`arsenal.pickUp`).
+  ammo $150 / $400 / $300 (`arsenal.pickUp`). Something you can't afford
+  shakes and flashes the cash red (and a haptic tick).
 - **CHAOS RUN** (title, `modes/chaosRun.ts`, `chaosRunMode.ts`): a sports
-  car at a random crossing, 3-2-1 with the car held, then 2:00 on the clock
-  top centre; +5 s per explosion you cause, +3 s each time a chain reaches
+  car at a random crossing and the same loadout every run (`CHAOS_LOADOUT`:
+  a pistol, whatever free roam or the shop left in your pockets; RETRY too),
+  3-2-1 with the car held, then 2:00 on the clock
+  top centre; +5 s per explosion you cause (not your own car, even one you
+  bailed out of), +3 s each time a chain reaches
   ×5 ("+5 S" pops beside the timer); the last ten seconds count down out
   loud in red tenths (the last five as smaller red digits up top, off the
   car). The BEST line shows the run's own best (`Hud.setBest`); leaving the
@@ -474,8 +522,9 @@ are `src/game/modes/*Mode.ts`.
   WASTED or BUSTED ends the run early (results after the respawn). The best
   and medal are saved and shown on the title; RESTART in the pause menu
   starts a fresh run. The medal lines are the review's (bronze is a run
-  that keeps its car and chains a few stunts); a reckless autopilot that
-  wrecks its car in the first 15 s and stays on foot scores 4.5–6.6k.
+  that keeps its car and chains a few stunts); before the run's car was
+  armoured (×1.5 health, 60% crash share), a reckless autopilot wrecked it
+  in the first 15–20 s and scored 1–6.6k on foot.
 - **Frenzies** (`modes/frenzies.ts`, `frenzyMode.ts`): eight spinning purple
   gems on pavements ('!' on the radar). Touch one, 3-2-1, then: KNOCK DOWN 15
   in 60 s (with an SMG), NEAR MISS ×8 in 60 s, CARJACK 5 in 120 s, DRIFT
@@ -492,7 +541,8 @@ are `src/game/modes/*Mode.ts`.
 - **Checkpoint races** (`modes/races.ts`, `raceMode.ts`): six courses of 8–12
   crossings authored as data (DOWNTOWN DASH, HARBOUR LOOP, OLD TOWN
   SCRAMBLE, NEON NIGHTS, CUL-DE-SAC CRAWL, RING ROAD RUN), 'R' on the radar.
-  Drive onto the chequered line: the car lines up, 3-2-1, then gates of
+  Drive onto the chequered line with no stars ("LOSE THE HEAT FIRST"
+  otherwise): the car lines up, 3-2-1, then gates of
   light (the next-but-one small), a radar route to the next checkpoint and
   the time against gold on the card. Medals against a developer time from
   the course (straights at 36 m/s, 1.2 s a corner, 2 s to launch): gold
@@ -507,7 +557,12 @@ are `src/game/modes/*Mode.ts`.
   "A TAXI", "A POLICE CAR", "ANY VAN"...); stop in the bay with no stars and
   at least half health: compact 300, sedan 400, van / pickup 500, taxi 600,
   sports 900, police 1,500 (+25% for a colour order) × health; the car is
-  craned away. The whole list pays $5,000 and a new one comes in.
+  craned away (`Vehicle.exported`: nobody gets back in to sell it twice).
+  Nothing sells while an activity runs ("DROP YOUR FARE FIRST", "FINISH
+  THE JOB FIRST"), and a car that sat in the bay during one (the first
+  payphone job delivers its sedan there) sells only after it drives out
+  and back in.
+  The whole list pays $5,000 and a new one comes in.
 - **Taxi fares** (`modes/taxi.ts`, `taxiMode.ts`): driving a taxi puts you
   on duty. A pedestrian ahead stops and waves under a yellow marker; stop
   beside them for a second and they get in. The destination is 250–700 m
@@ -525,8 +580,12 @@ are `src/game/modes/*Mode.ts`.
   from four payphones; the one with a job waiting rings (a ripple of light,
   the bell within 55 m, 'M' on the radar with an arrow). Answer on foot or
   by stopping beside it: the call is a card, the job runs with its objective
-  on the activity card and its targets marked; MIDNIGHT EXPRESS pins the
-  clock at night. Pay $500–$5,000; fail and the phone rings again.
+  on the activity card and its targets marked (a step any sedan will do
+  for rings and blips the three nearest, and the wrong car says NOT A
+  SEDAN); MIDNIGHT EXPRESS pins the clock at night (a fail or quit puts the
+  hour back). Pay $500–$5,000; fail and the phone rings again. A banner
+  raised while WASTED / BUSTED is up (MISSION FAILED, RACE OVER) waits for
+  the respawn.
 - **Activity HUD** (`ui/progressHud.ts`, `progress.css`): a compact card top
   centre under the pause button (what, a big timer, the goal and counter;
   the wanted stars step down under it, the radio card pushes it down), a
@@ -667,7 +726,10 @@ removed (that would recompile every lit material), every program is compiled
 on the first frame and again after a restored GL context (night-only meshes
 included; on desktop against the HDR target the scene really draws into),
 and quality-tier changes only resize or idle things. Every car model's
-geometry is uploaded at load, not when that model first drives into view.
+geometry is uploaded at load, not when that model first drives into view,
+and the whole city is drawn once with culling off before the first real
+frame (and after a restored context), so no chunk uploads its buffers
+the first time it comes into view.
 
 - **Draw calls.** All people are one GPU-skinned `InstancedMesh`
   (`characterModel.ts`: the GLB's 13 rigid parts merged at load, bones and
@@ -676,14 +738,16 @@ geometry is uploaded at load, not when that model first drives into view.
   sirens are per-instance attributes), all contact shadows one mesh
   (`contactShadows.ts`) and all faked lights one additive mesh
   (`glowSprites.ts`: headlight beams, tail/brake lights, siren wash, the
-  player marker, pickup rings). The city is ~5 instanced meshes per 256 m
+  player marker: a ring on foot, round the car a ring that dims at speed
+  but never goes out plus a chevron ahead of the bumper, pickup rings). The city is ~5 instanced meshes per 256 m
   chunk. Measured in Chromium (whole frame, incl. shadow pass), iPhone
-  15 Pro profile ('medium'): 40 draw calls on foot at spawn, 42–51 driving
-  a busy street by day or night (each car model in view costs one call,
-  plus one in the shadow pass); desktop ('high') is 54–59 including ~14
-  for bloom; 'low' (no shadow map) 22–27. Programs: 15 on phones, 24 on
-  desktop, none compiled after start-up over a full day. About 160–250k triangles, most of
-  it the instanced city in both passes.
+  15 Pro profile ('medium'): 40 draw calls on foot at spawn, 44–56 driving
+  a busy street by day or night, rain included (each car model in view
+  costs one call, plus one in the shadow pass); desktop ('high') is 55–69
+  including ~14 for bloom; 'low' (no shadow map) 22–27. Programs: 18 on
+  phones, 27 on desktop, none compiled after start-up over a full day.
+  About 160–250k triangles on the phone (most at night), ~245k on desktop,
+  most of it the instanced city in both passes.
 - **Light.** `timeOfDay.ts` (pure, tested) keyframes sun/moon direction,
   colour and strength, sky and ground fill, fog, exposure, reflection
   strength and a shared `uNight` (night keeps a strong blue moon and sky
@@ -762,7 +826,12 @@ focusZ, playing)` once per frame after placing cars and people.
   ahead driving up the screen (car at 79% of the height), 1.36 s driving
   down (car at 23%), 2.8 s across (car at 32% / 68% of the width); the car
   never reaches the bottom corners where the thumbs are. On foot the
-  camera lifts 5 m with a gun out and 3.5 m in a recent fight.
+  camera sits at 20–24 m on a phone and 27–31 m on a desktop (a 16:9
+  screen sees less across: ~42 × 23 m, so 22–24 m NPC gunfights stay in
+  view), and lifts 5 m (desktop 7 m) with a gun out and 3.5 m in a recent
+  fight. Mouse aim leans the view toward the cursor (`rig.aimAt`: 30% of
+  the cursor's ground offset, at most 8 m, eased), so you see what you
+  shoot at.
   `prefers-reduced-motion` keeps a third of the shake, no roll or FOV
   punches, and softer exposure and combo-edge flashes. A blast out of
   sight (over 55 m from the view centre) doesn't flash the screen.
@@ -774,10 +843,13 @@ focusZ, playing)` once per frame after placing cars and people.
   running on ahead of it. Crash sparks start just above roof height so the
   hit's first frames aren't hidden inside the two cars.
 - **Weather** (`fxWeather.ts`): every few minutes a shower of a minute or
-  two eases in; streets get wet behind it (`uWetness`) and dry slowly. Rain
-  is one instanced draw animated in the vertex shader (world-anchored
-  streaks that fan out from the view centre, plus splash rings); exposure
-  dips a little; `audio.setRain` adds a hiss-and-patter loop.
+  two eases in; streets get wet behind it (`uWetness`) and dry slowly:
+  everything darkens, and ~3 m puddles gather along the gutters (few
+  mid-road, hardly any on pavements) with a faint sky sheen by day and a
+  cool one at night. Rain is one instanced draw animated in the vertex
+  shader (world-anchored streaks that fan out from the view centre, plus
+  small faint splash rings); exposure dips a little; `audio.setRain` adds
+  a hiss-and-patter loop.
 - **Overlay** (`src/ui/fxOverlay.ts`, `fx.css`): screen-edge flashes at the
   ×5 and ×10 combo, animated with the Web Animations API.
 
@@ -793,7 +865,7 @@ then desktop 'high'):
 | Five-car chain reaction, peak | 51 → 55 | 66 → 67 |
 | SMG and shotgun fight with two armed NPCs | 52 | 61–63 |
 | Mid-drift with skid marks and tyre smoke | 47–51 | 61–63 |
-| Rain, day / night | 44 / 48 | 57 / 63 |
+| Rain, day / night | 44 / 48 | 60 / 63 |
 
 A five-car chain peaks at ~280 fire, ~180 smoke and ~60 debris particles
 on the phone tier (pools hold 900 / 700 / 128).

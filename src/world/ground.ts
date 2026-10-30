@@ -410,11 +410,14 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
   }
 
   c *= mix(0.5, 1.0, ao);
-  // Wet: everything darker, puddles reflect the sky.
+  // Wet: everything darker; puddles (~3 m, mostly along the gutters, few on
+  // pavements and lots) darker still with a faint sheen: the sky's by day, a
+  // cool lamp-lit one at night (full sky tint read as pale-blue camo blotches).
   if (uWetness > 0.0) {
-    float puddle = smoothstep(0.62 - 0.12 * uWetness, 0.7 - 0.12 * uWetness, ubFbm(w * 0.12 + 20.0)) * uWetness;
-    c *= 1.0 - 0.35 * uWetness - 0.3 * puddle;
-    glow += puddle * uSkyTint * 0.08;
+    float gutter = kerb > 0.0 ? mix(0.45, 1.0, 1.0 - smoothstep(0.6, 3.0, kerb)) : 0.2;
+    float puddle = smoothstep(0.74 - 0.12 * uWetness, 0.82 - 0.12 * uWetness, ubFbm(w * 0.35 + 20.0)) * uWetness * gutter;
+    c *= 1.0 - 0.35 * uWetness - 0.45 * puddle;
+    glow += puddle * (uSkyTint * 0.02 * (1.0 - uNight) + vec3(0.1, 0.12, 0.16) * 0.06 * uNight);
   }
   return c;
 }

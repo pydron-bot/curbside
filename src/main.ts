@@ -4,11 +4,12 @@ import { events } from './core/events';
 import { Input } from './core/input';
 import { FixedStep } from './core/loop';
 import { UpdateGate } from './core/updateGate';
-import { PLAYER_ON_FOOT, stepPedestrian } from './entities/pedestrian';
+import { PLAYER_ON_FOOT, copyPedState, stepPedestrian } from './entities/pedestrian';
 import {
   GRAVITY,
   VEHICLE_HEALTH,
   VEHICLE_SPECS,
+  copyVehicleState,
   createVehicleState,
   driverDoorPosition,
   forwardSpeed,
@@ -41,6 +42,7 @@ import { provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } fr
 import { WEAPONS, WEAPON_ORDER, type WeaponKind } from './systems/weapons';
 import { PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
+  PLAYER_CRASH_SHARE,
   applyDamage,
   createDamage,
   crashDamage,
@@ -91,7 +93,15 @@ const app = document.getElementById('app')!;
 const ENTER_RANGE = 4;
 /** Cars moving faster than this can't be boarded. */
 const ENTER_MAX_SPEED = 6;
-const CAMERA_FOOT = [20, 24] as const;
+/**
+ * On foot: tuned for a landscape phone; a 16:9 desktop sees less across at
+ * the same height, so it sits higher (~42 × 23 m on screen) to keep NPC
+ * gunfights (22–24 m) and the pistol's 32 m in view.
+ */
+const CAMERA_FOOT: readonly [number, number] = getDevice().handheld ? [20, 24] : [27, 31];
+/** Mouse aim leads the view toward the cursor by this share of its ground offset, at most this far (m). */
+const MOUSE_LEAD = 0.3;
+const MOUSE_LEAD_MAX = 8;
 const CAMERA_CAR = [26, 64] as const;
 /** The title screen's slow cruise over traffic. */
 const CAMERA_ATTRACT = [34, 46] as const;
@@ -143,12 +153,17 @@ function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation):
   };
 }
 
-/** Parked at the kerbs around the spawn intersection; put back on every respawn. */
+/**
+ * Parked at the kerbs around the spawn intersection; put back on every
+ * respawn. The yellow sports car waits on the centreline across the
+ * junction, lined up on the ramp a block east: the first car invites the
+ * first STUNT (23 m of run-up, ~0.9 s of air flat out).
+ */
 const PARKED: ParkingSpot[] = [
   { archetype: 'sedan', x: 5.5, z: -14, heading: Math.PI, paint: '#c8342b' },
   { archetype: 'compact', x: -5.5, z: 16, heading: 0, paint: '#2f6fc0' },
   { archetype: 'van', x: 20, z: 5.5, heading: Math.PI / 2, paint: '#d9d6cc' },
-  { archetype: 'sports', x: -22, z: -5.5, heading: -Math.PI / 2, paint: '#e8b923' },
+  { archetype: 'sports', x: -11, z: 0, heading: Math.PI / 2, paint: '#e8b923' },
   { archetype: 'police', x: 5.5, z: 34, heading: Math.PI, paint: '#f2f2f2' },
 ];
 
@@ -274,6 +289,9 @@ const heat = new Heat({
   repaint: (v) => look.cars.restyle(v.mesh, v.archetype, v.paint),
   // Resprays cost cash (the progress director sets the price and can refuse).
   pay: (cost) => progress.payRespray(cost),
+  // A race or Chaos Run 3-2-1 holds the car: no bust while it can't move.
+  held: () => progress.holdControls,
+  bustFine: () => progress.bustShare(),
 });
 addHeatLook(look, heat);
 
@@ -371,12 +389,14 @@ function syncWeapon() {
 function nearestEnterable(): Vehicle | null {
   if (!player.canEnter) return null;
   let best: Vehicle | null = null;
-  let bestDist = ENTER_RANGE;
+  let bestD2 = ENTER_RANGE * ENTER_RANGE;
   for (const v of vehicles) {
-    const d = Math.hypot(v.sim.x - player.ped.x, v.sim.z - player.ped.z);
-    if (d < bestDist && speed(v.sim) < ENTER_MAX_SPEED && !v.damage.wrecked) {
+    const dx = v.sim.x - player.ped.x;
+    const dz = v.sim.z - player.ped.z;
+    const d2 = dx * dx + dz * dz;
+    if (d2 < bestD2 && speed(v.sim) < ENTER_MAX_SPEED && !v.damage.wrecked && !v.exported) {
       best = v;
-      bestDist = d;
+      bestD2 = d2;
     }
   }
   return best;
@@ -422,6 +442,8 @@ function respawnPlayer() {
   combat.reset();
   nitro.reset();
   stunts.cancel();
+  // A fresh run starts empty-handed (perks re-arm on the respawn event).
+  player.arsenal.clear();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true);
@@ -471,7 +493,7 @@ function simulate(dt: number) {
   for (const c of population.crowd) addObstacle(c.agent.s.x, c.agent.s.z, 0.4);
 
   for (const v of vehicles) {
-    Object.assign(v.prev, v.sim);
+    copyVehicleState(v.prev, v.sim);
     let controls = NO_CONTROLS;
     if (v.damage.wrecked) controls = NO_CONTROLS;
     else if (v === driving) controls = playerControls;
@@ -482,7 +504,7 @@ function simulate(dt: number) {
     if (rideRamps(v.sim, ramps) === 'launch') carJumped(v, v === driving);
   }
 
-  Object.assign(player.prev, player.ped);
+  copyPedState(player.prev, player.ped);
   if (!driving) {
     stepPedestrian(player.ped, player.down || attract.active ? NO_MOVE : input.readMove(), PLAYER_ON_FOOT, dt);
     // Twin-stick: face the lock-on or the aim while walking (strafe), not the way you walk.
@@ -497,11 +519,10 @@ function simulate(dt: number) {
   for (const v of vehicles) if (v.sim.y < 0.8) vehicleStates.push(v.sim);
   const target = playerTarget();
   for (const c of population.crowd) {
-    Object.assign(c.prev, c.agent.s);
-    const wasDown = c.agent.mode === 'down';
+    copyPedState(c.prev, c.agent.s);
     const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, target);
-    if (!wasDown && c.agent.mode === 'down') pedHitByCar(c, driving);
-    if (event?.kind === 'punch') {
+    if (event?.kind === 'struck') pedHitByCar(c, driving !== null && event.car === driving.sim ? driving : null);
+    else if (event?.kind === 'punch') {
       combat.npcPunch(c);
     } else if (event?.kind === 'shoot') {
       c.model.shoot();
@@ -515,7 +536,7 @@ function simulate(dt: number) {
     // A ramp's sides and back are solid to anything not riding up it.
     if (!v.sim.airborne && v.sim.y <= 0 && !enteringRamp(v.sim, ramps)) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact));
     if (impact <= 0) continue;
-    const hit = impactDamage(impact);
+    const hit = impactDamage(impact) * (v === driving ? PLAYER_CRASH_SHARE : 1);
     applyDamage(v.damage, hit);
     if (v === driving && hit > 0) markPlayerHit(v.damage, simTime);
     if (impact > CRASH_EVENT_MIN) {
@@ -531,8 +552,8 @@ function simulate(dt: number) {
       const impact = collideVehicles(a.sim, b.sim, contact, ma, mb);
       if (impact <= 0) continue;
       // The rammer takes less than the car it hits, the heavier car less than the lighter.
-      const hitA = crashDamage(impact, contact.closingA, contact.closingB, ma, mb);
-      const hitB = crashDamage(impact, contact.closingB, contact.closingA, mb, ma);
+      const hitA = crashDamage(impact, contact.closingA, contact.closingB, ma, mb) * (a === driving ? PLAYER_CRASH_SHARE : 1);
+      const hitB = crashDamage(impact, contact.closingB, contact.closingA, mb, ma) * (b === driving ? PLAYER_CRASH_SHARE : 1);
       applyDamage(a.damage, hitA);
       applyDamage(b.damage, hitB);
       const involvesPlayer = driving !== null && (a === driving || b === driving);
@@ -575,8 +596,10 @@ function simulate(dt: number) {
     if (speed(ds) > NEAR_MISS_SPEED) {
       for (const v of vehicles) {
         if (v === driving || v.damage.wrecked) continue;
-        const d = Math.hypot(v.sim.x - ds.x, v.sim.z - ds.z);
-        if (d > NEAR_MISS_DIST || d < 2.05) continue;
+        const dx = v.sim.x - ds.x;
+        const dz = v.sim.z - ds.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 > NEAR_MISS_DIST * NEAR_MISS_DIST || d2 < 2.05 * 2.05) continue;
         if (Math.hypot(v.sim.vx - ds.vx, v.sim.vz - ds.vz) < NEAR_MISS_SPEED) continue;
         if (simTime - (nearMissAt.get(v) ?? -99) < 2.5) continue;
         nearMissAt.set(v, simTime);
@@ -640,14 +663,17 @@ function carLanded(v: Vehicle, impact: number, isPlayer: boolean) {
   if (impact > 3) events.emit({ type: 'land', x: v.sim.x, z: v.sim.z, impact, involvesPlayer: isPlayer });
 }
 
-/** A ped was knocked over by a car this step: if it was the player's, that's a hit and run. */
-function pedHitByCar(c: CrowdPed, driving: Vehicle | null) {
+/**
+ * A ped was knocked over by a car this step; `playerCar` is set only when it
+ * was the player's car that hit them (a police car running down its own
+ * officer beside you isn't your hit and run).
+ */
+function pedHitByCar(c: CrowdPed, playerCar: Vehicle | null) {
   const s = c.agent.s;
-  const byPlayer = driving !== null && Math.hypot(driving.sim.x - s.x, driving.sim.z - s.z) < 5;
-  events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'vehicle', byPlayer, cop: c.agent.role === 'cop' });
-  if (driving && byPlayer) {
+  events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'vehicle', byPlayer: playerCar !== null, cop: c.agent.role === 'cop' });
+  if (playerCar) {
     award(score.award('hitAndRun'));
-    provoke(c.agent, driving.sim.x, driving.sim.z);
+    provoke(c.agent, playerCar.sim.x, playerCar.sim.z);
   }
 }
 
@@ -690,7 +716,10 @@ function frame(now: number) {
   if (paused) {
     // Resizing clears the canvas (rotating the phone while paused): redraw the
     // frozen scene behind the pause card.
-    if (resized && !contextLost) look.render(rig.camera);
+    if ((resized || redrawPaused) && !contextLost) {
+      redrawPaused = false;
+      look.render(rig.camera);
+    }
     return;
   }
 
@@ -699,6 +728,13 @@ function frame(now: number) {
   updateMouseAim(input, rig.camera, me.x, me.z, viewW, viewH);
   const aim = input.readAim();
   const playing = !attract.active;
+  // On foot with the mouse: see what you shoot at (the view leans toward the cursor).
+  if (playing && !player.driving && mouseGround.valid) {
+    const dx = (mouseGround.x - me.x) * MOUSE_LEAD;
+    const dz = (mouseGround.z - me.z) * MOUSE_LEAD;
+    const k = Math.min(1, MOUSE_LEAD_MAX / (Math.hypot(dx, dz) || 1));
+    rig.aimAt(dx * k, dz * k);
+  } else rig.aimAt(0, 0);
   // A card over the game (results, a phone call, the shop) takes the input.
   const control = playing && !progress.blocksInput;
   const aiming = control && player.ready && aim.active ? aimHeading(aim.x, aim.y) : null;
@@ -720,7 +756,9 @@ function frame(now: number) {
       aimInput.ground = input.mouseAimLive() && mouseGround.valid ? mouseGround : null;
       combat.updateAim(pressed || aim.fire || input.fireHeld, aimInput);
       if (gun) {
-        if (pressed || aim.fire || (WEAPONS[gun].automatic && input.fireHeld)) combat.fire(aimInput);
+        // Throwables go when the aim stick is let go (once), never on a held push.
+        const stick = WEAPONS[gun].mode === 'throw' ? aim.release : aim.fire;
+        if (pressed || stick || (WEAPONS[gun].automatic && input.fireHeld)) combat.fire(aimInput);
       } else if (pressed || aim.fire) combat.punch(aimHeadingNow);
     } else combat.updateAim(false, aimInput);
     if (acted && player.ready) {
@@ -901,6 +939,7 @@ const progress = new ProgressDirector({
   audio,
   frontDoor,
   input,
+  haptics,
   scene,
   pinned: activityCars,
   playing: () => !attract.active,
@@ -977,6 +1016,11 @@ applyUpdate = registerSW({ immediate: true, onNeedRefresh: () => updates.markRea
 
 /** True while the WebGL context is gone: nothing can resume until it's back. */
 let contextLost = false;
+/** Draw one frame behind the pause card (the GL context came back while paused). */
+let redrawPaused = false;
+/** No restore this long after a lost context: offer a reload, ms. */
+const RELOAD_OFFER_MS = 6000;
+let reloadOfferTimer = 0;
 /** Paused only because the context was lost (so resume when it's restored). */
 let pausedForContext = false;
 /** Why the game is paused, while it is. */
@@ -1020,12 +1064,28 @@ renderer.domElement.addEventListener('webglcontextlost', (e) => {
   contextLost = true;
   pausedForContext = !paused;
   setPaused(true, 'contextLost');
+  // A restore that never comes would leave the card up for good: offer a reload (the save is flushed first).
+  window.clearTimeout(reloadOfferTimer);
+  reloadOfferTimer = window.setTimeout(() => {
+    if (!contextLost) return;
+    frontDoor.pause.offerReload(() => {
+      progress.progress.flush();
+      location.reload();
+    });
+  }, RELOAD_OFFER_MS);
 });
 renderer.domElement.addEventListener('webglcontextrestored', () => {
   contextLost = false;
+  window.clearTimeout(reloadOfferTimer);
+  frontDoor.pause.offerReload(null);
   resolution.holdOff();
   if (pausedForContext) setPaused(false);
-  else if (paused) setPaused(true, 'paused');
+  else if (paused) {
+    // Back to the pause menu: draw the city behind it again now (and compile
+    // every program while still paused, not on the RESUME frame).
+    setPaused(true, 'paused');
+    redrawPaused = true;
+  }
   pausedForContext = false;
 });
 

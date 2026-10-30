@@ -163,10 +163,14 @@ export class CombatLook {
     const c = this.combat;
     // The throw marker: a landing ring and a dotted arc from the hand.
     if (c.marker.show && !this.player.driving) {
-      const pulse = 0.5 + 0.5 * Math.sin(t * 9);
+      // Orange; red and quicker when a wall cuts the throw short.
+      const blocked = c.marker.blocked;
+      const pulse = 0.5 + 0.5 * Math.sin(t * (blocked ? 16 : 9));
       const k = 0.75 + 0.35 * pulse;
-      glows.addFlat(c.marker.x, 0.06, c.marker.z, t * 2, 2.6, 2.6, 1.6 * k, 0.55 * k, 0.2 * k, GLOW.ring);
-      glows.addFlat(c.marker.x, 0.05, c.marker.z, 0, 1.2, 1.2, 0.9 * k, 0.3 * k, 0.1 * k, GLOW.disc);
+      const r = blocked ? 2 : 1.6;
+      const g = blocked ? 0.12 : 0.55;
+      glows.addFlat(c.marker.x, 0.06, c.marker.z, t * 2, 2.6, 2.6, r * k, g * k, 0.2 * k, GLOW.ring);
+      glows.addFlat(c.marker.x, 0.05, c.marker.z, 0, 1.2, 1.2, 0.9 * k, g * 0.55 * k, 0.1 * k, GLOW.disc);
       const p = this.player.ped;
       throwVelocity(p.x, p.z, c.marker.x, c.marker.z, this.arc);
       for (let i = 1; i < ARC_DOTS; i++) {

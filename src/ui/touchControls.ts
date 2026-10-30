@@ -5,7 +5,7 @@ import type { InputSource } from '../core/input';
 import { onSettingsChange, settings } from '../core/settings';
 import { clampToRect, followThumb, footScale, shapeAxis, shapeStick, type Vec2 } from '../core/stick';
 import { PLAYER_ON_FOOT } from '../entities/pedestrian';
-import type { WeaponKind } from '../systems/weapons';
+import { WEAPONS, type WeaponKind } from '../systems/weapons';
 import type { Haptics } from './haptics';
 import { ICONS } from './icons';
 import { chordBetween, pedalsAt, type PedalCircle, type PedalLayout, type PedalState } from './pedalZones';
@@ -64,7 +64,8 @@ const WEAPON_ICON: Record<WeaponKind | 'fists', string> = {
  *    under the thumb, stays inside the safe area and follows a thumb dragged
  *    past its rim.
  *  - Right half on foot: a twin-stick aim pad anywhere outside the buttons
- *    (aim; push past AIM_FIRE_AT to fire; tap to fire), FIRE, weapon swap and
+ *    (aim; push past AIM_FIRE_AT to fire; tap to fire; with a grenade or
+ *    molotov, aim and let go to throw), FIRE, weapon swap and
  *    ENTER (pulses when a car is in reach).
  *  - Right side in a car: one pedal pad tracking every finger (slide between
  *    GAS and BRAKE; the band between GAS and HAND presses both, to drift with
@@ -198,7 +199,8 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     idleStick();
   }
   function idleStick() {
-    stickBase.classList.remove('active');
+    // 'aiming' too: a resting stick mustn't keep the car's direction arrow (it reads as input held).
+    stickBase.classList.remove('active', 'aiming');
     out.steer = out.moveX = out.moveY = 0;
     out.sprint = false;
     moveKnob(stickKnob, 0, 0);
@@ -251,6 +253,13 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   let aimDownAt = 0;
   let aimTravel = 0;
   let armed = false;
+  /**
+   * A grenade or molotov in hand: the stick only aims (full deflection, full
+   * range) and letting go throws, once; pushing far doesn't fire.
+   */
+  let throwing = false;
+  /** The aim stick is out past its deadzone (a release then throws). */
+  let aimDeflected = false;
 
   /**
    * With a gun out, a faint aim ring waits beside the swap button so the aim
@@ -290,10 +299,13 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   const releaseAim = (e: { pointerId: number; type?: string }) => {
     if (e.pointerId !== aimPointer) return;
     aimPointer = null;
-    const tap = !aimParked && e.type === 'pointerup' && aimTravel < TAP_PX && performance.now() - aimDownAt < TAP_MS;
+    const lifted = !aimParked && e.type === 'pointerup';
+    const tap = lifted && aimTravel < TAP_PX && performance.now() - aimDownAt < TAP_MS;
+    // Letting go of an aimed throw throws it along the last aim (kept in aimX/Y for that read).
+    const release = lifted && throwing && aimDeflected && !tap;
     if (tap) out.punchPresses++;
     aimParked = false;
-    idleAim();
+    idleAim(release);
   };
   /** Let go of the aim stick but remember the thumb (see stickParked). */
   function parkAim() {
@@ -301,9 +313,11 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     aimParked = true;
     idleAim();
   }
-  function idleAim() {
-    out.aimX = out.aimY = 0;
+  function idleAim(release = false) {
+    if (release) out.aimRelease = true;
+    else out.aimX = out.aimY = 0;
     out.aimFire = false;
+    aimDeflected = false;
     aimBase.classList.remove('active', 'firing');
     moveKnob(aimKnob, 0, 0);
     restAim();
@@ -324,7 +338,10 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     const m = shapeStick(dx, dy, AIM_R, AIM_DZ, 1, shaped);
     out.aimX = shaped.x;
     out.aimY = -shaped.y;
-    const firing = m > 0 && Math.min(1, len / AIM_R) >= AIM_FIRE_AT;
+    // A fresh aim replaces one released but not read yet.
+    out.aimRelease = false;
+    aimDeflected = m > 0;
+    const firing = !throwing && m > 0 && Math.min(1, len / AIM_R) >= AIM_FIRE_AT;
     if (firing !== out.aimFire) {
       out.aimFire = firing;
       aimBase.classList.toggle('firing', firing);
@@ -437,6 +454,12 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
       weapon = w;
       fireIcon.innerHTML = WEAPON_ICON[w ?? 'fists'];
       armed = w !== null;
+      throwing = w !== null && WEAPONS[w].mode === 'throw';
+      // Switched to a throwable with the stick pushed out: stop firing (a release throws).
+      if (throwing && out.aimFire) {
+        out.aimFire = false;
+        aimBase.classList.remove('firing');
+      }
       fire.classList.toggle('armed', armed);
       restAim();
     },

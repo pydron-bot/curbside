@@ -170,8 +170,20 @@ export class ProgressHud {
     this.bonusEl.classList.add('show');
   }
 
+  /**
+   * While this says so (the WASTED / BUSTED card is up), a banner waits for
+   * releaseBanner() instead of showing through the card's slash: "MISSION
+   * FAILED · WASTED" comes after the respawn.
+   */
+  holdBanners: () => boolean = () => false;
+  private heldBanner: { text: string; tone: BannerTone; sub: string; seconds: number } | null = null;
+
   /** A big line in the middle of the screen (3-2-1, PASSED, FAILED...). */
   banner(text: string, tone: BannerTone, sub = '', seconds = BANNER_SECONDS): void {
+    if (this.holdBanners()) {
+      this.heldBanner = { text, tone, sub, seconds };
+      return;
+    }
     this.bannerText.textContent = text;
     this.bannerSub.textContent = sub;
     this.bannerSub.hidden = !sub;
@@ -187,6 +199,14 @@ export class ProgressHud {
   clearBanner(): void {
     this.bannerLeft = 0;
     this.bannerEl.hidden = true;
+    this.heldBanner = null;
+  }
+
+  /** Show the banner held back by holdBanners, if any. */
+  releaseBanner(): void {
+    const b = this.heldBanner;
+    this.heldBanner = null;
+    if (b) this.banner(b.text, b.tone, b.sub, b.seconds);
   }
 
   /** The marker prompt ("STOP HERE TO RACE"), or null to hide it. */

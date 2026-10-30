@@ -25,7 +25,14 @@ const STOP_SPEED = 3;
 const TAKE_AFTER = 1.4;
 const PROMPT_RANGE = 22;
 /** Why the buyer won't take a car (prompt lines). */
-const REFUSALS = ['NOT ON THE LIST', 'LOSE THE HEAT FIRST', `TOO DAMAGED · NEEDS ${Math.round(EXPORT_MIN_HEALTH * 100)}%`] as const;
+const REFUSALS = [
+  'NOT ON THE LIST',
+  'LOSE THE HEAT FIRST',
+  `TOO DAMAGED · NEEDS ${Math.round(EXPORT_MIN_HEALTH * 100)}%`,
+  'DROP YOUR FARE FIRST',
+  'FINISH THE JOB FIRST',
+  'DRIVE OUT AND BACK IN TO SELL',
+] as const;
 
 export class ExportMode implements Mode {
   readonly docks: SprayShop;
@@ -39,6 +46,12 @@ export class ExportMode implements Mode {
   private wanted: ExportOrder | null = null;
   private blip = '';
   private refused: (typeof REFUSALS)[number] | '' = '';
+  /**
+   * A car that sat in the bay during an activity (a mission delivering to the
+   * docks, a fare): it sells only once it has left the bay and come back, so
+   * finishing the job doesn't sell it out from under you.
+   */
+  private parked: Vehicle | null = null;
   private readonly promptText = new KeyedText();
 
   constructor(
@@ -49,7 +62,8 @@ export class ExportMode implements Mode {
     this.list = exportList(ctx.progress.data.exports.lists);
     this.listNo = ctx.progress.data.exports.lists;
     ctx.deps.bus.on('enterVehicle', () => {
-      if (!ctx.freeRoam) return;
+      // Not mid-activity: the bay won't take it then (nor in a Chaos Run).
+      if (!ctx.freeRoam || ctx.busy) return;
       const v = ctx.deps.player.driving;
       const o = v ? this.orderFor(v) : null;
       if (o) ctx.notice(`EXPORT: ${o.label}`, 'progress');
@@ -63,26 +77,30 @@ export class ExportMode implements Mode {
   }
 
   private orderFor(v: Vehicle): ExportOrder | null {
+    if (v.exported) return null;
     return openOrderFor(this.list, this.ctx.progress.data.exports.done, v.archetype, v.paint, v.police === true);
   }
 
   step(dt: number): void {
     const ctx = this.ctx;
-    if (this.sold && (this.soldIn -= dt) <= 0) {
-      const v = this.sold;
-      this.sold = null;
-      const player = ctx.deps.player;
-      if (player.driving !== v) {
-        ctx.deps.population.retireVehicle(v);
-        if (player.lastDriven === v) player.lastDriven = null;
-      }
-    }
+    if (this.sold && (this.soldIn -= dt) <= 0) this.crane();
     const car = ctx.deps.player.driving;
     this.wanted = ctx.freeRoam && car && !car.damage.wrecked ? this.orderFor(car) : null;
     this.syncBlip();
     this.refused = '';
-    if (!car || !ctx.freeRoam || !ctx.live || ctx.busy === 'mission' || !inShop(this.docks, car.sim.x, car.sim.z, 1)) {
+    const inBay = car !== null && inShop(this.docks, car.sim.x, car.sim.z, 1);
+    if (!inBay) this.parked = null;
+    else if (ctx.busy) this.parked = car;
+    if (!car || !ctx.freeRoam || !ctx.live || !inBay) {
       this.held = 0;
+      return;
+    }
+    if (ctx.busy || this.parked === car) {
+      // A mission's own delivery to the docks says nothing; anything else says why.
+      this.held = 0;
+      if (ctx.busy === 'taxi') this.refused = REFUSALS[3];
+      else if (ctx.busy && ctx.busy !== 'mission') this.refused = REFUSALS[4];
+      else if (!ctx.busy && this.wanted) this.refused = REFUSALS[5];
       return;
     }
     if (speed(car.sim) > STOP_SPEED) {
@@ -106,8 +124,9 @@ export class ExportMode implements Mode {
     save.exports.done.push(order.id);
     save.stats.exportsDelivered++;
     ctx.ui.banner('SOLD!', 'pass', `${order.label} · +$${fmt(paid)}`);
-    // Out you get; the crane takes it.
+    // Out you get; the crane takes it. Sold is sold: no getting back in to sell it twice.
     ctx.deps.player.exit();
+    car.exported = true;
     this.sold = car;
     this.soldIn = TAKE_AFTER;
     if (save.exports.done.length >= this.list.length) {
@@ -169,6 +188,18 @@ export class ExportMode implements Mode {
   reset(): void {
     this.held = 0;
     this.refused = '';
+    this.parked = null;
+    if (this.sold) this.crane();
+  }
+
+  /** The sold car goes (whoever is near it). */
+  private crane(): void {
+    const v = this.sold!;
+    this.sold = null;
+    const player = this.ctx.deps.player;
+    if (player.driving === v) player.exit();
+    this.ctx.deps.population.retireVehicle(v);
+    if (player.lastDriven === v) player.lastDriven = null;
   }
 
   /** '$' at the docks in free roam; pulsing with an arrow while you drive a wanted car. */

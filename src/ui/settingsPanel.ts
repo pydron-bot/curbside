@@ -14,6 +14,8 @@ type Row =
 
 /** Slider step for keyboard / pad adjustment. */
 const STEP = 0.05;
+/** Sideways movement (px) that turns a press on a slider into a drag. */
+const DRAG_SLOP = 6;
 /** The volume preview click plays at most this often while dragging, ms. */
 const PREVIEW_EVERY = 90;
 
@@ -46,8 +48,10 @@ export class SettingsPanel implements Panel {
       <header class="sheet-head"><h2>SETTINGS</h2></header>
       <div class="sheet-body settings-grid" data-scroll>
         <section><h3>SOUND</h3></section>
-        <section><h3>CONTROLS</h3></section>
-        <section><h3>DISPLAY</h3></section>
+        <div class="settings-col">
+          <section><h3>CONTROLS</h3></section>
+          <section><h3>DISPLAY</h3></section>
+        </div>
       </div>`;
     const [sound, controls, display] = card.querySelectorAll('section');
     const head = card.querySelector('.sheet-head')!;
@@ -161,21 +165,35 @@ export class SettingsPanel implements Panel {
       const r = track.getBoundingClientRect();
       set((e.clientX - r.left) / r.width, true);
     };
-    let dragging: number | null = null;
+    // A drag starts only once the finger moves sideways (the track is
+    // touch-action: pan-y), so a swipe up the sheet that starts on a slider
+    // scrolls instead of changing the volume; a tap still jumps to the spot.
+    let pressed: number | null = null;
+    let dragging = false;
+    let startX = 0;
     row.addEventListener('pointerdown', (e) => {
       if (!(e.target as Element).closest('.slider')) return;
-      dragging = e.pointerId;
-      track.setPointerCapture(e.pointerId);
-      fromPointer(e);
+      pressed = e.pointerId;
+      dragging = false;
+      startX = e.clientX;
     });
     track.addEventListener('pointermove', (e) => {
-      if (e.pointerId === dragging) fromPointer(e);
+      if (e.pointerId !== pressed) return;
+      if (!dragging && Math.abs(e.clientX - startX) > DRAG_SLOP) {
+        dragging = true;
+        track.setPointerCapture(e.pointerId);
+      }
+      if (dragging) fromPointer(e);
     });
-    const stop = (e: PointerEvent) => {
-      if (e.pointerId === dragging) dragging = null;
-    };
-    track.addEventListener('pointerup', stop);
-    track.addEventListener('pointercancel', stop);
+    track.addEventListener('pointerup', (e) => {
+      if (e.pointerId !== pressed) return;
+      if (!dragging) fromPointer(e);
+      pressed = null;
+    });
+    // The browser took the touch for a scroll: leave the value alone.
+    track.addEventListener('pointercancel', (e) => {
+      if (e.pointerId === pressed) pressed = null;
+    });
     this.nav.add({ el: row, adjust: (dir) => set(settings[key] + dir * STEP, true) });
     this.refreshers.push((s) => {
       const pct = Math.round(s[key] * 100);

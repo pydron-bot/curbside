@@ -93,6 +93,8 @@ export class RaceMode implements Mode {
       if (d > START_RADIUS + 10) this.armed.set(def.id, true);
       if (d < PROMPT_RANGE) this.near = def;
       if (!car || car.damage.wrecked || ctx.busy || !this.armed.get(def.id)) continue;
+      // Not with the police on you: the 3-2-1 holds the car still, a sitting duck for a bust.
+      if (ctx.deps.heat.wanted.level > 0) continue;
       if (d < START_RADIUS && speed(car.sim) < START_SPEED) {
         this.armed.set(def.id, false);
         this.begin(def);
@@ -178,10 +180,12 @@ export class RaceMode implements Mode {
     if (!def || this.run || this.ctx.busy) return null;
     const best = this.ctx.progress.data.raceTimes[def.id];
     const driving = this.ctx.deps.player.driving !== null;
+    const hot = this.ctx.deps.heat.wanted.level > 0;
     const p = this.promptText;
-    if (p.stale(RACES.indexOf(def) * 2 + (driving ? 1 : 0) + (best ?? 0) * 100)) {
+    if (p.stale(RACES.indexOf(def) * 4 + (driving ? 1 : 0) + (hot ? 2 : 0) + (best ?? 0) * 100)) {
       const tail = best !== undefined ? ` · BEST ${formatRaceTime(best)}` : '';
-      p.text = driving ? `RACE · ${def.name} · DRIVE ONTO THE LINE${tail}` : `RACE · ${def.name} · NEEDS A CAR${tail}`;
+      const what = hot ? 'LOSE THE HEAT FIRST' : driving ? 'DRIVE ONTO THE LINE' : 'NEEDS A CAR';
+      p.text = `RACE · ${def.name} · ${what}${tail}`;
     }
     return p.text;
   }

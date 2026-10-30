@@ -15,11 +15,13 @@ import type { ColorRepresentation, Scene } from 'three';
 import { createVehicleState, type VehicleArchetype } from '../entities/vehicle';
 import type { GlowSprites } from '../render/glowSprites';
 import { MARK, ProgressProps, beacon, chevrons, groundRing, nearView } from '../render/progressLook';
+import { getDevice } from '../render/quality';
 import { worldUniforms } from '../render/shaderLib';
 import type { Panel } from '../ui/menu';
 import { ProgressHud } from '../ui/progressHud';
 import { DialogueCard, ResultsCard, ShopSheet, StatsSheet, type StatsModel } from '../ui/progressScreens';
 import type { BlipOptions } from '../ui/radar';
+import { RADAR_LEGEND } from '../ui/radarLegend';
 import { fmt } from '../ui/scoreHud';
 import { formatDuration } from './runStats';
 import type { Rect } from '../world/city';
@@ -27,7 +29,7 @@ import { ChaosRunMode } from './modes/chaosRunMode';
 import { CHAOS_RUN_ID } from './modes/chaosRun';
 import type { Mode, ModeCtx, ProgressDeps } from './modes/context';
 import { ExportMode } from './modes/exportMode';
-import { ORDERS_PER_LIST } from './modes/exports';
+import { ORDERS_PER_LIST, exportList } from './modes/exports';
 import { FRENZIES } from './modes/frenzies';
 import { FrenzyMode } from './modes/frenzyMode';
 import { MissionMode } from './modes/missionMode';
@@ -38,11 +40,14 @@ import { RaceMode } from './modes/raceMode';
 import { RACES, formatRaceTime } from './modes/races';
 import { SHOP_ITEMS, TOUGH_SKIN_HEALTH, canBuy, sprayPrice } from './modes/shop';
 import { TaxiMode } from './modes/taxiMode';
+import { BUST_FINE } from './heat';
 import { MAX_ARMOUR, MAX_HEALTH } from './player';
 import type { Vehicle } from './population';
 import { Progress, bustFine, hospitalBill } from './progress';
 import { ChainBank, chainLive } from './progressBank';
+import { pruneSave } from './progressSave';
 import { TAXI_GOAL, completion } from './progressStats';
+import { TUTORIAL_DONE, advanceTutorial, pointerWaits, tutorialText, type TutorialEvent } from './tutorial';
 
 /** Stand on the safehouse door this long to open the shop, s. */
 const SHOP_HOLD = 0.4;
@@ -87,11 +92,21 @@ export class ProgressDirector implements ModeCtx {
   private nearShop = false;
   private sprayShown: unknown = null;
   private homeBlip = false;
+  /** The first-run pointer has the radar routing to the ringing phone. */
+  private tutorialRoute = false;
+  /** On a phone, the first-run pointer is waiting for the car to stop (tutorial.ts pointerWaits). */
+  private pointerWaiting = false;
 
   constructor(d: DirectorDeps) {
     this.deps = d;
     this.pinned = d.pinned;
     this.progress = new Progress();
+    // Ids this build doesn't have can't count (missions' ids once the jobs are built, below).
+    pruneSave(this.progress.data, {
+      packages: PACKAGE_COUNT,
+      frenzies: FRENZIES.map((f) => f.id),
+      exportOrders: exportList(this.progress.data.exports.lists).map((o) => o.id),
+    });
     this.progress.track(d.bus, () => this.live, () => d.playing());
     // The free-roam best is the save's (a Chaos Run swaps in its own).
     d.hud.setBest(this.progress.best('free'));
@@ -100,7 +115,7 @@ export class ProgressDirector implements ModeCtx {
     this.progress.onCash((c) => this.ui.setCash(c.total, c.amount));
     this.results = new ResultsCard(document.body);
     this.dialogue = new DialogueCard(document.body, d.audio);
-    this.shop = new ShopSheet(document.body, d.audio, SHOP_ITEMS);
+    this.shop = new ShopSheet(document.body, d.audio, SHOP_ITEMS, d.haptics ?? null);
     this.stats = new StatsSheet(document.body, d.audio);
     for (const o of this.props.objects) d.scene.add(o);
 
@@ -111,6 +126,7 @@ export class ProgressDirector implements ModeCtx {
     this.exports = new ExportMode(this, d.city);
     this.taxi = new TaxiMode(this);
     this.missions = new MissionMode(this, this.exports.docks, this.dialogue);
+    pruneSave(this.progress.data, { missions: this.missions.missions.map((m) => m.id) });
     // Card owners first: a running mode claims the activity card before a passive one.
     this.modes = [this.chaos, this.frenzies, this.races, this.missions, this.taxi, this.exports, this.packages];
 
@@ -131,7 +147,12 @@ export class ProgressDirector implements ModeCtx {
     });
     d.bus.on('playerDied', () => this.lifeLost(false));
     d.bus.on('busted', () => this.lifeLost(true));
-    d.bus.on('respawn', () => this.applyUpgrades());
+    // Banners raised by a death or arrest (MISSION FAILED, RACE OVER) wait for the respawn.
+    this.ui.holdBanners = () => d.playing() && !this.live;
+    d.bus.on('respawn', () => {
+      this.applyUpgrades();
+      this.ui.releaseBanner();
+    });
     d.bus.on('pause', (e) => {
       if (e.paused) this.progress.flush();
       // Resuming over a card: keep the world quiet.
@@ -190,6 +211,7 @@ export class ProgressDirector implements ModeCtx {
     const s = this.progress.stats;
     s.bestChain = Math.max(s.bestChain, cash);
     this.notice(links > 1 ? `BANKED $${fmt(cash)}` : `+$${fmt(cash)}`, 'cash');
+    if (this.freeRoam) this.tutor('banked');
   }
 
   unpin(v: Vehicle): void {
@@ -252,6 +274,7 @@ export class ProgressDirector implements ModeCtx {
     // Bank the chain once the combo runs out.
     if (this.bank.open && !chainLive(this.deps.score)) this.bankChain();
     this.stepShop(dt);
+    this.stepTutorial();
     // Free roam's best as it's beaten (the Chaos Run records its own at the end).
     const total = this.deps.score.total;
     if (!this.chaos.active && total > this.progress.best('free')) this.progress.recordBest('free', total);
@@ -269,6 +292,10 @@ export class ProgressDirector implements ModeCtx {
     if (!this.blocksInput) {
       if (this.nearShop && this.freeRoam && !this.busy) prompt = 'SAFEHOUSE SHOP · STEP ON THE DOOR';
       for (let i = 0; i < this.modes.length && prompt === null; i++) prompt = this.modes[i].prompt();
+      // Nothing nearer to hand: the first run's next pointer (on a phone, not over a moving car).
+      const car = this.deps.player.driving;
+      this.pointerWaiting = getDevice().handheld && pointerWaits(this.pointerWaiting, car ? Math.hypot(car.sim.vx, car.sim.vz) : null);
+      if (prompt === null && this.freeRoam && !this.busy && this.live && !this.pointerWaiting) prompt = tutorialText(this.progress.data.tutorial, this.deps.input.lastDevice);
     }
     ui.prompt(prompt);
     this.sprayNotice();
@@ -320,10 +347,49 @@ export class ProgressDirector implements ModeCtx {
     this.holdControls = false;
     this.pinned.length = 0;
     this.deps.radar.clearWaypoint();
+    this.tutorialRoute = false;
     this.ui.activity(null);
     this.ui.prompt(null);
     this.ui.clearBanner();
     this.progress.flush();
+  }
+
+  /**
+   * First-run pointers: step on when the player does the thing (in free roam:
+   * the Chaos Run's car doesn't count as stealing one), and route the radar
+   * to the ringing phone for the last one.
+   */
+  private stepTutorial(): void {
+    const step = this.progress.data.tutorial;
+    if (step >= TUTORIAL_DONE) return;
+    if (this.busy === 'mission') this.tutor('mission');
+    else if (this.freeRoam && this.live && this.deps.player.driving) this.tutor('enterVehicle');
+    const phone = this.progress.data.tutorial === 2 && this.freeRoam && !this.busy && this.live ? this.missions.ringing : null;
+    // Only ever set: an activity starting takes the route over, and clears it when it ends.
+    if (phone && !this.tutorialRoute) this.deps.radar.setWaypoint(phone.x, phone.z);
+    this.tutorialRoute = phone !== null;
+  }
+
+  private tutor(event: TutorialEvent): void {
+    const d = this.progress.data;
+    const next = advanceTutorial(d.tutorial, event);
+    if (next === d.tutorial) return;
+    d.tutorial = next;
+    this.progress.markDirty();
+    // Answered: the call takes over (and sets its own route).
+    if (next === TUTORIAL_DONE && this.tutorialRoute) {
+      this.tutorialRoute = false;
+      this.deps.radar.clearWaypoint();
+    }
+  }
+
+  /**
+   * The share of the score a bust takes. A Chaos Run's bust takes none: being
+   * cut short is the cost (as WASTED), and its results card and recorded best
+   * must add up to the breakdown.
+   */
+  bustShare(): number {
+    return this.chaos.active ? 0 : BUST_FINE;
   }
 
   /** WASTED or BUSTED: the open chain is lost, and the bill comes. */
@@ -335,6 +401,8 @@ export class ProgressDirector implements ModeCtx {
     const due = busted ? bustFine(cash) : hospitalBill(cash);
     const taken = this.progress.charge(due, busted ? 'fine' : 'hospital');
     if (taken > 0) this.notice(busted ? `FINE −$${fmt(taken)}` : `HOSPITAL −$${fmt(taken)}`, 'lost');
+    // On the card too, beside the points: two different "fines" need their units.
+    this.deps.hud.wastedBill(busted ? 'CASH FINE' : 'HOSPITAL', taken);
     this.progress.flush();
   }
 
@@ -359,7 +427,7 @@ export class ProgressDirector implements ModeCtx {
     const at = p.position;
     const d = Math.hypot(at.x - SAFEHOUSE.x, at.z - SAFEHOUSE.z);
     this.nearShop = d < 8 && !p.driving;
-    const offer = this.freeRoam && !this.busy && d < SHOP_NEAR;
+    const offer = this.shopOffered();
     if (offer === this.shopButton.hidden) this.shopButton.hidden = !offer;
     if (d > 4) this.shopArmed = true;
     if (!this.live || !this.freeRoam || this.busy || p.driving || d > SHOP_REACH || !this.shopArmed || Math.hypot(p.ped.vx, p.ped.vz) > 1.5) {
@@ -372,7 +440,15 @@ export class ProgressDirector implements ModeCtx {
     this.openShop(true);
   }
 
+  /** The pause menu's SHOP: free roam, nothing on, near the safehouse. */
+  private shopOffered(): boolean {
+    const at = this.deps.player.position;
+    return this.live && this.freeRoam && !this.busy && Math.hypot(at.x - SAFEHOUSE.x, at.z - SAFEHOUSE.z) < SHOP_NEAR;
+  }
+
   private openShop(fromStreet = false): void {
+    // The button is the gate, but keyboard / pad navigation mustn't get round it.
+    if (!fromStreet && !this.shopOffered()) return;
     const progress = this.progress;
     const player = this.deps.player;
     const owned = (id: string) => (item(id).kind === 'armour' ? player.armour >= MAX_ARMOUR : progress.has(id));
@@ -440,7 +516,7 @@ export class ProgressDirector implements ModeCtx {
             { label: 'Taxi fares', value: `${st.fares}`, bar: st.fares / TAXI_GOAL },
             { label: 'Cars exported', value: `${st.exportsDelivered}`, bar: s.exports.lists > 0 ? 1 : s.exports.done.length / ORDERS_PER_LIST },
           ],
-          chips: this.exports.orders.map((o) => ({ text: o.label, done: o.done })),
+          chips: { label: 'EXPORT ORDERS', items: this.exports.orders.map((o) => ({ text: o.label, done: o.done })) },
         },
         {
           title: 'BEST',
@@ -467,6 +543,10 @@ export class ProgressDirector implements ModeCtx {
             { label: 'Wasted', value: n(st.wasted) },
             { label: 'Busted', value: n(st.busted) },
           ],
+        },
+        {
+          title: 'RADAR',
+          rows: RADAR_LEGEND.map(([icon, meaning]) => ({ label: meaning, value: icon })),
         },
       ],
     };

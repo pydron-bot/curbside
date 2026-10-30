@@ -19,11 +19,13 @@ export interface WastedSummary {
  * then the life's numbers drop in one by one — score (with a NEW BEST stamp),
  * best, time alive, knockouts, cars wrecked — while a bar runs down to the
  * respawn. All of it is CSS animation (hud.css), restarted on each show.
- * Arrests reuse it as BUSTED, in police blue with the fine (wanted.css).
+ * Arrests reuse it as BUSTED, in police blue with the points lost (wanted.css);
+ * the progress director adds what the life cost in cash (bill()).
  */
 export class WastedScreen {
   private readonly el: HTMLElement;
-  private readonly rows: Record<'score' | 'best' | 'time' | 'kos' | 'wrecks' | 'fine', HTMLElement>;
+  private readonly rows: Record<'score' | 'best' | 'time' | 'kos' | 'wrecks' | 'fine' | 'bill', HTMLElement>;
+  private readonly billLabel: HTMLElement;
   private readonly title: HTMLElement;
   private readonly bar: HTMLElement;
   private readonly badge: HTMLElement;
@@ -41,13 +43,15 @@ export class WastedScreen {
         <div class="ws-row"><span>TIME ALIVE</span><b data-k="time"></b></div>
         <div class="ws-row"><span>KNOCKOUTS</span><b data-k="kos"></b></div>
         <div class="ws-row"><span>CARS WRECKED</span><b data-k="wrecks"></b></div>
-        <div class="ws-row ws-fine"><span>FINE</span><b data-k="fine"></b></div>
+        <div class="ws-row ws-fine" hidden><span>POINTS LOST</span><b data-k="fine"></b></div>
+        <div class="ws-row ws-bill" hidden><span></span><b data-k="bill"></b></div>
       </div>
       <div class="wasted-timer"><i></i></div>`;
     root.append(el);
     this.el = el;
     const k = (key: string) => el.querySelector<HTMLElement>(`[data-k="${key}"]`)!;
-    this.rows = { score: k('score'), best: k('best'), time: k('time'), kos: k('kos'), wrecks: k('wrecks'), fine: k('fine') };
+    this.rows = { score: k('score'), best: k('best'), time: k('time'), kos: k('kos'), wrecks: k('wrecks'), fine: k('fine'), bill: k('bill') };
+    this.billLabel = el.querySelector('.ws-bill > span')!;
     this.title = el.querySelector('.wasted-title')!;
     this.bar = el.querySelector('.wasted-timer > i')!;
     this.badge = el.querySelector('.ws-badge')!;
@@ -79,7 +83,15 @@ export class WastedScreen {
     this.el.hidden = false;
   }
 
+  /** What the life cost in cash ('HOSPITAL', 'CASH FINE'), under the score's own loss; 0 hides it. */
+  bill(label: string, amount: number): void {
+    this.billLabel.textContent = label;
+    this.rows.bill.textContent = `−$${fmt(amount)}`;
+    this.rows.bill.parentElement!.hidden = amount <= 0;
+  }
+
   hide(): void {
     this.el.hidden = true;
+    this.rows.bill.parentElement!.hidden = true;
   }
 }

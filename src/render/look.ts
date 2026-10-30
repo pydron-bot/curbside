@@ -1,4 +1,4 @@
-import type { Camera, Scene, WebGLRenderer } from 'three';
+import type { Camera, Object3D, Scene, WebGLRenderer } from 'three';
 import type { City, Rect } from '../world/city';
 import { createCityMesh, type CityMesh } from '../world/cityMesh';
 import { createGround } from '../world/ground';
@@ -59,6 +59,8 @@ export class Look {
   private dt = 0;
   private player: PlayerView | null = null;
   private warmedUp = false;
+  /** Every city chunk's buffers are on the GPU (see uploadCity). */
+  private uploaded = false;
   private readonly glowSources: GlowSource[] = [];
   /**
    * Multiplier on the sky's exposure, for flashes (e.g. an explosion kicking
@@ -94,6 +96,7 @@ export class Look {
     renderer.domElement.addEventListener('webglcontextrestored', () => {
       this.cars.buildEnvironment();
       this.warmedUp = false;
+      this.uploaded = false;
     });
     this.update(0, null);
   }
@@ -128,6 +131,7 @@ export class Look {
     this.contactShadows.end();
     this.glows.end();
     this.sunShadow.update(view, this.lighting.toLight);
+    if (!this.uploaded) this.uploadCity(camera);
     // Count the whole frame (shadow pass, scene, bloom), not just the last pass.
     this.renderer.info.reset();
     this.renderer.render(this.scene, camera);
@@ -155,7 +159,33 @@ export class Look {
     precompile(this.renderer, this.scene, camera);
   }
 
-  /** On foot: a pulsing ring and a heading chevron; driving: a ring round the car that fades at speed. */
+  /**
+   * Draw the whole city once with culling off (night-only meshes too), so
+   * every chunk's instanced buffers go up to the GPU now, behind the title
+   * or the pause card: renderer.compile builds programs but uploads nothing,
+   * so otherwise each chunk uploaded on the first frame it came into view (a
+   * small hitch driving fast into a new district, or a Chaos Run's random
+   * start). The real render straight after overwrites this one.
+   */
+  private uploadCity(camera: Camera): void {
+    this.uploaded = true;
+    const touched: Object3D[] = [];
+    const state: boolean[] = [];
+    this.city.root.traverse((o) => {
+      if (!('isMesh' in o)) return;
+      touched.push(o);
+      state.push(o.frustumCulled, o.visible);
+      o.frustumCulled = false;
+      o.visible = true;
+    });
+    this.renderer.render(this.scene, camera);
+    for (let i = 0; i < touched.length; i++) {
+      touched[i].frustumCulled = state[i * 2];
+      touched[i].visible = state[i * 2 + 1];
+    }
+  }
+
+  /** On foot: a pulsing ring and a heading chevron; driving: a ring round the car that dims at speed, and a chevron ahead. */
   private addMarker(): void {
     const p = this.player;
     if (!p || !p.alive) return;
@@ -170,10 +200,17 @@ export class Look {
       const fz = Math.cos(p.heading);
       this.glows.addFlat(p.x + fx * 1.25, 0.06, p.z + fz * 1.25, p.heading, 0.7, 0.55, r * 0.9, g * 0.9, b * 0.9, GLOW.chevron);
     } else {
-      const fade = 1 - Math.min(1, Math.max(0, (p.speed - 4) / 10));
-      if (fade <= 0.01) return;
-      const k = (0.35 + 0.2 * pulse) * fade;
+      // The ring fades as the car picks up speed, but not out: among
+      // same-coloured traffic you'd lose your own car. At speed a chevron
+      // just ahead of the bumper takes over (both in the glow batch: free).
+      const fast = Math.min(1, Math.max(0, (p.speed - 4) / 10));
+      const k = (0.35 + 0.2 * pulse) * Math.max(0.3, 1 - fast);
       this.glows.addFlat(p.x, 0.05, p.z, p.heading, 6.4, 6.4, r * k, g * k, b * k, GLOW.ring);
+      if (fast > 0.05) {
+        const kc = 0.8 * fast;
+        const ahead = 3.4;
+        this.glows.addFlat(p.x + Math.sin(p.heading) * ahead, 0.06, p.z + Math.cos(p.heading) * ahead, p.heading, 1.5, 1.1, r * kc, g * kc, b * kc, GLOW.chevron);
+      }
     }
   }
 

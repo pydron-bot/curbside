@@ -26,6 +26,8 @@ export interface AimState {
   active: boolean;
   /** Twin-stick fire: keep shooting (at the weapon's rate) while true. */
   fire: boolean;
+  /** The aim stick was just let go with a throwable aimed: throw along this aim, once. */
+  release: boolean;
 }
 
 /** World heading of a screen-relative aim vector. */

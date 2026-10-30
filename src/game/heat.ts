@@ -72,6 +72,10 @@ export interface HeatDeps {
   repaint(v: Vehicle): void;
   /** Take payment (see SPRAY_COST); false refuses. Defaults to free. */
   pay?(cost: number): boolean;
+  /** The game is holding the player's car still (a 3-2-1): no bust meanwhile. */
+  held?(): boolean;
+  /** The share of the score a bust takes (default BUST_FINE). */
+  bustFine?(): number;
 }
 
 export class Heat {
@@ -137,7 +141,8 @@ export class Heat {
       this.crime('explosion', e.x, e.z);
       if (e.police) {
         this.crime('copCarWrecked', e.x, e.z);
-        deps.award(deps.score.award('copWreck'));
+        // No points while WASTED or BUSTED (a fire you started can still go up).
+        if (deps.player.alive && !deps.player.arrested) deps.award(deps.score.award('copWreck'));
       }
     });
     bus.on('enterVehicle', (e) => {
@@ -329,6 +334,8 @@ export class Heat {
       this.bust.reset();
       return;
     }
+    // A held car can't get away, so nobody gets to cuff it: the meter waits.
+    if (this.deps.held?.()) return;
     const car = p.driving;
     const sit = this.situation;
     sit.stars = this.wanted.level;
@@ -354,7 +361,7 @@ export class Heat {
 
   /** BUSTED: a cut of the score, weapons gone, heat cleared, the police stand down. */
   private arrest(): void {
-    const fine = this.deps.score.fine(BUST_FINE);
+    const fine = this.deps.score.fine(this.deps.bustFine?.() ?? BUST_FINE);
     if (!this.deps.player.arrest(fine)) return;
     this.wanted.clear('busted');
     this.police.standDown();

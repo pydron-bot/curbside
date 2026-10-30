@@ -83,6 +83,25 @@ export interface VehicleState {
   launchTime: number;
 }
 
+/**
+ * dst = src, field by field: the sim keeps last step's state of every car for
+ * render interpolation, and Object.assign there boxed numbers every step.
+ */
+export function copyVehicleState(dst: VehicleState, src: VehicleState): void {
+  dst.x = src.x;
+  dst.z = src.z;
+  dst.heading = src.heading;
+  dst.vx = src.vx;
+  dst.vz = src.vz;
+  dst.yawRate = src.yawRate;
+  dst.y = src.y;
+  dst.vy = src.vy;
+  dst.airborne = src.airborne;
+  dst.slide = src.slide;
+  dst.burnout = src.burnout;
+  dst.launchTime = src.launchTime;
+}
+
 export interface VehicleControls {
   /** -1 (brake/reverse) .. 1 (full throttle) */
   throttle: number;

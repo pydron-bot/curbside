@@ -33,7 +33,7 @@ import {
   type BlastKind,
 } from '../systems/damage';
 import { CAR_CIRCLE_OFFSETS, CAR_CIRCLE_RADIUS, carCircles } from '../systems/physics';
-import { FIRE_RADIUS, Projectiles, throwTarget, type ProjectileWorld } from '../systems/projectiles';
+import { FIRE_RADIUS, MIN_THROW, Projectiles, clampThrowToWalls, throwTarget, type ProjectileWorld } from '../systems/projectiles';
 import type { Award, Score } from '../systems/score';
 import {
   DRIVE_BY_SPREAD,
@@ -158,8 +158,8 @@ export class Combat {
   readonly projectiles = new Projectiles();
   /** Who the gun is locked on to (a ped), while firing. */
   lock: CrowdPed | null = null;
-  /** Where a throw would land now (the landing marker), while one is ready. */
-  readonly marker = { x: 0, z: 0, show: false };
+  /** Where a throw would land now (the landing marker), while one is ready; `blocked`: a wall cut it short. */
+  readonly marker = { x: 0, z: 0, show: false, blocked: false };
   /** The player's current combo step (0..2) and the time left to continue it. */
   comboStep = -1;
   comboTimer = 0;
@@ -233,7 +233,7 @@ export class Combat {
     // Throwables always show where they'd land, aimed or not (a tap on FIRE
     // throws to the same spot, so touch players see it first too).
     if (spec.mode === 'throw') {
-      this.throwPoint(spec.range, aim, this.target);
+      this.marker.blocked = this.throwPoint(spec.range, aim, this.target);
       this.marker.x = this.target.x;
       this.marker.z = this.target.z;
       this.marker.show = true;
@@ -322,10 +322,12 @@ export class Combat {
 
   private throwIt(kind: 'grenade' | 'molotov', aim: AimInput): boolean {
     const p = this.d.player;
+    const { x, z } = p.ped;
+    const blocked = this.throwPoint(WEAPONS[kind].range, aim, this.target);
+    // Hugging a wall and throwing into it would drop it at your own feet: no throw (the ring shows red there).
+    if (blocked && Math.hypot(this.target.x - x, this.target.z - z) < MIN_THROW) return false;
     if (!p.arsenal.tryFire()) return false;
     this.sinceShot = 0;
-    const { x, z } = p.ped;
-    this.throwPoint(WEAPONS[kind].range, aim, this.target);
     p.ped.heading = Math.atan2(this.target.x - x, this.target.z - z);
     this.d.pose?.punch(1);
     this.projectiles.throw(kind, x, z, this.target.x, this.target.z, true);
@@ -333,8 +335,19 @@ export class Combat {
     return true;
   }
 
-  /** Where a throw lands: the cursor, a locked or assisted target, the stick's reach, or ahead. */
-  private throwPoint(range: number, aim: AimInput, out: { x: number; z: number }): void {
+  /**
+   * Where a throw lands, short of any wall in the way (true if one cut it
+   * short): the marker shows what will really happen, not a spot behind a
+   * building that the grenade would bounce back from.
+   */
+  private throwPoint(range: number, aim: AimInput, out: { x: number; z: number }): boolean {
+    this.aimThrow(range, aim, out);
+    const p = this.d.player.ped;
+    return clampThrowToWalls(p.x, p.z, out, this.d.grid);
+  }
+
+  /** Where a throw is aimed: the cursor, a locked or assisted target, the stick's reach, or ahead. */
+  private aimThrow(range: number, aim: AimInput, out: { x: number; z: number }): void {
     const p = this.d.player.ped;
     if (aim.ground) {
       throwTarget(p.x, p.z, aim.ground.x, aim.ground.z, range, out);
@@ -490,14 +503,19 @@ export class Combat {
    */
   vehicleExploded(v: Vehicle): void {
     const p = this.d.player;
-    const ownCar = p.driving === v;
+    const inside = p.driving === v;
+    // Bailing out of your own burning car doesn't turn its blast into a wreck
+    // you caused (no Chaos Run time, heat or frenzy credit to farm).
+    const ownCar = inside || (p.lastDriven === v && p.leftBurning);
     const byPlayer = ownCar || blamesPlayer(v.damage, this.d.now());
     this.blast('car', v.sim.x, v.sim.z, byPlayer, v, ownCar);
-    if (this.d.playing()) {
+    // Losing your own ride isn't a KABOOM, and nothing scores once you're
+    // WASTED or BUSTED (fires you started can still go up after).
+    if (this.d.playing() && !ownCar && p.alive && !p.arrested) {
       const at = p.position;
       if (Math.hypot(at.x - v.sim.x, at.z - v.sim.z) < BOOM_SCORE_RANGE) this.d.award(this.d.score.award('boom'));
     }
-    if (ownCar) {
+    if (inside) {
       // The slide (if any) dies with the car; you're thrown clear and hurt once.
       this.d.score.endDrift(false);
       p.ownCarExploded();
@@ -520,7 +538,8 @@ export class Combat {
       source: kind === 'car' ? 'vehicle' : kind,
     });
     const p = d.player;
-    if (!p.driving && !ownCar && d.playing()) {
+    // On foot (the car you're in throws you clear itself: ownCarExploded).
+    if (!p.driving && d.playing()) {
       const dist = Math.hypot(p.ped.x - x, p.ped.z - z);
       if (dist < b.radius) {
         p.hurt(blastDamage(dist, b.radius, b.playerDamage));

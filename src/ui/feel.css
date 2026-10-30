@@ -18,12 +18,18 @@
   display: none;
 }
 
-/* In a car with a drive-by gun: the weapon sits beside the speedometer. */
+/* In a car with a drive-by gun: the weapon sits under the speedometer (beside
+   it, the centred activity card ran over its ammo count on a phone). */
 body[data-mode='car'] .hud-status:not(.in-car) .weapon {
   position: absolute;
-  top: 26px;
-  left: calc(clamp(80px, 24vmin, 140px) + 14px);
+  top: calc(clamp(80px, 24vmin, 140px) + 6px);
+  left: -4px;
   height: 26px;
+}
+
+body[data-device='touch'][data-hand='left'][data-mode='car'] .hud-status:not(.in-car) .weapon {
+  left: auto;
+  right: -4px;
 }
 
 /* Nitro: a slim upright gauge on the speedometer's right. */

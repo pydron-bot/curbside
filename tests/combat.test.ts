@@ -38,7 +38,7 @@ function car(x: number, z: number, archetype: VehicleArchetype = 'sedan'): Vehic
   };
 }
 
-function setup(opts: { stars?: number } = {}) {
+function setup(opts: { stars?: number; walls?: Array<{ minX: number; minZ: number; maxX: number; maxZ: number }> } = {}) {
   const bus = new EventBus();
   const log: GameEvent[] = [];
   bus.onAny((e) => log.push(e));
@@ -52,7 +52,7 @@ function setup(opts: { stars?: number } = {}) {
     player,
     vehicles,
     crowd,
-    grid: new StaticGrid([]),
+    grid: new StaticGrid(opts.walls ?? []),
     rand: random(7),
     score,
     award: (a) => a && bus.emit({ type: 'award', award: a }),
@@ -259,6 +259,35 @@ describe('throws', () => {
     expect(w.combat.fire(noAim)).toBe(true);
     expect(w.log.find((e) => e.type === 'throw')).toMatchObject({ toX: x, toZ: z, weapon: 'grenade' });
   });
+
+  it('the marker stops short of a wall in the way (and says it is blocked), and the throw goes there', () => {
+    const w = setup({ walls: [{ minX: -10, minZ: 6, maxX: 10, maxZ: 20 }] });
+    w.player.arsenal.pickUp('grenade');
+    w.player.arsenal.current = 'grenade';
+    // Full push of the stick straight at the building (facing +Z).
+    const aim: AimInput = { heading: 0, reach: 1, ground: null };
+    w.combat.updateAim(false, aim);
+    expect(w.combat.marker.blocked).toBe(true);
+    expect(w.combat.marker.z).toBeLessThan(6);
+    expect(w.combat.fire(aim)).toBe(true);
+    expect(w.log.find((e) => e.type === 'throw')).toMatchObject({ toZ: w.combat.marker.z });
+    // Right up against it, the throw would land at your own feet: it doesn't go.
+    w.step(1);
+    const thrown = w.log.filter((e) => e.type === 'throw').length;
+    const left = w.player.arsenal.ammo.get('grenade');
+    w.player.ped.z = 5.5;
+    w.combat.updateAim(false, aim);
+    expect(w.combat.marker.blocked).toBe(true);
+    expect(w.combat.fire(aim)).toBe(false);
+    expect(w.log.filter((e) => e.type === 'throw')).toHaveLength(thrown);
+    expect(w.player.arsenal.ammo.get('grenade')).toBe(left);
+    w.player.ped.z = 0;
+    // Turned away from it, the throw is clear.
+    aim.heading = Math.PI;
+    w.combat.updateAim(false, aim);
+    expect(w.combat.marker.blocked).toBe(false);
+    expect(w.combat.marker.z).toBeCloseTo(-WEAPONS.grenade.range);
+  });
 });
 
 describe('rockets', () => {
@@ -348,6 +377,64 @@ describe('blasts and fire', () => {
     let t = 0;
     while (!stepDamage(own.damage, DT) && t < 6) t += DT;
     expect(t).toBeGreaterThan(2.9);
+  });
+
+  it("your own car going up is no KABOOM and no wreck you caused, in it or just bailed out of it burning", () => {
+    const w = setup();
+    const own = car(0, 3);
+    w.vehicles.push(own);
+    w.player.enter(own);
+    own.damage.burning = true;
+    w.combat.vehicleExploded(own);
+    expect(w.log.find((e) => e.type === 'explosion')).toMatchObject({ byPlayer: true, ownCar: true });
+    expect(w.awards()).not.toContain('boom');
+
+    // Bail out of a burning car: its blast is still your own car (no Chaos time, heat or frenzy farm).
+    const w2 = setup();
+    const ride = car(0, 3);
+    w2.vehicles.push(ride);
+    w2.player.enter(ride);
+    ride.damage.burning = true;
+    w2.player.exit();
+    w2.player.ped.z = -6; // ran clear
+    w2.combat.vehicleExploded(ride);
+    expect(w2.log.find((e) => e.type === 'explosion')).toMatchObject({ byPlayer: true, ownCar: true });
+    expect(w2.awards()).not.toContain('boom');
+
+    // A car you left healthy and then blew up yourself is a wreck like any other.
+    const w3 = setup();
+    const left = car(0, 3);
+    w3.vehicles.push(left);
+    w3.player.enter(left);
+    w3.player.exit();
+    w3.player.ped.z = -6;
+    left.damage.lastPlayerHit = 0;
+    w3.combat.vehicleExploded(left);
+    expect(w3.log.find((e) => e.type === 'explosion')).toMatchObject({ byPlayer: true, ownCar: false });
+    expect(w3.awards()).toContain('boom');
+  });
+
+  it('nothing scores once you are WASTED, even a car you set alight going up', () => {
+    const w = setup();
+    const target = car(0, 10);
+    w.vehicles.push(target);
+    target.damage.lastPlayerHit = 0;
+    w.player.hurt(1000);
+    expect(w.player.alive).toBe(false);
+    w.combat.vehicleExploded(target);
+    expect(w.awards()).not.toContain('boom');
+  });
+
+  it('a car you bailed out of still hurts you if you stand next to it', () => {
+    const w = setup();
+    const ride = car(0, 3);
+    w.vehicles.push(ride);
+    w.player.enter(ride);
+    ride.damage.burning = true;
+    w.player.exit();
+    const before = w.player.health;
+    w.combat.vehicleExploded(ride);
+    expect(w.player.health).toBeLessThan(before);
   });
 
   it('grenade blasts knock people out near the centre and down further out', () => {

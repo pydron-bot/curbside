@@ -303,6 +303,22 @@ describe('input', () => {
     expect(input.readAim().active).toBe(false);
   });
 
+  it('a released throw aim is read once, then the stick is at rest', () => {
+    const { win } = fakeWindow();
+    const coarse = Object.assign(win, { matchMedia: (q: string) => ({ matches: q === '(pointer: coarse)' }) });
+    const input = new Input(coarse);
+    // What the aim stick leaves behind when a thumb lets go of an aimed grenade.
+    input.touch.aimX = 0.8;
+    input.touch.aimY = 0;
+    input.touch.aimRelease = true;
+    expect(input.readAim()).toMatchObject({ active: true, release: true, fire: false, x: 0.8 });
+    expect(input.readAim()).toMatchObject({ active: false, release: false });
+    input.touch.aimX = 0.5;
+    input.touch.aimRelease = true;
+    input.resetActions(); // pausing or getting in drops it
+    expect(input.readAim().release).toBe(false);
+  });
+
   it('mouse: left button fires (and holds), right button and wheel switch weapon, aim goes stale', () => {
     const { win } = fakeWindow();
     const input = new Input(win);

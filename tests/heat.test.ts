@@ -26,7 +26,7 @@ const DT = 1 / 60;
 const city = generateCity(1337);
 const grid = new StaticGrid(city.obstacles);
 
-function world(seed = 3, x = 9.5, z = 9.5) {
+function world(seed = 3, x = 9.5, z = 9.5, held?: () => boolean, bustFine?: () => number) {
   const bus = new EventBus();
   const log: GameEvent[] = [];
   bus.onAny((e) => log.push(e));
@@ -85,6 +85,8 @@ function world(seed = 3, x = 9.5, z = 9.5) {
     ejectDriver: (v) => (v.ai = null),
     npcShoot: () => shots.push(1),
     repaint: () => {},
+    held,
+    bustFine,
   });
   population.maintain({ x, z, vx: 0, vz: 0, view: updateView(), keep: [], seed: true });
 
@@ -167,6 +169,23 @@ describe('heat: police response', () => {
     expect(w.vehicles.filter((v) => v.police)).toHaveLength(0);
   });
 
+  it('nobody is busted while the game holds them still (a 3-2-1); the meter picks up after', () => {
+    let held = true;
+    const w = world(3, 9.5, 9.5, () => held);
+    w.heat.wanted.force(1);
+    let gripped = 0;
+    w.runUntil(() => {
+      gripped = Math.max(gripped, w.heat.bust.progress);
+      return false;
+    }, 40);
+    expect(w.player.arrested).toBe(false);
+    expect(gripped).toBe(0);
+    // An officer is right there, waiting for the GO.
+    expect(w.heat.police.nearestOfficer(w.player.ped.x, w.player.ped.z)).toBeLessThan(2);
+    held = false;
+    expect(w.runUntil(() => w.player.arrested, 3)).toBeLessThan(3);
+  });
+
   it('a busted player is fined, loses their guns and the police clear off', () => {
     const w = world(7);
     w.score.total = 1000;
@@ -179,6 +198,15 @@ describe('heat: police response', () => {
     expect(w.score.total).toBe(750);
     expect(w.player.arsenal.current).toBeNull();
     expect(w.heat.police.units.every((u) => u.dismissed)).toBe(true);
+  });
+
+  it('a bust can take no points (a Chaos Run: being cut short is the cost)', () => {
+    const w = world(7, 9.5, 9.5, undefined, () => 0);
+    w.score.total = 3750;
+    w.heat.wanted.force(2);
+    w.runUntil(() => w.player.arrested, 90);
+    expect(w.log.find((e) => e.type === 'busted')).toMatchObject({ fine: 0 });
+    expect(w.score.total).toBe(3750);
   });
 
   it('officers cuff someone lying on the ground rather than shoot them, even at 3 stars', () => {

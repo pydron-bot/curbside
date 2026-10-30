@@ -26,6 +26,15 @@ export interface PedState {
   vz: number;
 }
 
+/** dst = src, field by field (last step's state, kept every step for interpolation). */
+export function copyPedState(dst: PedState, src: PedState): void {
+  dst.x = src.x;
+  dst.z = src.z;
+  dst.heading = src.heading;
+  dst.vx = src.vx;
+  dst.vz = src.vz;
+}
+
 export interface MoveInput {
   /** Screen-right, -1..1 */
   x: number;

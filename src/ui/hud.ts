@@ -218,6 +218,11 @@ export class Hud {
     });
   }
 
+  /** The WASTED / BUSTED card's cash line: the hospital bill or the fine. */
+  wastedBill(label: string, amount: number): void {
+    this.wasted.bill(label, amount);
+  }
+
   /** A mode's own best score on the BEST line and for the WASTED screen's NEW BEST (Chaos Run, free roam). */
   setBest(best: number): void {
     this.bestAtStart = best;

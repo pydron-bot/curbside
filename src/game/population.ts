@@ -41,6 +41,8 @@ export interface Vehicle {
   police?: boolean;
   /** Chasing the player (a police unit, or a driver in a road rage): drives with this instead of `ai`. */
   pursuit?: PursuitDriver | null;
+  /** Sold at the docks and waiting for the crane: nobody can get back in. */
+  exported?: boolean;
 }
 
 export interface CrowdPed {
@@ -377,6 +379,7 @@ export class Population {
     v.ai = null;
     v.pursuit = null;
     v.police = false;
+    v.exported = false;
     v.mesh.siren = false;
     v.mesh.root.visible = false;
     v.sim.vx = v.sim.vz = v.sim.yawRate = 0;

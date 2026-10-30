@@ -6,6 +6,8 @@
  * the city to a freeze-frame for the results card: medal, best, the
  * breakdown, and one tap to go again. WASTED or BUSTED ends it early.
  */
+import { VEHICLE_HEALTH } from '../../entities/vehicle';
+import { createDamage } from '../../systems/damage';
 import { DIRS, MAX_NODE, dirHeading, lanePoint } from '../../world/roads';
 import type { GlowSprites } from '../../render/glowSprites';
 import type { ProgressProps } from '../../render/progressLook';
@@ -13,7 +15,7 @@ import type { ResultsCard, ResultsData } from '../../ui/progressScreens';
 import { fmt } from '../../ui/scoreHud';
 import type { TitleMode } from '../../ui/titleScreen';
 import type { Vehicle } from '../population';
-import { CHAOS_CATEGORIES, CHAOS_MEDALS, CHAOS_RUN_ID, CHAOS_RUN_SECONDS, ChaosRun, FINAL_COUNT, chaosMedal, nextMedal, type ChaosEnd } from './chaosRun';
+import { CHAOS_CAR_HEALTH, CHAOS_CATEGORIES, CHAOS_MEDALS, CHAOS_RUN_ID, CHAOS_RUN_SECONDS, ChaosRun, FINAL_COUNT, armForRun, chaosMedal, nextMedal, type ChaosEnd } from './chaosRun';
 import type { Mode, ModeCtx } from './context';
 
 const PAINTS = ['#e8b923', '#ff2e88', '#2ee6ff', '#ff6a3d', '#3ddc84', '#f6f1e4'];
@@ -100,11 +102,16 @@ export class ChaosRunMode implements Mode {
     }
     const paint = PAINTS[Math.floor(rand() * PAINTS.length)];
     this.car = this.ctx.spawnCar('sports', paint, spot.x, spot.z, spot.heading);
+    // Armoured (a recycled car gets its stock health back when it's reset).
+    this.car.damage = createDamage(VEHICLE_HEALTH.sports * CHAOS_CAR_HEALTH);
+    // In the run before boarding: free roam's listeners (the export feed line) must see it.
+    this.phase = 'countdown';
     this.ctx.board(this.car);
+    // Same guns every run (RETRY comes through here too).
+    armForRun(deps.player.arsenal);
     // The run's own best on the BEST line (free roam's comes back in reset()).
     deps.hud.setBest(this.ctx.progress.best(CHAOS_RUN_ID));
     this.run = new ChaosRun();
-    this.phase = 'countdown';
     this.countdown = COUNTDOWN;
     this.shownCount = 0;
     this.ctx.holdControls = true;

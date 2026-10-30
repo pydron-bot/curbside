@@ -8,6 +8,8 @@ import {
   ROCKET_SPEED,
   THROW_GRAVITY,
   THROW_HEIGHT,
+  WALL_CLEARANCE,
+  clampThrowToWalls,
   throwTarget,
   throwVelocity,
   type ProjectileWorld,
@@ -53,6 +55,39 @@ describe('throw arcs', () => {
     expect(out).toEqual({ x: 0, z: 20 });
     throwTarget(0, 0, 1, 0, 20, out);
     expect(out.x).toBeCloseTo(MIN_THROW);
+  });
+});
+
+describe('throws and walls', () => {
+  const wall = { minX: -10, minZ: 6, maxX: 10, maxZ: 8 };
+  const grid = new StaticGrid([wall]);
+
+  it('a throw at a wall lands short of it, and says so', () => {
+    const out = { x: 0, z: 14 };
+    expect(clampThrowToWalls(0, 0, out, grid)).toBe(true);
+    expect(out.x).toBeCloseTo(0);
+    expect(out.z).toBeCloseTo(6 - WALL_CLEARANCE);
+  });
+
+  it('a clear throw is left alone; one landing at a wall\'s foot steps back a little', () => {
+    const out = { x: 3, z: -12 };
+    expect(clampThrowToWalls(0, 0, out, grid)).toBe(false);
+    expect(out).toEqual({ x: 3, z: -12 });
+    out.x = 0;
+    out.z = 5.6; // short of the wall, but a bounce would reach it
+    expect(clampThrowToWalls(0, 0, out, grid)).toBe(false);
+    expect(out.z).toBeCloseTo(6 - WALL_CLEARANCE);
+  });
+
+  it('a grenade thrown at the clamped point goes off there, not back at the thrower', () => {
+    const { w, booms } = world([wall]);
+    const pr = new Projectiles();
+    const out = { x: 0, z: 14 };
+    clampThrowToWalls(0, 0, out, grid);
+    pr.throw('grenade', 0, 0, out.x, out.z, true);
+    for (let t = 0; t < 3; t += DT) pr.step(DT, w);
+    expect(booms).toHaveLength(1);
+    expect(Math.abs(booms[0].z - out.z)).toBeLessThan(1.5);
   });
 });
 

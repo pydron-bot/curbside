@@ -60,6 +60,8 @@ export interface SaveData {
   missions: string[];
   /** Purchases and perks ('scanner', 'armour', ...). */
   unlocks: string[];
+  /** First-run pointers: the step reached (game/tutorial.ts; 3 = done). */
+  tutorial: number;
 }
 
 export function defaultStats(): LifetimeStats {
@@ -95,8 +97,14 @@ export function defaultSave(): SaveData {
     taxi: { bestStreak: 0 },
     missions: [],
     unlocks: [],
+    tutorial: 0,
   };
 }
+
+/** The tutorial's last step (game/tutorial.ts's TUTORIAL_DONE). */
+const TUTORIAL_STEPS = 3;
+/** A save from before the tutorial with this much play (s) has no need of it. */
+const TUTORIAL_SKIP_PLAYED = 120;
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -120,11 +128,15 @@ function numberMap(v: unknown, int = true): Record<string, number> {
  * Any parsed JSON (or nothing) → a valid current-version save. Unknown or
  * broken fields fall back to their defaults one by one, so a single bad
  * value doesn't cost the whole save. A save from a newer build keeps the
- * fields this one understands.
+ * fields this one understands, carries the ones it doesn't through untouched
+ * and keeps its version, so an older build (a second tab, a PWA before its
+ * update applies) can't wipe a newer one's progress on its next write.
  */
 export function migrateSave(raw: unknown, legacyBest = 0): SaveData {
   const save = defaultSave();
   if (isObj(raw)) {
+    const known = save as unknown as Obj;
+    for (const [k, v] of Object.entries(raw)) if (!(k in known)) known[k] = v;
     save.cash = num(raw.cash);
     const stats = isObj(raw.stats) ? raw.stats : {};
     const s = save.stats as unknown as Record<string, number>;
@@ -142,11 +154,35 @@ export function migrateSave(raw: unknown, legacyBest = 0): SaveData {
     if (isObj(raw.taxi)) save.taxi = { bestStreak: num(raw.taxi.bestStreak) };
     save.missions = strings(raw.missions);
     save.unlocks = strings(raw.unlocks);
+    const veteran = save.stats.playTime >= TUTORIAL_SKIP_PLAYED;
+    save.tutorial = Math.min(TUTORIAL_STEPS, num(raw.tutorial, veteran ? TUTORIAL_STEPS : 0));
   }
   // The free-roam best predates the save: carry it over.
   save.best.free = Math.max(save.best.free ?? 0, num(legacyBest));
-  save.v = SAVE_VERSION;
+  save.v = Math.max(SAVE_VERSION, isObj(raw) ? num(raw.v) : 0);
   return save;
+}
+
+/** What this build has: package count and the ids it knows (each optional). */
+export interface KnownIds {
+  packages?: number;
+  frenzies?: readonly string[];
+  missions?: readonly string[];
+  /** The current export list's order ids. */
+  exportOrders?: readonly string[];
+}
+
+/**
+ * Drop ids this build doesn't have (a hand edit, another build's) so they
+ * can't count toward completion, the export list or the package perks.
+ * In place; the director calls it at boot with the game's data.
+ */
+export function pruneSave(save: SaveData, known: KnownIds): void {
+  if (known.packages !== undefined) save.packages = save.packages.filter((i) => i < known.packages!);
+  const keep = (ids: string[], of: readonly string[] | undefined) => (of ? ids.filter((id) => of.includes(id)) : ids);
+  save.frenzies = keep(save.frenzies, known.frenzies);
+  save.missions = keep(save.missions, known.missions);
+  save.exports.done = keep(save.exports.done, known.exportOrders);
 }
 
 /** The bits of the Storage API the save needs (localStorage, or a fake in tests). */
