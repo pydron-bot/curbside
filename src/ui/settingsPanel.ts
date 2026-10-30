@@ -1,4 +1,5 @@
 import type { GameAudio } from '../audio/gameAudio';
+import { BUILD_ID } from '../core/build';
 import { onSettingsChange, settings, updateSettings, type Settings } from '../core/settings';
 import { ICONS } from './icons';
 import { MenuNav, overlay, type Panel } from './menu';
@@ -52,6 +53,7 @@ export class SettingsPanel implements Panel {
           <section><h3>CONTROLS</h3></section>
           <section><h3>DISPLAY</h3></section>
         </div>
+        <footer class="build-id">Build ${BUILD_ID}</footer>
       </div>`;
     const [sound, controls, display] = card.querySelectorAll('section');
     const head = card.querySelector('.sheet-head')!;

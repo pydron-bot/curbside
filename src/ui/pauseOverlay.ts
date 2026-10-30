@@ -1,3 +1,4 @@
+import { BUILD_ID } from '../core/build';
 import type { InputDevice } from '../core/input';
 import './core.css';
 import type { IconName } from './icons';
@@ -77,7 +78,10 @@ export class PauseOverlay implements Panel {
     this.reload = menuButton('RELOAD THE GAME', { icon: 'restart', className: 'pause-update' });
     this.reload.hidden = true;
     this.reload.addEventListener('click', () => this.onReload?.());
-    card.append(this.title, this.hint, this.menu, this.update, this.reload);
+    const build = document.createElement('div');
+    build.className = 'build-id';
+    build.textContent = `Build ${BUILD_ID}`;
+    card.append(this.title, this.hint, this.menu, this.update, this.reload, build);
     el.append(card);
 
     this.nav.add({ el: this.resumeBtn, activate: () => actions.resume() });
