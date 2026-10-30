@@ -141,6 +141,15 @@ describe('engine gear / RPM model', () => {
     expect(engine.rpm).toBeGreaterThan(engine.profile.idleRpm * 1.5);
   });
 
+  it('takes over a running engine (carjack) without cranking: a blip that settles to idle', () => {
+    const engine = createEngine('sports');
+    engine.warm();
+    expect(engine.cranking).toBe(false);
+    expect(engine.rpm).toBeGreaterThan(engine.profile.idleRpm * 1.2);
+    for (let i = 0; i < 90; i++) engine.step(DT, 0, 0);
+    expect(engine.rpm).toBeCloseTo(engine.profile.idleRpm, -1);
+  });
+
   it('flags overrun when lifting off at high revs', () => {
     const engine = createEngine('sports');
     for (let i = 0; i < 120; i++) engine.step(DT, 0, 1);

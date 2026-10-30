@@ -139,6 +139,8 @@ const MUSIC_ON_FOOT = 0.7;
 const STATION_KEY = 'curbside.station';
 /** The world muffle's resting cutoff, Hz (effectively open). */
 const OPEN = 20000;
+/** Entering a car this soon (ms) after a carjack means its engine is already running: no starter. */
+const CARJACK_WINDOW_MS = 1500;
 
 const rnd = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
 
@@ -222,6 +224,7 @@ export class GameAudio {
   /** Master volume at zero: the context stays suspended (battery; other apps' audio plays). */
   private muted = false;
   private dead = false;
+  private carjackAt = -Infinity;
   private inCar: boolean | null = null;
   private pauseTimer = 0;
   private tickHandle = 0;
@@ -403,6 +406,7 @@ export class GameAudio {
     // Life and death change state even while the context is suspended, so the music comes back.
     if (e.type === 'playerDied') return this.onPlayerDied();
     if (e.type === 'respawn') return this.onRespawn();
+    if (e.type === 'carjack') this.carjackAt = performance.now();
     const ctx = this.ctx;
     if (!ctx || !this.bank || ctx.state !== 'running') return;
     switch (e.type) {
@@ -955,7 +959,9 @@ export class GameAudio {
       if (!this.engine || this.engine.archetype !== car.archetype) {
         if (this.engine) this.retire(this.engine.v, this.engine.release(now));
         this.engine = new EngineVoice(this.ctx!, this.bank!, this.worldIn, car.archetype, now);
-        this.engine.ignite();
+        // A carjacked car is already running; one that was parked needs the starter.
+        if (performance.now() - this.carjackAt < CARJACK_WINDOW_MS) this.engine.warm();
+        else this.engine.ignite();
       }
       this.tyres ??= new TyreVoice(this.ctx!, this.bank!, this.worldIn, now);
       if (this.engine.apply(car, dt, now, push) === 'pop') this.backfire();

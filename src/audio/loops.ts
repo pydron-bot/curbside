@@ -94,6 +94,11 @@ export class EngineVoice {
     this.model.start();
   }
 
+  /** Already running (a carjacked car): straight to idle with a small blip. */
+  warm(): void {
+    this.model.warm();
+  }
+
   /**
    * Step the gear model (every frame) and steer the synth (when `push`, or on a
    * gear change so the throttle cut lands on time). Returns 'pop' when an

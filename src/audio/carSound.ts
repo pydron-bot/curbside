@@ -144,6 +144,8 @@ const CLUTCH_SPEED = 4;
 const FREE_REV = 0.62;
 /** Starter motor time before the engine catches. */
 export const CRANK_TIME = 0.55;
+/** Revs (× idle) when taking over a running engine. */
+const WARM_BLIP = 1.45;
 
 /** Firing frequency (Hz) of an engine turning at `rpm`. */
 export function engineHz(rpm: number, p: EngineProfile): number {
@@ -202,6 +204,16 @@ export class EngineModel {
     this.cranking = true;
     this.crankTimer = CRANK_TIME;
     this.rpm = this.profile.idleRpm * 0.3;
+    this.gear = 1;
+    this.load = 0;
+    this.shiftTimer = 0;
+  }
+
+  /** Take over an engine that's already running (a carjack): no starter, just a blip of revs that settles to idle. */
+  warm(): void {
+    this.cranking = false;
+    this.crankTimer = 0;
+    this.rpm = this.profile.idleRpm * WARM_BLIP;
     this.gear = 1;
     this.load = 0;
     this.shiftTimer = 0;
