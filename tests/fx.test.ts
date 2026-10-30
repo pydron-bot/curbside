@@ -456,6 +456,24 @@ describe('effects budget', () => {
     expect(fx.hot.count + fx.soft.count + fx.debris.count).toBe(0);
   });
 
+  it('draws the ground-marks layer only while a mark is alive', async () => {
+    const { GroundDecals, DECAL } = await import('../src/render/fxDecals');
+    const decals = new GroundDecals();
+    decals.update(1 / 60);
+    expect(decals.mesh.visible).toBe(false);
+    decals.stamp(0, 0, 0.2, 0, 0.8, 2, DECAL.pock);
+    decals.update(1 / 60);
+    expect(decals.mesh.visible).toBe(true);
+    for (let i = 0; i < 150; i++) decals.update(1 / 60);
+    expect(decals.mesh.visible).toBe(false);
+    // Clearing still gets its upload drawn once, then the layer is idle again.
+    decals.clear();
+    decals.update(1 / 60);
+    expect(decals.mesh.visible).toBe(true);
+    decals.update(1 / 60);
+    expect(decals.mesh.visible).toBe(false);
+  });
+
   it('tracers, muzzle flashes and impacts draw and expire', async () => {
     const { Scene } = await import('three');
     const { Effects } = await import('../src/render/effects');

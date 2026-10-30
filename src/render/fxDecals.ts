@@ -9,6 +9,7 @@ import {
   Sphere,
   Vector3,
 } from 'three';
+import { worldUniforms } from './shaderLib';
 
 /** Decal looks, drawn analytically in the shader. */
 export const DECAL = {
@@ -57,6 +58,8 @@ export class GroundDecals {
   private dirtyMax = -1;
   /** Seconds, advanced by update(); the shader's clock. */
   private time = 0;
+  /** When the last mark written so far expires: the layer isn't drawn after that. */
+  private until = 0;
 
   constructor() {
     const v = QUADS * 4;
@@ -83,6 +86,7 @@ export class GroundDecals {
     this.mesh = new Mesh(geo, this.material);
     this.mesh.frustumCulled = false;
     this.mesh.renderOrder = -1;
+    this.mesh.visible = false;
     this.mesh.name = 'groundDecals';
   }
 
@@ -90,6 +94,8 @@ export class GroundDecals {
   update(dt: number): void {
     this.time += dt;
     this.material.uniforms.uDecalTime.value = this.time;
+    // No live marks, no draw call; a pending upload is drawn once so it isn't lost.
+    this.mesh.visible = this.time < this.until || this.dirtyMax >= 0;
     if (this.dirtyMax < 0) return;
     this.upload(this.posAttr);
     this.upload(this.uvAttr);
@@ -151,6 +157,7 @@ export class GroundDecals {
   /** Remove every mark (e.g. a fresh run). */
   clear(): void {
     for (let i = 0; i < QUADS * 4; i++) this.data[i * 4] = -1e6;
+    this.until = 0;
     this.dirtyMin = 0;
     this.dirtyMax = QUADS * 4 - 1;
   }
@@ -212,12 +219,13 @@ export class GroundDecals {
     }
     this.dirtyMin = Math.min(this.dirtyMin, b);
     this.dirtyMax = Math.max(this.dirtyMax, b + 3);
+    this.until = Math.max(this.until, this.time + life);
   }
 }
 
 function decalMaterial(): ShaderMaterial {
   return new ShaderMaterial({
-    uniforms: { uDecalTime: { value: 0 } },
+    uniforms: { uDecalTime: { value: 0 }, uNight: worldUniforms.uNight },
     vertexShader: /* glsl */ `
       attribute vec4 aDecal;
       uniform float uDecalTime;
@@ -238,6 +246,7 @@ function decalMaterial(): ShaderMaterial {
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }`,
     fragmentShader: /* glsl */ `
+      uniform float uNight;
       varying vec2 vUv;
       varying float vAlpha;
       varying float vKind;
@@ -279,7 +288,8 @@ function decalMaterial(): ShaderMaterial {
         } else {
           float x = vUv.x;
           a = smoothstep(0.0, 0.35, x) * smoothstep(1.0, 0.65, x) * (0.6 + 0.4 * noise(vec2(x * 4.0, vUv.y * 6.0)));
-          col = vec3(0.62, 0.6, 0.56);
+          // Bare metal catches the daylight; unlit at night it would glow on the dark road.
+          col = vec3(0.62, 0.6, 0.56) * (1.0 - 0.75 * uNight);
         }
         a *= vAlpha;
         if (a < 0.004) discard;
