@@ -49,10 +49,13 @@ describe('city generator', () => {
   });
 
   it('never overlaps buildings', () => {
+    // One expect for the whole list: 500k expect() calls took ~4 s and timed out under load.
     const bs = city.buildings;
+    const clashes: Array<[number, number]> = [];
     for (let i = 0; i < bs.length; i++) {
-      for (let j = i + 1; j < bs.length; j++) expect(overlaps(bs[i], bs[j])).toBe(false);
+      for (let j = i + 1; j < bs.length; j++) if (overlaps(bs[i], bs[j])) clashes.push([i, j]);
     }
+    expect(clashes).toEqual([]);
   });
 
   it('keeps building heights under the on-foot camera', () => {
