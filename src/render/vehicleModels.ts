@@ -26,20 +26,34 @@ export class VehicleModels {
   private constructor(
     private readonly geometries: Map<string, BufferGeometry>,
     private readonly sizes: Map<string, CarDims>,
+    private readonly seats: Map<string, readonly [number, number, number]>,
   ) {}
 
   static async load(url: string): Promise<VehicleModels> {
     const gltf = await new GLTFLoader().loadAsync(url);
     const geometries = new Map<string, BufferGeometry>();
     const sizes = new Map<string, CarDims>();
+    const seats = new Map<string, readonly [number, number, number]>();
     for (const child of [...gltf.scene.children]) {
       child.position.set(0, 0, 0); // laid out side by side in Blender
+      // A bike's `<arch>_seat` empty: where its rider's hips go.
+      const seat = child.getObjectByName(`${child.name}_seat`);
+      if (seat) {
+        child.updateMatrixWorld(true);
+        const p = new Vector3().setFromMatrixPosition(seat.matrixWorld);
+        seats.set(child.name, [p.x, p.y, p.z]);
+      }
       const geo = mergeCar(child);
       if (!geo) continue;
       geometries.set(child.name, geo);
       sizes.set(child.name, dimsOf(geo));
     }
-    return new VehicleModels(geometries, sizes);
+    return new VehicleModels(geometries, sizes, seats);
+  }
+
+  /** A bike's seat (the rider's hips), in its own frame; undefined for cars. */
+  seat(archetype: VehicleArchetype): readonly [number, number, number] | undefined {
+    return this.seats.get(archetype);
   }
 
   geometry(archetype: VehicleArchetype): BufferGeometry | undefined {

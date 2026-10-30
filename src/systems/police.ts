@@ -23,15 +23,24 @@ import { DIR_VEC, MAX_NODE, type Dir } from '../world/roads';
 import { carsTouching } from './arrest';
 import { HELI_FROM, HELI_GONE, HELI_REFUEL, HELI_SHIFT, HELI_SPAWN, stepHelicopter, type Helicopter } from './helicopter';
 import { lineOfSight, sees } from './sight';
-import { resumeWalking, spawnPed } from './crowd';
+import { knockDown, resumeWalking, spawnPed } from './crowd';
 import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from './pursuit';
 import { CRUISE_SPEED, TURN_SPEED, createDriver, rerouteAi, spawnAi, type AiDriver, type Obstacle } from './traffic';
 
 // --- Tunables -------------------------------------------------------------
 /** Units chasing at each wanted level (index = stars). */
 export const UNITS_BY_STARS = [0, 2, 3, 4, 6, 7] as const;
-/** Of those, dark SWAT vans. */
+/** Of those, dark SWAT trucks. */
 export const SWAT_BY_STARS = [0, 0, 0, 0, 2, 3] as const;
+/** At 1–2 stars a unit may come on a police bike (fast, fragile, one officer): this share of new units, at most one. */
+export const BIKE_SHARE = 0.5;
+export const BIKES_FROM = 1;
+export const BIKES_UNTIL = 2;
+/** From this many stars, patrols come in SUVs this share of the time. */
+export const SUV_FROM = 3;
+const SUV_SHARE = 0.5;
+/** Police bikes chase this much faster than the cars' top speed for the level. */
+const BIKE_PACE = 1.1;
 /** Seconds between new units arriving, by stars (the first comes quicker). */
 const SPAWN_EVERY = [0, 5, 3, 2, 1.6, 1.2] as const;
 const FIRST_SPAWN = 0.6;
@@ -79,15 +88,13 @@ const ROADBLOCK_PASSED = 45;
 const ROADBLOCK_LIFE = 35;
 /** A dismissed unit waits this long for its officers to get back in, then leaves them, s. */
 const CREW_WAIT = 12;
-/** SWAT vans are armoured. */
-const SWAT_HEALTH = 180;
 const POLICE_PAINT = '#f2f2f2';
 const SWAT_PAINT = '#1b1f27';
 export const COP_OUTFIT: Outfit = { shirt: '#1d2f57', pants: '#141b2e', shoes: '#0b0b0d', hair: '#101828' };
 export const SWAT_OUTFIT: Outfit = { shirt: '#22262d', pants: '#1a1d22', shoes: '#0b0b0d', hair: '#15171b' };
 const SKIN = ['#e0ac84', '#c68e63', '#8d5a3b', '#f1c9a5', '#5e3b26'];
 
-export type UnitKind = 'patrol' | 'swat';
+export type UnitKind = 'patrol' | 'swat' | 'bike';
 export type UnitRole = 'pursuit' | 'roadblock';
 
 export interface PoliceUnit {
@@ -322,6 +329,11 @@ export class PoliceForce {
         // On fire: everyone out, and the car is left to burn.
         this.deploy(u, ctx.rand, u.aboard);
         this.loseCar(u);
+      } else if (v.tipped) {
+        // A police bike down: the officer was thrown off and lies in the road.
+        this.deploy(u, ctx.rand, u.aboard);
+        for (const o of u.officers) knockDown(o.agent, v.sim.x, v.sim.z, 3, 2.5);
+        this.loseCar(u);
       } else if (s.car === v.sim) {
         // The player took it: the crew bails out first.
         this.deploy(u, ctx.rand, u.aboard);
@@ -370,8 +382,14 @@ export class PoliceForce {
     if ((this.spawnIn -= dt) > 0) return;
     this.spawnIn = SPAWN_EVERY[this.stars];
     let swat = 0;
-    for (const u of this.units) if (!u.dismissed && u.kind === 'swat') swat++;
-    const kind: UnitKind = swat < SWAT_BY_STARS[this.stars] ? 'swat' : 'patrol';
+    let bikes = 0;
+    for (const u of this.units) {
+      if (u.dismissed) continue;
+      if (u.kind === 'swat') swat++;
+      if (u.kind === 'bike') bikes++;
+    }
+    const bike = this.stars >= BIKES_FROM && this.stars <= BIKES_UNTIL && bikes === 0 && ctx.rand() < BIKE_SHARE;
+    const kind: UnitKind = swat < SWAT_BY_STARS[this.stars] ? 'swat' : bike ? 'bike' : 'patrol';
     this.spawnUnit(kind, ctx);
   }
 
@@ -385,13 +403,19 @@ export class PoliceForce {
     const ahead = this.seen ? 0.3 : 0.65;
     const spot = policeSpawnPoint(t.x, t.z, t.vx, t.vz, ctx.view, ctx.rand, (x, z) => this.crowded(x, z), ahead);
     if (!spot) return null;
-    const v = this.borrowCar(kind, spot.x, spot.z, spot.heading, SPAWN_SPEED);
+    const v = this.borrowCar(kind, spot.x, spot.z, spot.heading, SPAWN_SPEED, ctx.rand);
     return this.addUnit(v, kind, 'pursuit', spot.driver);
   }
 
-  /** A car for a unit at (x, z), already rolling at `rolling` m/s (they arrive on the scene at speed). */
-  private borrowCar(kind: UnitKind, x: number, z: number, heading: number, rolling = 0): Vehicle {
-    const v = this.depot.takeVehicle(kind === 'swat' ? 'van' : 'police', kind === 'swat' ? SWAT_PAINT : POLICE_PAINT);
+  /**
+   * A car for a unit at (x, z), already rolling at `rolling` m/s (they arrive
+   * on the scene at speed): the SWAT truck, a police bike, or a patrol car
+   * (an SUV half the time from SUV_FROM stars).
+   */
+  private borrowCar(kind: UnitKind, x: number, z: number, heading: number, rolling = 0, rand: () => number = Math.random): Vehicle {
+    const archetype: VehicleArchetype =
+      kind === 'swat' ? 'swat' : kind === 'bike' ? 'cop_bike' : this.stars >= SUV_FROM && rand() < SUV_SHARE ? 'police_suv' : 'police';
+    const v = this.depot.takeVehicle(archetype, kind === 'swat' ? SWAT_PAINT : POLICE_PAINT);
     const sim = v.sim;
     sim.x = x;
     sim.z = z;
@@ -400,8 +424,8 @@ export class PoliceForce {
     sim.vz = Math.cos(heading) * rolling;
     sim.yawRate = 0;
     Object.assign(v.prev, sim);
-    if (kind === 'swat') v.damage.health = v.damage.maxHealth = SWAT_HEALTH;
-    else v.damage.health = v.damage.maxHealth = VEHICLE_HEALTH.police;
+    v.damage.health = v.damage.maxHealth = VEHICLE_HEALTH[archetype];
+    v.tipped = false;
     v.mesh.siren = true;
     return v;
   }
@@ -418,7 +442,8 @@ export class PoliceForce {
       role,
       vehicle: v,
       driver,
-      aboard: 2,
+      // A bike carries one officer.
+      aboard: kind === 'bike' ? 1 : 2,
       officers: [],
       seesPlayer: false,
       direct: false,
@@ -454,7 +479,7 @@ export class PoliceForce {
     const stars = Math.max(1, this.stars);
     u.driver.aggression = stars >= RAM_FROM ? 1 : 0;
     u.driver.cruise = CRUISE_BY_STARS[stars];
-    u.driver.topSpeed = TOP_BY_STARS[stars] * (u.kind === 'swat' ? 0.85 : 1);
+    u.driver.topSpeed = TOP_BY_STARS[stars] * (u.kind === 'swat' ? 0.85 : u.kind === 'bike' ? BIKE_PACE : 1);
 
     for (let i = u.officers.length - 1; i >= 0; i--) this.stepOfficer(u, i, ctx);
 
@@ -733,7 +758,7 @@ export class PoliceForce {
     for (let i = 0; i < cars; i++) {
       const c = spot.cars[i];
       if (this.crowded(c.x, c.z)) continue;
-      const v = this.borrowCar('patrol', c.x, c.z, c.heading);
+      const v = this.borrowCar('patrol', c.x, c.z, c.heading, 0, ctx.rand);
       const road = createDriver(0, 0, 0, ctx.rand);
       rerouteAi(road, v.sim, ctx.rand);
       const u = this.addUnit(v, 'patrol', 'roadblock', road);

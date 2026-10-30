@@ -12,10 +12,13 @@ import {
   VEHICLE_SPECS,
   copyVehicleState,
   createVehicleState,
+  bikeThrows,
   driverDoorPosition,
   forwardSpeed,
+  isBike,
   lateralSpeed,
   lerpAngle,
+  slideOnSide,
   speed,
   stepVehicle,
   type VehicleArchetype,
@@ -39,7 +42,7 @@ import { createRenderer, precompile } from './render/post';
 import { getQuality } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
 import { charVehicle, restoreVehicleLook } from './render/vehicleLooks';
-import { provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
+import { knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
 import { WEAPONS, WEAPON_ORDER, type WeaponKind } from './systems/weapons';
 import { PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
@@ -86,9 +89,12 @@ import { WantedHud } from './ui/wantedHud';
 import { generateCity, type Rect } from './world/city';
 import { StaticGrid } from './world/collision';
 import { mulberry32 } from './world/random';
+import { Knockables, type KnockableItem } from './systems/knockables';
+import { KnockFx } from './render/knockFx';
 import { dressCity } from './world/dressing';
 import { TrafficSignals } from './world/signals';
 import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audio/gameAudio';
+import { StreetLife } from './game/streetLife';
 import { mountRadioToast } from './ui/radioToast';
 
 const app = document.getElementById('app')!;
@@ -139,6 +145,13 @@ const rig = new CameraRig(1);
 const look = new Look(renderer, scene, city, rig, pickups, app, dressing.street);
 look.props.setLandmarks(dressing.landmarks);
 const effects = new Effects(scene);
+/** Hydrants, bins, benches, cones: a car knocks them flying (they're back a minute later). */
+const knockables = new Knockables(dressing.knockables);
+const knockFx = new KnockFx(look.props, effects);
+look.addGlowSource((_g, view) => knockFx.update(view));
+// Blown-up cars shed debris.glb's parts once it's in.
+look.props.onLoaded(() => (effects.debris.parts = look.props.debris));
+look.addGlowSource(() => effects.debris.drawParts());
 const rampGrid = new StaticGrid(rampSolids(ramps));
 scene.add(new RampMesh(ramps, look).mesh);
 const stunts = new StuntTracker();
@@ -179,6 +192,7 @@ const PARKED: ParkingSpot[] = [
   { archetype: 'van', x: 20, z: 5.5, heading: Math.PI / 2, paint: '#d9d6cc' },
   { archetype: 'sports', x: -11, z: 0, heading: Math.PI / 2, paint: '#e8b923' },
   { archetype: 'police', x: 5.5, z: 34, heading: Math.PI, paint: '#f2f2f2' },
+  { archetype: 'scooter', x: -20, z: -5.8, heading: Math.PI / 2, paint: '#2fb5a8' },
 ];
 
 /** Ready a recycled car for traffic: full health, and its proper look if it was a wreck or restyled. */
@@ -272,7 +286,10 @@ function maintainPopulation(seed = false, parked = seed) {
     seed,
     parked: parked ? PARKED : undefined,
   });
+  // Knocked-over furniture is back once nobody's looking.
+  knockables.restore(viewRect, restoreProp);
 }
+const restoreProp = (k: KnockableItem) => look.props.restore(k.id);
 maintainPopulation(true);
 
 // --- Score ---
@@ -309,7 +326,12 @@ const heat = new Heat({
   bustFine: () => progress.bustShare(),
   signals,
 });
-addHeatLook(look, heat);
+addHeatLook(look, heat, {
+  scene,
+  camera: () => rig.camera.position,
+  playerCar: () => player.driving?.sim ?? null,
+  knock: (kind, x, z, vx, vz) => knockFx.hit(kind, x, z, vx, vz),
+});
 
 // --- Combat: guns, fists, throws, rockets, drive-bys, blasts, fire ---
 const combat = new Combat({
@@ -335,6 +357,19 @@ const audio = new GameAudio({ best: score.best });
 const audioFrame = createAudioFrame(vehicles);
 const audioCar = createCarSound();
 mountRadioToast(document.body, audio);
+const streetLife = new StreetLife({
+  vehicles,
+  player,
+  playerModel,
+  police: heat.police,
+  cars: look.cars,
+  createRider: (outfit) => {
+    const model = look.characters.create(outfit);
+    scene.add(model.root);
+    return model;
+  },
+  audio,
+});
 
 // --- Input ---
 const input = new Input();
@@ -440,6 +475,8 @@ function boardVehicle(v: Vehicle) {
     events.emit({ type: 'carjack', x: v.sim.x, z: v.sim.z });
     award(score.award('carjack'));
   }
+  // A bike on its side is stood back up.
+  v.tipped = false;
   player.enter(v);
 }
 
@@ -463,6 +500,8 @@ function respawnPlayer() {
   player.arsenal.clear();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
+  knockables.reset(restoreProp);
+  knockFx.clear();
   maintainPopulation(true);
   // The run is over anyway: a good moment to pick up a waiting app update.
   updates.atSafePoint();
@@ -513,6 +552,7 @@ function simulate(dt: number) {
     copyVehicleState(v.prev, v.sim);
     let controls = NO_CONTROLS;
     if (v.damage.wrecked) controls = NO_CONTROLS;
+    else if (v.tipped) slideOnSide(v.sim, dt);
     else if (v === driving) controls = playerControls;
     // Traffic, police and road ragers. (A car's own entry sits at distance 0, which clearDistance ignores.)
     else if (v.ai || v.pursuit) controls = heat.drive(v, obstacles, dt);
@@ -535,6 +575,7 @@ function simulate(dt: number) {
   vehicleStates.length = 0;
   for (const v of vehicles) if (v.sim.y < 0.8) vehicleStates.push(v.sim);
   const target = playerTarget();
+  knockables.step(vehicleStates, dt, knockProp);
   for (const c of population.crowd) {
     copyPedState(c.prev, c.agent.s);
     const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, target);
@@ -559,6 +600,7 @@ function simulate(dt: number) {
     if (impact > CRASH_EVENT_MIN) {
       events.emit({ type: 'crash', x: contact.x, z: contact.z, impact, against: 'static', involvesPlayer: v === driving });
     }
+    if (isBike(v.archetype) && bikeThrows(impact)) throwRider(v, impact);
   }
   for (let i = 0; i < vehicles.length; i++) {
     for (let j = i + 1; j < vehicles.length; j++) {
@@ -573,6 +615,9 @@ function simulate(dt: number) {
       const hitB = crashDamage(impact, contact.closingB, contact.closingA, mb, ma) * (b === driving ? PLAYER_CRASH_SHARE : 1);
       applyDamage(a.damage, hitA);
       applyDamage(b.damage, hitB);
+      // A hard hit throws a bike's rider off (whichever of the two is a bike).
+      if (isBike(a.archetype) && bikeThrows(impact)) throwRider(a, impact);
+      if (isBike(b.archetype) && bikeThrows(impact)) throwRider(b, impact);
       const involvesPlayer = driving !== null && (a === driving || b === driving);
       if (involvesPlayer && hitA + hitB > 0) {
         markPlayerHit(a.damage, simTime);
@@ -666,6 +711,50 @@ function simulate(dt: number) {
     collidePedStatic(c.agent.s, rampGrid);
   }
   syncWeapon();
+}
+
+/** A car knocked street furniture flying: it's gone from its spot, a copy tumbles away, and the hit is heard. */
+function knockProp(k: KnockableItem, car: Vehicle['sim']) {
+  look.props.knock(k.id);
+  knockFx.hit(k.kind, k.x, k.z, car.vx, car.vz);
+  const impact = Math.min(7, Math.max(3, speed(car) * 0.3));
+  events.emit({ type: 'crash', x: k.x, z: k.z, impact, against: 'static', involvesPlayer: player.driving !== null && player.driving.sim === car });
+}
+
+/** Off a bike in a hard crash: knocked flat this long (the player), s; hurt by this much per m/s of impact. */
+const BIKE_THROW_STUN = 1.6;
+const BIKE_THROW_HURT = 1.4;
+
+/**
+ * A bike crashed hard: the rider is thrown off over the bars and knocked
+ * flat (hurt, if it's the player), and the bike is left on its side. A
+ * police bike's officer is thrown by the police (they see `tipped`).
+ */
+function throwRider(v: Vehicle, impact: number) {
+  if (v.tipped) return;
+  v.tipped = true;
+  const s = v.sim;
+  // Flung on along the way the bike was going.
+  const fromX = s.x - s.vx;
+  const fromZ = s.z - s.vz;
+  const push = Math.min(9, 3 + impact * 0.4);
+  if (v === player.driving) {
+    player.exit(s.vx * 0.5, s.vz * 0.5);
+    player.knockDown(fromX, fromZ, push, BIKE_THROW_STUN, 'vehicle', false);
+    player.hurt(impact * BIKE_THROW_HURT);
+    stunts.cancel();
+    return;
+  }
+  if (!v.ai) return;
+  v.ai = null;
+  const at = player.position;
+  if (Math.hypot(s.x - at.x, s.z - at.z) > CROWD_DESPAWN) return;
+  const door = driverDoorPosition(s);
+  const agent = spawnPed(0, 0, 0, 0, rand);
+  Object.assign(agent.s, { x: door.x, z: door.z, vx: 0, vz: 0, heading: s.heading });
+  knockDown(agent, fromX, fromZ, push, 2.5);
+  population.addPed(agent);
+  events.emit({ type: 'pedDown', x: door.x, z: door.z, cause: 'vehicle', byPlayer: false });
 }
 
 /** A car came off a ramp: report the take-off and the flight time to expect. */
@@ -831,6 +920,8 @@ function frame(now: number) {
   // Body motion, tyre marks, damaged-car smoke and fire, weather, particles.
   const focus = attract.active ? attract : player.position;
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
+  // Bikes lean and carry their riders; emergency sirens and the ice cream chime.
+  streetLife.update(frameSeconds, focus.x, focus.z, !attract.active);
   combatLook.update(frameSeconds * fx.hitStop.scale);
   updateHud(frameSeconds);
   progress.update(frameSeconds);
@@ -1132,6 +1223,9 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   nitro,
   ramps,
   stunts,
+  dressing,
+  knockables,
+  signals,
   updates,
   hud,
   radar,

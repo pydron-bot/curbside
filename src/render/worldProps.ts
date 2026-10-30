@@ -1,5 +1,6 @@
 import type { Object3D } from 'three';
 import type { BuildingPlan, RoofProp } from '../world/buildingPlans';
+import { LANDMARK_KNOCK_ID } from '../world/dressing';
 import { signalAt } from '../world/signals';
 import type { Rect } from '../world/city';
 import type { Landmarks } from '../world/landmarkProps';
@@ -19,8 +20,13 @@ const ROOF_MODEL: Partial<Record<RoofProp['kind'], string>> = {
   housing: 'rooftop_door',
 };
 
-/** Knockable ids: street props by index, landmark props from here up. */
-const LANDMARK_ID = 1 << 20;
+
+/** A booth or garage roof opens while the player is this close to its middle, m. */
+const ROOF_CUT_RADIUS = 7.5;
+/** ...and the signs on it above this height go with it, m. */
+const ROOF_SIGN_HEIGHT = 4.4;
+/** The landmarks with a roof to open. */
+const ROOFED = new Set(['spray_booth', 'export_bay']);
 
 /** Lens heights on the traffic_light model (red, amber, green), m. */
 const LENS_Y = [3.85, 3.55, 3.25] as const;
@@ -43,7 +49,8 @@ export interface SignalClock {
  * the safehouse door, payphones, race gantries, ramps); and `things`, the
  * small models that move or come and go each frame (pickup crates, hidden
  * packages, frenzy gems, roadblock barriers and cones), which other
- * presenters add through `things` every frame. Each family is one draw call
+ * presenters add through `things` every frame; and blown-up cars' parts
+ * (debris.glb, written by the fx debris). Each family is one draw call
  * (plus one in the shadow pass) while any of it is in view, so the whole
  * street scene adds about a dozen calls whatever is on screen, and the
  * city's per-chunk stand-ins for lamps, rooftop boxes and trees go away.
@@ -83,6 +90,8 @@ export class WorldProps {
     ],
     192,
   );
+  /** Car parts thrown by explosions (fx debris writes them per frame), tinted with the car's paint; no shadows. */
+  readonly debris = new PropBatch('debris', ['door', 'hood', 'bumper', 'wheel', 'panel_a', 'panel_b', 'panel_c'], 96, { shadows: false });
   /** The traffic lights' clock (set by main.ts); the lenses follow it. */
   signals: SignalClock | null = null;
   models: PropModels | null = null;
@@ -98,13 +107,13 @@ export class WorldProps {
     private readonly streetProps: StreetProps,
     private readonly plans: readonly BuildingPlan[],
   ) {
-    this.families = [this.lamps, this.street, this.roofs, this.trees, this.landmarks, this.things];
+    this.families = [this.lamps, this.street, this.roofs, this.trees, this.landmarks, this.things, this.debris];
     const lights = streetProps.props.filter((p) => p.kind === 'traffic_light');
     this.signalData = new Float32Array(lights.length * 5);
     lights.forEach((p, i) => this.signalData.set([p.x, p.z, p.heading, p.phase, p.eastWest ? 1 : 0], i * 5));
-    PropModels.load('/assets/props.glb', '/assets/pickups.glb').then(
+    PropModels.load('/assets/props.glb', '/assets/pickups.glb', '/assets/debris.glb').then(
       (models) => this.useModels(models),
-      (err) => console.error('Failed to load props.glb / pickups.glb', err),
+      (err) => console.error('Failed to load props.glb / pickups.glb / debris.glb', err),
     );
   }
 
@@ -141,14 +150,14 @@ export class WorldProps {
     if (h) h[0].setHidden(h[1], false);
   }
 
-  /** The knockable id of a landmark's knockable (its index in Landmarks.props). */
-  static landmarkId(prop: number): number {
-    return LANDMARK_ID + prop;
-  }
 
-  /** Start a frame (before anything adds `things`): the static families follow the view. */
-  begin(view: Rect): void {
+  /**
+   * Start a frame (before anything adds `things`): the static families follow
+   * the view; (focusX, focusZ) is the player, whose booth roof opens up.
+   */
+  begin(view: Rect, focusX = 0, focusZ = 0, focusActive = false): void {
     propUniforms.uSignalTime.value = this.signals?.time ?? 0;
+    propUniforms.uFocus.value.set(focusX, focusZ, focusActive ? ROOF_CUT_RADIUS : 0);
     for (const f of this.families) f.begin(view);
   }
 
@@ -208,8 +217,8 @@ export class WorldProps {
     this.landmarks.clearStatic();
     l.props.forEach((p, i) => {
       const f = this.landmarks.kindOf(p.kind) >= 0 ? this.landmarks : this.street;
-      const h = f.addStatic(p.kind, p.x, p.y, p.z, p.heading, p.sx, p.sy, p.sz);
-      this.handles.set(WorldProps.landmarkId(i), [f, h]);
+      const h = f.addStatic(p.kind, p.x, p.y, p.z, p.heading, p.sx, p.sy, p.sz, 0, ROOFED.has(p.kind) ? ROOF_SIGN_HEIGHT : 0);
+      this.handles.set(LANDMARK_KNOCK_ID + i, [f, h]);
     });
   }
 

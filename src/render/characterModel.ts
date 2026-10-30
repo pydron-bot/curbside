@@ -300,7 +300,7 @@ export class CharacterBatch {
 export type ArmedPose = false | 'one' | 'two';
 
 /** Optional clips, played by name when the GLB has them (docs/BLENDER_TODO.md). */
-const CLIP_NAMES = ['Idle', 'Walk', 'Run', 'Punch', 'Aim', 'Shoot', 'Fall', 'Down', 'GetUp'] as const;
+const CLIP_NAMES = ['Idle', 'Walk', 'Run', 'Punch', 'Aim', 'Shoot', 'Fall', 'Down', 'GetUp', 'Ride'] as const;
 type ClipName = (typeof CLIP_NAMES)[number];
 /** Bones the upper-body layer (Aim, Shoot, Punch) drives, as GLTFLoader names them. */
 const UPPER_BONES = ['armR', 'armL', 'chest', 'head'];
@@ -335,6 +335,8 @@ export class CharacterModel {
   readonly body = new Group();
   /** Weapon held (set by the game before update): raises the arms / plays Aim. */
   armed: ArmedPose = false;
+  /** Seated on a bike (set by the game): plays Ride instead of the legs' locomotion. */
+  riding = false;
   private rig: Object3D | null = null;
   private bones: Object3D[] = [];
   private mixer: AnimationMixer | null = null;
@@ -472,7 +474,12 @@ export class CharacterModel {
     if (!this.mixer || !this.rig) return;
 
     // --- Locomotion: Idle / Walk / Run by speed (nothing while down or getting up) ---
-    const busy = down || this.getUpTime > 0;
+    const ride = this.riding && !down && a.Ride !== undefined;
+    if (a.Ride && ride !== a.Ride.isRunning()) {
+      if (ride) a.Ride.reset().play();
+      else a.Ride.stop();
+    }
+    const busy = down || this.getUpTime > 0 || ride;
     const moving = busy ? 0 : Math.min(1, Math.max(0, (groundSpeed - 0.15) / 0.5));
     const run = a.Run ? Math.min(1, Math.max(0, (groundSpeed - RUN_FROM) / (RUN_TO - RUN_FROM))) : 0;
     const legs = busy ? 0 : 1;

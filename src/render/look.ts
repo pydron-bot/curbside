@@ -136,7 +136,8 @@ export class Look {
     const view = this.rig.visibleGround(this.view);
     this.contactShadows.begin();
     this.glows.begin();
-    this.props.begin(view);
+    const p = this.player;
+    this.props.begin(view, p?.x ?? 0, p?.z ?? 0, p !== null && p.alive);
     this.characters.flush(this.contactShadows);
     this.cars.flush(view, this.dt, this.contactShadows, this.glows);
     // A redraw without update() (resized while paused) must not read as motion.

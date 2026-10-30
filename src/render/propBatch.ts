@@ -17,7 +17,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Rect } from '../world/city';
 import { SIGNAL_GLSL } from '../world/signals';
 import { uploadRange } from './glowSprites';
-import type { PropModels } from './propModels';
+import { SURF, type PropModels } from './propModels';
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms } from './shaderLib';
 
 /** Floats per static instance: matrix (16), aProp (4), aTint (3). */
@@ -31,6 +31,12 @@ const MARGIN = 14;
 export const propUniforms = {
   /** The traffic signals' clock (TrafficSignals.time), s. */
   uSignalTime: { value: 0 },
+  /**
+   * The player (x, z) and a radius: a landmark flagged for it (a spray booth,
+   * the export garage) drops its roof and the signs on it while the player
+   * is within the radius of its middle, so you see your car inside.
+   */
+  uFocus: { value: new Vector3(0, 0, 0) },
 } satisfies Record<string, IUniform>;
 
 /**
@@ -340,6 +346,18 @@ const FAMILY_SELECT = /* glsl */ `void main() {
     return;
   }`;
 
+/**
+ * The lit pass also cuts away a flagged landmark's roof (aProp.z > 1.5 is
+ * the height above which its signs go too) while the player is under it.
+ * The shadow pass keeps it: the inside stays shaded like a garage.
+ */
+const ROOF_CUT = /* glsl */ `
+  if (aProp.z > 1.5 && (abs(aSurf - ${SURF.roof}.0) < 0.5 || (abs(aSurf - ${SURF.sign}.0) < 0.5 && position.y > aProp.z))
+      && distance(instanceMatrix[3].xz, uFocus.xy) < uFocus.z) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    return;
+  }`;
+
 function patchDepth(shader: { vertexShader: string }): void {
   shader.vertexShader = after(shader.vertexShader, '#include <common>', 'attribute float aKind;\nattribute vec4 aProp;');
   shader.vertexShader = replace(shader.vertexShader, 'void main() {', FAMILY_SELECT);
@@ -357,6 +375,7 @@ function propMaterial(): MeshLambertMaterial {
   mat.onBeforeCompile = (shader) => {
     useWorldUniforms(shader);
     shader.uniforms.uSignalTime = propUniforms.uSignalTime;
+    shader.uniforms.uFocus = propUniforms.uFocus;
     shader.vertexShader = after(
       shader.vertexShader,
       '#include <common>',
@@ -368,6 +387,7 @@ function propMaterial(): MeshLambertMaterial {
       uniform float uTime;
       uniform float uNight;
       uniform float uSignalTime;
+      uniform vec3 uFocus;
       varying vec3 vPropColor;
       varying vec3 vPropGlow;
       varying vec3 vPropWorld;
@@ -376,7 +396,7 @@ function propMaterial(): MeshLambertMaterial {
       varying float vPropSurf;
       ${SIGNAL_GLSL}`,
     );
-    shader.vertexShader = replace(shader.vertexShader, 'void main() {', FAMILY_SELECT);
+    shader.vertexShader = replace(shader.vertexShader, 'void main() {', FAMILY_SELECT + ROOF_CUT);
     shader.vertexShader = after(
       shader.vertexShader,
       '#include <project_vertex>',

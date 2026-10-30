@@ -11,7 +11,7 @@
  */
 import type { ColorRepresentation } from 'three';
 import type { PedState } from '../entities/pedestrian';
-import { createVehicleState, type VehicleArchetype, type VehicleState } from '../entities/vehicle';
+import { createVehicleState, isEmergency, type VehicleArchetype, type VehicleState } from '../entities/vehicle';
 import type { CarMesh } from '../render/carMesh';
 import type { CharacterModel, Outfit } from '../render/characterModel';
 import { cornerPoint, spawnPed, type PedAgent } from '../systems/crowd';
@@ -43,6 +43,10 @@ export interface Vehicle {
   pursuit?: PursuitDriver | null;
   /** Sold at the docks and waiting for the crane: nobody can get back in. */
   exported?: boolean;
+  /** A bike lying on its side after a crash threw its rider (stood up again by whoever gets on). */
+  tipped?: boolean;
+  /** An ambulance or fire truck on a call: lights and siren, in a hurry, and traffic gives way. */
+  emergency?: boolean;
 }
 
 export interface CrowdPed {
@@ -116,6 +120,10 @@ export const TRAFFIC_MIX: Array<[VehicleArchetype, number]> = [
   ['ambulance', 0.015],
   ['firetruck', 0.01],
 ];
+/** Share of ambulances and fire trucks in traffic that are on a call. */
+export const EMERGENCY_SHARE = 0.5;
+/** How fast one on a call cruises, m/s. */
+const EMERGENCY_CRUISE = 17;
 /** Archetypes with a fixed livery rather than a random paint job. */
 const LIVERY: Partial<Record<VehicleArchetype, string>> = {
   taxi: '#f2c12e',
@@ -401,6 +409,8 @@ export class Population {
     Object.assign(v.sim, createVehicleState(spot.x, spot.z, spot.heading));
     Object.assign(v.prev, v.sim);
     v.ai = null;
+    v.tipped = false;
+    v.emergency = false;
     v.mesh.root.visible = true;
     this.vehicles.push(v);
     idle.push(v);
@@ -414,6 +424,8 @@ export class Population {
     v.pursuit = null;
     v.police = false;
     v.exported = false;
+    v.tipped = false;
+    v.emergency = false;
     v.mesh.siren = false;
     v.mesh.root.visible = false;
     v.sim.vx = v.sim.vz = v.sim.yawRate = 0;
@@ -453,6 +465,14 @@ export class Population {
       Object.assign(v.sim, createVehicleState(spawned.x, spawned.z, spawned.heading));
       Object.assign(v.prev, v.sim);
       v.ai = spawned.driver;
+      v.tipped = false;
+      // Ambulances and fire trucks are on a call half the time: lights, siren, in a hurry.
+      v.emergency = isEmergency(v.archetype) && this.rand() < EMERGENCY_SHARE;
+      v.mesh.siren = v.emergency;
+      if (v.emergency) {
+        v.ai.urgent = true;
+        v.ai.cruise = EMERGENCY_CRUISE;
+      }
       return true;
     }
     return false;

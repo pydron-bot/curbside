@@ -1,10 +1,15 @@
+import type { Scene } from 'three';
+import type { VehicleState } from '../entities/vehicle';
 import type { Heat } from '../game/heat';
 import { SPOT_RADIUS } from '../systems/helicopter';
+import type { PoliceUnit } from '../systems/police';
 import type { Rect } from '../world/city';
 import type { SprayShop } from '../world/landmarks';
 import type { ContactShadows } from './contactShadows';
 import { GLOW, type GlowSprites } from './glowSprites';
+import { HeliModel } from './heliModel';
 import { worldUniforms } from './shaderLib';
+import type { WorldProps } from './worldProps';
 
 /** Colours (linear) for the spray bay's light gate: hot pink and cyan. */
 const PINK = [1.0, 0.12, 0.45] as const;
@@ -19,20 +24,54 @@ const MIST = [
   [0.4, 1.0, 0.3],
 ] as const;
 
+/** What the heat look needs beyond the look itself (all optional: without them, glows and shadows only). */
+export interface HeatLookExtras {
+  /** For the helicopter model. */
+  scene?: Scene;
+  /** The camera's position: the helicopter flies under it, over its shadow on screen. */
+  camera?: () => { x: number; y: number; z: number };
+  /** The player's car: it scatters roadblock barriers and cones. */
+  playerCar?: () => VehicleState | null;
+  /** Throw a copy of a knocked prop (render/knockFx.ts). */
+  knock?: (kind: string, x: number, z: number, vx: number, vz: number) => void;
+}
+
+/** Roadblock dressing per car: a barrier beyond its nose, two cones off its tail (car frame: across, along). */
+const DRESSING: ReadonlyArray<readonly [kind: string, along: number, across: number, reach: number]> = [
+  ['barrier', 3.6, 0, 1.4],
+  ['traffic_cone', -3.4, 0.9, 0.5],
+  ['traffic_cone', -3.4, -0.9, 0.5],
+];
+
 /**
- * What the police add to the picture, all as faked light and shadow in the
- * shared batches (no draw calls of their own, no real lights): the
- * helicopter's shadow sliding over the streets with its searchlight pool,
- * the Pay 'n' Spray bays' light gates (brighter while wanted, a paint mist
- * while spraying) and a blue marker at the police station door.
- * Registered once as a glow source; reads Heat each frame.
+ * What the police add to the picture: the helicopter (heli.glb, rotors
+ * spinning, one draw call) with its shadow sliding over the streets and its
+ * searchlight pool, the Pay 'n' Spray bays' light gates (brighter while
+ * wanted, a paint mist while spraying), a blue marker at the police station
+ * door, and roadblocks dressed with a sawhorse barrier and cones per car
+ * (world props' things: no draw call of their own; the player's car sends
+ * them flying). The rest is faked light and shadow in the shared batches,
+ * no real lights. Registered once as a glow source; reads Heat each frame.
  */
-export function addHeatLook(look: { addGlowSource(fn: (g: GlowSprites, view: Rect) => void): () => void; contactShadows: ContactShadows }, heat: Heat): () => void {
+export function addHeatLook(
+  look: { addGlowSource(fn: (g: GlowSprites, view: Rect) => void): () => void; contactShadows: ContactShadows; props?: WorldProps },
+  heat: Heat,
+  extras: HeatLookExtras = {},
+): () => void {
   const shadows = look.contactShadows;
+  const heli = extras.scene ? new HeliModel() : null;
+  if (heli) extras.scene!.add(heli.root);
+  const knocked = new Map<number, number>();
+  let last = -1;
   return look.addGlowSource((glows, view) => {
     const t = worldUniforms.uTime.value;
     const night = worldUniforms.uNight.value;
+    const dt = last < 0 ? 0 : Math.min(0.1, Math.max(0, t - last));
+    last = t;
+    const cam = extras.camera?.();
+    heli?.update(heat.police.heli, dt, cam?.x ?? heat.police.heli.x, cam?.y ?? 40, cam?.z ?? heat.police.heli.z);
     drawHeli(glows, shadows, heat, view, t, night);
+    if (look.props?.loaded) drawRoadblocks(look.props, heat.police.units, view, knocked, extras);
     const wanted = heat.wanted.level > 0;
     for (const shop of heat.shops) {
       if (!near(shop.x, shop.z, view, 14)) continue;
@@ -41,6 +80,41 @@ export function addHeatLook(look: { addGlowSource(fn: (g: GlowSprites, view: Rec
     const st = heat.station;
     if (near(st.x, st.z, view, 8)) drawStation(glows, st.x, st.z, t, night);
   });
+}
+
+/**
+ * Barriers and cones round each roadblock car (for as long as its unit
+ * stands); the player's car knocks them flying (once each, per unit).
+ */
+function drawRoadblocks(props: WorldProps, units: readonly PoliceUnit[], view: Rect, knocked: Map<number, number>, extras: HeatLookExtras): void {
+  const car = extras.playerCar?.() ?? null;
+  const fast = car !== null && Math.hypot(car.vx, car.vz) > 4;
+  for (const u of units) {
+    const v = u.vehicle;
+    if (u.role !== 'roadblock' || !v) {
+      knocked.delete(u.id);
+      continue;
+    }
+    const s = v.sim;
+    if (!near(s.x, s.z, view, 10)) continue;
+    const fx = Math.sin(s.heading);
+    const fz = Math.cos(s.heading);
+    let mask = knocked.get(u.id) ?? 0;
+    for (let i = 0; i < DRESSING.length; i++) {
+      if (mask & (1 << i)) continue;
+      const [kind, along, across, reach] = DRESSING[i];
+      const x = s.x + fx * along + fz * across;
+      const z = s.z + fz * along - fx * across;
+      if (fast && Math.abs(car!.x - x) < reach + 1 && Math.abs(car!.z - z) < reach + 1 && Math.hypot(car!.x - x, car!.z - z) < reach + 1) {
+        mask |= 1 << i;
+        extras.knock?.(kind, x, z, car!.vx, car!.vz);
+        continue;
+      }
+      // The barrier runs across the road (along the car's length), the cones stand.
+      props.things.add(kind, x, 0, z, s.heading + Math.PI / 2);
+    }
+    knocked.set(u.id, mask);
+  }
 }
 
 function near(x: number, z: number, view: Rect, margin: number): boolean {

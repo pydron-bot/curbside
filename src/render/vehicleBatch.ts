@@ -124,6 +124,11 @@ export class CarBatch {
     setSiren(vehicle, on);
   }
 
+  /** A bike's seat from vehicles.glb (the rider's hips, in its own frame), once loaded. */
+  seat(archetype: VehicleArchetype): readonly [number, number, number] | undefined {
+    return this.models?.seat(archetype);
+  }
+
   /** vehicles.glb arrived: every car switches from the placeholder boxes to its model. */
   setModels(models: VehicleModels): void {
     this.models = models;

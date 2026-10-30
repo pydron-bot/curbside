@@ -458,6 +458,37 @@ export function carjack(v: Voice): void {
   noiseHit(v, v.bank.white, th, 'lowpass', 1500, 0.8, 0.6, 0.002, 0.03);
 }
 
+/**
+ * The ice cream van's jingle: a little music-box tune (eight notes of a
+ * major scale, square-ish and bright, each with a soft octave above) that
+ * reads as "ice cream" from down the street.
+ */
+export function chime(v: Voice): void {
+  const t = v.t;
+  const tune = [76, 79, 81, 79, 76, 72, 74, 76];
+  const step = 0.16;
+  const g = v.gain();
+  g.gain.value = 0.22;
+  const lp = v.filter('lowpass', 3800, 0.6);
+  v.chain(lp, g, v.input);
+  tune.forEach((midi, i) => {
+    const at = t + i * step;
+    const hz = 440 * Math.pow(2, (midi - 69) / 12);
+    for (const [mul, level] of [
+      [1, 0.5],
+      [2, 0.16],
+    ] as const) {
+      const o = v.osc('triangle', hz * mul, at, at + step * 1.6);
+      const e = v.gain();
+      e.gain.setValueAtTime(0, at);
+      e.gain.linearRampToValueAtTime(level, at + 0.008);
+      e.gain.exponentialRampToValueAtTime(0.001, at + step * 1.5);
+      o.connect(e);
+      e.connect(lp);
+    }
+  });
+}
+
 /** Car horn: two detuned saws a major third apart through a nasal band. */
 export function horn(v: Voice, duration: number): void {
   const t = v.t;

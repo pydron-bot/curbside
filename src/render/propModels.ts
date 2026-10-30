@@ -35,6 +35,8 @@ export const SURF = {
   strobeBlue: 13,
   /** Self-lit in the instance's tint (the frenzy gem: purple, gold once beaten). */
   tint: 14,
+  /** A garage roof: cut away while the player is under it (see PropBatch). */
+  roof: 15,
 } as const;
 
 /** Surface class for a material (and the root it's on: an antenna's red tip blinks, a signal's is a lens). */
@@ -58,6 +60,8 @@ export function surfaceFor(material: string, root: string): number {
       return SURF.sign;
     case 'frenzy':
       return SURF.tint;
+    case 'booth_roof':
+      return SURF.roof;
     case 'hazard':
     case 'cone_orange':
     case 'barrier_orange':

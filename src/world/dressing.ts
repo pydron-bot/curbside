@@ -12,6 +12,7 @@ import { RACES, legDir, nodeX, nodeZ } from '../game/modes/races';
 import type { City, Rect } from './city';
 import { placeSprayShops, placeStation, shopRect } from './landmarks';
 import { placeLandmarkProps, type Landmarks } from './landmarkProps';
+import type { KnockableItem } from '../systems/knockables';
 import type { Ramp } from './ramps';
 import { dirHeading } from './roads';
 import { placeStreetProps, type StreetProps } from './streetProps';
@@ -21,7 +22,12 @@ export interface Dressing {
   landmarks: Landmarks;
   /** Everything solid, for the collision grid. */
   solids: Rect[];
+  /** What a car knocks flying (ids: street props by index, landmark props from LANDMARK_KNOCK_ID up). */
+  knockables: KnockableItem[];
 }
+
+/** Knockable ids of landmark props start here (street props use their own index). */
+export const LANDMARK_KNOCK_ID = 1 << 20;
 
 export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: number }>, ramps: readonly Ramp[]): Dressing {
   const shops = placeSprayShops(city);
@@ -53,5 +59,9 @@ export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: num
     };
   });
   const street = placeStreetProps(city, { avoid, keepOut });
-  return { street, landmarks, solids: [...street.solids, ...landmarks.solids] };
+  const knockables: KnockableItem[] = [
+    ...street.knockables.map((k) => ({ id: k.prop, kind: street.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius })),
+    ...landmarks.knockables.map((k) => ({ id: LANDMARK_KNOCK_ID + k.prop, kind: landmarks.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius })),
+  ];
+  return { street, landmarks, solids: [...street.solids, ...landmarks.solids], knockables };
 }

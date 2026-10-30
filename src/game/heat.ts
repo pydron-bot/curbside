@@ -415,17 +415,22 @@ export class Heat {
     this.deps.bus.emit({ type: 'respray', x: car.sim.x, z: car.sim.z, cleared });
   }
 
-  /** Traffic pulls over for police cars with sirens coming up behind (or head-on). */
+  /** Traffic pulls over for police cars, ambulances and fire trucks with sirens coming up behind (or head-on). */
   private pullOver(): void {
     for (const u of this.police.units) {
       const cop = u.vehicle;
       if (!cop || u.dismissed || u.role !== 'pursuit' || speed(cop.sim) < 5) continue;
-      for (const v of this.deps.vehicles) {
-        const ai = v.ai;
-        if (!ai || v.police || v.pursuit || ai.mood !== 'calm') continue;
-        if (Math.abs(v.sim.x - cop.sim.x) > YIELD_RANGE || Math.abs(v.sim.z - cop.sim.z) > YIELD_RANGE) continue;
-        if (shouldYield(v.sim, cop.sim)) ai.yielding = 1;
-      }
+      this.giveWay(cop);
+    }
+    for (const e of this.deps.vehicles) if (e.emergency && e.ai && !e.damage.wrecked && speed(e.sim) > 5) this.giveWay(e);
+  }
+
+  private giveWay(siren: Vehicle): void {
+    for (const v of this.deps.vehicles) {
+      const ai = v.ai;
+      if (v === siren || !ai || v.police || v.pursuit || v.emergency || ai.mood !== 'calm') continue;
+      if (Math.abs(v.sim.x - siren.sim.x) > YIELD_RANGE || Math.abs(v.sim.z - siren.sim.z) > YIELD_RANGE) continue;
+      if (shouldYield(v.sim, siren.sim)) ai.yielding = 1;
     }
   }
 

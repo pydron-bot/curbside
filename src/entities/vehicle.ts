@@ -372,7 +372,7 @@ export const VEHICLE_SPECS: Record<VehicleArchetype, VehicleSpec> = {
     ...SEDAN,
     maxSpeed: 24,
     maxReverseSpeed: 3,
-    accel: 15,
+    accel: 19,
     reverseAccel: 3,
     brakeDecel: 24,
     handbrakeDecel: 8,
@@ -383,7 +383,7 @@ export const VEHICLE_SPECS: Record<VehicleArchetype, VehicleSpec> = {
     grip: 12,
     handbrakeGrip: 3,
     handbrakeYawBoost: 1.4,
-    latAccel: 25,
+    latAccel: 29,
     driftGrip: 5,
     driftRecover: 3.5,
     driftCarry: 0.3,
@@ -393,7 +393,7 @@ export const VEHICLE_SPECS: Record<VehicleArchetype, VehicleSpec> = {
     ...SEDAN,
     maxSpeed: 38,
     maxReverseSpeed: 3,
-    accel: 22,
+    accel: 26,
     reverseAccel: 3,
     brakeDecel: 28,
     handbrakeDecel: 8,
@@ -404,7 +404,7 @@ export const VEHICLE_SPECS: Record<VehicleArchetype, VehicleSpec> = {
     grip: 12,
     handbrakeGrip: 2.6,
     handbrakeYawBoost: 1.5,
-    latAccel: 28,
+    latAccel: 30,
     driftGrip: 4.5,
     driftRecover: 3,
     driftCarry: 0.35,
@@ -696,6 +696,14 @@ export const BIKE_THROW_IMPACT = 8;
 /** Lean (rad) per m/s² of sideways acceleration, and the most a bike leans. */
 const LEAN_PER_ACCEL = 0.045;
 export const MAX_LEAN = 0.62;
+
+/** A bike lying on its side scrapes to a stop: no grip, no engine, a lot of friction. */
+export function slideOnSide(s: VehicleState, dt: number): void {
+  const k = Math.exp(-2.4 * dt);
+  s.vx *= k;
+  s.vz *= k;
+  s.yawRate *= Math.exp(-5 * dt);
+}
 
 /** Does a crash at `impact` m/s throw the rider off a bike? */
 export function bikeThrows(impact: number): boolean {
