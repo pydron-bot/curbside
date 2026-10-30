@@ -282,55 +282,73 @@ export function rayCircle(ox: number, oz: number, dx: number, dz: number, c: Cir
   return t >= 0 ? t : cc <= 0 ? 0 : Infinity;
 }
 
-/** Distance along the ray (unit dir) to the box, or Infinity (slab method). */
+/** Distance along the ray (unit dir) to the box, or Infinity (slab method). Allocates nothing (it runs per bullet per wall). */
 export function rayRect(ox: number, oz: number, dx: number, dz: number, r: Rect): number {
-  let tmin = 0;
-  let tmax = Infinity;
-  for (const [o, d, lo, hi] of [
-    [ox, dx, r.minX, r.maxX],
-    [oz, dz, r.minZ, r.maxZ],
-  ] as const) {
-    if (Math.abs(d) < 1e-9) {
-      if (o < lo || o > hi) return Infinity;
-      continue;
-    }
-    let t1 = (lo - o) / d;
-    let t2 = (hi - o) / d;
-    if (t1 > t2) [t1, t2] = [t2, t1];
-    tmin = Math.max(tmin, t1);
-    tmax = Math.min(tmax, t2);
-    if (tmin > tmax) return Infinity;
+  const x = slab(ox, dx, r.minX, r.maxX, 0, Infinity);
+  if (x === null) return Infinity;
+  const tmin = slab(oz, dz, r.minZ, r.maxZ, x, slabMax);
+  return tmin === null ? Infinity : tmin;
+}
+
+/** The far end of the last slab() that passed (a module scratch, so slab returns one number). */
+let slabMax = Infinity;
+
+/** Clip [tmin, tmax] to one axis' slab; the new tmin (tmax in slabMax), or null for a miss. */
+function slab(o: number, d: number, lo: number, hi: number, tmin: number, tmax: number): number | null {
+  if (Math.abs(d) < 1e-9) {
+    if (o < lo || o > hi) return null;
+    slabMax = tmax;
+    return tmin;
   }
+  let t1 = (lo - o) / d;
+  let t2 = (hi - o) / d;
+  if (t1 > t2) {
+    const t = t1;
+    t1 = t2;
+    t2 = t;
+  }
+  tmin = Math.max(tmin, t1);
+  tmax = Math.min(tmax, t2);
+  if (tmin > tmax) return null;
+  slabMax = tmax;
   return tmin;
 }
 
-/** Unit direction toward the best target within `cone` radians of `heading`, else the heading itself. */
+/**
+ * Unit direction toward the best target within `cone` radians of `heading`,
+ * else the heading itself. Written into `out` when given (no garbage per shot).
+ */
 export function autoAim(
   ox: number,
   oz: number,
   heading: number,
-  targets: Array<{ x: number; z: number }>,
+  targets: ArrayLike<{ x: number; z: number }>,
   range: number,
   cone = 0.45,
+  out: { x: number; z: number } = { x: 0, z: 0 },
 ): { x: number; z: number } {
   const fx = Math.sin(heading);
   const fz = Math.cos(heading);
-  let best: { x: number; z: number } | null = null;
+  const coneCos = Math.cos(cone);
+  out.x = fx;
+  out.z = fz;
   let bestScore = Infinity;
-  for (const t of targets) {
+  for (let i = 0; i < targets.length; i++) {
+    const t = targets[i];
     const dx = t.x - ox;
     const dz = t.z - oz;
     const d = Math.hypot(dx, dz);
     if (d < 0.3 || d > range) continue;
     const cos = (dx * fx + dz * fz) / d;
-    if (cos < Math.cos(cone)) continue;
+    if (cos < coneCos) continue;
     const score = d * (2 - cos); // prefer close and centred
     if (score < bestScore) {
       bestScore = score;
-      best = { x: dx / d, z: dz / d };
+      out.x = dx / d;
+      out.z = dz / d;
     }
   }
-  return best ?? { x: fx, z: fz };
+  return out;
 }
 
 /** Something to lock on to: where it is and whether it's fighting the player. */

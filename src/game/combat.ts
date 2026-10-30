@@ -89,6 +89,8 @@ const FIRE_PLAYER_DPS = 14;
 const FIRE_PLAYER_TICK = 0.3;
 /** People who walk into fire burn this long, s. */
 const BURN_SECONDS = 3.5;
+/** A blast that sets the player's own car alight leaves at least this long to get out, s. */
+const PLAYER_CAR_FUSE = 3;
 /** Explosions further than this from the player don't score KABOOM, m. */
 const BOOM_SCORE_RANGE = 60;
 /** Gunfire scares people within this, m; armed ones within ARMED_JOIN may join in. */
@@ -128,7 +130,12 @@ export interface AimInput {
   ground: { x: number; z: number } | null;
 }
 
-type Hit = { kind: 'ped'; ped: CrowdPed } | { kind: 'vehicle'; v: Vehicle } | { kind: 'player' } | null;
+/** What a bullet hit (traceBullet reuses one record: read it before the next trace). */
+interface Hit {
+  kind: 'none' | 'ped' | 'vehicle' | 'player';
+  ped: CrowdPed | null;
+  v: Vehicle | null;
+}
 
 /** A lock-on / drive-by candidate with what it is. */
 interface Candidate extends LockCandidate {
@@ -161,6 +168,7 @@ export class Combat {
   /** Reused for autoAim (a view of the first candidateCount candidates) and ray tests. */
   private readonly aimTargets: Candidate[] = [];
   private readonly ray = { x: 0, z: 0, r: 0 };
+  private readonly hit: Hit = { kind: 'none', ped: null, v: null };
   private readonly target = { x: 0, z: 0 };
   private readonly world: ProjectileWorld;
 
@@ -212,8 +220,9 @@ export class Combat {
     if (spec.mode !== 'throw' && (firing || this.sinceShot < LOCK_LINGER)) {
       if (!this.lockValid(spec.range * 1.2, aim.heading)) this.lock = firing ? this.acquireLock(spec.range, aim.heading) : null;
     } else this.lock = null;
-    // Throwables show where they'd land.
-    if (spec.mode === 'throw' && (aim.heading !== null || aim.ground !== null || firing)) {
+    // Throwables always show where they'd land, aimed or not (a tap on FIRE
+    // throws to the same spot, so touch players see it first too).
+    if (spec.mode === 'throw') {
       this.throwPoint(spec.range, aim, this.target);
       this.marker.x = this.target.x;
       this.marker.z = this.target.z;
@@ -297,9 +306,8 @@ export class Combat {
     const targets = this.aimTargets;
     targets.length = 0;
     for (let i = 0; i < this.candidateCount; i++) targets.push(this.candidates[i]);
-    const a = aimHeading !== null ? autoAim(p.x, p.z, aimHeading, targets, range, 0.26) : autoAim(p.x, p.z, p.heading, targets, range);
-    out.x = a.x;
-    out.z = a.z;
+    if (aimHeading !== null) autoAim(p.x, p.z, aimHeading, targets, range, 0.26, out);
+    else autoAim(p.x, p.z, p.heading, targets, range, undefined, out);
   }
 
   private throwIt(kind: 'grenade' | 'molotov', aim: AimInput): boolean {
@@ -450,11 +458,11 @@ export class Combat {
     const oz = sz + dz * 0.6;
     this.d.bus.emit({ type: 'shot', x: ox, z: oz, dirX: dx, dirZ: dz, weapon: null, byPlayer: false });
     const hit = this.traceBullet(ox, oz, dx, dz, NPC_SHOT_RANGE, false);
-    if (hit?.kind === 'player') {
+    if (hit.kind === 'player') {
       const far = Math.hypot(p.ped.x - sx, p.ped.z - sz) > NPC_FAR;
       p.hurt(far ? NPC_FAR_DAMAGE : NPC_SHOT_DAMAGE);
-    } else if (hit?.kind === 'vehicle') applyDamage(hit.v.damage, NPC_SHOT_DAMAGE * NPC_VEHICLE_SHARE);
-    else if (hit?.kind === 'ped') {
+    } else if (hit.v) applyDamage(hit.v.damage, NPC_SHOT_DAMAGE * NPC_VEHICLE_SHARE);
+    else if (hit.ped) {
       // Stray rounds hurt bystanders too (nobody scores for them).
       const res = hurtPed(hit.ped.agent, NPC_PED_DAMAGE, sx, sz);
       this.resolve(hit.ped, res, 'shot', sx, sz, false);
@@ -511,9 +519,12 @@ export class Combat {
       if (v === source || v.damage.wrecked) continue;
       const dist = this.nearestPart(v, x, z);
       if (dist >= b.radius) continue;
-      if (dist < b.igniteRadius) ignite(v.damage, 0.5 + d.rand() * 1.4);
       const dmg = blastDamage(dist, b.radius, b.carDamage);
-      applyDamage(v.damage, dmg);
+      // Close cars catch fire and go up after a short fuse, so a jam goes in a
+      // rippling chain (not all on the next step); the player's own car leaves
+      // time to bail. The rest just take the damage.
+      if (dist < b.igniteRadius) ignite(v.damage, v === p.driving ? PLAYER_CAR_FUSE + d.rand() : 0.5 + d.rand() * 1.4);
+      else applyDamage(v.damage, dmg);
       // A chain reaction is still the player's doing.
       if (byPlayer) markPlayerHit(v.damage, now);
       const push = (dmg / b.carDamage) * b.push / VEHICLE_SPECS[v.archetype].mass;
@@ -608,10 +619,10 @@ export class Combat {
     for (let i = 0; i < w.pellets; i++) {
       const a = heading + (d.rand() * 2 - 1) * spread;
       const hit = this.traceBullet(ox, oz, Math.sin(a), Math.cos(a), w.range, true);
-      if (hit?.kind === 'ped') {
+      if (hit.ped) {
         const res = hurtPed(hit.ped.agent, w.damage, fromX, fromZ);
         this.resolve(hit.ped, res, 'shot', fromX, fromZ, true);
-      } else if (hit?.kind === 'vehicle') {
+      } else if (hit.v) {
         applyDamage(hit.v.damage, w.damage * VEHICLE_SHARE);
         markPlayerHit(hit.v.damage, d.now());
         if (hit.v.ai && d.rand() < 0.25) d.ejectDriver(hit.v, fromX, fromZ);
@@ -658,7 +669,10 @@ export class Combat {
     const d = this.d;
     let best = range;
     let wall = false;
-    let hit: Hit = null;
+    const hit = this.hit;
+    hit.kind = 'none';
+    hit.ped = null;
+    hit.v = null;
     for (const r of d.grid.near(ox + (dx * range) / 2, oz + (dz * range) / 2, range / 2 + 1)) {
       const t = rayRect(ox, oz, dx, dz, r);
       if (t < best) {
@@ -671,7 +685,8 @@ export class Combat {
       const t = rayCircle(ox, oz, dx, dz, this.circle(c.agent.s.x, c.agent.s.z, PED_HIT_RADIUS));
       if (t > 0.3 && t < best) {
         best = t;
-        hit = { kind: 'ped', ped: c };
+        hit.kind = 'ped';
+        hit.ped = c;
       }
     }
     const own = d.player.driving;
@@ -681,7 +696,9 @@ export class Combat {
         const t = rayCircle(ox, oz, dx, dz, this.circle(q.x, q.z, CAR_CIRCLE_RADIUS * 0.9));
         if (t > 0.3 && t < best) {
           best = t;
-          hit = { kind: 'vehicle', v };
+          hit.kind = 'vehicle';
+          hit.ped = null;
+          hit.v = v;
         }
       }
     }
@@ -690,18 +707,20 @@ export class Combat {
       const t = rayCircle(ox, oz, dx, dz, this.circle(p.ped.x, p.ped.z, PED_HIT_RADIUS));
       if (t > 0.3 && t < best) {
         best = t;
-        hit = { kind: 'player' };
+        hit.kind = 'player';
+        hit.ped = null;
+        hit.v = null;
       }
     }
     d.bus.emit({
       type: 'bulletHit',
       x: ox + dx * best,
       z: oz + dz * best,
-      target: hit ? hit.kind : wall ? 'wall' : 'none',
+      target: hit.kind !== 'none' ? hit.kind : wall ? 'wall' : 'none',
       fromX: ox,
       fromZ: oz,
       byPlayer: shooterIsPlayer,
-      police: hit?.kind === 'vehicle' && (hit.v.archetype === 'police' || hit.v.police === true),
+      police: hit.v !== null && (hit.v.archetype === 'police' || hit.v.police === true),
     });
     return hit;
   }

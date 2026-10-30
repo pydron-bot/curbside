@@ -216,7 +216,9 @@ export class Player {
 
   /** Back on your feet at (x, z) with full health, no armour and no weapons. Always on foot. */
   respawn(x: number, z: number, heading = Math.PI): void {
-    this.driving = null;
+    // Restarting (or quitting to the title) at the wheel: get out properly, so
+    // everything that follows enter/exit (camera, controls, the body) hears it.
+    this.exit();
     this.dead = 0;
     this.custody = 0;
     this.stunned = 0;

@@ -130,6 +130,15 @@ describe('player transitions', () => {
     expect(types().slice(-1)).toEqual(['respawn']);
   });
 
+  it('a restart at the wheel gets out first (exitVehicle), then respawns on foot', () => {
+    const { player, types } = setup();
+    player.enter(car());
+    player.respawn(9.5, 9.5);
+    expect(player.driving).toBeNull();
+    expect(player.ped.x).toBe(9.5);
+    expect(types().slice(-2)).toEqual(['exitVehicle', 'respawn']);
+  });
+
   it('reports hurt with the remaining health, and ignores damage when dead', () => {
     const { player, log } = setup();
     player.hurt(30);

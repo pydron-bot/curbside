@@ -132,7 +132,7 @@ export class FxDirector {
       this.boosting = e.on;
       if (!e.on || !this.playing) return;
       // The kick of it lighting: the view widens and jolts back.
-      this.d.rig.punchFov(5);
+      this.d.rig.punchFov(-5);
       this.d.rig.addTrauma(0.18);
       const car = this.d.player.driving;
       if (car) this.d.rig.kick(-car.sim.vx, -car.sim.vz, 0.5);

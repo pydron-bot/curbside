@@ -557,7 +557,7 @@ function simulate(dt: number) {
       const ds = driving.sim;
       events.emit({ type: 'stunt', x: ds.x, z: ds.z, airtime: stunt.airtime, distance: stunt.distance, spin: stunt.spin, points: a.points, label: stunt.label });
     }
-  }
+  } else stunts.cancel(); // thrown out mid-air (the car blew up): that jump is void
   if (driving && !driving.damage.wrecked && !driving.sim.airborne) {
     const ds = driving.sim;
     const slip = Math.abs(lateralSpeed(ds));

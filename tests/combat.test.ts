@@ -244,6 +244,23 @@ describe('spread bloom', () => {
   });
 });
 
+describe('throws', () => {
+  it('a throwable always shows where it lands, aimed or not, and a tap throws right there', () => {
+    const w = setup();
+    w.player.arsenal.pickUp('grenade');
+    w.player.arsenal.current = 'grenade';
+    w.combat.updateAim(false, noAim);
+    expect(w.combat.marker.show).toBe(true);
+    // Nobody about: ahead of the player (facing +Z), within the throw's range.
+    expect(Math.abs(w.combat.marker.x)).toBeLessThan(0.01);
+    expect(w.combat.marker.z).toBeGreaterThan(3);
+    expect(w.combat.marker.z).toBeLessThanOrEqual(WEAPONS.grenade.range);
+    const { x, z } = w.combat.marker;
+    expect(w.combat.fire(noAim)).toBe(true);
+    expect(w.log.find((e) => e.type === 'throw')).toMatchObject({ toX: x, toZ: z, weapon: 'grenade' });
+  });
+});
+
 describe('drive-bys', () => {
   it('fires out of the side window at the target there, not straight ahead', () => {
     const w = setup();
@@ -294,7 +311,21 @@ describe('blasts and fire', () => {
     let t = 0;
     while (!stepDamage(beside.damage, DT) && t < 5) t += DT;
     expect(t).toBeLessThan(2.5); // a short fuse: the chain ripples
+    expect(t).toBeGreaterThan(0.4); // ...not all on the next step
     expect(w.log.some((e) => e.type === 'explosion' && e.source === 'vehicle')).toBe(true);
+  });
+
+  it("a blast that sets the player's own car alight leaves time to bail out", () => {
+    const w = setup();
+    const source = car(0, 20);
+    const own = car(4.2, 20);
+    w.vehicles.push(source, own);
+    w.player.enter(own);
+    w.combat.vehicleExploded(source);
+    expect(own.damage.burning).toBe(true);
+    let t = 0;
+    while (!stepDamage(own.damage, DT) && t < 6) t += DT;
+    expect(t).toBeGreaterThan(2.9);
   });
 
   it('grenade blasts knock people out near the centre and down further out', () => {

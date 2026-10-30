@@ -331,7 +331,7 @@ export function stepCrowdPed(
       p.fleeZ = Math.sin(a);
     }
     p.timer = Math.max(p.timer, 1);
-    stepPedestrian(p.s, { x: p.fleeX, y: -p.fleeZ, sprint: true }, NPC_SPEC, dt);
+    stepPedestrian(p.s, move(p.fleeX, -p.fleeZ, true), NPC_SPEC, dt);
     return null;
   }
 
@@ -342,7 +342,7 @@ export function stepCrowdPed(
   }
 
   if (p.mode === 'flee') {
-    stepPedestrian(p.s, { x: p.fleeX, y: -p.fleeZ, sprint: true }, NPC_SPEC, dt);
+    stepPedestrian(p.s, move(p.fleeX, -p.fleeZ, true), NPC_SPEC, dt);
     if ((p.timer -= dt) <= 0) resumeWalking(p);
     return null;
   }
@@ -356,12 +356,20 @@ export function stepCrowdPed(
     arriveAtCorner(p, rand);
     return null;
   }
-  stepPedestrian(p.s, { x: (dx / d) * p.pace, y: (-dz / d) * p.pace, sprint: false }, NPC_SPEC, dt);
+  stepPedestrian(p.s, move((dx / d) * p.pace, (-dz / d) * p.pace, false), NPC_SPEC, dt);
   return null;
 }
 
 /** Reused stick input for officers (they step every frame; no garbage). */
 const copMove = { x: 0, y: 0, sprint: false };
+/** Reused stick input for everyone else: `move(x, y, sprint)` fills and returns it. */
+const moveIn = { x: 0, y: 0, sprint: false };
+function move(x: number, y: number, sprint: boolean): typeof moveIn {
+  moveIn.x = x;
+  moveIn.y = y;
+  moveIn.sprint = sprint;
+  return moveIn;
+}
 
 /** An officer running to their goal (the player, or a car door), then standing ready. */
 function stepArrest(p: PedAgent, target: Target | undefined, dt: number): void {
@@ -391,14 +399,13 @@ function stepHostile(p: PedAgent, target: Target | undefined, dt: number): Crowd
   }
   const ux = dx / (d || 1);
   const uz = dz / (d || 1);
-  const still = { x: 0, y: 0, sprint: false };
 
   if (p.mode === 'fight') {
     if (d > PUNCH_REACH) {
-      stepPedestrian(p.s, { x: ux, y: -uz, sprint: true }, FIGHTER_SPEC, dt);
+      stepPedestrian(p.s, move(ux, -uz, true), FIGHTER_SPEC, dt);
       return null;
     }
-    stepPedestrian(p.s, still, NPC_SPEC, dt);
+    stepPedestrian(p.s, move(0, 0, false), NPC_SPEC, dt);
     p.s.heading = Math.atan2(ux, uz);
     if (p.attackCooldown > 0) return null;
     p.attackCooldown = PUNCH_EVERY;
@@ -413,9 +420,9 @@ function stepHostile(p: PedAgent, target: Target | undefined, dt: number): Crowd
     copMove.sprint = d > 16;
     stepPedestrian(p.s, copMove, COP_SPEC, dt);
   }
-  else if (d > 12) stepPedestrian(p.s, { x: ux * 0.8, y: -uz * 0.8, sprint: false }, NPC_SPEC, dt);
-  else if (d < 6) stepPedestrian(p.s, { x: -ux * 0.6, y: uz * 0.6, sprint: false }, NPC_SPEC, dt);
-  else stepPedestrian(p.s, still, NPC_SPEC, dt);
+  else if (d > 12) stepPedestrian(p.s, move(ux * 0.8, -uz * 0.8, false), NPC_SPEC, dt);
+  else if (d < 6) stepPedestrian(p.s, move(-ux * 0.6, uz * 0.6, false), NPC_SPEC, dt);
+  else stepPedestrian(p.s, move(0, 0, false), NPC_SPEC, dt);
   p.s.heading = Math.atan2(ux, uz);
   if (p.attackCooldown > 0 || d > (cop ? COP_SHOOT_RANGE : SHOOT_RANGE)) return null;
   p.attackCooldown = cop ? COP_SHOOT_EVERY : SHOOT_EVERY;
