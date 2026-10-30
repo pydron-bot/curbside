@@ -16,6 +16,7 @@ import {
   entryPoint,
   exitPoint,
   lanePoint,
+  nodeValid,
   reverse,
   type Dir,
 } from '../world/roads';
@@ -84,7 +85,8 @@ export function spawnAi(
   rand: () => number,
 ): { driver: AiDriver; x: number; z: number; heading: number } | null {
   const v = DIR_VEC[dir];
-  if (!canLeave(ix - v.x, iz - v.z, dir)) return null; // segment must exist
+  // The segment must exist: both its ends are on the map.
+  if (!nodeValid(ix - v.x, iz - v.z) || !canLeave(ix - v.x, iz - v.z, dir)) return null;
   const along = -BLOCK_SIZE * (1 - t) - 12 * t; // stay out of both intersections
   const p = lanePoint(ix, iz, dir, Math.min(-12, along));
   return {

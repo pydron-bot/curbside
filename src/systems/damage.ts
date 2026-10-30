@@ -8,6 +8,8 @@ export interface DamageState {
   maxHealth: number;
   burning: boolean;
   wrecked: boolean;
+  /** Sim time the player last damaged it (rammed, shot, blew up next to it); -Infinity if never. */
+  lastPlayerHit: number;
 }
 
 export type DamageStage = 'ok' | 'smoking' | 'burning' | 'wrecked';
@@ -17,12 +19,24 @@ export const SMOKE_AT = 0.6;
 export const FIRE_AT = 0.25;
 /** Health lost per second while on fire (as a fraction of max). */
 const BURN_RATE = 0.06;
+/** A wreck counts as the player's doing if they hurt it within this many seconds. */
+export const ATTRIBUTION_SECONDS = 10;
 /** Impacts below this speed (m/s) are free: parking taps, scrapes. */
 const IMPACT_THRESHOLD = 4;
 const DAMAGE_PER_MS = 5;
 
 export function createDamage(maxHealth = 100): DamageState {
-  return { health: maxHealth, maxHealth, burning: false, wrecked: false };
+  return { health: maxHealth, maxHealth, burning: false, wrecked: false, lastPlayerHit: -Infinity };
+}
+
+/** Remember that the player just hurt this vehicle (for blame when it blows up). */
+export function markPlayerHit(d: DamageState, now: number): void {
+  d.lastPlayerHit = now;
+}
+
+/** Did the player damage it recently enough to take the credit (or blame)? */
+export function blamesPlayer(d: DamageState, now: number): boolean {
+  return now - d.lastPlayerHit <= ATTRIBUTION_SECONDS;
 }
 
 export function impactDamage(impactSpeed: number): number {

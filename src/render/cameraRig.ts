@@ -1,4 +1,13 @@
-import { PerspectiveCamera } from 'three';
+import { PerspectiveCamera, Vector3 } from 'three';
+import type { Rect } from '../world/city';
+
+/** NDC corners of the screen, for projecting the view onto the ground. */
+const SCREEN_CORNERS = [
+  [-1, -1],
+  [1, -1],
+  [1, 1],
+  [-1, 1],
+] as const;
 
 /**
  * Near-overhead chase camera: looks almost straight down with a slight tilt
@@ -11,6 +20,7 @@ export class CameraRig {
   private z = 0;
   private height: number;
   private shakeAmount = 0;
+  private readonly corner = new Vector3();
 
   constructor(
     aspect: number,
@@ -62,6 +72,46 @@ export class CameraRig {
     this.height += (wantHeight - this.height) * (1 - Math.exp(-o.zoomRate * dt));
     this.shakeAmount *= Math.exp(-5 * dt);
     this.apply();
+  }
+
+  /** Ground point the camera is centred on (the player plus look-ahead). */
+  get focusX(): number {
+    return this.x;
+  }
+
+  get focusZ(): number {
+    return this.z;
+  }
+
+  /** Current camera height, m. */
+  get currentHeight(): number {
+    return this.height;
+  }
+
+  /**
+   * The patch of ground (y = 0) the camera can see right now, as the bounding
+   * box of the four screen corners projected onto it. Spawning outside this
+   * keeps people and cars from popping into view. Writes into `out`.
+   */
+  visibleGround(out: Rect): Rect {
+    const cam = this.camera;
+    cam.updateMatrixWorld();
+    const { x: px, y: py, z: pz } = cam.position;
+    out.minX = out.minZ = Infinity;
+    out.maxX = out.maxZ = -Infinity;
+    for (const [nx, ny] of SCREEN_CORNERS) {
+      // Unit ray from the camera through this corner of the screen.
+      const dir = this.corner.set(nx, ny, 0.5).unproject(cam).sub(cam.position).normalize();
+      // Distance along it to the ground; a ray that never gets there stops at the far plane.
+      const t = dir.y < -1e-6 ? Math.min(-py / dir.y, cam.far) : cam.far;
+      const gx = px + dir.x * t;
+      const gz = pz + dir.z * t;
+      out.minX = Math.min(out.minX, gx);
+      out.maxX = Math.max(out.maxX, gx);
+      out.minZ = Math.min(out.minZ, gz);
+      out.maxZ = Math.max(out.maxZ, gz);
+    }
+    return out;
   }
 
   resize(aspect: number): void {

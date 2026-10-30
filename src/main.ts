@@ -4,8 +4,6 @@ import {
   DirectionalLight,
   Fog,
   HemisphereLight,
-  Mesh,
-  MeshLambertMaterial,
   Scene,
   WebGLRenderer,
   type ColorRepresentation,
@@ -27,13 +25,13 @@ import {
   type VehicleArchetype,
   type VehicleControls,
 } from './entities/vehicle';
-import { Population, type Vehicle } from './game/population';
+import { CROWD_DESPAWN, Population, type Vehicle } from './game/population';
 import { Effects } from './render/effects';
 import { CameraRig } from './render/cameraRig';
-import { createCarMesh } from './render/carMesh';
 import { CharacterModel } from './render/characterModel';
 import { DynamicResolution } from './render/dynamicResolution';
 import { VehicleModels } from './render/vehicleModels';
+import { charVehicle, createVehicleMesh, dressAll, restoreVehicleLook } from './render/vehicleLooks';
 import { PUNCH_REACH, knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
 import { Arsenal, VEHICLE_SHARE, WEAPONS, autoAim, rayCircle, rayRect } from './systems/weapons';
 import { PickupMesh } from './render/pickupMesh';
@@ -58,7 +56,7 @@ import { Score, type Award } from './systems/score';
 import { driveAi, type Obstacle } from './systems/traffic';
 import { ScoreHud, loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
-import { generateCity } from './world/city';
+import { generateCity, type Rect } from './world/city';
 import { createCityMesh } from './world/cityMesh';
 import { StaticGrid } from './world/collision';
 import { createGround } from './world/ground';
@@ -119,7 +117,6 @@ const collision = new StaticGrid(city.obstacles);
 scene.add(createCityMesh(city));
 const rand = mulberry32(Date.now() >>> 0);
 const effects = new Effects(scene);
-const charred = new MeshLambertMaterial({ color: '#1c1a19' });
 const pickups = generatePickups(1337);
 const pickupMesh = new PickupMesh(pickups);
 scene.add(pickupMesh.mesh);
@@ -128,12 +125,12 @@ scene.add(pickupMesh.mesh);
 const vehicles: Vehicle[] = [];
 let vehicleModels: VehicleModels | null = null;
 
-function makeVehicle(archetype: VehicleArchetype, paint: ColorRepresentation, x = 0, z = 0, heading = 0): Vehicle {
+function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation, x = 0, z = 0, heading = 0): Vehicle {
   const sim = createVehicleState(x, z, heading);
-  const mesh = createCarMesh(paint);
+  const mesh = createVehicleMesh(paint);
   vehicleModels?.dress(mesh, archetype, paint);
   scene.add(mesh.root);
-  const v: Vehicle = {
+  return {
     archetype,
     paint,
     sim,
@@ -142,9 +139,8 @@ function makeVehicle(archetype: VehicleArchetype, paint: ColorRepresentation, x 
     ai: null,
     damage: createDamage(VEHICLE_HEALTH[archetype]),
     wreckAge: 0,
+    charred: false,
   };
-  vehicles.push(v);
-  return v;
 }
 
 // A few parked at the kerbs around the spawn intersection.
@@ -155,31 +151,37 @@ const PARKED: Array<[VehicleArchetype, number, number, number, ColorRepresentati
   ['sports', -22, -5.5, -Math.PI / 2, '#e8b923'],
   ['police', 5.5, 34, Math.PI, '#f2f2f2'],
 ];
-for (const [archetype, x, z, h, paint] of PARKED) makeVehicle(archetype, paint, x, z, h);
+for (const [archetype, x, z, h, paint] of PARKED) vehicles.push(createVehicle(archetype, paint, x, z, h));
+
+/** Ready a recycled car for traffic: full health, and its proper look if it was a wreck or restyled. */
+function resetVehicle(v: Vehicle, restyled: boolean) {
+  v.damage = createDamage(VEHICLE_HEALTH[v.archetype]);
+  v.wreckAge = 0;
+  if (v.charred || restyled) restoreVehicleLook(v, vehicleModels);
+}
+
+const population = new Population(
+  vehicles,
+  {
+    createVehicle: (a, p) => createVehicle(a, p),
+    resetVehicle,
+    createPedModel: (outfit) => {
+      const model = new CharacterModel('/assets/player.glb', outfit);
+      scene.add(model.root);
+      return model;
+    },
+  },
+  rand,
+);
 
 // Placeholder boxes show until the Blender-built models arrive.
 VehicleModels.load('/assets/vehicles.glb').then(
   (models) => {
     vehicleModels = models;
-    for (const v of vehicles) models.dress(v.mesh, v.archetype, v.paint);
+    dressAll([...vehicles, ...population.spares], models);
   },
   (err) => console.error('Failed to load vehicles.glb', err),
 );
-
-function resetVehicle(v: Vehicle) {
-  v.damage = createDamage(VEHICLE_HEALTH[v.archetype]);
-  v.wreckAge = 0;
-  vehicleModels?.dress(v.mesh, v.archetype, v.paint); // replaces charred parts
-}
-
-/** Blacken a burnt-out car (the blob shadow keeps its material). */
-function charVehicle(v: Vehicle) {
-  v.mesh.root.traverse((o) => {
-    if (o instanceof Mesh && o.name !== 'shadow') o.material = charred;
-  });
-}
-
-const population = new Population(scene, vehicles, (a, p) => makeVehicle(a, p), resetVehicle, rand);
 
 // --- Player ---
 const player = {
@@ -188,6 +190,8 @@ const player = {
   model: new CharacterModel('/assets/player.glb'),
   /** Vehicle being driven, or null when on foot. */
   driving: null as Vehicle | null,
+  /** The car last got out of: kept around rather than recycled. */
+  lastDriven: null as Vehicle | null,
   /** Seconds left lying on the ground after a blast. */
   stunned: 0,
   punchCooldown: 0,
@@ -221,6 +225,25 @@ fitToScreen();
 rig.setHeights(...CAMERA_FOOT);
 rig.snapTo(player.ped.x, player.ped.z);
 
+const viewRect: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
+const keepVehicles: Array<Vehicle | null> = [null, null];
+/** Recycle and top up traffic and crowd; `seed` fills the streets from scratch. */
+function maintainPopulation(seed = false) {
+  const at = player.driving ? player.driving.sim : player.ped;
+  keepVehicles[0] = player.driving;
+  keepVehicles[1] = player.lastDriven;
+  population.maintain({
+    x: at.x,
+    z: at.z,
+    vx: at.vx,
+    vz: at.vz,
+    view: rig.visibleGround(viewRect),
+    keep: keepVehicles,
+    seed,
+  });
+}
+maintainPopulation(true);
+
 // --- Score ---
 const score = new Score(loadBest());
 const scoreHud = new ScoreHud(document.body, score);
@@ -251,6 +274,9 @@ function nearestEnterable(): Vehicle | null {
 /** The NPC driver gets out on the driver's side and runs from (fromX, fromZ). */
 function ejectDriver(v: Vehicle, fromX: number, fromZ: number) {
   v.ai = null;
+  // Far from the player nobody would see them, and Population would just recycle them.
+  const focus = player.driving ? player.driving.sim : player.ped;
+  if (Math.hypot(v.sim.x - focus.x, v.sim.z - focus.z) > CROWD_DESPAWN) return;
   const door = driverDoorPosition(v.sim);
   const agent = spawnPed(0, 0, 0, 0, rand);
   Object.assign(agent.s, { x: door.x, z: door.z, vx: 0, vz: 0, heading: v.sim.heading });
@@ -275,6 +301,7 @@ function exitVehicle(vx = 0, vz = 0) {
   Object.assign(player.ped, { x: door.x, z: door.z, heading: v.sim.heading, vx, vz });
   Object.assign(player.prev!, player.ped);
   player.driving = null;
+  player.lastDriven = v;
   player.model.root.visible = true;
   rig.setHeights(...CAMERA_FOOT);
 }
@@ -477,6 +504,7 @@ function respawn() {
   Object.assign(player.prev!, player.ped);
   rig.snapTo(player.ped.x, player.ped.z);
   wastedEl.hidden = true;
+  maintainPopulation(true);
 }
 
 /** Nearest thing a bullet from (ox, oz) along unit (dx, dz) hits within range. */
@@ -621,7 +649,7 @@ function frame(now: number) {
   const focus = player.driving ? player.driving.sim : player.ped;
   if ((maintainTimer -= frameSeconds) <= 0) {
     maintainTimer = 0.25;
-    population.maintain(focus.x, focus.z, player.driving);
+    maintainPopulation();
   }
 
   const alpha = loop.advance(frameSeconds, simulate);
