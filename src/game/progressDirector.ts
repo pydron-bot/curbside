@@ -359,7 +359,7 @@ export class ProgressDirector implements ModeCtx {
     const at = p.position;
     const d = Math.hypot(at.x - SAFEHOUSE.x, at.z - SAFEHOUSE.z);
     this.nearShop = d < 8 && !p.driving;
-    const offer = this.freeRoam && !this.busy && d < SHOP_NEAR;
+    const offer = this.shopOffered();
     if (offer === this.shopButton.hidden) this.shopButton.hidden = !offer;
     if (d > 4) this.shopArmed = true;
     if (!this.live || !this.freeRoam || this.busy || p.driving || d > SHOP_REACH || !this.shopArmed || Math.hypot(p.ped.vx, p.ped.vz) > 1.5) {
@@ -372,7 +372,15 @@ export class ProgressDirector implements ModeCtx {
     this.openShop(true);
   }
 
+  /** The pause menu's SHOP: free roam, nothing on, near the safehouse. */
+  private shopOffered(): boolean {
+    const at = this.deps.player.position;
+    return this.live && this.freeRoam && !this.busy && Math.hypot(at.x - SAFEHOUSE.x, at.z - SAFEHOUSE.z) < SHOP_NEAR;
+  }
+
   private openShop(fromStreet = false): void {
+    // The button is the gate, but keyboard / pad navigation mustn't get round it.
+    if (!fromStreet && !this.shopOffered()) return;
     const progress = this.progress;
     const player = this.deps.player;
     const owned = (id: string) => (item(id).kind === 'armour' ? player.armour >= MAX_ARMOUR : progress.has(id));
