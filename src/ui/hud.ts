@@ -2,7 +2,7 @@ import './tokens.css';
 import './hud.css';
 import type { EventBus } from '../core/events';
 import type { InputDevice } from '../core/input';
-import type { VehicleSpec } from '../entities/vehicle';
+import { terminalSpeed, type VehicleSpec } from '../entities/vehicle';
 import { onSettingsChange, settings } from '../core/settings';
 import { BUSTED_SECONDS, RESPAWN_SECONDS } from '../game/player';
 import { RunStats } from '../game/runStats';
@@ -43,13 +43,12 @@ export function createHudFrame(): HudFrame {
 }
 
 /**
- * Where the speedometer's scale ends for a car: just above the speed it can
- * actually reach (drag stops it short of spec.maxSpeed, see stepVehicle), so
- * flat out fills the dial whatever the tuning.
+ * Where the speedometer's scale ends for a car: just above the speed it
+ * reaches flat out (see terminalSpeed), so flat out fills the dial whatever
+ * the tuning; nitro pins the needle.
  */
-export function gaugeTopSpeed(spec: Pick<VehicleSpec, 'accel' | 'maxSpeed' | 'drag'>): number {
-  const terminal = spec.accel / (spec.accel / spec.maxSpeed + spec.drag);
-  return Math.min(spec.maxSpeed, terminal) * 1.06;
+export function gaugeTopSpeed(spec: Pick<VehicleSpec, 'maxSpeed'>): number {
+  return terminalSpeed(spec) * 1.06;
 }
 
 export interface HudOptions {
