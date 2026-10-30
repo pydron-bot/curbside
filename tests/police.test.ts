@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import {
-  HELI_FROM,
-  SPAWN_RANGE,
-  SPOT_RADIUS,
-  lineOfSight,
-  policeSpawnPoint,
-  roadblockSpot,
-  sees,
-  stepHelicopter,
-  type Helicopter,
-} from '../src/systems/police';
+import { HELI_FROM, SPOT_RADIUS, stepHelicopter, type Helicopter } from '../src/systems/helicopter';
+import { SPAWN_RANGE, policeSpawnPoint, roadblockSpot } from '../src/systems/police';
+import { lineOfSight, sees } from '../src/systems/sight';
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, generateCity, type Rect } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
 import { random } from './helpers';

@@ -1,0 +1,266 @@
+/* --- Wanted level (src/ui/wantedHud.ts), the BUSTED screen, police feed lines --- */
+
+/* Under the pause button, top centre: clear of the radar and status (top
+   left), the score and feed (top right) and the thumbs (bottom). */
+#wanted {
+  --star: clamp(18px, 5.4vmin, 26px);
+  position: fixed;
+  z-index: 21;
+  top: calc(max(4px, var(--safe-t)) + 50px);
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  font-family: var(--hud-font);
+  color: var(--ink);
+  text-shadow: var(--hud-shadow);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#wanted[hidden],
+body:not([data-scene='play']) #wanted {
+  display: none;
+}
+
+.w-stars {
+  display: flex;
+  gap: calc(var(--star) * 0.12);
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.32);
+  transition: opacity 0.6s;
+}
+
+#wanted.clean .w-stars {
+  opacity: 0;
+  transition-delay: 0.5s;
+}
+
+.w-star {
+  display: block;
+  width: var(--star);
+  height: var(--star);
+}
+
+.w-star svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.w-star path {
+  fill: rgb(0 0 0 / 0.35);
+  stroke: rgb(255 255 255 / 0.4);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+
+.w-star.on path {
+  fill: var(--neon-yellow);
+  stroke: #3a2a00;
+  stroke-width: 1.4;
+}
+
+.w-star.on svg {
+  filter: drop-shadow(0 0 4px rgb(255 210 63 / 0.75)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.8));
+}
+
+/* A star lit just now: slams in with a white flash. */
+.w-star.gain {
+  animation: star-gain 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+@keyframes star-gain {
+  0% {
+    transform: scale(2.6) rotate(-30deg);
+    filter: brightness(3);
+    opacity: 0;
+  }
+  45% {
+    opacity: 1;
+  }
+}
+
+/* Out of sight: the lit stars blink while the police search. */
+#wanted.searching .w-star.on {
+  animation: star-search 0.9s steps(1) infinite;
+}
+
+@keyframes star-search {
+  50% {
+    opacity: 0.22;
+  }
+}
+
+/* "WANTED", "HOT PURSUIT", ..., "EVADED" under the stars. */
+.w-pop {
+  --c: #ff4d5e;
+  font: italic 900 clamp(13px, 4.4vmin, 20px)/1 var(--display-font);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--c);
+  text-shadow: 0 2px 0 rgb(0 0 0 / 0.6), 0 0 12px color-mix(in srgb, var(--c) 55%, transparent);
+  animation: w-pop 2.2s ease-out both;
+}
+
+.w-pop[hidden] {
+  display: none;
+}
+
+.w-pop[data-tone='down'] {
+  --c: #8fb8ff;
+}
+
+.w-pop[data-tone='clear'] {
+  --c: var(--neon-green);
+  font-size: clamp(16px, 5.4vmin, 26px);
+}
+
+@keyframes w-pop {
+  0% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  12% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Meters: an officer's grip (blue, urgent) and a respray (pink). */
+.w-meter {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.w-meter[hidden] {
+  display: none;
+}
+
+.w-meter b {
+  font: 900 10px/1 var(--hud-font);
+  letter-spacing: 0.22em;
+}
+
+.w-meter span {
+  display: block;
+  width: calc(var(--star) * 5.5);
+  height: 6px;
+  border-radius: 3px;
+  background: rgb(0 0 0 / 0.5);
+  border: 1px solid rgb(255 255 255 / 0.3);
+  overflow: hidden;
+}
+
+.w-meter i {
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+
+.w-arrest b {
+  color: #9cc0ff;
+  animation: w-urgent 0.4s steps(1) infinite;
+}
+
+.w-arrest i {
+  background: linear-gradient(90deg, #2f6fff, #ff3048);
+}
+
+@keyframes w-urgent {
+  50% {
+    color: #ff5a6a;
+  }
+}
+
+.w-spray b {
+  color: #ff8ad8;
+}
+
+.w-spray i {
+  background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink), var(--neon-yellow));
+}
+
+/* --- BUSTED: the WASTED screen in police blue --- */
+#wasted.busted {
+  background: radial-gradient(ellipse at center, rgb(0 20 70 / 0.4), rgb(0 0 0 / 0.8));
+  animation-name: busted-fade;
+}
+
+@keyframes busted-fade {
+  0% {
+    background-color: rgb(40 90 255 / 0.55);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+}
+
+#wasted.busted .wasted-slash {
+  background: linear-gradient(90deg, transparent, rgb(8 30 110 / 0.88) 18%, rgb(8 30 110 / 0.88) 82%, transparent);
+}
+
+#wasted.busted .wasted-title {
+  color: #4f8bff;
+  -webkit-text-stroke-color: #02092a;
+  text-shadow: 0 0.06em 0 #020b38, 0 0 0.5em rgb(60 120 255 / 0.5);
+}
+
+#wasted.busted .wasted-timer > i {
+  background: #4f8bff;
+}
+
+/* The fine: only on the BUSTED screen. */
+.ws-fine {
+  display: none;
+}
+
+#wasted.busted .ws-fine {
+  display: flex;
+  animation-delay: 0.95s;
+}
+
+#wasted.busted .ws-fine b {
+  color: #ff6b7d;
+}
+
+/* --- Police lines in the score feed --- */
+.feed-copRam {
+  --c: #7fb0ff;
+}
+
+.feed-copWreck {
+  --c: #4f8bff;
+  font-size: clamp(15px, 5vmin, 22px);
+}
+
+.feed-evaded {
+  --c: var(--neon-green);
+  font-size: clamp(15px, 5vmin, 22px);
+}
+
+.feed-police {
+  --c: #8fb8ff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .w-star.gain,
+  #wanted.searching .w-star.on,
+  .w-pop,
+  .w-arrest b {
+    animation: none;
+  }
+}

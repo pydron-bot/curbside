@@ -21,6 +21,8 @@ import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, type Rect } from '../world/city';
 import type { StaticGrid } from '../world/collision';
 import { DIR_VEC, MAX_NODE, type Dir } from '../world/roads';
 import { carsTouching } from './arrest';
+import { HELI_FROM, HELI_GONE, HELI_SPAWN, stepHelicopter, type Helicopter } from './helicopter';
+import { sees } from './sight';
 import { resumeWalking, spawnPed } from './crowd';
 import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from './pursuit';
 import { CRUISE_SPEED, createDriver, rerouteAi, spawnAi, type AiDriver, type Obstacle } from './traffic';
@@ -81,42 +83,13 @@ export const COP_OUTFIT: Outfit = { shirt: '#1d2f57', pants: '#141b2e', shoes: '
 export const SWAT_OUTFIT: Outfit = { shirt: '#22262d', pants: '#1a1d22', shoes: '#0b0b0d', hair: '#15171b' };
 const SKIN = ['#e0ac84', '#c68e63', '#8d5a3b', '#f1c9a5', '#5e3b26'];
 
-// --- Helicopter -------------------------------------------------------------
-export const HELI_FROM = 5;
-const HELI_SPEED = 27;
-const HELI_ACCEL = 7;
-/** The spotlight's radius on the ground: inside it, the player is seen, m. */
-export const SPOT_RADIUS = 7.5;
-/** The spotlight wanders this far round its aim point, m. */
-const SPOT_WANDER = 3.5;
-/** Spawned / gone this far out, m. */
-const HELI_SPAWN = 150;
-const HELI_GONE = 260;
-
-export interface Helicopter {
-  /** In the air near the player (or leaving). */
-  active: boolean;
-  leaving: boolean;
-  x: number;
-  z: number;
-  vx: number;
-  vz: number;
-  /** Nose direction (vehicle convention). */
-  heading: number;
-  /** Spotlight centre on the ground. */
-  spotX: number;
-  spotZ: number;
-  /** Spotlight wander phase. */
-  sweep: number;
-  /** The spotlight is on the player. */
-  sees: boolean;
-}
-
 export type UnitKind = 'patrol' | 'swat';
 export type UnitRole = 'pursuit' | 'roadblock';
 
 export interface PoliceUnit {
   id: number;
+  /** "cop-<id>", e.g. for a radar blip. */
+  label: string;
   kind: UnitKind;
   role: UnitRole;
   /** Null once the car is lost (wrecked, stolen). */
@@ -311,6 +284,10 @@ export class PoliceForce {
         // Whoever was inside didn't make it out.
         u.aboard = 0;
         this.loseCar(u);
+      } else if (v.damage.burning) {
+        // On fire: everyone out, and the car is left to burn.
+        this.deploy(u, ctx.rand, u.aboard);
+        this.loseCar(u);
       } else if (s.car === v.sim) {
         // The player took it: the crew bails out first.
         this.deploy(u, ctx.rand, u.aboard);
@@ -393,8 +370,10 @@ export class PoliceForce {
     const stars = Math.max(1, this.stars);
     const driver = createPursuit(road, stars >= RAM_FROM ? 1 : 0, CRUISE_BY_STARS[stars], TOP_BY_STARS[stars]);
     driver.slot = this.units.length;
+    const id = this.nextId++;
     const u: PoliceUnit = {
-      id: this.nextId++,
+      id,
+      label: `cop-${id}`,
       kind,
       role,
       vehicle: v,
@@ -690,8 +669,9 @@ export class PoliceForce {
       this.deploy(u, ctx.rand, 1);
       const o = u.officers[0];
       if (o) {
-        o.agent.s.x = c.x - spot.dirX * 3;
-        o.agent.s.z = c.z - spot.dirZ * 3;
+        // Beyond the cars, from where the player's coming.
+        o.agent.s.x = c.x + spot.dirX * 3;
+        o.agent.s.z = c.z + spot.dirZ * 3;
         o.agent.goalX = o.agent.s.x;
         o.agent.goalZ = o.agent.s.z;
         Object.assign(o.prev, o.agent.s);
@@ -777,7 +757,7 @@ export function policeSpawnPoint(
 }
 
 export interface RoadblockSpot {
-  /** Unit vector along the road toward the player's approach (they come from -dir). */
+  /** Unit vector along the road the way the player is driving (they arrive from the -dir side). */
   dirX: number;
   dirZ: number;
   cars: Array<{ x: number; z: number; heading: number }>;
@@ -818,108 +798,6 @@ export function roadblockSpot(px: number, pz: number, vx: number, vz: number, vi
     return { dirX, dirZ, cars };
   }
   return null;
-}
-
-/**
- * Move the helicopter toward where the player is heading (accelerating up
- * to HELI_SPEED, so a fast car can outrun it), and swing the spotlight onto
- * the player with a little search wander. `sees` is set when the light is on them.
- */
-export function stepHelicopter(h: Helicopter, goalX: number, goalZ: number, goalVx: number, goalVz: number, px: number, pz: number, dt: number): void {
-  let tx: number;
-  let tz: number;
-  if (h.leaving) {
-    const dx = h.x - px;
-    const dz = h.z - pz;
-    const d = Math.hypot(dx, dz) || 1;
-    tx = h.x + (dx / d) * 100;
-    tz = h.z + (dz / d) * 100;
-  } else {
-    // Hold just behind and to the side of where they're going.
-    tx = goalX + goalVx * 0.8 + 6;
-    tz = goalZ + goalVz * 0.8 + 8;
-  }
-  const dx = tx - h.x;
-  const dz = tz - h.z;
-  const d = Math.hypot(dx, dz);
-  const want = Math.min(HELI_SPEED, d * 0.9);
-  const wx = d > 0.01 ? (dx / d) * want : 0;
-  const wz = d > 0.01 ? (dz / d) * want : 0;
-  const ex = wx - h.vx;
-  const ez = wz - h.vz;
-  const e = Math.hypot(ex, ez);
-  const maxDv = HELI_ACCEL * dt;
-  if (e <= maxDv) {
-    h.vx = wx;
-    h.vz = wz;
-  } else {
-    h.vx += (ex / e) * maxDv;
-    h.vz += (ez / e) * maxDv;
-  }
-  h.x += h.vx * dt;
-  h.z += h.vz * dt;
-  if (Math.hypot(h.vx, h.vz) > 1) h.heading = Math.atan2(h.vx, h.vz);
-
-  // The light reaches 30 m from under the helicopter toward the target (led a
-  // little, the operator anticipates), wandering a little.
-  h.sweep += dt;
-  const ax = goalX + goalVx * 0.25 - h.x;
-  const az = goalZ + goalVz * 0.25 - h.z;
-  const ad = Math.hypot(ax, az) || 1;
-  const reach = Math.min(ad, 30);
-  const sx = h.x + (ax / ad) * reach + Math.cos(h.sweep * 1.7) * SPOT_WANDER;
-  const sz = h.z + (az / ad) * reach + Math.sin(h.sweep * 1.3) * SPOT_WANDER;
-  // The operator swings it smoothly.
-  const k = Math.min(1, dt * 4);
-  h.spotX += (sx - h.spotX) * k;
-  h.spotZ += (sz - h.spotZ) * k;
-  h.sees = !h.leaving && Math.hypot(h.spotX - px, h.spotZ - pz) < SPOT_RADIUS;
-}
-
-/**
- * Can someone at (ax, az) see (bx, bz)? Always within `near`; within `far`
- * if no building (or tree) blocks the straight line between them.
- */
-export function sees(grid: StaticGrid, ax: number, az: number, bx: number, bz: number, near: number, far: number): boolean {
-  const d = Math.hypot(bx - ax, bz - az);
-  if (d < near) return true;
-  if (d > far) return false;
-  return lineOfSight(grid, ax, az, bx, bz);
-}
-
-/** No obstacle crosses the segment from (ax, az) to (bx, bz). Allocation-free slab tests. */
-export function lineOfSight(grid: StaticGrid, ax: number, az: number, bx: number, bz: number): boolean {
-  const dx = bx - ax;
-  const dz = bz - az;
-  const len = Math.hypot(dx, dz);
-  if (len < 1e-6) return true;
-  const rects = grid.near((ax + bx) / 2, (az + bz) / 2, len / 2 + 1);
-  for (let i = 0; i < rects.length; i++) {
-    const r = rects[i];
-    // Segment vs box: parametric t in [0, 1] along (dx, dz).
-    let t0 = 0;
-    let t1 = 1;
-    if (Math.abs(dx) < 1e-9) {
-      if (ax < r.minX || ax > r.maxX) continue;
-    } else {
-      const ta = (r.minX - ax) / dx;
-      const tb = (r.maxX - ax) / dx;
-      t0 = Math.max(t0, Math.min(ta, tb));
-      t1 = Math.min(t1, Math.max(ta, tb));
-      if (t0 > t1) continue;
-    }
-    if (Math.abs(dz) < 1e-9) {
-      if (az < r.minZ || az > r.maxZ) continue;
-    } else {
-      const ta = (r.minZ - az) / dz;
-      const tb = (r.maxZ - az) / dz;
-      t0 = Math.max(t0, Math.min(ta, tb));
-      t1 = Math.min(t1, Math.max(ta, tb));
-      if (t0 > t1) continue;
-    }
-    return false;
-  }
-  return true;
 }
 
 /** Nearest officer on their feet in `list` to (x, z), if nearer than `best`. */
