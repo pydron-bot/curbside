@@ -77,6 +77,9 @@ export function createGround(city: City): Mesh {
   const ground = new Mesh(new PlaneGeometry(GROUND_SIZE, GROUND_SIZE), mat);
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
+  // Drawn after the other opaque meshes: its shader is the heaviest and covers
+  // the screen, so early depth rejection skips it under roofs and cars.
+  ground.renderOrder = 1;
   ground.name = 'ground';
   return ground;
 }

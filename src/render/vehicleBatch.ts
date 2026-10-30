@@ -13,7 +13,7 @@ import {
   type WebGLRenderer,
 } from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import type { VehicleArchetype } from '../entities/vehicle';
+import { VEHICLE_SPECS, type VehicleArchetype } from '../entities/vehicle';
 import type { Rect } from '../world/city';
 import { createCarMesh, placeholderCarGeometry, type CarMesh } from './carMesh';
 import type { ContactShadows } from './contactShadows';
@@ -69,11 +69,19 @@ export class CarBatch {
   private readonly placeholder = placeholderCarGeometry();
   private models: VehicleModels | null = null;
   private envMap: Texture | null = null;
+  /**
+   * Draw every model's mesh next frame even with no cars (zero instances: no
+   * GL draw call, but its geometry is uploaded), so a model's first
+   * appearance mid-drive never stalls on an upload.
+   */
+  private uploadAll = true;
 
   constructor(private readonly renderer: WebGLRenderer) {
     this.root.name = 'cars';
     this.material = carMaterial();
     this.buildEnvironment();
+    // Every model's mesh up front (see uploadAll).
+    for (const archetype of Object.keys(VEHICLE_SPECS) as VehicleArchetype[]) this.meshFor(archetype);
   }
 
   /** (Re)build the reflection map, e.g. after the GL context was restored. */
@@ -120,6 +128,7 @@ export class CarBatch {
   setModels(models: VehicleModels): void {
     this.models = models;
     for (const [archetype, am] of this.meshes) this.useGeometry(am, archetype);
+    this.uploadAll = true;
   }
 
   /**
@@ -165,12 +174,13 @@ export class CarBatch {
       const am = list[k];
       const n = am.count;
       am.mesh.count = n;
-      am.mesh.visible = n > 0;
+      am.mesh.visible = n > 0 || this.uploadAll;
       uploadRange(am.mesh.instanceMatrix, n);
       uploadRange(am.paint, n);
       uploadRange(am.state, n);
       uploadRange(am.siren, n);
     }
+    this.uploadAll = false;
   }
 
   /** Follow a car's motion: forward speed, braking (hard deceleration) and how long it's been still. */

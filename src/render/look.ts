@@ -116,6 +116,8 @@ export class Look {
     this.glows.begin();
     this.characters.flush(this.contactShadows);
     this.cars.flush(view, this.dt, this.contactShadows, this.glows);
+    // A redraw without update() (resized while paused) must not read as motion.
+    this.dt = 0;
     this.pickups.update(worldUniforms.uTime.value, this.glows, view);
     this.addMarker();
     for (let i = 0; i < this.glowSources.length; i++) this.glowSources[i](this.glows, view);
