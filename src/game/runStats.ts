@@ -27,7 +27,8 @@ export class RunStats implements RunStatsSnapshot {
       if (e.byPlayer && !e.isPlayer && this.alive) this.knockouts++;
     });
     bus.on('explosion', (e) => {
-      if (e.byPlayer && this.alive) this.carsWrecked++;
+      // Cars only: a grenade going off isn't a wreck.
+      if (e.byPlayer && this.alive && (e.source ?? 'vehicle') === 'vehicle') this.carsWrecked++;
     });
     bus.on('carjack', () => {
       if (this.alive) this.carjacks++;

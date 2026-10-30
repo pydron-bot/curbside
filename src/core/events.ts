@@ -31,9 +31,18 @@ export type GameEvent =
       ownCar?: boolean;
       /** It was a police car (a unit's, or the police model). */
       police?: boolean;
+      /** What blew up: a car (the default), a grenade or a rocket. */
+      source?: 'vehicle' | 'grenade' | 'rocket';
     }
-  /** A gun went off at (x, z) (the muzzle). weapon is null for NPC guns. */
-  | { type: 'shot'; x: number; z: number; dirX: number; dirZ: number; weapon: WeaponKind | null; byPlayer: boolean }
+  /**
+   * A gun went off at (x, z) (the muzzle). weapon is null for NPC guns;
+   * 'rocket' is a rocket leaving the launcher. driveBy: out of a car window.
+   */
+  | { type: 'shot'; x: number; z: number; dirX: number; dirZ: number; weapon: WeaponKind | null; byPlayer: boolean; driveBy?: boolean }
+  /** A grenade or molotov was thrown from (x, z) toward (toX, toZ). */
+  | { type: 'throw'; x: number; z: number; toX: number; toZ: number; weapon: 'grenade' | 'molotov'; byPlayer: boolean }
+  /** A molotov burst: a patch of fire of `radius` m at (x, z). */
+  | { type: 'ignite'; x: number; z: number; radius: number; byPlayer: boolean }
   /**
    * Where a bullet (one pellet) stopped and what it hit; (fromX, fromZ) is the
    * muzzle it left, for tracers.
@@ -49,14 +58,19 @@ export type GameEvent =
       /** The vehicle hit was a police car. */
       police?: boolean;
     }
-  /** A punch was thrown from (x, z); hit = it connected. */
-  | { type: 'punch'; x: number; z: number; hit: boolean; byPlayer: boolean }
+  /**
+   * A punch was thrown from (x, z); hit = it connected. combo: the player's
+   * combo step (0, 1 jabs, 2 the knock-down hook).
+   */
+  | { type: 'punch'; x: number; z: number; hit: boolean; byPlayer: boolean; combo?: number }
   /** A pedestrian (or the player, isPlayer) was knocked over. */
   | {
       type: 'pedDown';
       x: number;
       z: number;
-      cause: 'vehicle' | 'punch' | 'shot' | 'blast';
+      cause: 'vehicle' | 'punch' | 'shot' | 'blast' | 'fire';
+      /** Knocked out (0 HP: down for long, then they run), not just knocked over. */
+      ko?: boolean;
       byPlayer: boolean;
       isPlayer?: boolean;
       /** The one knocked over was a police officer. */
@@ -71,7 +85,11 @@ export type GameEvent =
   | { type: 'award'; award: Award }
   /** The player's selected weapon changed (null = fists), for any reason. */
   | { type: 'weaponSwitch'; weapon: WeaponKind | null }
-  | { type: 'playerHurt'; amount: number; health: number }
+  /**
+   * The player took `amount` damage: `absorbed` of it went into body armour
+   * (`armour` left), the rest off `health`.
+   */
+  | { type: 'playerHurt'; amount: number; health: number; armour: number; absorbed: number }
   | { type: 'playerDied' }
   | { type: 'respawn' }
   /**

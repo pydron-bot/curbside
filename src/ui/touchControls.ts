@@ -51,6 +51,9 @@ const WEAPON_ICON: Record<WeaponKind | 'fists', string> = {
   pistol: ICONS.pistol,
   smg: ICONS.smg,
   shotgun: ICONS.shotgun,
+  grenade: ICONS.grenade,
+  molotov: ICONS.molotov,
+  rocket: ICONS.rocket,
 };
 
 /**

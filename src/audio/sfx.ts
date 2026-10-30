@@ -162,7 +162,60 @@ export function gunshot(v: Voice, weapon: WeaponKind | null, byPlayer: boolean):
   if (weapon === 'pistol') pistol(v);
   else if (weapon === 'smg') smg(v);
   else if (weapon === 'shotgun') shotgun(v, byPlayer);
+  else if (weapon === 'rocket') rocketLaunch(v);
   else npcGun(v);
+}
+
+/** A rocket leaving the tube: a hollow pop, then a roaring hiss that climbs away. */
+export function rocketLaunch(v: Voice): void {
+  const t = v.t;
+  const b = v.bank;
+  thump(v, t, 110, 40, 0.18, 0.85, 0.07);
+  noiseHit(v, b.white, t, 'bandpass', 900, 0.8, 0.7, 0.002, 0.04);
+  const n = v.noise(b.pink, t, t + 1.4);
+  const bp = v.filter('bandpass', 600, 0.9);
+  sweep(bp.frequency, t, 500, 2600, 0.9);
+  const g = v.gain();
+  v.chain(n, bp, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.75, t + 0.05);
+  g.gain.setTargetAtTime(0, t + 0.25, 0.35);
+}
+
+/** Something thrown: a short cloth-and-air whoosh. */
+export function throwWhoosh(v: Voice): void {
+  const t = v.t;
+  const n = v.noise(v.bank.pink, t, t + 0.4);
+  const bp = v.filter('bandpass', 900, 1.4);
+  sweep(bp.frequency, t, 1500, 420, 0.28);
+  const g = v.gain();
+  v.chain(n, bp, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.7, t + 0.06);
+  g.gain.setTargetAtTime(0, t + 0.09, 0.07);
+}
+
+/** A molotov bursting: breaking glass and the whump of fuel catching. */
+export function ignite(v: Voice): void {
+  const t = v.t;
+  const b = v.bank;
+  noiseHit(v, b.white, t, 'highpass', 4200, 0.7, 0.8, 0.0005, 0.03);
+  for (let i = 0; i < 3; i++) {
+    const at = t + rnd(0.01, 0.12);
+    const o = v.osc('sine', rnd(2600, 4800), at, at + 0.2);
+    const g = v.gain();
+    v.chain(o, g, v.input);
+    perc(g.gain, at, rnd(0.05, 0.1), 0.001, 0.03);
+  }
+  const n = v.noise(b.brown, t + 0.03, t + 1.4);
+  const lp = v.filter('lowpass', 300, 0.7);
+  sweep(lp.frequency, t + 0.03, 300, 1600, 0.25);
+  const g = v.gain();
+  v.chain(n, lp, g, v.input);
+  g.gain.setValueAtTime(0, t + 0.03);
+  g.gain.linearRampToValueAtTime(0.9, t + 0.12);
+  g.gain.setTargetAtTime(0, t + 0.3, 0.3);
+  thump(v, t + 0.04, 90, 40, 0.2, 0.6, 0.08);
 }
 
 /** A bullet passing close by: a short tearing hiss. */
@@ -435,7 +488,7 @@ export function tinnitus(v: Voice, amount: number): void {
 /** A gun pickup: the action worked twice (slide or pump for the shotgun). */
 export function pickupWeapon(v: Voice, kind: WeaponKind): void {
   const t = v.t;
-  const heavy = kind === 'shotgun';
+  const heavy = kind === 'shotgun' || kind === 'rocket';
   const second = t + (heavy ? 0.16 : 0.12);
   const n = v.noise(v.bank.white, t, second + 0.15);
   const bp = v.filter('bandpass', heavy ? 2200 : 3400, 3);
@@ -450,6 +503,28 @@ export function pickupWeapon(v: Voice, kind: WeaponKind): void {
   v.chain(ping, pg, v.input);
   perc(pg.gain, t, 0.2, 0.001, 0.02);
   perc(pg.gain, second, 0.3, 0.001, 0.03);
+}
+
+/** An armour pickup: straps ripping tight and a low, solid chime. */
+export function pickupArmour(v: Voice): void {
+  const t = v.t;
+  for (let i = 0; i < 2; i++) {
+    const at = t + i * 0.09;
+    const n = v.noise(v.bank.white, at, at + 0.12);
+    const bp = v.filter('bandpass', 1800 + i * 600, 2.5);
+    const g = v.gain();
+    v.chain(n, bp, g, v.input);
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.5, at + 0.01);
+    g.gain.linearRampToValueAtTime(0, at + 0.07);
+  }
+  [0, 7, 12].forEach((st, i) => {
+    const at = t + 0.16 + i * 0.05;
+    const o = v.osc('triangle', 330 * semis(st), at, at + 0.8);
+    const g = v.gain();
+    v.chain(o, g, v.input);
+    perc(g.gain, at, 0.22, 0.004, 0.14);
+  });
 }
 
 /** A health pickup: a bright rising major arpeggio and a little shimmer. */

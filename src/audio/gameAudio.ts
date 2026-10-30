@@ -466,9 +466,17 @@ export class GameAudio {
       case 'pickup': {
         const kind = e.kind;
         return this.oneShot('pickup', null, FALLOFF.near, 0.75, 0.05, (v) =>
-          kind === 'health' ? sfx.pickupHealth(v) : sfx.pickupWeapon(v, kind),
+          kind === 'health'
+            ? sfx.pickupHealth(v)
+            : kind === 'armour'
+              ? sfx.pickupArmour(v)
+              : sfx.pickupWeapon(v, kind === 'ammo' ? 'smg' : kind),
         );
       }
+      case 'throw':
+        return this.oneShot('punch', e, FALLOFF.punch, 0.8, 0.1, sfx.throwWhoosh);
+      case 'ignite':
+        return this.oneShot('impact', e, FALLOFF.crash, 0.9, 0.3, sfx.ignite, 0.5);
       case 'award':
         return this.onAward(e.award, newBest);
       case 'weaponSwitch': {

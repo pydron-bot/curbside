@@ -67,9 +67,14 @@ export interface FxDeps {
 
 const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
   health: { r: 0.35, g: 1, b: 0.45 },
+  armour: { r: 0.3, g: 0.8, b: 1 },
+  ammo: { r: 1, g: 0.85, b: 0.3 },
   pistol: { r: 1, g: 0.78, b: 0.3 },
   smg: { r: 1, g: 0.65, b: 0.2 },
   shotgun: { r: 1, g: 0.5, b: 0.2 },
+  grenade: { r: 0.6, g: 1, b: 0.35 },
+  molotov: { r: 1, g: 0.5, b: 0.15 },
+  rocket: { r: 0.9, g: 0.35, b: 1 },
 };
 
 export class FxDirector {
@@ -245,7 +250,7 @@ export class FxDirector {
     const power = e.weapon === 'shotgun' ? 1.6 : e.weapon === 'smg' ? 0.85 : e.weapon ? 1 : 0.65;
     const fx = this.d.effects;
     fx.muzzleFlash(e.x, e.z, e.dirX, e.dirZ, power);
-    this.lastShot = e.weapon ?? 'npc';
+    this.lastShot = e.weapon === 'pistol' || e.weapon === 'smg' || e.weapon === 'shotgun' ? e.weapon : 'npc';
     const p = this.d.player;
     if (e.byPlayer) {
       this.lastCombat = this.realTime;

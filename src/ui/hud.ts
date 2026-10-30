@@ -7,7 +7,8 @@ import { onSettingsChange, settings } from '../core/settings';
 import { BUSTED_SECONDS, RESPAWN_SECONDS } from '../game/player';
 import { RunStats } from '../game/runStats';
 import type { Score } from '../systems/score';
-import { WEAPONS, type WeaponKind } from '../systems/weapons';
+import type { WeaponKind } from '../systems/weapons';
+import { pickupLabel } from '../world/pickups';
 import { hiddenSetter, styleSetter, textSetter } from './domWrite';
 import { ICONS } from './icons';
 import { ScoreHud } from './scoreHud';
@@ -26,6 +27,8 @@ export interface HudFrame {
   device: InputDevice;
   /** Aiming with the mouse on foot: the cursor becomes a crosshair. */
   mouseAim: boolean;
+  /** In a car with a gun that fires out of the window (the weapon shows). */
+  driveBy: boolean;
 }
 
 export interface CarHud {
@@ -39,7 +42,7 @@ export interface CarHud {
 }
 
 export function createHudFrame(): HudFrame {
-  return { health: 100, weapon: null, ammo: 0, car: null, nearCar: null, device: 'keyboard', mouseAim: false };
+  return { health: 100, weapon: null, ammo: 0, car: null, nearCar: null, device: 'keyboard', mouseAim: false, driveBy: false };
 }
 
 /**
@@ -185,9 +188,7 @@ export class Hud {
     onSettingsChange(showDebug);
 
     bus.on('award', (e) => this.score.pop(e.award));
-    bus.on('pickup', (e) =>
-      e.kind === 'health' ? this.score.notice('+ HEALTH', 'health') : this.score.notice(`+ ${WEAPONS[e.kind].label}`, 'weapon'),
-    );
+    bus.on('pickup', (e) => this.score.notice(pickupLabel(e.kind), e.kind === 'health' || e.kind === 'armour' ? 'health' : 'weapon'));
     bus.on('playerHurt', (e) => this.flashHurt(e.amount));
     bus.on('playerDied', () =>
       this.wasted.show({
@@ -241,8 +242,8 @@ export class Hud {
     const car = f.car;
     this.setSpeedoHidden(!car);
     if (car) this.updateSpeedo(car);
-    // Fists or a gun on foot; nothing in a car (no drive-bys).
-    const weapon = car ? undefined : f.weapon;
+    // Fists or a weapon on foot; in a car only a drive-by gun (else nothing).
+    const weapon = car ? (f.driveBy ? f.weapon : undefined) : f.weapon;
     if (weapon !== this.shownWeapon) {
       this.shownWeapon = weapon;
       this.status.classList.toggle('in-car', weapon === undefined);

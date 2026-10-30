@@ -7,6 +7,12 @@
  * them: 'arrest' runs to a goal point (the player, or the driver's door of
  * their car), 'shoot' advances while firing. Cops don't scare and don't
  * hold grudges of their own.
+ *
+ * Everyone has hit points (PED_HP): bullets, punches, blasts and fire take
+ * them off. A hit staggers (a beat with no moving or attacking); a big one,
+ * or the third punch of a combo, knocks them over; at 0 HP they're knocked
+ * out, down for KO_SECONDS, and then run (no grudge left in them). Police
+ * officers take hits the same way.
  */
 import { PLAYER_ON_FOOT, createPedState, stepPedestrian, type PedSpec, type PedState } from '../entities/pedestrian';
 import { speed, type VehicleState } from '../entities/vehicle';
@@ -52,7 +58,26 @@ export interface PedAgent {
   /** Where an officer in 'arrest' mode is running to. */
   goalX: number;
   goalZ: number;
+  /** Hit points, 0..PED_HP. */
+  hp: number;
+  /** Seconds left reeling from a hit: no walking, no attacking. */
+  stagger: number;
+  /** Down because their HP ran out (knocked out), not just knocked over. */
+  ko: boolean;
+  /** Seconds left on fire (a molotov): running about in a panic. */
+  burning: number;
 }
+
+/** Hit points everyone starts with. */
+export const PED_HP = 100;
+/** A hit staggers for this long, s, and pushes the next attack back as much. */
+export const STAGGER_SECONDS = 0.3;
+/** Knocked out (0 HP): down this long, s. */
+export const KO_SECONDS = 8;
+/** An ordinary knock-down (third punch, a blast's edge): down this long, s. */
+export const KNOCKDOWN_SECONDS = 2.5;
+/** Back up after a knockout with this much HP. */
+const KO_RECOVER_HP = 50;
 
 export const NPC_SPEC: PedSpec = { ...PLAYER_ON_FOOT, walkSpeed: 2.2, runSpeed: 5.2 };
 /** Chase speed for fighters: a little slower than a sprinting player, so you can escape. */
@@ -119,7 +144,51 @@ export function spawnPed(bx: number, bz: number, edge: number, t: number, rand: 
     role: 'civilian',
     goalX: 0,
     goalZ: 0,
+    hp: PED_HP,
+    stagger: 0,
+    ko: false,
+    burning: 0,
   };
+}
+
+/** What a hit did: nothing (already down), a stagger, a knock-down, or a knockout. */
+export type HurtResult = 'none' | 'hit' | 'down' | 'ko';
+
+/**
+ * Take `damage` off a ped hit from (fromX, fromZ). 0 HP knocks them out
+ * (down for KO_SECONDS, then they run); `knock` (push, m/s) knocks them over
+ * anyway (the third punch, a blast); otherwise they stagger. Someone already
+ * on the ground takes nothing more.
+ */
+export function hurtPed(p: PedAgent, damage: number, fromX: number, fromZ: number, knock = 0): HurtResult {
+  if (p.mode === 'down' || damage <= 0) return 'none';
+  p.hp = Math.max(0, p.hp - damage);
+  if (p.hp <= 0) {
+    knockDown(p, fromX, fromZ, Math.max(3, knock), KO_SECONDS);
+    p.ko = true;
+    p.provoked = false;
+    p.stagger = 0;
+    return 'ko';
+  }
+  if (knock > 0) {
+    knockDown(p, fromX, fromZ, knock, KNOCKDOWN_SECONDS);
+    p.stagger = 0;
+    return 'down';
+  }
+  p.stagger = STAGGER_SECONDS;
+  p.attackCooldown += STAGGER_SECONDS;
+  // A small shove away from the hit.
+  const dx = p.s.x - fromX;
+  const dz = p.s.z - fromZ;
+  const d = Math.hypot(dx, dz) || 1;
+  p.s.vx = (dx / d) * 1.6;
+  p.s.vz = (dz / d) * 1.6;
+  return 'hit';
+}
+
+/** Set a ped alight for `seconds` (a molotov's fire): they run about in a panic. */
+export function setAlight(p: PedAgent, seconds: number): void {
+  p.burning = Math.max(p.burning, seconds);
 }
 
 export function rollTemper(rand: () => number): Temper {
@@ -195,18 +264,33 @@ export function stepCrowdPed(
       p.timer = 3;
       p.s.vx = v.vx * 0.6;
       p.s.vz = v.vz * 0.6;
+      p.stagger = 0;
+      // Hit hard enough, it's a knockout: down for longer, no fight left after.
+      p.hp = Math.max(0, p.hp - sp * 5);
+      if (p.hp <= 0) {
+        p.ko = true;
+        p.provoked = false;
+        p.timer = KO_SECONDS;
+      }
       break;
     }
     if (sp > 7) dodge(p, v, sp);
   }
 
   if (p.mode === 'down') {
+    p.burning = Math.max(0, p.burning - dt);
     const k = Math.exp(-4 * dt);
     p.s.vx *= k;
     p.s.vz *= k;
     p.s.x += p.s.vx * dt;
     p.s.z += p.s.vz * dt;
     if ((p.timer -= dt) <= 0) {
+      if (p.ko) {
+        // Coming round from a knockout: shaken, and in no mood for a rematch.
+        p.ko = false;
+        p.hp = Math.max(p.hp, KO_RECOVER_HP);
+        p.provoked = false;
+      }
       if (p.role === 'cop') {
         // Back on their feet and back on the job.
         p.mode = 'arrest';
@@ -223,6 +307,31 @@ export function stepCrowdPed(
         provoke(p, target.x, target.z);
       }
     }
+    return null;
+  }
+
+  // Reeling from a hit: slide to a stop, no walking, no attacking.
+  if (p.stagger > 0) {
+    p.stagger = Math.max(0, p.stagger - dt);
+    const k = Math.exp(-8 * dt);
+    p.s.vx *= k;
+    p.s.vz *= k;
+    p.s.x += p.s.vx * dt;
+    p.s.z += p.s.vz * dt;
+    return null;
+  }
+
+  // On fire: run about blindly, swerving, until it goes out.
+  if (p.burning > 0) {
+    p.burning = Math.max(0, p.burning - dt);
+    if (p.mode !== 'flee' || rand() < dt * 3) {
+      const a = rand() * Math.PI * 2;
+      p.mode = 'flee';
+      p.fleeX = Math.cos(a);
+      p.fleeZ = Math.sin(a);
+    }
+    p.timer = Math.max(p.timer, 1);
+    stepPedestrian(p.s, { x: p.fleeX, y: -p.fleeZ, sprint: true }, NPC_SPEC, dt);
     return null;
   }
 

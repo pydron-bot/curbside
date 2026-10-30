@@ -387,8 +387,13 @@ export class CharacterModel {
   }
 
   /** Throw a right jab (layered on top of whatever clip is playing). */
-  punch(): void {
+  punch(_step = 0): void {
     this.punchTime = PUNCH_SECONDS;
+  }
+
+  /** A shot's recoil (layered on top of the aim). */
+  shoot(): void {
+    this.punchTime = PUNCH_SECONDS * 0.5;
   }
 
   /** Flash white for a moment (e.g. when hit). */

@@ -43,6 +43,43 @@ export const ICONS = {
   shotgun: svg(
     '<path d="M1.5 9.2h16v-1.2h5v3.2h-12l-1.4 1.6-4 4.6H2.7l3-4.6H1.5z" fill="currentColor"/><path d="M11.5 11.2h4.2v1.6h-4.2z" fill="currentColor" opacity=".55"/>',
   ),
+  /** A frag grenade: ribbed body, lever and pin ring. */
+  grenade: svg(
+    '<ellipse cx="11" cy="14.5" rx="6.2" ry="7" fill="currentColor"/>' +
+      '<path d="M5.2 12.5h11.6M5.2 16.5h11.6M11 7.6v13.8" stroke="rgb(0 0 0 / .4)" stroke-width="1.1"/>' +
+      '<path d="M8.6 7.8V5.6h4.8v2.2M13.4 6.2l5.4 3.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>' +
+      '<circle cx="18.2" cy="4.4" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/>',
+  ),
+  /** A bottle with a burning rag. */
+  molotov: svg(
+    '<path d="M10 9.5h4l1.8 3.2V21a1 1 0 0 1-1 1H9.2a1 1 0 0 1-1-1v-8.3z" fill="currentColor"/>' +
+      '<path d="M10.4 6.2h3.2v3.3h-3.2z" fill="currentColor" opacity=".8"/>' +
+      '<path d="M12 1.6c1.9 1.6 2.6 3 1.8 4.4-.4-.9-1-1.2-1.8-1.3-.8.1-1.4.4-1.8 1.3-.8-1.4-.1-2.8 1.8-4.4z" fill="currentColor"/>' +
+      '<path d="M8.3 15h7.4" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
+  ),
+  /** A shoulder launcher with a rocket in it. */
+  rocket: svg(
+    '<path d="M1.5 10h16v4.2h-16z" fill="currentColor"/>' +
+      '<path d="M17.5 9.2l3.4 1.6c.8.4.8 1.6 0 2l-3.4 1.6z" fill="currentColor"/>' +
+      '<path d="M6 14.2l-1 4.6h2.6l1-4.6M11 14.2v3.4h2.4v-3.4" fill="currentColor" opacity=".85"/>' +
+      '<path d="M4 10v4.2M15 10v4.2" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
+  ),
+  /** Body armour: a vest. */
+  armour: svg(
+    '<path d="M8 3h2.2c.4 1.4 1 2 1.8 2s1.4-.6 1.8-2H16l3.5 2.4-1.6 4.4V20a1 1 0 0 1-1 1H7.1a1 1 0 0 1-1-1V9.8L4.5 5.4z" fill="currentColor"/>' +
+      '<path d="M12 6.2V21M8.2 12.5h2.4M13.4 12.5h2.4" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
+  ),
+  /** Three rounds: ammo. */
+  ammo: svg(
+    '<path d="M4.5 9.5c0-2.4 1-4.6 2-6 1 1.4 2 3.6 2 6V20h-4zM10 9.5c0-2.4 1-4.6 2-6 1 1.4 2 3.6 2 6V20h-4zM15.5 9.5c0-2.4 1-4.6 2-6 1 1.4 2 3.6 2 6V20h-4z" fill="currentColor"/>' +
+      '<path d="M4.5 11h4M10 11h4M15.5 11h4" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
+  ),
+  /** Nitro: a bottle with a speed flash. */
+  nitro: svg(
+    '<path d="M9.5 6h5v2.2c1.6.7 2.5 2.1 2.5 3.8V20a1.4 1.4 0 0 1-1.4 1.4H8.4A1.4 1.4 0 0 1 7 20v-8c0-1.7.9-3.1 2.5-3.8z" fill="currentColor"/>' +
+      '<path d="M10.5 2.6h3V6h-3z" fill="currentColor" opacity=".8"/>' +
+      '<path d="M12.8 10.5l-2.6 4.2h2.2l-1.2 4 3.4-5h-2.2l1.2-3.2z" fill="rgb(0 0 0 / .5)"/>',
+  ),
   swap: svg(
     '<path d="M4 8.5h13.5M14 5l3.5 3.5L14 12M20 15.5H6.5M10 12l-3.5 3.5L10 19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
   ),

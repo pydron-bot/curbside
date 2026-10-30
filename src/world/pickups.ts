@@ -1,13 +1,15 @@
 /**
- * Weapon and health crates on the sidewalks. Positions come from the city
- * seed so they're in the same places every game; taken crates respawn.
+ * Weapon, ammo, armour and health crates on the sidewalks. Positions come
+ * from the city seed so they're in the same places every game; taken crates
+ * respawn. Grenades, molotovs and above all rockets are rare; a few starter
+ * crates sit by the spawn corner.
  */
 import { cornerPoint } from '../systems/crowd';
-import type { WeaponKind } from '../systems/weapons';
+import { WEAPONS, type WeaponKind } from '../systems/weapons';
 import { BLOCKS_PER_SIDE } from './city';
 import { mulberry32 } from './random';
 
-export type PickupKind = WeaponKind | 'health';
+export type PickupKind = WeaponKind | 'health' | 'armour' | 'ammo';
 
 export interface Pickup {
   x: number;
@@ -20,15 +22,29 @@ export interface Pickup {
 export const PICKUP_RADIUS = 1.4;
 export const PICKUP_RESPAWN = 30;
 export const HEALTH_PICKUP = 50;
+export const ARMOUR_PICKUP = 50;
 
 const KINDS: Array<[PickupKind, number]> = [
-  ['pistol', 0.35],
-  ['smg', 0.22],
-  ['shotgun', 0.18],
-  ['health', 0.25],
+  ['pistol', 0.21],
+  ['smg', 0.14],
+  ['shotgun', 0.12],
+  ['health', 0.17],
+  ['armour', 0.1],
+  ['ammo', 0.1],
+  ['grenade', 0.07],
+  ['molotov', 0.05],
+  ['rocket', 0.04],
 ];
 
-export function generatePickups(seed: number, count = 48): Pickup[] {
+/** The feed line for picking one up. */
+export function pickupLabel(kind: PickupKind): string {
+  if (kind === 'health') return '+ HEALTH';
+  if (kind === 'armour') return '+ ARMOUR';
+  if (kind === 'ammo') return '+ AMMO';
+  return `+ ${WEAPONS[kind].label}`;
+}
+
+export function generatePickups(seed: number, count = 56): Pickup[] {
   const rand = mulberry32(seed ^ 0x51ed);
   const out: Pickup[] = [];
   for (let i = 0; i < count; i++) {
@@ -43,9 +59,17 @@ export function generatePickups(seed: number, count = 48): Pickup[] {
     for (const [k, w] of KINDS) if ((r -= w) <= 0) { kind = k; break; }
     out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, kind, respawnAt: 0 });
   }
-  // Something to play with right at the start.
-  out.push({ ...cornerPoint(8, 8, 0), kind: 'pistol', respawnAt: 0 });
-  out[out.length - 1].x += 6;
+  // Something to play with right at the start: a pistol and, round the
+  // corner, grenades and armour.
+  const starters: Array<[PickupKind, number, number]> = [
+    ['pistol', 6, 0],
+    ['grenade', 0, 14],
+    ['armour', 18, 0],
+  ];
+  for (const [kind, dx, dz] of starters) {
+    const at = cornerPoint(8, 8, 0);
+    out.push({ x: at.x + dx, z: at.z + dz, kind, respawnAt: 0 });
+  }
   return out;
 }
 
