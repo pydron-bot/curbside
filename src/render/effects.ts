@@ -168,11 +168,11 @@ export class Effects {
       FRAME.flame,
     );
     if (i < 0) return;
-    const k = 1.6 + Math.random() * 0.8;
+    const k = 1.35 + Math.random() * 0.6;
     this.hot.r[i] = k;
     this.hot.g[i] = k;
     this.hot.b[i] = k;
-    this.hot.add[i] = 0.55;
+    this.hot.add[i] = 0.5;
     this.hot.alpha[i] = 0.9;
     this.hot.spin[i] = (Math.random() - 0.5) * 3;
   }
@@ -191,8 +191,8 @@ export class Effects {
     this.light(x, 0.12, z, 2.5, 12, 2.1, 1.25, 0.5, 0.34, GLOW.disc);
     this.light(x, 0.1, z, 1.5, 9.5, 1.9, 1.15, 0.55, 0.38, GLOW.ring);
     this.light(x, 0.1, z, 1, 11.5, 0.6, 0.42, 0.28, 0.6, GLOW.ring);
-    // A brief white pop high over the car (draws over its roof).
-    this.flare(x, 2.8, z, 4.6, 0.12, 2.6, 2.2, 1.6);
+    // A brief white pop high over the car (draws over its roof); once per chain, or they stack to white.
+    if (this.recentBooms < 1.5) this.flare(x, 2.8, z, 4.6, 0.12, 2, 1.7, 1.2);
 
     // Fireball: a few big slow balls (above the roof, so the body can't hide
     // them) and a spray of fast ones.
@@ -213,7 +213,7 @@ export class Effects {
         FRAME.flame,
       );
       if (i < 0) break;
-      this.fireLook(i, 2.6, 0.5);
+      this.fireLook(i, 1.75, 0.38);
       this.hot.flags[i] = FLAG.handoff;
       this.hot.drag[i] = 1.6;
     }
@@ -234,7 +234,7 @@ export class Effects {
         Math.random() < 0.5 ? FRAME.flame : FRAME.puffB,
       );
       if (i < 0) break;
-      this.fireLook(i, 1.9, 0.5);
+      this.fireLook(i, 1.55, 0.45);
       this.hot.drag[i] = 3.2;
       if (Math.random() < 0.35) this.hot.flags[i] = FLAG.handoff;
     }

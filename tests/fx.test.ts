@@ -433,3 +433,43 @@ describe('camera feel', () => {
     expect(rig.currentHeight).toBeGreaterThan(h0 + 4.5);
   });
 });
+
+describe('effects budget', () => {
+  it('a chain of explosions shares one particle budget and every pool stays within capacity', async () => {
+    const { Scene } = await import('three');
+    const { Effects } = await import('../src/render/effects');
+    const fx = new Effects(new Scene());
+    fx.explode(0, 0);
+    const one = fx.hot.count + fx.soft.count;
+    expect(one).toBeGreaterThan(60);
+    fx.clear();
+    for (let i = 0; i < 5; i++) fx.explode(i * 3, 0);
+    const five = fx.hot.count + fx.soft.count;
+    // Five at once cost well under five times one.
+    expect(five).toBeLessThan(one * 3);
+    for (let i = 0; i < 30; i++) fx.explode(i, i);
+    expect(fx.hot.count).toBeLessThanOrEqual(fx.hot.capacity);
+    expect(fx.soft.count).toBeLessThanOrEqual(fx.soft.capacity);
+    expect(fx.debris.count).toBeLessThanOrEqual(fx.debris.capacity);
+    // Everything burns out: fire hands off to smoke, smoke fades, debris settles and goes.
+    for (let i = 0; i < 12 * 30; i++) fx.update(1 / 30);
+    expect(fx.hot.count + fx.soft.count + fx.debris.count).toBe(0);
+  });
+
+  it('tracers, muzzle flashes and impacts draw and expire', async () => {
+    const { Scene } = await import('three');
+    const { Effects } = await import('../src/render/effects');
+    const scene = new Scene();
+    const fx = new Effects(scene);
+    fx.muzzleFlash(0, 0, 1, 0, 1);
+    fx.tracer(0, 0, 30, 0, 'smg');
+    fx.impact(30, 0, 'wall', 0, 0);
+    fx.update(1 / 60);
+    const hot = scene.getObjectByName('fxHot')!;
+    expect(hot.visible).toBe(true);
+    for (let i = 0; i < 120; i++) fx.update(1 / 60);
+    expect(fx.hot.count).toBe(0);
+    fx.update(1 / 60);
+    expect(hot.visible).toBe(false);
+  });
+});
