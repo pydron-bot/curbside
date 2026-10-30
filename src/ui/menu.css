@@ -333,7 +333,8 @@ kbd.pad.b {
   align-items: start;
 }
 
-.settings-grid section {
+.settings-grid section,
+.settings-col {
   display: grid;
   gap: 2px;
 }
@@ -354,6 +355,13 @@ kbd.pad.b {
   padding: 2px 8px;
   border-radius: 9px;
   cursor: pointer;
+}
+
+/* Short screens: rows at the 44 pt minimum, so both columns fit without scrolling at 393 high. */
+@media (max-height: 420px) {
+  .srow {
+    min-height: 44px;
+  }
 }
 
 .srow:hover {
@@ -392,7 +400,7 @@ kbd.pad.b {
   position: relative;
   width: clamp(110px, 20vw, 170px);
   height: 44px;
-  touch-action: none;
+  touch-action: pan-y;
   cursor: pointer;
 }
 
