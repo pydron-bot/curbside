@@ -8,6 +8,7 @@ import {
   FloatType,
   Group,
   InstancedMesh,
+  LoopOnce,
   LoopRepeat,
   Matrix4,
   Mesh,
@@ -20,6 +21,7 @@ import {
   Vector3,
   type AnimationAction,
   type AnimationClip,
+  type Interpolant,
   type BufferGeometry,
   type ColorRepresentation,
   type IUniform,
@@ -37,8 +39,11 @@ type OutfitSlot = 'skin' | 'hair' | 'shirt' | 'pants' | 'shoes';
 const SLOTS: readonly OutfitSlot[] = ['skin', 'hair', 'shirt', 'pants', 'shoes'];
 
 const PUNCH_SECONDS = 0.3;
+const SHOOT_SECONDS = 0.12;
+const STAGGER_SECONDS = 0.3;
 const FLASH_SECONDS = 0.09;
 const X_AXIS = new Vector3(1, 0, 0);
+const Y_AXIS = new Vector3(0, 1, 0);
 const punchQ = new Quaternion();
 /** Texels per character row after the bones: 5 palette colours + 1 misc (flash). */
 const EXTRA_TEXELS = SLOTS.length + 1;
@@ -291,25 +296,74 @@ export class CharacterBatch {
   }
 }
 
+/** How a character holds a weapon: not at all, one-handed (pistol), two-handed (the rest). */
+export type ArmedPose = false | 'one' | 'two';
+
+/** Optional clips, played by name when the GLB has them (docs/BLENDER_TODO.md). */
+const CLIP_NAMES = ['Idle', 'Walk', 'Run', 'Punch', 'Aim', 'Shoot', 'Fall', 'Down', 'GetUp'] as const;
+type ClipName = (typeof CLIP_NAMES)[number];
+/** Bones the upper-body layer (Aim, Shoot, Punch) drives, as GLTFLoader names them. */
+const UPPER_BONES = ['armR', 'armL', 'chest', 'head'];
+/** The Run clip's stride is matched to this ground speed, m/s. */
+const RUN_SPEED = 5.5;
+/** Locomotion: walk below RUN_FROM m/s, run above RUN_TO, blended between. */
+const RUN_FROM = 3;
+const RUN_TO = 4.5;
+const FALL_SECONDS = 0.5;
+const GETUP_SECONDS = 0.9;
+const STAGGER_LEAN = -0.32;
+const tmpQ = new Quaternion();
+
 /**
  * One person: `root` is placed by the game (position, heading, visibility),
  * like any Object3D, and may carry children; the body itself is drawn by the
  * CharacterBatch that made it.
+ *
+ * Animation: the GLB's clips are looked up by name, and each one that's
+ * missing falls back to a procedural fake, so new clips can land in any
+ * order. Locomotion blends Idle → Walk → Run by ground speed (no Run: Walk
+ * sped up, leaning in). An upper-body layer on the arms, chest and head
+ * holds Aim while armed and plays Shoot (recoil) and Punch one-shots over
+ * whatever the legs do (fakes: arms raised forward, a kick, a jab, a left,
+ * a hook). Knocked down: Fall, then Down, and GetUp when they rise (fake:
+ * the whole body tips over and back). A hit staggers: a lurch back. All of
+ * it only moves bones, so everyone stays one instanced draw call.
  */
 export class CharacterModel {
   readonly root = new Group();
   /** Tipped over when knocked down (drawn as part of the instance transform). */
   readonly body = new Group();
+  /** Weapon held (set by the game before update): raises the arms / plays Aim. */
+  armed: ArmedPose = false;
   private rig: Object3D | null = null;
   private bones: Object3D[] = [];
   private mixer: AnimationMixer | null = null;
-  private idle: AnimationAction | null = null;
-  private walk: AnimationAction | null = null;
-  private current: AnimationAction | null = null;
+  /** Legs and whole-body clips (Idle, Walk, Run, Fall, Down, GetUp), played by the mixer. */
+  private readonly actions: Partial<Record<ClipName, AnimationAction>> = {};
+  /** Upper-body clips (Aim, Shoot, Punch), sampled by hand over the mixer's pose. */
+  private readonly upper: Partial<Record<'Aim' | 'Shoot' | 'Punch', UpperClip>> = {};
+  private upperBones: Object3D[] = [];
+  /**
+   * The mixer's own pose of the upper bones last frame. Restored before each
+   * mixer update: the mixer only writes a bone when its value changes, so
+   * the layers and fakes drawn on top would otherwise pile up frame to frame.
+   */
+  private readonly upperBase: Quaternion[] = [];
+  private aimTime = 0;
   private walkSpeed = 1.6;
-  private punchArm: Object3D | null = null;
+  private armR: Object3D | null = null;
+  private armL: Object3D | null = null;
+  private chest: Object3D | null = null;
   private punchTime = 0;
+  private punchStep = 0;
+  private shootTime = 0;
   private flashTime = 0;
+  private aimWeight = 0;
+  private staggerTime = 0;
+  /** Seconds into the current fall (while down) or get-up (after). */
+  private downTime = 0;
+  private getUpTime = 0;
+  private wasDown = false;
   private readonly palette = SLOTS.map(() => new Color());
   private readonly outfit: Outfit = {};
   private readonly placeholder = new Matrix4().makeTranslation(0, 0.85, 0);
@@ -324,6 +378,7 @@ export class CharacterModel {
 
   /** True while lying on the ground (knocked down). */
   get lying(): boolean {
+    if (this.actions.Fall || this.actions.Down) return this.wasDown && this.downTime > FALL_SECONDS * 0.6;
     return this.body.rotation.x < -0.7;
   }
 
@@ -343,57 +398,140 @@ export class CharacterModel {
     this.bones = t.boneNames.map((name) => this.rig!.getObjectByName(name) ?? this.rig!);
     this.walkSpeed = t.walkSpeed;
     // GLTFLoader sanitises "arm.R" to "armR".
-    this.punchArm = this.rig.getObjectByName('armR') ?? null;
+    this.armR = this.rig.getObjectByName('armR') ?? null;
+    this.armL = this.rig.getObjectByName('armL') ?? null;
+    this.chest = this.rig.getObjectByName('chest') ?? null;
     this.mixer = new AnimationMixer(this.rig);
-    const clip = (name: string) => t.clips.find((a) => a.name === name);
-    const idleClip = clip('Idle');
-    const walkClip = clip('Walk');
-    if (idleClip) this.idle = this.mixer.clipAction(idleClip).setLoop(LoopRepeat, Infinity);
-    if (walkClip) this.walk = this.mixer.clipAction(walkClip).setLoop(LoopRepeat, Infinity);
-    // Desynchronise crowds so they don't all step in unison.
-    if (this.idle) {
-      this.idle.play();
-      this.idle.time = Math.random() * 2;
-      this.current = this.idle;
+    this.upperBones = UPPER_BONES.map((n) => this.rig!.getObjectByName(n)).filter((b): b is Object3D => b !== undefined);
+    this.upperBase.length = 0;
+    for (const b of this.upperBones) this.upperBase.push(b.quaternion.clone());
+    for (const name of CLIP_NAMES) {
+      const clip = t.clips.find((a) => a.name === name);
+      if (!clip) continue;
+      if (name === 'Aim' || name === 'Shoot' || name === 'Punch') {
+        this.upper[name] = upperClip(clip, this.rig);
+        continue;
+      }
+      const action = this.mixer.clipAction(clip);
+      const once = name === 'Fall' || name === 'GetUp';
+      if (once) {
+        action.setLoop(LoopOnce, 1);
+        action.clampWhenFinished = true;
+      } else action.setLoop(LoopRepeat, Infinity);
+      this.actions[name] = action;
+    }
+    // Locomotion runs all the time, weighted by speed; desynchronised so crowds don't step in unison.
+    for (const name of ['Idle', 'Walk', 'Run'] as const) {
+      const a = this.actions[name];
+      if (!a) continue;
+      a.play();
+      a.time = Math.random() * a.getClip().duration;
+      a.setEffectiveWeight(name === 'Idle' ? 1 : 0);
     }
     this.setOutfit({});
     this.rig.updateMatrixWorld(true);
   }
 
-  /** Advance animation; picks Idle or Walk and matches stride to ground speed. */
+  /** Advance animation for this frame at `groundSpeed` m/s; `down` while knocked over. */
   update(dt: number, groundSpeed: number, down = false): void {
-    // Knocked down: lie flat on the back, feet toward where we were facing.
-    const target = down ? -Math.PI / 2 : 0;
-    this.body.rotation.x += (target - this.body.rotation.x) * Math.min(1, dt * 12);
-    this.body.position.y = down ? 0.15 : 0;
     this.flashTime = Math.max(0, this.flashTime - dt);
-    if (!this.mixer || !this.rig) return;
-    if (!down && groundSpeed > 0.2 && this.walk) {
-      this.play(this.walk);
-      this.walk.timeScale = groundSpeed / this.walkSpeed;
-    } else {
-      this.play(this.idle);
+    this.staggerTime = Math.max(0, this.staggerTime - dt);
+    const a = this.actions;
+    const clipFall = a.Fall !== undefined || a.Down !== undefined;
+    // --- Down and up ---
+    if (down !== this.wasDown) {
+      this.wasDown = down;
+      this.downTime = 0;
+      if (down) {
+        a.GetUp?.stop();
+        a.Fall?.reset().play();
+      } else if (a.GetUp && clipFall) {
+        a.Fall?.stop();
+        a.Down?.stop();
+        a.GetUp.reset().play();
+        this.getUpTime = GETUP_SECONDS;
+      }
     }
+    this.downTime += dt;
+    this.getUpTime = Math.max(0, this.getUpTime - dt);
+    if (down && a.Down && this.downTime > FALL_SECONDS && !a.Down.isRunning()) {
+      a.Fall?.stop();
+      a.Down.reset().play();
+    }
+    if (!down && !this.getUpTime) {
+      a.Fall?.stop();
+      a.Down?.stop();
+      a.GetUp?.stop();
+    }
+    // Procedural fall: tip flat on the back (only when there are no clips for it).
+    const lyingFake = down && !clipFall;
+    const lean = !down && !clipFall ? this.leanFor(groundSpeed) : 0;
+    const target = lyingFake ? -Math.PI / 2 : lean;
+    this.body.rotation.x += (target - this.body.rotation.x) * Math.min(1, dt * (lyingFake || this.staggerTime > 0 ? 12 : 8));
+    this.body.position.y = lyingFake ? 0.15 : 0;
+    if (!this.mixer || !this.rig) return;
+
+    // --- Locomotion: Idle / Walk / Run by speed (nothing while down or getting up) ---
+    const busy = down || this.getUpTime > 0;
+    const moving = busy ? 0 : Math.min(1, Math.max(0, (groundSpeed - 0.15) / 0.5));
+    const run = a.Run ? Math.min(1, Math.max(0, (groundSpeed - RUN_FROM) / (RUN_TO - RUN_FROM))) : 0;
+    const legs = busy ? 0 : 1;
+    a.Idle?.setEffectiveWeight(legs * (1 - moving));
+    if (a.Walk) {
+      a.Walk.setEffectiveWeight(legs * moving * (1 - run));
+      a.Walk.timeScale = Math.max(0.3, groundSpeed / this.walkSpeed);
+    }
+    if (a.Run) {
+      a.Run.setEffectiveWeight(legs * moving * run);
+      a.Run.timeScale = Math.max(0.5, groundSpeed / RUN_SPEED);
+    }
+    const bones = this.upperBones;
+    for (let i = 0; i < bones.length; i++) bones[i].quaternion.copy(this.upperBase[i]);
     this.mixer.update(dt);
-    if (this.punchTime > 0 && this.punchArm) {
-      this.punchTime = Math.max(0, this.punchTime - dt);
-      // Fast out, slower back: 0 → 1 → 0 over the punch.
-      const t = 1 - this.punchTime / PUNCH_SECONDS;
-      const reach = t < 0.3 ? t / 0.3 : (1 - t) / 0.7;
-      punchQ.setFromAxisAngle(X_AXIS, -1.5 * reach); // swing the arm forward
-      this.punchArm.quaternion.multiply(punchQ);
+    for (let i = 0; i < bones.length; i++) this.upperBase[i].copy(bones[i].quaternion);
+
+    // --- Upper body: aim, shoot, punch over the legs ---
+    const armed = this.armed !== false && !busy;
+    this.aimWeight += ((armed ? 1 : 0) - this.aimWeight) * Math.min(1, dt * 12);
+    this.punchTime = Math.max(0, this.punchTime - dt);
+    this.shootTime = Math.max(0, this.shootTime - dt);
+    const u = this.upper;
+    this.aimTime += dt;
+    if (u.Aim && this.aimWeight > 0.001) this.layer(u.Aim, this.aimTime % u.Aim.duration, this.aimWeight);
+    if (u.Shoot && this.shootTime > 0) this.layer(u.Shoot, (1 - this.shootTime / SHOOT_SECONDS) * u.Shoot.duration, 1);
+    if (u.Punch && this.punchTime > 0) {
+      const dur = PUNCH_SECONDS * (this.punchStep === 2 ? 1.4 : 1);
+      this.layer(u.Punch, (1 - this.punchTime / dur) * u.Punch.duration, 1);
+    }
+    // Fakes for whatever has no clip.
+    if (!u.Aim && this.aimWeight > 0.01) {
+      this.swing(this.armR, -1.35 * this.aimWeight);
+      if (this.armed === 'two' || (!armed && this.aimWeight > 0)) this.swing(this.armL, -1.2 * this.aimWeight);
+    }
+    if (!u.Shoot && this.shootTime > 0) this.swing(this.armR, -0.35 * (this.shootTime / SHOOT_SECONDS));
+    if (!u.Punch && this.punchTime > 0) this.fakePunch();
+    // A hit: the chest snaps back.
+    if (this.staggerTime > 0 && this.chest) {
+      punchQ.setFromAxisAngle(X_AXIS, STAGGER_LEAN * (this.staggerTime / STAGGER_SECONDS));
+      this.chest.quaternion.multiply(punchQ);
     }
     this.rig.updateMatrixWorld(true);
   }
 
-  /** Throw a right jab (layered on top of whatever clip is playing). */
-  punch(_step = 0): void {
-    this.punchTime = PUNCH_SECONDS;
+  /** Throw a punch (layered on top of whatever the legs do): 0 a right jab, 1 a left, 2 a hook. */
+  punch(step = 0): void {
+    this.punchTime = PUNCH_SECONDS * (step === 2 ? 1.4 : 1);
+    this.punchStep = step;
   }
 
   /** A shot's recoil (layered on top of the aim). */
   shoot(): void {
-    this.punchTime = PUNCH_SECONDS * 0.5;
+    this.shootTime = SHOOT_SECONDS;
+  }
+
+  /** Reel from a hit for `seconds`. */
+  stagger(seconds = STAGGER_SECONDS): void {
+    this.staggerTime = Math.max(this.staggerTime, seconds);
   }
 
   /** Flash white for a moment (e.g. when hit). */
@@ -421,12 +559,64 @@ export class CharacterModel {
     data[o] = this.flashTime > 0 ? 0.9 : 0;
   }
 
-  private play(action: AnimationAction | null): void {
-    if (!action || action === this.current) return;
-    action.reset().play();
-    if (this.current) action.crossFadeFrom(this.current, 0.15, false);
-    this.current = action;
+  /** Forward lean: running (when there's no Run clip to do it) and reeling back from a hit. */
+  private leanFor(speed: number): number {
+    if (this.staggerTime > 0) return STAGGER_LEAN * 0.6;
+    if (this.actions.Run) return 0;
+    return Math.min(0.14, Math.max(0, (speed - RUN_FROM) * 0.06));
   }
+
+  /** Pose the upper bones from `clip` at time `t`, blended `weight` over what's there. */
+  private layer(clip: UpperClip, t: number, weight: number): void {
+    for (let i = 0; i < clip.bones.length; i++) {
+      const v = clip.samplers[i].evaluate(t);
+      tmpQ.set(v[0], v[1], v[2], v[3]);
+      clip.bones[i].quaternion.slerp(tmpQ, weight);
+    }
+  }
+
+  /** Rotate a bone forward (negative) or back about its X axis, on top of its pose. */
+  private swing(bone: Object3D | null, angle: number): void {
+    if (!bone) return;
+    punchQ.setFromAxisAngle(X_AXIS, angle);
+    bone.quaternion.multiply(punchQ);
+  }
+
+  /** The procedural jab / left / hook: fast out, slower back. */
+  private fakePunch(): void {
+    const dur = PUNCH_SECONDS * (this.punchStep === 2 ? 1.4 : 1);
+    const t = 1 - this.punchTime / dur;
+    const reach = t < 0.3 ? t / 0.3 : (1 - t) / 0.7;
+    const arm = this.punchStep === 1 ? this.armL : this.armR;
+    this.swing(arm, (this.punchStep === 2 ? -1.8 : -1.5) * reach);
+    if (this.punchStep === 2 && this.chest) {
+      // The hook turns the shoulders into it.
+      punchQ.setFromAxisAngle(Y_AXIS, -0.5 * reach);
+      this.chest.quaternion.multiply(punchQ);
+    }
+  }
+}
+
+/** An upper-body clip sampled by hand: its arm, chest and head rotation tracks. */
+interface UpperClip {
+  duration: number;
+  bones: Object3D[];
+  samplers: Interpolant[];
+}
+
+/** The upper-body bones' rotation tracks of `clip`, bound to `rig`'s bones. */
+function upperClip(clip: AnimationClip, rig: Object3D): UpperClip {
+  const out: UpperClip = { duration: Math.max(1e-3, clip.duration), bones: [], samplers: [] };
+  for (const track of clip.tracks) {
+    const [node, prop] = track.name.split('.');
+    if (prop !== 'quaternion' || !UPPER_BONES.includes(node)) continue;
+    const bone = rig.getObjectByName(node);
+    if (!bone) continue;
+    out.bones.push(bone);
+    // createInterpolant is set per track by its interpolation mode (slerp for rotations).
+    out.samplers.push((track as unknown as { createInterpolant(): Interpolant }).createInterpolant());
+  }
+  return out;
 }
 
 /** Mark every vertex of `geo` with its bone and outfit slot. */

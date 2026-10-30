@@ -480,7 +480,7 @@ function simulate(dt: number) {
     if (event?.kind === 'punch') {
       combat.npcPunch(c);
     } else if (event?.kind === 'shoot') {
-      c.model.punch(); // same arm raise reads as aiming
+      c.model.shoot();
       npcShoot(c.agent.s.x, c.agent.s.z, event.dirX, event.dirZ);
     }
   }
@@ -698,6 +698,9 @@ function frame(now: number) {
     const s = c.agent.s;
     c.model.root.position.set(lerp(c.prev.x, s.x, alpha), 0, lerp(c.prev.z, s.z, alpha));
     c.model.root.rotation.y = lerpAngle(c.prev.heading, s.heading, alpha);
+    // Shooters hold their gun up; a hit makes them reel.
+    c.model.armed = c.agent.mode === 'shoot' ? 'one' : false;
+    if (c.agent.stagger > 0) c.model.stagger(c.agent.stagger);
     c.model.update(frameSeconds, Math.hypot(s.vx, s.vz), c.agent.mode === 'down');
   }
 
@@ -707,6 +710,8 @@ function frame(now: number) {
   const pz = lerp(prev.z, ped.z, alpha);
   playerModel.root.position.set(px, 0, pz);
   playerModel.root.rotation.y = lerpAngle(prev.heading, ped.heading, alpha);
+  const held = player.arsenal.current;
+  playerModel.armed = held === null || WEAPONS[held].mode === 'throw' ? false : held === 'pistol' ? 'one' : 'two';
   playerModel.update(frameSeconds, Math.hypot(ped.vx, ped.vz), player.down);
 
   // Body motion, tyre marks, damaged-car smoke and fire, weather, particles.
