@@ -21,7 +21,7 @@ import {
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EventBus } from '../core/events';
-import type { Pigeon, PigeonThreat } from '../systems/pigeons';
+import type { Pigeon, PigeonThreat, PigeonWorld } from '../systems/pigeons';
 import { Pigeons } from '../systems/pigeons';
 import type { City, Rect } from '../world/city';
 import type { StaticGrid } from '../world/collision';
@@ -78,6 +78,8 @@ export class PigeonLook {
   private readonly threats: PigeonThreat[] = [];
   private readonly threatPool: PigeonThreat[] = [];
   private readonly view: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
+  /** What the flocks see this frame (reused). */
+  private readonly world: PigeonWorld = { view: this.view, x: 0, z: 0, threats: this.threats };
   private loaded = false;
 
   constructor(
@@ -160,7 +162,10 @@ export class PigeonLook {
       if (sp > 3 && (a.x - x) ** 2 + (a.z - z) ** 2 < r2) this.threat(a.x, a.z, sp, false, false);
     }
     if (player && !player.driving) this.threat(player.ped.x, player.ped.z, Math.hypot(player.ped.vx, player.ped.vz), false, true);
-    this.flocks.step(dt, { view: rig.visibleGround(this.view), x, z, threats });
+    rig.visibleGround(this.view);
+    this.world.x = x;
+    this.world.z = z;
+    this.flocks.step(dt, this.world);
   }
 
   private threat(x: number, z: number, speed: number, car: boolean, player: boolean): void {
