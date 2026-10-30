@@ -36,7 +36,7 @@ export function addHeatLook(look: { addGlowSource(fn: (g: GlowSprites, view: Rec
     const wanted = heat.wanted.level > 0;
     for (const shop of heat.shops) {
       if (!near(shop.x, shop.z, view, 14)) continue;
-      drawBay(glows, shop, t, night, wanted, shop === heat.shop ? heat.sprayProgress : 0);
+      drawBay(glows, shadows, shop, t, night, wanted, shop === heat.shop ? heat.sprayProgress : 0);
     }
     const st = heat.station;
     if (near(st.x, st.z, view, 8)) drawStation(glows, st.x, st.z, t, night);
@@ -76,15 +76,20 @@ function drawHeli(glows: GlowSprites, shadows: ContactShadows, heat: Heat, view:
   }
 }
 
-/** A Pay 'n' Spray bay: a glowing outline, chevrons leading in, light posts at the mouth. */
-function drawBay(glows: GlowSprites, s: SprayShop, t: number, night: number, wanted: boolean, spray: number): void {
+/**
+ * A Pay 'n' Spray bay: a dark pad (so it reads by day, when additive light
+ * barely shows on grass or paving), a glowing outline, chevrons leading in,
+ * light posts at the mouth.
+ */
+function drawBay(glows: GlowSprites, shadows: ContactShadows, s: SprayShop, t: number, night: number, wanted: boolean, spray: number): void {
   const fx = Math.sin(s.heading);
   const fz = Math.cos(s.heading);
   // Across the bay (perpendicular to the way in).
   const ax = fz;
   const az = -fx;
   const pulse = 0.5 + 0.5 * Math.sin(t * (wanted ? 6 : 2.5));
-  const base = (0.35 + 0.45 * night) * (wanted ? 1.35 : 1);
+  const base = (0.5 + 0.3 * night) * (wanted ? 1.35 : 1);
+  shadows.add(s.x, s.z, s.heading, s.halfWidth + 0.3, s.halfLength + 0.3, 0.4, 0.42 - 0.17 * night);
   const k = base * (0.7 + 0.3 * pulse);
   const [pr, pg, pb] = PINK;
   const [cr, cg, cb] = CYAN;
