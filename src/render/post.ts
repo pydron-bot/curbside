@@ -6,7 +6,10 @@ import {
   PCFShadowMap,
   UnsignedByteType,
   Vector2,
+  WebGLRenderTarget,
   WebGLRenderer,
+  type Camera,
+  type Scene,
 } from 'three';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { getDevice, getQuality, onQualityChange } from './quality';
@@ -58,6 +61,26 @@ export function createRenderer(): WebGLRenderer {
   renderer.shadowMap.type = PCFShadowMap;
   if (hdr) hdrRenderers.add(renderer);
   return renderer;
+}
+
+/**
+ * Compile every material in `scene` for the pass it is really drawn in. With
+ * the half-float pipeline the scene renders into a linear HDR target (tone
+ * mapping comes later, in the output pass), so compiling against the canvas
+ * would build sRGB/tone-mapped programs that are never used and leave the
+ * real ones to compile mid-play (e.g. the night-only glows at the first dusk).
+ */
+export function precompile(renderer: WebGLRenderer, scene: Scene, camera: Camera): void {
+  if (!hdrRenderers.has(renderer)) {
+    renderer.compile(scene, camera);
+    return;
+  }
+  const target = new WebGLRenderTarget(1, 1, { type: HalfFloatType });
+  const previous = renderer.getRenderTarget();
+  renderer.setRenderTarget(target);
+  renderer.compile(scene, camera);
+  renderer.setRenderTarget(previous);
+  target.dispose();
 }
 
 /** Does this browser render to half-float targets? (Probed on a throwaway context.) */

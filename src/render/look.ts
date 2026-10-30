@@ -11,7 +11,7 @@ import { GLOW, GlowSprites } from './glowSprites';
 /** Adds faked lights for one frame (muzzle flashes, beacons, ...); `view` is the visible ground. */
 export type GlowSource = (glows: GlowSprites, view: Rect) => void;
 import { PickupMesh } from './pickupMesh';
-import { PostEffects, mountVignette } from './post';
+import { PostEffects, mountVignette, precompile } from './post';
 import { getQuality, onQualityChange } from './quality';
 import { SceneLighting } from './sceneLighting';
 import { worldUniforms } from './shaderLib';
@@ -58,7 +58,6 @@ export class Look {
   private readonly view: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
   private dt = 0;
   private player: PlayerView | null = null;
-  private night = 0;
   private warmedUp = false;
   private readonly glowSources: GlowSource[] = [];
   /**
@@ -106,7 +105,6 @@ export class Look {
     this.sunShadow.setStrength(sky.shadowStrength);
     this.cars.envIntensity = sky.envIntensity;
     this.post.setNight(sky.night);
-    this.night = sky.night;
     this.city.update(sky.night);
   }
 
@@ -143,14 +141,12 @@ export class Look {
 
   /**
    * Compile every program before play, including the night-only glow meshes
-   * that are hidden by day: otherwise the first dusk would stall a frame
-   * compiling them mid-drive.
+   * that are hidden by day (compile() walks hidden objects too): otherwise
+   * the first dusk would stall a frame compiling them mid-drive.
    */
   private warmUp(camera: Camera): void {
     this.warmedUp = true;
-    this.city.update(1);
-    this.renderer.compile(this.scene, camera);
-    this.city.update(this.night);
+    precompile(this.renderer, this.scene, camera);
   }
 
   /** On foot: a pulsing ring and a heading chevron; driving: a ring round the car that fades at speed. */
