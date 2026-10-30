@@ -414,6 +414,30 @@ body:not([data-scene='play']) #act-prompt {
   display: none;
 }
 
+/* In a car on touch the bottom centre belongs to NOS and the pedals: the
+   pill sits between the resting steer stick and NOS (pad 204 + NOS 74 px
+   in from the edge), mirrored for left-handed. */
+body[data-device='touch'][data-mode='car'] #act-prompt {
+  left: calc(var(--edge-l) + 150px);
+  max-width: min(340px, calc(100vw - var(--edge-l) - var(--edge-r) - 440px));
+  transform: none;
+  transform-origin: left center;
+  animation-name: act-prompt-side;
+}
+
+body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
+  left: auto;
+  right: calc(var(--edge-r) + 150px);
+  transform-origin: right center;
+}
+
+@keyframes act-prompt-side {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+}
+
 /* --- Cards over the game: results, mission dialogue --- */
 .prog-overlay {
   z-index: 48;
