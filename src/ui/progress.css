@@ -106,21 +106,28 @@ body[data-device='touch'][data-hand='left'] .cash-chip {
   margin: 0 0 0 8px;
 }
 
-/* Feed lines for money and progress (ScoreHud.notice kinds). */
-.feed-cash {
+/* Feed lines for money and progress (ScoreHud.notice kinds). Two classes,
+   so they win over .feed-line's own colour whichever sheet loads last; a
+   little smaller than stunt lines and never wider than the gap beside the
+   activity card on a phone. */
+.feed-line.feed-cash,
+.feed-line.feed-lost,
+.feed-line.feed-progress {
+  max-width: calc(50vw - 100px);
+  overflow: hidden;
+  font-size: clamp(12px, 3.8vmin, 17px);
+}
+
+.feed-line.feed-cash {
   --c: var(--cash);
 }
 
-.feed-lost {
+.feed-line.feed-lost {
   --c: #ff6b7d;
 }
 
-.feed-progress {
+.feed-line.feed-progress {
   --c: #c9a7ff;
-}
-
-.feed-package {
-  --c: #8dff6b;
 }
 
 /* --- The activity card: top centre, under the pause button --- */

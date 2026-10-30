@@ -52,7 +52,7 @@ export class ExportMode implements Mode {
       if (!ctx.freeRoam) return;
       const v = ctx.deps.player.driving;
       const o = v ? this.orderFor(v) : null;
-      if (o) ctx.notice(`EXPORT WANTED: ${o.label}`, 'progress');
+      if (o) ctx.notice(`EXPORT: ${o.label}`, 'progress');
     });
   }
 
@@ -102,7 +102,7 @@ export class ExportMode implements Mode {
   private deliver(car: Vehicle, order: ExportOrder, health: number): void {
     const ctx = this.ctx;
     const save = ctx.progress.data;
-    const paid = ctx.pay(exportPayout(order, health), 'export', `EXPORT · ${order.label}`);
+    const paid = ctx.pay(exportPayout(order, health), 'export', 'EXPORT');
     save.exports.done.push(order.id);
     save.stats.exportsDelivered++;
     ctx.ui.banner('SOLD!', 'pass', `${order.label} · +$${fmt(paid)}`);
@@ -111,7 +111,7 @@ export class ExportMode implements Mode {
     this.sold = car;
     this.soldIn = TAKE_AFTER;
     if (save.exports.done.length >= this.list.length) {
-      ctx.pay(LIST_BONUS, 'export', 'EXPORT LIST COMPLETE');
+      ctx.pay(LIST_BONUS, 'export', 'LIST BONUS');
       ctx.ui.banner('LIST COMPLETE!', 'gold', `+$${fmt(LIST_BONUS)} · A NEW LIST IS IN`, 3);
       ctx.deps.audio.ui('success');
       save.exports.lists++;

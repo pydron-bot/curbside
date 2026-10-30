@@ -116,7 +116,7 @@ export class TaxiMode implements Mode {
     this.fare = best;
     this.wave = 0;
     this.duty.hailed();
-    this.ctx.notice('TAXI! A FARE IS HAILING', 'progress');
+    this.ctx.notice('TAXI! A FARE HAILS', 'progress');
   }
 
   private dropHail(): void {
@@ -138,7 +138,7 @@ export class TaxiMode implements Mode {
     this.ctx.busy = 'taxi';
     deps.radar.setWaypoint(dest.x, dest.z);
     this.ctx.blip('taxi', { x: dest.x, z: dest.z, kind: 'objective', icon: 'T', size: 6, pulse: true, edgeArrow: true });
-    this.ctx.notice(`FARE ON BOARD · ${Math.round(dist)} M`, 'progress');
+    this.ctx.notice(`FARE · ${Math.round(dist)} M`, 'progress');
     deps.audio.ui('confirm');
   }
 

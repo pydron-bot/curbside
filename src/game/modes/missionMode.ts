@@ -227,7 +227,7 @@ export class MissionMode implements Mode {
         const m = run.def;
         this.finish();
         ctx.progress.complete('missions', m.id);
-        const paid = ctx.pay(m.reward, 'mission', m.title);
+        const paid = ctx.pay(m.reward, 'mission', 'MISSION');
         ctx.deps.audio.ui('success');
         ctx.ui.banner('MISSION PASSED', 'gold', `+$${fmt(paid)}`, 2.6);
         ctx.progress.flush();

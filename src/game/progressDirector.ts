@@ -249,7 +249,7 @@ export class ProgressDirector implements ModeCtx {
     if (!claimed) ui.activity(null);
     let prompt: string | null = null;
     if (!this.blocksInput) {
-      if (this.nearShop && this.freeRoam && !this.busy) prompt = 'SAFEHOUSE · STAND ON THE DOOR TO SHOP';
+      if (this.nearShop && this.freeRoam && !this.busy) prompt = 'SAFEHOUSE SHOP · STEP ON THE DOOR';
       for (let i = 0; i < this.modes.length && prompt === null; i++) prompt = this.modes[i].prompt();
     }
     ui.prompt(prompt);
@@ -260,7 +260,7 @@ export class ProgressDirector implements ModeCtx {
   payRespray(baseCost: number): boolean {
     const price = this.progress.has('spraycard') ? sprayPrice(true) : baseCost;
     if (this.progress.spend(price, 'respray')) {
-      this.notice(`PAY 'N' SPRAY −$${fmt(price)}`, 'police');
+      this.notice(`SPRAY −$${fmt(price)}`, 'police');
       return true;
     }
     this.ui.banner('NO CASH, NO SPRAY', 'fail', `A RESPRAY COSTS $${fmt(price)}`);
@@ -292,6 +292,7 @@ export class ProgressDirector implements ModeCtx {
   // --- Internals ---
 
   private resetAll(): void {
+    this.recordFreeBest();
     for (const m of this.modes) m.reset();
     for (const p of [...this.modals]) {
       p.hide?.();
@@ -320,15 +321,21 @@ export class ProgressDirector implements ModeCtx {
     this.notice(links > 1 ? `BANKED $${fmt(cash)}` : `+$${fmt(cash)}`, 'cash');
   }
 
+  /** A free-roam run's score counts toward its best when it ends (wasted, busted, restart, quit). */
+  private recordFreeBest(): void {
+    if (this.deps.playing() && !this.chaos.active) this.progress.recordBest('free', this.deps.score.total);
+  }
+
   /** WASTED or BUSTED: the open chain is lost, and the bill comes. */
   private lifeLost(busted: boolean): void {
     if (!this.deps.playing()) return;
+    this.recordFreeBest();
     const lost = this.bank.lose();
     if (lost > 0) this.notice(`CHAIN LOST · ${fmt(lost)}`, 'lost');
     const cash = this.progress.cash;
     const due = busted ? bustFine(cash) : hospitalBill(cash);
     const taken = this.progress.charge(due, busted ? 'fine' : 'hospital');
-    if (taken > 0) this.notice(busted ? `FINE −$${fmt(taken)}` : `HOSPITAL BILL −$${fmt(taken)}`, 'lost');
+    if (taken > 0) this.notice(busted ? `FINE −$${fmt(taken)}` : `HOSPITAL −$${fmt(taken)}`, 'lost');
     this.progress.flush();
   }
 
@@ -437,7 +444,7 @@ export class ProgressDirector implements ModeCtx {
           title: 'BEST',
           rows: [
             { label: 'Chaos Run', value: n(p.best(CHAOS_RUN_ID)), medal: p.medal(CHAOS_RUN_ID) },
-            { label: 'Free roam run', value: n(Math.max(p.best('free'), this.deps.score.best)) },
+            { label: 'Free roam run', value: n(p.best('free')) },
             ...RACES.map((r) => ({ label: r.name, value: s.raceTimes[r.id] !== undefined ? formatRaceTime(s.raceTimes[r.id]) : '—', medal: p.medal(r.id) })),
             { label: 'Best taxi streak', value: `${s.taxi.bestStreak}` },
           ],
@@ -485,7 +492,7 @@ export class ProgressDirector implements ModeCtx {
     this.sprayShown = shop;
     if (!shop) return;
     const price = sprayPrice(this.progress.has('spraycard'));
-    this.notice(this.progress.cash >= price ? `RESPRAY $${fmt(price)} · STOP TO SPRAY` : `RESPRAY $${fmt(price)} · NOT ENOUGH CASH`, 'police');
+    this.notice(this.progress.cash >= price ? `RESPRAY $${fmt(price)}` : `RESPRAY $${fmt(price)} · NO CASH`, 'police');
   }
 
   private glow(g: GlowSprites, view: Rect): void {

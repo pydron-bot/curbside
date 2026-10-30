@@ -134,7 +134,7 @@ export class RaceMode implements Mode {
       const improved = ctx.progress.recordMedal(id, medal);
       // A better medal pays in full; a repeat pays a tenth.
       const pay = medal ? (improved ? MEDAL_PAY[medal] : MEDAL_PAY[medal] / 10) : 0;
-      const paid = pay > 0 ? ctx.pay(pay, 'race', run.def.name) : 0;
+      const paid = pay > 0 ? ctx.pay(pay, 'race', 'RACE') : 0;
       ctx.ui.banner(medal ? `${MEDAL_WORD[medal]}!` : 'FINISHED', medal ? 'gold' : 'pass', `${formatRaceTime(run.time)}${record && best !== undefined ? ' · RECORD' : ''}${paid ? ` · +$${fmt(paid)}` : ''}`, 3);
       ctx.deps.audio.ui(medal ? 'success' : 'confirm');
       ctx.progress.markDirty();
