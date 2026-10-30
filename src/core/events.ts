@@ -104,6 +104,8 @@ export type GameEvent =
   | { type: 'horn'; x: number; z: number; duration: number }
   /** A car was resprayed at a Pay 'n' Spray; `cleared`: it lost the police too. */
   | { type: 'respray'; x: number; z: number; cleared: boolean }
+  /** The player's nitro lit (on) or went out (off), at (x, z). */
+  | { type: 'boost'; on: boolean; x: number; z: number }
   /** The game was paused or resumed (menu, app switch, lost graphics context). */
   | { type: 'pause'; paused: boolean };
 

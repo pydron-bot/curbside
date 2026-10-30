@@ -20,6 +20,7 @@ import {
 } from './entities/vehicle';
 import { Combat, type AimInput } from './game/combat';
 import { Heat } from './game/heat';
+import { NITRO_DRIFT, NITRO_MIN, NITRO_NEAR_MISS, Nitro } from './game/nitro';
 import { HeatPresenter } from './game/heatPresenter';
 import { Player } from './game/player';
 import { CROWD_DESPAWN, Population, type CrowdPed, type ParkingSpot, type Vehicle } from './game/population';
@@ -29,6 +30,7 @@ import { CameraRig } from './render/cameraRig';
 import { DynamicResolution } from './render/dynamicResolution';
 import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
+import { CombatLook } from './render/combatLook';
 import { createRenderer, precompile } from './render/post';
 import { getQuality } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
@@ -57,6 +59,8 @@ import type { Obstacle } from './systems/traffic';
 import type { PauseReason } from './ui/pauseOverlay';
 import { loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
+import { mountCarButtons } from './ui/carButtons';
+import { CombatHud } from './ui/combatHud';
 import { AIM_TURN_RATE, aimHeading, approachAngle } from './core/aim';
 import { getDevice } from './render/quality';
 import { AttractCamera } from './ui/attract';
@@ -273,6 +277,7 @@ const combat = new Combat({
   stars: () => heat.wanted.level,
   pose: playerModel,
 });
+const combatLook = new CombatLook(scene, look, effects, combat, population.crowd, player);
 
 // --- Audio (unlocks on the first tap / click / key) ---
 const audio = new GameAudio({ best: score.best });
@@ -286,6 +291,10 @@ input.attachMouse(renderer.domElement);
 const haptics = new Haptics(input, events);
 const touch = mountTouchControls(document.body, input.touch, haptics);
 input.addResetHook(() => touch.reset());
+const carButtons = mountCarButtons(touch.layer, input.touch, haptics);
+input.addResetHook(() => carButtons.reset());
+/** The player's nitro tank (fills by drifting, near misses and stunts). */
+const nitro = new Nitro(events);
 blockBrowserGestures([renderer.domElement, touch.layer]);
 /** World heading the player is aiming this frame (stick, mouse or pad), or null. */
 let aimHeadingNow: number | null = null;
@@ -393,6 +402,7 @@ function respawnPlayer() {
   calmHostiles();
   heat.reset();
   combat.reset();
+  nitro.reset();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true);
@@ -429,6 +439,9 @@ const contact: CarContact = { x: 0, z: 0, nx: 0, nz: 0, closingA: 0, closingB: 0
 function simulate(dt: number) {
   const driving = player.driving;
   const playerControls = driving ? input.readVehicle(driving.sim, dt) : NO_CONTROLS;
+  // Nitro burns only while held, lit and in the tank.
+  const boosting = nitro.step(dt, driving !== null && playerControls.boost === true && !attract.active, driving ? driving.sim : null);
+  if (driving) playerControls.boost = boosting;
 
   // What AI drivers need to avoid this step.
   obstacles.length = 0;
@@ -519,7 +532,9 @@ function simulate(dt: number) {
   score.step(dt);
   if (driving && !driving.damage.wrecked) {
     const ds = driving.sim;
-    award(score.drift(Math.abs(lateralSpeed(ds)), speed(ds), dt));
+    const slip = Math.abs(lateralSpeed(ds));
+    award(score.drift(slip, speed(ds), dt));
+    if (slip > 3.5 && speed(ds) > 8) nitro.add(NITRO_DRIFT * dt);
     if (speed(ds) > NEAR_MISS_SPEED) {
       for (const v of vehicles) {
         if (v === driving || v.damage.wrecked) continue;
@@ -529,6 +544,7 @@ function simulate(dt: number) {
         if (simTime - (nearMissAt.get(v) ?? -99) < 2.5) continue;
         nearMissAt.set(v, simTime);
         award(score.award('nearMiss'));
+        nitro.add(NITRO_NEAR_MISS);
       }
     }
   }
@@ -696,6 +712,7 @@ function frame(now: number) {
   // Body motion, tyre marks, damaged-car smoke and fire, weather, particles.
   const focus = attract.active ? attract : player.position;
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
+  combatLook.update(frameSeconds * fx.hitStop.scale);
   updateHud(frameSeconds);
   heatPresenter.update(frameSeconds, focus.x, focus.z, playing);
 
@@ -764,6 +781,8 @@ function updateHud(frameSeconds: number) {
   hudFrame.mouseAim = !v && !attract.active && input.mouseAimLive();
   hudFrame.driveBy = v !== null && gun !== null && WEAPONS[gun].driveBy;
   hud.update(frameSeconds, hudFrame);
+  combatHud.update(player.armour, nitro.charge, nitro.boosting, nitro.charge >= NITRO_MIN);
+  carButtons.update(v ? (gun && WEAPONS[gun].driveBy ? gun : player.arsenal.driveByGun()) : null, nitro.charge, nitro.charge >= NITRO_MIN || nitro.boosting);
   touch.setWeapon(gun, gun !== null || ownsGun());
   touch.setMode(v ? 'car' : 'foot', nearCar !== null);
 }
@@ -784,6 +803,7 @@ const hud = new Hud(document.body, score, events, {
   onPause: () => frontDoor.openPause(),
   debugText: () => `${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`,
 });
+const combatHud = new CombatHud(document.getElementById('hud')!);
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
 const wantedHud = new WantedHud(document.body, events);
 const heatPresenter = new HeatPresenter(heat, audio, radar, wantedHud, hud.score, events);
@@ -938,6 +958,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   explode,
   heat,
   combat,
+  nitro,
   updates,
   hud,
   radar,

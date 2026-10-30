@@ -477,6 +477,9 @@ export class GameAudio {
         return this.oneShot('punch', e, FALLOFF.punch, 0.8, 0.1, sfx.throwWhoosh);
       case 'ignite':
         return this.oneShot('impact', e, FALLOFF.crash, 0.9, 0.3, sfx.ignite, 0.5);
+      case 'boost':
+        if (!e.on) return;
+        return this.oneShot('engine', null, FALLOFF.near, 0.8, 0.1, sfx.boost, 0.3);
       case 'award':
         return this.onAward(e.award, newBest);
       case 'weaponSwitch': {

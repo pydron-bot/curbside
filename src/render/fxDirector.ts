@@ -90,6 +90,9 @@ export class FxDirector {
   private lastCombat = -Infinity;
   private lastBoomKick = -Infinity;
   private lastShot: TracerKind = 'pistol';
+  /** The player's nitro is burning (exhaust flames each frame). */
+  private boosting = false;
+  private exhaustDebt = 0;
   private readonly paint: Rgb = { r: 0, g: 0, b: 0 };
   private readonly view: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
   private readonly size = new Vector2();
@@ -118,6 +121,16 @@ export class FxDirector {
       this.d.effects.burst(e.x, e.z, c.r, c.g, c.b, Math.round(14 * this.d.effects.scale), 2.6);
     });
     bus.on('award', (e) => this.onAward(e));
+    bus.on('ignite', (e) => this.onIgnite(e));
+    bus.on('boost', (e) => {
+      this.boosting = e.on;
+      if (!e.on || !this.playing) return;
+      // The kick of it lighting: the view widens and jolts back.
+      this.d.rig.punchFov(5);
+      this.d.rig.addTrauma(0.18);
+      const car = this.d.player.driving;
+      if (car) this.d.rig.kick(-car.sim.vx, -car.sim.vz, 0.5);
+    });
     bus.on('playerHurt', (e) => {
       this.d.rig.addTrauma(0.2 + Math.min(0.4, e.amount / 50));
       this.d.playerModel.flash(0.1);
@@ -125,6 +138,7 @@ export class FxDirector {
     });
     bus.on('playerDied', () => this.d.rig.addTrauma(0.5));
     bus.on('respawn', () => {
+      this.boosting = false;
       this.flash = 0;
       this.hitStop.reset();
       this.driving.reset();
@@ -181,6 +195,7 @@ export class FxDirector {
     this.rain.update(realDt, rainShown, d.rig.visibleGround(this.view), d.rig.currentHeight, this.size.x, this.size.y, worldUniforms.uNight.value);
 
     this.driving.update(dt, d.vehicles, driving, controls, d.score.driftPoints, focusX, focusZ);
+    if (this.boosting && driving) this.exhaust(driving, dt);
     d.effects.update(dt);
   }
 
@@ -247,11 +262,25 @@ export class FxDirector {
   }
 
   private onShot(e: EventOf<'shot'>): void {
-    const power = e.weapon === 'shotgun' ? 1.6 : e.weapon === 'smg' ? 0.85 : e.weapon ? 1 : 0.65;
+    const rocket = e.weapon === 'rocket';
+    const power = rocket ? 1.9 : e.weapon === 'shotgun' ? 1.6 : e.weapon === 'smg' ? 0.85 : e.weapon ? 1 : 0.65;
     const fx = this.d.effects;
     fx.muzzleFlash(e.x, e.z, e.dirX, e.dirZ, power);
     this.lastShot = e.weapon === 'pistol' || e.weapon === 'smg' || e.weapon === 'shotgun' ? e.weapon : 'npc';
     const p = this.d.player;
+    if (rocket) {
+      // Backblast: a cone of smoke out of the back of the tube.
+      for (let k = 0; k < 7; k++) {
+        const sp = 3 + Math.random() * 5;
+        fx.puff(e.x - e.dirX * 1.3, 1.2, e.z - e.dirZ * 1.3, 0.72, 0.5, 2.4, 0.6, -e.dirX * sp + (Math.random() - 0.5) * 2, 0.6, -e.dirZ * sp + (Math.random() - 0.5) * 2, 1.2);
+      }
+      if (this.playing && e.byPlayer) {
+        this.d.rig.addTrauma(0.3);
+        this.d.rig.kick(-e.dirX, -e.dirZ, 0.7);
+        this.lastCombat = this.realTime;
+      }
+      return;
+    }
     if (e.byPlayer) {
       this.lastCombat = this.realTime;
       // Spent casing out of the right side of the gun (the right is (-dirZ, dirX)).
@@ -326,6 +355,41 @@ export class FxDirector {
     } else if (e.cause === 'shot' || e.cause === 'punch') {
       this.hitStop.hit(0.045, 0.12);
     }
+  }
+
+  /** Nitro burning: blue-white flames out of the exhaust, the odd puff of smoke. */
+  private exhaust(car: Vehicle, dt: number): void {
+    const fx = this.d.effects;
+    const s = car.sim;
+    const root = car.mesh.root.position;
+    const fx0 = Math.sin(s.heading);
+    const fz0 = Math.cos(s.heading);
+    const bx = root.x - fx0 * 2.5;
+    const bz = root.z - fz0 * 2.5;
+    this.exhaustDebt += dt * 70;
+    while (this.exhaustDebt >= 1) {
+      this.exhaustDebt -= 1;
+      const side = Math.random() < 0.5 ? 0.45 : -0.45;
+      const x = bx + Math.cos(s.heading) * side;
+      const z = bz - Math.sin(s.heading) * side;
+      if (Math.random() < 0.75) fx.flare(x, 0.55 + root.y, z, 0.45 + Math.random() * 0.35, 0.06, 1.4, 1.9, 3);
+      else fx.flare(x - fx0 * 0.5, 0.6 + root.y, z - fz0 * 0.5, 0.6, 0.08, 2.8, 1.5, 0.6);
+    }
+    if (Math.random() < dt * 10) fx.puff(bx, 0.6, bz, 0.7, 0.4, 1.6, 0.35, -s.vx * 0.1, 0.4, -s.vz * 0.1, 0.8);
+  }
+
+  /** A molotov bursting: a whoosh of flame, glass and a flash of light on the ground. */
+  private onIgnite(e: EventOf<'ignite'>): void {
+    const fx = this.d.effects;
+    fx.flare(e.x, 0.8, e.z, 2.2, 0.12, 2.8, 1.6, 0.6);
+    fx.light(e.x, 0.1, e.z, 1, e.radius * 1.8, 1.8, 0.9, 0.3, 0.45, GLOW.disc);
+    for (let k = Math.round(14 * fx.scale); k > 0; k--) {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.random() * e.radius * 0.8;
+      fx.emitFire(e.x + Math.cos(a) * d, e.z + Math.sin(a) * d, 0.2);
+    }
+    fx.glass(e.x, 0.4, e.z, Math.round(6 * fx.scale), 4);
+    if (this.playing && Math.hypot(this.d.rig.focusX - e.x, this.d.rig.focusZ - e.z) < 30) this.d.rig.addTrauma(0.15);
   }
 
   private onAward(e: EventOf<'award'>): void {

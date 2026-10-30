@@ -182,6 +182,27 @@ export function rocketLaunch(v: Voice): void {
   g.gain.setTargetAtTime(0, t + 0.25, 0.35);
 }
 
+/** Nitro lighting: a deep thump and a jet-like roar rising and fading. */
+export function boost(v: Voice): void {
+  const t = v.t;
+  const b = v.bank;
+  thump(v, t, 70, 38, 0.25, 0.7, 0.12);
+  const n = v.noise(b.pink, t, t + 1.3);
+  const bp = v.filter('bandpass', 400, 0.8);
+  sweep(bp.frequency, t, 300, 2200, 0.7);
+  const g = v.gain();
+  v.chain(n, bp, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.85, t + 0.08);
+  g.gain.setTargetAtTime(0, t + 0.45, 0.3);
+  const o = v.osc('sawtooth', 90, t, t + 1);
+  sweep(o.frequency, t, 90, 240, 0.6);
+  const lp = v.filter('lowpass', 900, 0.8);
+  const og = v.gain();
+  v.chain(o, lp, og, v.input);
+  perc(og.gain, t, 0.25, 0.05, 0.25);
+}
+
 /** Something thrown: a short cloth-and-air whoosh. */
 export function throwWhoosh(v: Voice): void {
   const t = v.t;
