@@ -1053,14 +1053,22 @@ export class GameAudio {
     automateDip(this.worldMuffle.frequency, this.muffleDip, now, 0.25);
   }
 
+  /**
+   * Every new life, and every fresh run (PLAY, RESTART, quit to title come
+   * through respawn too): the chaos meter starts from zero, so a 5-star chase
+   * doesn't carry its music into the next run. The sting only after WASTED
+   * or BUSTED, not over the title.
+   */
   private onRespawn(): void {
+    const fromDeath = this.dead;
     this.dead = false;
     this.runPoints = 0;
+    this.chaos.reset();
     if (!this.ctx || !this.bank) return;
     const now = this.ctx.currentTime;
     this.muffleDip.release(now, 0.9);
     automateDip(this.worldMuffle.frequency, this.muffleDip, now, 0.01);
-    const v = this.voice(null, FALLOFF.near, 0.9, 0, 0, 'ui');
+    const v = fromDeath ? this.voice(null, FALLOFF.near, 0.9, 0, 0, 'ui') : null;
     if (v) {
       sfx.respawn(v, this.station.key);
       this.commit('player', v);
