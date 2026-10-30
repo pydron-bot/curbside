@@ -802,20 +802,24 @@ Everyone in the city is drawn from the Blender bodies in `public/assets/`
 - **Who wears what.** The crowd is a mix of `player` / `ped_slim` /
   `ped_stocky` / `ped_coat` (28/26/24/22%) in the street palettes (caps get
   brighter colours than hair); pooled models only come back as the same
-  body. Officers on foot wear `cop` in police blue with a navy cap (SWAT in
+  body, dressed from scratch (nothing of their last outfit carries over;
+  when the pool is full the longest-waiting model goes). Officers on foot wear `cop` in police blue with a navy cap (SWAT in
   charcoal, with SMGs). Lil' Tuna (both pick-ups) wears `tuna`; Vex waits
   at the docks yard for every delivery there; Deacon Pike guards his car in
   LAST CALL; the Collector wears Pike's coat in white. Story characters
-  keep their own colours.
+  keep their own colours; only the friendly ones cheer.
 - **Clips** (`characterAnim.ts`): the 22 clips are sampled by hand from
-  shared interpolants (no `AnimationMixer` per person, no per-frame
-  garbage) into three layers: legs (Idle/Walk/Run on one gait phase at the
+  shared interpolants (no `AnimationMixer` per person, no objects made
+  per frame) into three layers: legs (Idle/Walk/Run on one gait phase at the
   authored `walkSpeed` / `runSpeed`), a whole-body layer (Fall, Down, GetUp,
   Arrested, Cower, Cheer, EnterCar, Ride, Stagger: these move the root
   bone, so the instance is never tipped while they play) and the arms,
   chest and head (aims, shots, punches, Throw, Hail), crossfaded by weight.
   `render/peoplePose.ts` turns the simulation's state into them every
-  frame, outside `main.ts`. Hit-stop freezes people with the world.
+  frame, outside `main.ts`. Hit-stop freezes people with the world; a hit's
+  Stagger follows the sim's countdown rising, so a card freezing the sim
+  doesn't restart it. Models load through `publicUrl()` (`core/paths.ts`),
+  so they work under deeek.org/curbside/.
 - **Weapons in hand** (`render/heldWeapons.ts`): `weapons.glb`'s pistol,
   SMG, shotgun, grenade, molotov and launcher merged into ONE instanced
   draw call (each instance shows only its own model); each follows its
@@ -824,7 +828,9 @@ Everyone in the city is drawn from the Blender bodies in `public/assets/`
   `muzzle` extra). Hidden in cars, while down, kneeling or just thrown.
 - **Moments.** Gunfire right beside a timid bystander makes them cower
   before they run; anyone knocked down falls on their back away from the
-  hit; the player ducks into the driver's door before vanishing, rocks
+  hit (a second knock where they lie doesn't spin them round); the player
+  ducks into the driver's door before vanishing (put straight into a car
+  elsewhere, as a Chaos Run does, they're simply in), rocks
   back from hits, kneels with hands on head when BUSTED, and cheers a
   passed mission or a Chaos Run medal (event `celebrate`) with any story
   character nearby; hailing fares and waiting mission characters wave.
@@ -846,7 +852,8 @@ Everyone in the city is drawn from the Blender bodies in `public/assets/`
   `model.hold(weapon, aiming)`, `model.armed` (the aim pose),
   `model.arrested` / `cowering` / `riding` (Ride: put the root at the
   bike's `<arch>_seat` minus 0.75 m), `model.punch(step)`, `shoot()`,
-  `throw()`, `stagger(s)`, `hail(s)`, `cheer(s)`, `enterCar()` (returns its
+  `throw()`, `stagger(s)` (an event) / `followStagger(s)` (a sim countdown,
+  every frame), `hail(s)`, `cheer(s)`, `enterCar()` (returns its
   length), `reset()`, `hasClip(name)`, `update(dt, speed, down, downLeft)`;
   `population.addPed(agent, outfit?, body?)`; CrowdPed `gun`; bus event
   `celebrate`.
