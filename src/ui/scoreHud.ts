@@ -77,6 +77,12 @@ export class ScoreHud {
     saveBest(this.score.best);
   }
 
+  /** A fresh run after respawning: beating the best again is worth celebrating again. */
+  newRun(): void {
+    this.startBest = this.score.best;
+    this.celebratedBest = false;
+  }
+
   /** A pop-up without points, e.g. "+ PISTOL". */
   notice(text: string, kind = 'notice'): void {
     const el = document.createElement('div');

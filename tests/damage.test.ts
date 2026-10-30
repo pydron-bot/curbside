@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ATTRIBUTION_SECONDS,
   applyDamage,
+  blamesPlayer,
   blastDamage,
   createDamage,
   damageStage,
   impactDamage,
+  markPlayerHit,
   stepDamage,
 } from '../src/systems/damage';
 
@@ -44,6 +47,14 @@ describe('vehicle damage', () => {
     applyDamage(d, 10);
     expect(d.health).toBe(0);
     expect(stepDamage(d, 1)).toBe(false);
+  });
+
+  it('remembers who hurt it, for a while', () => {
+    const d = createDamage(100);
+    expect(blamesPlayer(d, 0)).toBe(false);
+    markPlayerHit(d, 12);
+    expect(blamesPlayer(d, 12 + ATTRIBUTION_SECONDS - 0.1)).toBe(true);
+    expect(blamesPlayer(d, 12 + ATTRIBUTION_SECONDS + 0.1)).toBe(false);
   });
 
   it('blast damage falls off with distance', () => {
