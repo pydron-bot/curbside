@@ -26,18 +26,24 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 
 ## Controls
 
-| | Keyboard | Touch | Gamepad |
+| | Keyboard & mouse | Touch | Gamepad |
 |---|---|---|---|
-| Walk (on foot) | WASD / arrows | left-half joystick | left stick |
-| Sprint (on foot) | Shift | push joystick to the rim | A |
-| Enter / exit car | E / F / Enter | ENTER / EXIT | Y |
-| Punch / fire (on foot, hold for SMG) | Space / J | PUNCH / FIRE | X |
-| Switch weapon | Q / Tab (Shift+Tab back) | ⇄ | RB / LB |
-| Steer | A/D, ←/→ | left-half joystick | left stick |
-| Gas / brake-reverse | W/S, ↑/↓ | GAS / BRAKE | RT / LT |
-| Handbrake | Space | HAND | A |
-| Pause | P / Esc | — (auto on app switch; tap to resume) | Start (A resumes) |
+| Walk / run (on foot) | WASD / arrows, Shift sprints | left stick (appears under the thumb): push further to run | left stick, A sprints |
+| Aim (on foot) | mouse (crosshair cursor) | right half: drag the aim stick | right stick |
+| Punch / fire (hold for SMG) | left click, Space / J | FIRE button; push the aim stick past half-way; tap the right half | RT or X |
+| Switch weapon | wheel, right click, Q / Tab (Shift+Tab back) | ⇄ | RB / LB |
+| Enter / exit car | E / F / Enter | door button (pulses next to a car) | Y |
+| Steer | A/D, ←/→ | **Point** (default): stick = where to go, push further = more gas; **Classic**: stick left/right | left stick |
+| Gas / brake-reverse | W/S, ↑/↓ | pedal pad: GAS / BRAKE — slide between them without lifting | RT / LT |
+| Handbrake | Space | HAND, or the DRIFT band (GAS + HAND with one thumb) | A |
+| Pause | P / Esc | ❚❚ top centre (also automatic on app switch / portrait) | Start (B resumes) |
+| Menus | arrows + Enter, Esc / Backspace back | tap | D-pad / left stick + A, B back |
 | Next radio station | R | tap the "now playing" card | — |
+
+Settings (title or pause menu): master / effects / music volume, sound with
+the iPhone silent switch on, graphics quality, touch steering
+(point / classic), left-handed layout (mirrors the controls and the HUD),
+vibration, show FPS.
 
 ## Status
 
@@ -107,6 +113,32 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
   engine with a gearbox, tyres, guns, impacts, explosions, fire, sirens,
   city ambience, stingers tuned to the music, and an adaptive procedural
   soundtrack on three radio stations. See *Audio* below.
+- **Front door, controls and HUD** (`src/ui/`, see *UI* below): a title
+  screen over a live attract mode (the city runs, the camera cruises after
+  traffic) with PLAY, a mode list other systems extend, settings, how to
+  play and the best score; the first tap unlocks audio, shaders are warmed
+  behind it; a one-time "Add to Home Screen" tip on iPhone Safari. Pause
+  menu (resume, settings, how to play, restart, quit to title) that still
+  offers waiting app updates and covers a lost GL context. A rotate-your-
+  phone card in portrait that pauses, then 3-2-1 back in landscape. All
+  menus work with touch, keyboard and gamepad.
+- **Touch overhaul**: floating sticks with expo curves and rescaled
+  deadzones whose origin follows a thumb past the rim, clamped to the safe
+  area; continuous walk → run; *point-where-you-want-to-go* steering
+  (`src/core/steering.ts`: heading error → steer, lift on sharp turns,
+  three-point turns, backs off walls) with auto-gas; one pedal pad you can
+  slide across, with a GAS+HAND drift band; twin-stick aim with auto-aim
+  snapping within ~15°; inline-SVG icons; left-handed mirror; iOS gesture
+  blocking; haptics (gamepad rumble, Android vibrate, the iOS 18 switch
+  tick) driven by bus events. Mouse aim and gamepad right-stick aim on
+  desktop; prompts follow the device in use.
+- **HUD**: score with a punch on every award and a draining combo ring, a
+  two-line feed that merges repeats; segmented health; an arc speedometer
+  with the car's health inside it; weapon and ammo; a vmin-sized damage
+  vignette; a WASTED screen with the life's stats. Circular north-up radar
+  (the city pre-rendered once, traffic, pickups, hostiles, blips and a
+  waypoint route, zooming out with speed, ≤30 Hz) and red edge chevrons for
+  off-screen attackers.
 - Next: **M6 Heat** (wanted level, police).
 
 ## Layout
@@ -116,7 +148,7 @@ src/core      loop, input
 src/entities  vehicle physics (no three.js)
 src/render    camera rig, meshes, dynamic resolution
 src/world     ground / city
-src/ui        touch controls, HUD, radio card, CSS
+src/ui        title/pause/settings menus, touch controls, HUD, radar, radio card, CSS
 src/audio     synthesised sound and music (pure models + Web Audio voices)
 tests/        vitest
 tools/        icon generator
@@ -199,3 +231,34 @@ To audition sounds without playing, render them offline: every recipe takes
 a `Voice` on any `BaseAudioContext`, so an `OfflineAudioContext` in the dev
 page can render and analyse them (`window.__ub.audio` and `__ub.events` are
 exposed for emitting test events).
+
+## UI
+
+Plain DOM over the canvas, one stylesheet per area (`tokens.css` for the
+shared palette and safe-area edges, `title.css`, `menu.css`, `hud.css`,
+`radar.css`, `touch.css`). `FrontDoor` (`src/ui/frontDoor.ts`) owns the
+flow between title, pause, settings, how-to, rotate and countdown and
+routes keyboard / gamepad navigation (`Input.consumeNav`) to whichever
+screen is on top; `main.ts` hands it a few hooks. The HUD only writes to
+the DOM what changed since the last frame; nothing in the per-frame paths
+allocates.
+
+Safe areas come from `env(safe-area-inset-*)` through `--safe-t/r/b/l` on
+`:root`; a test can override those to emulate a notched phone
+(`safeArea.ts` reads them back for JS layout). The touch layout is checked
+at 852×393 and 852×340 (Safari's toolbar showing).
+
+API for other systems:
+
+```ts
+frontDoor.title.addMode({ id, label, sub?, onSelect })   // a mode under PLAY (e.g. CHAOS RUN); removeMode(id)
+radar.setBlip(id, { x, z, kind?, colour?, icon?, pulse?, edgeArrow?, size? })
+radar.removeBlip(id)
+radar.setWaypoint(x, z) / radar.clearWaypoint()          // route along the roads + rim arrow when off-radar
+hud.score.notice(text, kind?)                            // a feed line without points
+haptics.pulse(strength0to1, ms)                          // also fired by crash / explosion / shot / hurt events
+```
+
+Kinds: `objective`, `enemy`, `police`, `pickup`, `friend`, `shop`, `race`,
+`marker` (each has a default colour).
+
