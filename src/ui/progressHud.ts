@@ -175,6 +175,7 @@ export class ProgressHud {
     this.bannerSub.textContent = sub;
     this.bannerSub.hidden = !sub;
     this.bannerEl.dataset.tone = tone;
+    this.bannerEl.classList.toggle('long', text.length > 11);
     // Restart the slam-in animation.
     this.bannerEl.hidden = true;
     void this.bannerEl.offsetWidth;

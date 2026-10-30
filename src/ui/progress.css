@@ -264,7 +264,8 @@ body[data-activity] #wanted {
   position: fixed;
   z-index: 30;
   left: 50%;
-  top: 30%;
+  /* Under the score feed's lines, above the car (the middle of the view). */
+  top: 34%;
   display: grid;
   justify-items: center;
   gap: 4px;
@@ -287,6 +288,11 @@ body:not([data-scene='play']) #act-banner {
   text-shadow: 0 0.06em 0 rgb(0 0 0 / 0.55), 0 0 0.4em color-mix(in srgb, var(--c) 60%, transparent);
   transform: skewX(-8deg);
   animation: banner-slam 0.5s cubic-bezier(0.2, 1.5, 0.35, 1) both;
+}
+
+/* Long lines ("NO CASH, NO SPRAY") a size down, so they stay clear of the corners. */
+#act-banner.long b {
+  font-size: clamp(24px, 8vmin, 46px);
 }
 
 #act-banner small {
@@ -334,8 +340,15 @@ body:not([data-scene='play']) #act-banner {
   --c: var(--neon-cyan);
 }
 
+/* A mission's new objective: can be a long line, so it wraps. */
+#act-banner[data-tone='info'] {
+  width: min(72vw, 560px);
+  white-space: normal;
+}
+
 #act-banner[data-tone='info'] b {
-  font-size: clamp(22px, 7.5vmin, 40px);
+  font-size: clamp(18px, 6vmin, 32px);
+  line-height: 1.1;
 }
 
 @keyframes banner-slam {
