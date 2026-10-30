@@ -7,6 +7,8 @@ export interface TouchControls {
   setMode(mode: ControlMode, canAct: boolean): void;
   /** Label the attack button for the current weapon (null = fists). */
   setWeapon(label: string | null): void;
+  /** Release every on-screen control (pause, blur, lost touches). */
+  reset(): void;
 }
 
 /**
@@ -87,6 +89,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): TouchCo
   };
   stickZone.addEventListener('pointerup', releaseStick);
   stickZone.addEventListener('pointercancel', releaseStick);
+  stickZone.addEventListener('lostpointercapture', releaseStick);
 
   function moveKnob(dx: number, dy: number) {
     stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
@@ -98,9 +101,11 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): TouchCo
     out.throttle = (held.gas ? 1 : 0) - (held.brake ? 1 : 0);
     out.handbrake = held.hand;
   };
-  bindHold(gas, (v) => ((held.gas = v), sync()));
-  bindHold(brake, (v) => ((held.brake = v), sync()));
-  bindHold(hand, (v) => ((held.hand = v), sync()));
+  const releasePedals = [
+    bindHold(gas, (v) => ((held.gas = v), sync())),
+    bindHold(brake, (v) => ((held.brake = v), sync())),
+    bindHold(hand, (v) => ((held.hand = v), sync())),
+  ];
   punch.addEventListener('pointerdown', (e) => {
     punch.setPointerCapture(e.pointerId);
     out.punchPresses++;
@@ -123,7 +128,15 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): TouchCo
   }
 
   let weaponLabel: string | null = null;
+  let actionLabel = '';
   return {
+    reset() {
+      if (stickPointer !== null) releaseStick({ pointerId: stickPointer } as PointerEvent);
+      for (const release of releasePedals) release();
+      out.fireHeld = false;
+      punch.classList.remove('pressed');
+      action.classList.remove('pressed');
+    },
     setWeapon(label) {
       if (label === weaponLabel) return;
       weaponLabel = label;
@@ -138,13 +151,15 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): TouchCo
         sync();
         for (const b of [gas, brake, hand]) b.classList.remove('pressed');
       }
-      action.textContent = mode === 'car' ? 'EXIT' : 'ENTER';
+      const label = mode === 'car' ? 'EXIT' : 'ENTER';
+      if (label !== actionLabel) action.textContent = actionLabel = label;
       action.classList.toggle('available', mode === 'car' || canAct);
     },
   };
 }
 
-function bindHold(target: HTMLElement, set: (down: boolean) => void): void {
+/** Track every pointer on a hold button; returns a function that releases it. */
+function bindHold(target: HTMLElement, set: (down: boolean) => void): () => void {
   const active = new Set<number>();
   const update = () => {
     target.classList.toggle('pressed', active.size > 0);
@@ -161,6 +176,10 @@ function bindHold(target: HTMLElement, set: (down: boolean) => void): void {
       update();
     });
   }
+  return () => {
+    active.clear();
+    update();
+  };
 }
 
 function el(tag: string, className: string): HTMLElement {

@@ -67,8 +67,18 @@ export class Arsenal {
     if (left <= 0) return null;
     this.ammo.set(k, left - 1);
     this.cooldown = WEAPONS[k].interval;
-    if (left - 1 === 0) this.cycle(); // out of ammo: switch to the next thing
+    if (left - 1 === 0) this.current = this.nextLoaded(k); // out of ammo: switch to the next gun
     return k;
+  }
+
+  /** The next gun after `from` (wrapping) that still has ammo, or fists. */
+  private nextLoaded(from: WeaponKind): WeaponKind | null {
+    const start = WEAPON_ORDER.indexOf(from);
+    for (let i = 1; i <= WEAPON_ORDER.length; i++) {
+      const k = WEAPON_ORDER[(start + i) % WEAPON_ORDER.length];
+      if ((this.ammo.get(k) ?? 0) > 0) return k;
+    }
+    return null;
   }
 }
 

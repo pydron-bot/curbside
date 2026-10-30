@@ -232,6 +232,7 @@ let simTime = 0;
 // --- Input ---
 const input = new Input();
 const touch = mountTouchControls(document.body, input.touch);
+input.addResetHook(() => touch.reset());
 const NO_CONTROLS: VehicleControls = { throttle: 0, steer: 0, handbrake: false };
 
 function nearestEnterable(): Vehicle | null {
@@ -595,12 +596,14 @@ function frame(now: number) {
   requestAnimationFrame(frame);
   const frameSeconds = Math.min(0.25, (now - last) / 1000);
   last = now;
+  input.pollGamepad();
+  if (input.consumePause() || (paused && input.consumeConfirm())) setPaused(!paused);
   if (paused) return;
 
-  input.pollGamepad();
   player.punchCooldown = Math.max(0, player.punchCooldown - frameSeconds);
   const pressed = input.consumePunch();
-  if (input.consumeCycle() && !player.driving) player.arsenal.cycle();
+  const cycle = input.consumeCycle();
+  if (cycle !== 0 && !player.driving) player.arsenal.cycle(cycle);
   if (!player.driving && player.dead === 0 && player.stunned <= 0) {
     const gun = player.arsenal.current;
     if (gun) {
@@ -700,6 +703,8 @@ function lerp(a: number, b: number, t: number) {
 function setPaused(p: boolean) {
   paused = p;
   pausedEl.hidden = !p;
+  // Nothing held or queued while paused may leak into play on resume.
+  input.resetAll();
   if (!p) {
     last = performance.now();
     loop.reset();
@@ -709,9 +714,6 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) setPaused(true);
 });
 pausedEl.addEventListener('pointerdown', () => setPaused(false));
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyP' || e.code === 'Escape') setPaused(!paused);
-});
 
 // Debug hook for poking at the sim from the console / automated checks.
 (window as unknown as { __ub: unknown }).__ub = { player, vehicles, input, city, population, renderer, score };

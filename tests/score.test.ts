@@ -42,6 +42,22 @@ describe('chaos score', () => {
     expect(t.total).toBe(0);
   });
 
+  it('banks or drops a pending drift when the slide is cut short', () => {
+    const s = new Score();
+    for (let i = 0; i < 90; i++) s.drift(6, 20, 1 / 60);
+    const banked = s.endDrift(true);
+    expect(banked?.kind).toBe('drift');
+    expect(s.driftPoints).toBe(0);
+    // Nothing left to bank later at a different multiplier.
+    for (let i = 0; i < 60; i++) expect(s.drift(0, 20, 1 / 60)).toBeNull();
+
+    const t = new Score();
+    for (let i = 0; i < 90; i++) t.drift(6, 20, 1 / 60);
+    expect(t.endDrift(false)).toBeNull();
+    expect(t.driftPoints).toBe(0);
+    expect(t.total).toBe(0);
+  });
+
   it('tracks the best score', () => {
     const s = new Score(1000);
     s.award('boom');

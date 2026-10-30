@@ -24,12 +24,42 @@ describe('arsenal', () => {
     expect(a.current).toBe('shotgun');
   });
 
-  it('falls back when a gun runs dry', () => {
+  it('falls back to fists when the only gun runs dry', () => {
     const a = new Arsenal();
     a.pickUp('pistol');
     a.ammo.set('pistol', 1);
     a.tryFire();
     expect(a.current).toBeNull();
+  });
+
+  it('switches to the next loaded gun when one runs dry', () => {
+    const a = new Arsenal();
+    a.pickUp('pistol');
+    a.pickUp('smg');
+    a.current = 'smg';
+    a.ammo.set('smg', 1);
+    expect(a.tryFire()).toBe('smg');
+    // SMG -> shotgun (not owned) -> pistol: wraps round WEAPON_ORDER.
+    expect(a.current).toBe('pistol');
+
+    const b = new Arsenal();
+    b.pickUp('pistol');
+    b.pickUp('shotgun');
+    b.current = 'pistol';
+    b.ammo.set('pistol', 1);
+    b.tryFire();
+    expect(b.current).toBe('shotgun');
+  });
+
+  it('cycles backwards too', () => {
+    const a = new Arsenal();
+    a.pickUp('pistol');
+    a.pickUp('smg');
+    a.current = null;
+    a.cycle(-1);
+    expect(a.current).toBe('smg');
+    a.cycle(-1);
+    expect(a.current).toBe('pistol');
   });
 });
 

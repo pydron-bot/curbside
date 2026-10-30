@@ -69,12 +69,25 @@ export class Score {
     return pts >= MIN_DRIFT_BANK ? this.bank('drift', pts) : null;
   }
 
+  /**
+   * The slide is over for good (got out, car blew up): bank what's pending if
+   * `bank` and it's worth it, else drop it. Either way the counter clears so it
+   * can't be banked later at a different multiplier.
+   */
+  endDrift(bank: boolean): Award | null {
+    const pts = Math.round(this.driftPoints);
+    this.driftPoints = 0;
+    this.driftIdle = 0;
+    return bank && pts >= MIN_DRIFT_BANK ? this.bank('drift', pts) : null;
+  }
+
   /** Start a fresh run (after dying); the best score is kept. */
   resetRun(): void {
     this.total = 0;
     this.combo = 1;
     this.comboTimer = 0;
     this.driftPoints = 0;
+    this.driftIdle = 0;
   }
 
   step(dt: number): void {
