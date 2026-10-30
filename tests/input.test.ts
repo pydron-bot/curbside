@@ -113,6 +113,22 @@ describe('input', () => {
     expect(input.consumeCycle()).toBe(0);
   });
 
+  it('gamepad Select (View) asks for the next radio station, once per press', () => {
+    const input = new Input(fakeWindow().win);
+    const pad = fakePad();
+    usePad(pad);
+    pad.buttons[8].pressed = true;
+    input.pollGamepad();
+    input.pollGamepad(); // held: still one press
+    expect(input.consumeStation()).toBe(true);
+    expect(input.consumeStation()).toBe(false);
+    pad.buttons[8].pressed = false;
+    input.pollGamepad();
+    pad.buttons[8].pressed = true;
+    input.pollGamepad();
+    expect(input.consumeStation()).toBe(true);
+  });
+
   it('gamepad fire is released when the pad disconnects mid-press', () => {
     const { win } = fakeWindow();
     const input = new Input(win);

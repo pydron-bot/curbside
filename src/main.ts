@@ -711,6 +711,8 @@ function frame(now: number) {
   const frameSeconds = Math.min(0.25, elapsed);
   last = now;
   input.pollGamepad();
+  // The pad's Select / View tunes the radio anywhere, like R or tapping the radio card.
+  if (input.consumeStation()) audio.nextStation();
   // Menus first: they take keyboard / pad navigation and pause toggles.
   frontDoor.update();
   if (paused) {

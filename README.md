@@ -41,7 +41,7 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Nitro | Shift in a car | NOS (fills the button) | B |
 | Pause | P / Esc | ❚❚ top centre (also automatic on app switch / portrait) | Start (B resumes) |
 | Menus | arrows + Enter, Esc / Backspace back | tap | D-pad / left stick + A, B back |
-| Next radio station | R | tap the "now playing" card | — |
+| Next radio station | R | tap the "now playing" card | Select / View |
 
 Settings (title or pause menu): master / effects / music volume, sound with
 the iPhone silent switch on, graphics quality, touch steering

@@ -40,6 +40,8 @@ export interface InputSource {
   cyclePrevPresses: number;
   /** Pause toggles (P / Esc / gamepad Start) not yet consumed. */
   pausePresses: number;
+  /** Next-radio-station presses (gamepad Select / View) not yet consumed; R and the radio card tune directly. */
+  stationPresses: number;
   /** Driving: nitro held. */
   boost: boolean;
 }
@@ -66,6 +68,7 @@ export const emptySource = (): InputSource => ({
   cyclePresses: 0,
   cyclePrevPresses: 0,
   pausePresses: 0,
+  stationPresses: 0,
   boost: false,
 });
 
@@ -73,7 +76,7 @@ export const emptySource = (): InputSource => ({
 export function clearSource(s: InputSource): void {
   s.steer = s.throttle = s.moveX = s.moveY = s.aimX = s.aimY = 0;
   s.handbrake = s.sprint = s.fireHeld = s.aimFire = s.aimRelease = s.boost = false;
-  s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.pausePresses = 0;
+  s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.pausePresses = s.stationPresses = 0;
 }
 
 /** Stick deadzone, as a fraction of full deflection (radial, then rescaled). */
@@ -106,6 +109,8 @@ const PAD_LB = 4;
 const PAD_RB = 5;
 const PAD_LT = 6;
 const PAD_RT = 7;
+/** Select / View / Share: next radio station (like R or tapping the radio card). */
+const PAD_SELECT = 8;
 const PAD_START = 9;
 const PAD_UP = 12;
 const PAD_DOWN = 13;
@@ -147,7 +152,7 @@ const NAV_KEYS: Readonly<Record<string, NavCommand>> = {
   Backspace: 'back',
 };
 
-type PressKey = 'punchPresses' | 'cyclePresses' | 'cyclePrevPresses' | 'actionPresses' | 'pausePresses';
+type PressKey = 'punchPresses' | 'cyclePresses' | 'cyclePrevPresses' | 'actionPresses' | 'pausePresses' | 'stationPresses';
 
 export class Input {
   readonly keyboard = emptySource();
@@ -437,6 +442,7 @@ export class Input {
       else if (i === PAD_RB) g.cyclePresses++;
       else if (i === PAD_LB) g.cyclePrevPresses++;
       else if (i === PAD_START) g.pausePresses++;
+      else if (i === PAD_SELECT) g.stationPresses++;
       else if (i === PAD_A) this.pushNav('confirm');
       else if (i === PAD_B) this.pushNav('back');
     }
@@ -581,6 +587,11 @@ export class Input {
   /** Pause toggles (P, Esc, gamepad Start) since the last call; two in one frame cancel out. */
   consumePause(): number {
     return this.drain('pausePresses');
+  }
+
+  /** True once per next-station press (gamepad Select / View). */
+  consumeStation(): boolean {
+    return this.drain('stationPresses') > 0;
   }
 
   /** The connected gamepad, if any (for rumble). */
