@@ -13,7 +13,7 @@ import type { Panel } from './menu';
 import { PauseOverlay, type PauseReason } from './pauseOverlay';
 import { RotateOverlay } from './rotateOverlay';
 import { SettingsPanel } from './settingsPanel';
-import { TitleScreen } from './titleScreen';
+import { TitleScreen, type TitleMode } from './titleScreen';
 
 export interface FrontDoorHooks {
   /** PLAY on the title: start a fresh game. */
@@ -50,6 +50,7 @@ export class FrontDoor {
   ) {
     this.title = new TitleScreen(parent, audio, {
       onPlay: () => this.play(),
+      onMode: (mode) => this.play(mode),
       onSettings: () => this.openSettings(),
       onHowTo: () => this.openHowTo(),
     });
@@ -151,11 +152,16 @@ export class FrontDoor {
     this.hooks.setPaused(true, 'paused');
   }
 
-  private play(): void {
-    this.title.root.classList.add('leaving');
+  /**
+   * Leave the title for a fresh run: PLAY, or a mode from title.addMode()
+   * (its onSelect runs once the run has started, to set itself up on top).
+   * The one way into play, so the title and its menu stack always close.
+   */
+  play(mode?: TitleMode): void {
     this.title.close();
     this.stack.length = 0;
     this.hooks.startGame();
+    mode?.onSelect();
   }
 
   private resume(): void {

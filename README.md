@@ -251,7 +251,10 @@ at 852×393 and 852×340 (Safari's toolbar showing).
 API for other systems:
 
 ```ts
-frontDoor.title.addMode({ id, label, sub?, onSelect })   // a mode under PLAY (e.g. CHAOS RUN); removeMode(id)
+frontDoor.title.addMode({ id, label, sub?, onSelect })   // a mode under PLAY (e.g. CHAOS RUN); removeMode(id).
+                                                         // Picking it starts a fresh run like PLAY, then calls
+                                                         // onSelect() to set the mode up on top of it.
+frontDoor.play(mode?)                                    // the PLAY path itself (closes the title, fresh run)
 radar.setBlip(id, { x, z, kind?, colour?, icon?, pulse?, edgeArrow?, size? })
 radar.removeBlip(id)
 radar.setWaypoint(x, z) / radar.clearWaypoint()          // route along the roads + rim arrow when off-radar

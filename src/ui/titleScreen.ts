@@ -18,6 +18,8 @@ export interface TitleMode {
 export interface TitleOptions {
   /** PLAY: free roam. */
   onPlay(): void;
+  /** A mode added with addMode() was picked. */
+  onMode(mode: TitleMode): void;
   onSettings(): void;
   onHowTo(): void;
 }
@@ -41,11 +43,12 @@ export class TitleScreen implements Panel {
   private readonly tip: HTMLElement;
   private readonly modeItems = new Map<string, { el: HTMLElement; item: NavItem }>();
   private readonly playBtn: HTMLButtonElement;
+  private hintDevice: InputDevice | null = null;
 
   constructor(
     parent: HTMLElement,
     private readonly audio: GameAudio,
-    opts: TitleOptions,
+    private readonly opts: TitleOptions,
   ) {
     const root = document.createElement('div');
     root.id = 'title';
@@ -107,13 +110,17 @@ export class TitleScreen implements Panel {
     return !this.root.hidden;
   }
 
-  /** Add a mode under PLAY (e.g. CHAOS RUN). Re-adding an id replaces it. */
+  /**
+   * Add a mode under PLAY (e.g. CHAOS RUN). Picking it starts a fresh run
+   * exactly as PLAY does, then calls mode.onSelect() to set the mode up on
+   * top of it. Re-adding an id replaces it.
+   */
   addMode(mode: TitleMode): void {
     this.removeMode(mode.id);
     const el = menuButton(mode.label, { sub: mode.sub ?? '', className: 'title-mode' });
     el.dataset.mode = mode.id;
     this.modes.append(el);
-    const item = this.nav.add({ el, activate: () => this.select(() => mode.onSelect()) });
+    const item = this.nav.add({ el, activate: () => this.select(() => this.opts.onMode(mode)) });
     this.modeItems.set(mode.id, { el, item });
   }
 
@@ -130,7 +137,6 @@ export class TitleScreen implements Panel {
     this.bestEl.querySelector('b')!.textContent = fmt(best);
     this.setDevice(device);
     this.root.hidden = false;
-    this.root.classList.remove('leaving');
     this.nav.focusElement(this.playBtn);
     this.nav.showFocus(device !== 'touch');
   }
@@ -139,15 +145,16 @@ export class TitleScreen implements Panel {
     this.root.hidden = true;
   }
 
-  /** Key hints follow the device in use (none on touch). */
+  /** Key hints follow the device in use (none on touch). Cheap to call every frame. */
   setDevice(device: InputDevice): void {
-    const html =
+    if (device === this.hintDevice) return;
+    this.hintDevice = device;
+    this.hints.innerHTML =
       device === 'gamepad'
         ? '<kbd class="pad">A</kbd> SELECT <kbd class="pad b">B</kbd> BACK'
         : device === 'keyboard'
           ? '<kbd>↑</kbd><kbd>↓</kbd> CHOOSE <kbd>ENTER</kbd> SELECT'
           : '';
-    if (this.hints.innerHTML !== html) this.hints.innerHTML = html;
   }
 
   back(): void {

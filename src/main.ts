@@ -1047,7 +1047,8 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   attract,
   touch,
   haptics,
-  startGame,
+  /** The PLAY button: closes the title and starts a fresh run. */
+  startGame: () => frontDoor.play(),
   enterTitle,
   get paused() {
     return paused;
