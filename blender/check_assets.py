@@ -20,8 +20,10 @@ CHAR_CLIPS = {
     "Idle": (2.0, 0.05), "Walk": (1.0, 0.05), "Run": (0.6, 0.05), "Punch": (0.35, 0.05),
     "Aim": (0.3, 0.05), "Shoot": (0.12, 0.02), "Fall": (0.5, 0.05), "Down": (1.0, 0.05),
     "GetUp": (0.9, 0.05), "EnterCar": (0.5, 0.05), "Arrested": (1.0, 0.05),
+    "Throw": (0.4, 0.05), "AimRocket": (0.3, 0.05), "ShootRocket": (0.2, 0.03), "Punch2": (0.33, 0.05),
+    "Uppercut": (0.4, 0.05), "Stagger": (0.3, 0.05), "Hail": (1.0, 0.05), "Cower": (1.0, 0.05), "Cheer": (1.0, 0.05),
 }
-CHARACTER_FILES = re.compile(r"^(player|ped_\w+|cop)\.glb$")
+CHARACTER_FILES = re.compile(r"^(player|ped_\w+|cop|vex|tuna|pike)\.glb$")
 BUDGET = {"character": 600, "vehicle": 1500, "vehicle_heli": 1500, "prop": 300, "debris": 80}
 # Large props that are allowed more than the small-prop budget.
 PROP_BUDGET_OVERRIDE = {"spray_booth": 300, "streetlamp": 300, "traffic_light": 300, "water_tank": 300, "palm": 300, "ramp": 300}
