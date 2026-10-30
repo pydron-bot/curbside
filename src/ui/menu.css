@@ -325,6 +325,23 @@ kbd.pad.b {
   padding: 6px 14px 14px;
 }
 
+/* Which build is running: small print at the foot of Settings and the pause card.
+   In Settings it sits in the body's bottom padding, so both columns still fit
+   unscrolled at 393 high. */
+.build-id {
+  grid-column: 1 / -1;
+  margin: 0 6px -8px;
+  text-align: center;
+  font: 10px/1.2 var(--hud-font);
+  letter-spacing: 0.08em;
+  opacity: 0.45;
+  user-select: text;
+}
+
+.pause-card .build-id {
+  margin: -4px 0 -6px;
+}
+
 /* --- Settings --- */
 .settings-grid {
   display: grid;
@@ -385,6 +402,11 @@ kbd.pad.b {
   .settings-grid section,
   .settings-col {
     gap: 0;
+  }
+
+  /* No room left at 340; the pause card still shows the build. */
+  .sheet-body > .build-id {
+    display: none;
   }
 }
 

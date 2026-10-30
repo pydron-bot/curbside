@@ -53,6 +53,27 @@ export function evadeBonus(stars: number): number {
   return stars >= EVADE_BONUS_FROM ? 1000 * stars : 0;
 }
 
+/** A car-on-car hit harder than this (m/s closing) can score SMASH. */
+export const SMASH_MIN_IMPACT = 6;
+/** Rammer, not victim: bring at least this much closing speed (m/s)... */
+export const RAM_MIN_CLOSING = 3;
+/** ...and this share of the total, so a head-on (half each) counts for both. */
+export const RAM_MIN_SHARE = 0.4;
+
+/**
+ * Whether a car rammed the other, from each one's share of the closing
+ * speed (CarContact.closingA/B). Being rear-ended, T-boned or PIT-ed while
+ * slow or stopped is not ramming.
+ */
+export function rammed(own: number, other: number): boolean {
+  return own >= RAM_MIN_CLOSING && own >= RAM_MIN_SHARE * (own + Math.max(0, other));
+}
+
+/** SMASH pays only the car that did the ramming. */
+export function smashCredit(impact: number, own: number, other: number): boolean {
+  return impact > SMASH_MIN_IMPACT && rammed(own, other);
+}
+
 export const COMBO_WINDOW = 3;
 export const MAX_COMBO = 10;
 /** Drift points per second per m/s of sideways slip. */

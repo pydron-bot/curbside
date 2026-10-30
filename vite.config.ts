@@ -1,11 +1,27 @@
 /// <reference types="vitest/config" />
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+
+// Shown in Settings and on the pause card (src/core/build.ts): the commit
+// (GITHUB_SHA on the Pages workflow, else the local checkout) and UTC time.
+function buildId(): string {
+  let sha = process.env.GITHUB_SHA;
+  if (!sha) {
+    try {
+      sha = execSync('git rev-parse --short HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+    } catch {
+      sha = 'dev'; // no git (e.g. a source tarball)
+    }
+  }
+  return `${sha.slice(0, 7)} ${new Date().toISOString().slice(0, 16).replace('T', ' ')}Z`;
+}
 
 export default defineConfig({
   // The site path the game is served from: '/' locally, '/curbside/' when the
   // Pages workflow builds it for deeek.org/curbside/ (CURBSIDE_BASE).
   base: process.env.CURBSIDE_BASE ?? '/',
+  define: { __BUILD__: JSON.stringify(buildId()) },
   server: {
     host: true,
     port: 5173,
