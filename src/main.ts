@@ -92,7 +92,15 @@ const app = document.getElementById('app')!;
 const ENTER_RANGE = 4;
 /** Cars moving faster than this can't be boarded. */
 const ENTER_MAX_SPEED = 6;
-const CAMERA_FOOT = [20, 24] as const;
+/**
+ * On foot: tuned for a landscape phone; a 16:9 desktop sees less across at
+ * the same height, so it sits higher (~42 × 23 m on screen) to keep NPC
+ * gunfights (22–24 m) and the pistol's 32 m in view.
+ */
+const CAMERA_FOOT: readonly [number, number] = getDevice().handheld ? [20, 24] : [27, 31];
+/** Mouse aim leads the view toward the cursor by this share of its ground offset, at most this far (m). */
+const MOUSE_LEAD = 0.3;
+const MOUSE_LEAD_MAX = 8;
 const CAMERA_CAR = [26, 64] as const;
 /** The title screen's slow cruise over traffic. */
 const CAMERA_ATTRACT = [34, 46] as const;
@@ -706,6 +714,13 @@ function frame(now: number) {
   updateMouseAim(input, rig.camera, me.x, me.z, viewW, viewH);
   const aim = input.readAim();
   const playing = !attract.active;
+  // On foot with the mouse: see what you shoot at (the view leans toward the cursor).
+  if (playing && !player.driving && mouseGround.valid) {
+    const dx = (mouseGround.x - me.x) * MOUSE_LEAD;
+    const dz = (mouseGround.z - me.z) * MOUSE_LEAD;
+    const k = Math.min(1, MOUSE_LEAD_MAX / (Math.hypot(dx, dz) || 1));
+    rig.aimAt(dx * k, dz * k);
+  } else rig.aimAt(0, 0);
   // A card over the game (results, a phone call, the shop) takes the input.
   const control = playing && !progress.blocksInput;
   const aiming = control && player.ready && aim.active ? aimHeading(aim.x, aim.y) : null;

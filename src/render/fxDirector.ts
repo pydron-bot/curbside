@@ -25,13 +25,13 @@ import { HitStop } from './fxMotion';
 import { Rain, WeatherCycle } from './fxWeather';
 import { GLOW, type GlowSprites } from './glowSprites';
 import type { Look } from './look';
-import { getQuality } from './quality';
+import { getDevice, getQuality } from './quality';
 import { worldUniforms } from './shaderLib';
 
 /** Matches main.ts: cars and people inside this take blast damage. */
 const BLAST_RADIUS = 9;
-/** On foot with a gun out, the camera rises this much to show more of the fight, m. */
-const ARMED_LIFT = 5;
+/** On foot with a gun out, the camera rises this much to show more of the fight, m (more on a 16:9 desktop). */
+const ARMED_LIFT = getDevice().handheld ? 5 : 7;
 /** Shot at or punched recently: lift a little even with bare fists. */
 const FIGHT_LIFT = 3.5;
 const FIGHT_SECONDS = 4;

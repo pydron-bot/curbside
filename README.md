@@ -779,7 +779,12 @@ focusZ, playing)` once per frame after placing cars and people.
   ahead driving up the screen (car at 79% of the height), 1.36 s driving
   down (car at 23%), 2.8 s across (car at 32% / 68% of the width); the car
   never reaches the bottom corners where the thumbs are. On foot the
-  camera lifts 5 m with a gun out and 3.5 m in a recent fight.
+  camera sits at 20–24 m on a phone and 27–31 m on a desktop (a 16:9
+  screen sees less across: ~42 × 23 m, so 22–24 m NPC gunfights stay in
+  view), and lifts 5 m (desktop 7 m) with a gun out and 3.5 m in a recent
+  fight. Mouse aim leans the view toward the cursor (`rig.aimAt`: 30% of
+  the cursor's ground offset, at most 8 m, eased), so you see what you
+  shoot at.
   `prefers-reduced-motion` keeps a third of the shake, no roll or FOV
   punches, and softer exposure and combo-edge flashes. A blast out of
   sight (over 55 m from the view centre) doesn't flash the screen.

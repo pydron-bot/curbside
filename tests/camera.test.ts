@@ -18,4 +18,20 @@ describe('camera rig', () => {
     expect(r.maxZ).toBeGreaterThan(-50);
     expect(rig.focusX).toBe(100);
   });
+
+  it('leans toward the aim when asked (eased), and back when it stops', () => {
+    const rig = new CameraRig(16 / 9);
+    rig.snapTo(0, 0);
+    rig.aimAt(6, -3);
+    for (let i = 0; i < 60 * 4; i++) rig.update(1 / 60, 0, 0, 0, 0);
+    expect(rig.focusX).toBeCloseTo(6, 1);
+    expect(rig.focusZ).toBeCloseTo(-3, 1);
+    rig.aimAt(0, 0);
+    for (let i = 0; i < 60 * 4; i++) rig.update(1 / 60, 0, 0, 0, 0);
+    expect(Math.hypot(rig.focusX, rig.focusZ)).toBeLessThan(0.1);
+    rig.aimAt(5, 5);
+    rig.snapTo(10, 10); // a respawn drops it
+    rig.update(1 / 60, 10, 10, 0, 0);
+    expect(rig.focusX).toBeCloseTo(10, 0);
+  });
 });
