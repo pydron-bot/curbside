@@ -120,6 +120,10 @@ describe('drive-by aim', () => {
     expect(driveByAim(0, 0, 0, [t(Math.sin(edge) * 10, Math.cos(edge) * 10)], 1, 30, out)).toBe(-1);
   });
 
+  it('goes for a person before a closer car', () => {
+    expect(driveByAim(0, 0, 0, [{ x: 5, z: 0, hostile: false, vehicle: true }, t(8, 1)], 2, 30, out)).toBe(1);
+  });
+
   it('prefers hostiles, and a side filter picks the window', () => {
     expect(driveByAim(0, 0, 0, [t(5, 0), t(-9, 0, true)], 2, 30, out)).toBe(1);
     expect(driveByAim(0, 0, 0, [t(5, 0), t(-9, 0, true)], 2, 30, out, 1)).toBe(0);

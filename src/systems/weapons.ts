@@ -339,6 +339,8 @@ export interface LockCandidate {
   z: number;
   /** Attacking the player (a fighter, a shooter, police after them): locked first. */
   hostile: boolean;
+  /** A car rather than a person: drive-bys go for people first (cars soak up bullets). */
+  vehicle?: boolean;
 }
 
 /** Without a deliberate aim, a non-hostile target must be within this half-angle of the facing (a 90° cone). */
@@ -390,7 +392,7 @@ export const DRIVE_BY_CONE = 1.2;
 /**
  * Drive-by targeting from a car at (x, z) facing `heading`: the best target
  * within DRIVE_BY_CONE of straight out of a side window (hostiles first,
- * then close and square to the window), within range. `side` 1 looks only
+ * people before cars, then close and square to the window), within range. `side` 1 looks only
  * out of the left (driver's) window, -1 only the right, 0 either. Writes the
  * unit direction into `out` and returns the target's index, or -1 (out then
  * points straight out of that window; the driver's for 0).
@@ -421,7 +423,7 @@ export function driveByAim(
     if (side !== 0 && across * side <= 0) continue;
     const square = Math.abs(across);
     if (square < coneCos) continue;
-    const score = d * (2 - square) * (t.hostile ? 0.5 : 1);
+    const score = d * (2 - square) * (t.hostile ? 0.5 : t.vehicle ? 1.8 : 1);
     if (score < bestScore) {
       bestScore = score;
       best = i;

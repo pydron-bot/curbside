@@ -767,10 +767,11 @@ export class Combat {
 
   private push(x: number, z: number, hostile: boolean, ped: CrowdPed | null, car: Vehicle | null): void {
     let c = this.candidates[this.candidateCount];
-    if (!c) c = this.candidates[this.candidateCount] = { x: 0, z: 0, hostile: false, ped: null, car: null };
+    if (!c) c = this.candidates[this.candidateCount] = { x: 0, z: 0, hostile: false, vehicle: false, ped: null, car: null };
     c.x = x;
     c.z = z;
     c.hostile = hostile;
+    c.vehicle = car !== null;
     c.ped = ped;
     c.car = car;
     this.candidateCount++;
