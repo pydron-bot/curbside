@@ -763,7 +763,9 @@ function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb
         vec2 offset;
         if (len > 1e-4) {
           vec2 dir = axis.xy / len;
-          vec2 across = vec2(-dir.y, dir.x);
+          // Clockwise of dir, so (across, dir) keeps the quad's winding
+          // counter-clockwise: the other way round it faces away and is culled.
+          vec2 across = vec2(dir.y, -dir.x);
           offset = dir * corner.y * (len + size) + across * corner.x * size;
         } else {
           float c = cos(iAxis.w);

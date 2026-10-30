@@ -180,7 +180,8 @@ export class Rain {
           vec2 dir = len > 1e-3 ? d / len : vec2(0.0, 1.0);
           // At least a few pixels long even straight under the camera.
           if (len < 7.0) ts = hs - dir * 7.0 / (uRes * 0.5);
-          vec2 across = vec2(-dir.y, dir.x) * (1.1 / (uRes * 0.5)) * (1.0 + iSeed.x);
+          // Clockwise of dir, so the quad stays counter-clockwise (front-facing).
+          vec2 across = vec2(dir.y, -dir.x) * (1.1 / (uRes * 0.5)) * (1.0 + iSeed.x);
           float along = position.y + 0.5;
           vec2 p = mix(ts, hs, along) + across * position.x * 2.0;
           float z01 = mix(tc.z / tc.w, hc.z / hc.w, along);
