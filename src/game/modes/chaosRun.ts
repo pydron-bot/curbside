@@ -23,6 +23,12 @@ export const FINAL_COUNT = 10;
 export const CHAOS_MEDALS: Readonly<Record<Medal, number>> = { bronze: 15_000, silver: 40_000, gold: 80_000 };
 
 /**
+ * The run's sports car is armoured: ×1.5 its health, so a run that drives
+ * like a Chaos Run should (into things) keeps its car for more than 20 s.
+ */
+export const CHAOS_CAR_HEALTH = 1.5;
+
+/**
  * Every run starts with the same guns (one clip each), whatever free roam or
  * the shop left in the pockets: rockets and grenades are worth KABOOMs and
  * +5 s a time, so carrying them in would buy medals.

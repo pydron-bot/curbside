@@ -213,10 +213,15 @@ can't take on grip (16 m/s for a right angle, more for gentle bends).
 stops only the speed into it; the speed along it is scrubbed by up to 45%
 with the square of the hit, and a nose-in glance swings the car parallel:
 at 25 m/s a 5° glance keeps its pace, 15° keeps ~20 m/s, head-on stops.
-Crashes cost nothing below 6 m/s, then 2.6 HP per m/s: a sedan (100 HP)
-smokes after one 28 m/s head-on and burns after a third 20 m/s hit. In a
-car-on-car crash the rammer takes 40% of what the car it hits takes (70%
-each head-on), scaled by mass. Health: sedan 100, compact and sports 90,
+Crashes cost nothing below 6 m/s, then 2.6 HP per m/s: a traffic sedan
+(100 HP) smokes after one 28 m/s head-on and burns after a third 20 m/s
+hit. In a car-on-car crash the rammer takes 30% of what the car it hits
+takes (65% each head-on), scaled by mass. The player's own car takes
+`PLAYER_CRASH_SHARE` (60%) of crash damage, since smashing is what scores:
+a 21 m/s wall hit costs a sports car 26% instead of 43%, ramming a parked
+car at 28 m/s ~10 HP (6 such rams and a sedan still isn't on fire), two
+28 m/s head-ons into buildings leave it smoking. The Chaos Run's sports car
+has ×1.5 health (135). Health: sedan 100, compact and sports 90,
 van 140, police 130, taxi 100, pickup 125; fire at 20%, burning 4.5 s.
 Blasts (`BLASTS`): a car going up does 85 at the centre to 0 at 9 m and
 sets cars within 4.8 m (of their nearest part) alight on a 0.5–1.9 s fuse
@@ -483,8 +488,9 @@ are `src/game/modes/*Mode.ts`.
   WASTED or BUSTED ends the run early (results after the respawn). The best
   and medal are saved and shown on the title; RESTART in the pause menu
   starts a fresh run. The medal lines are the review's (bronze is a run
-  that keeps its car and chains a few stunts); a reckless autopilot that
-  wrecks its car in the first 15 s and stays on foot scores 4.5–6.6k.
+  that keeps its car and chains a few stunts); before the run's car was
+  armoured (×1.5 health, 60% crash share), a reckless autopilot wrecked it
+  in the first 15–20 s and scored 1–6.6k on foot.
 - **Frenzies** (`modes/frenzies.ts`, `frenzyMode.ts`): eight spinning purple
   gems on pavements ('!' on the radar). Touch one, 3-2-1, then: KNOCK DOWN 15
   in 60 s (with an SMG), NEAR MISS ×8 in 60 s, CARJACK 5 in 120 s, DRIFT

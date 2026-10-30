@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ATTRIBUTION_SECONDS,
   BLASTS,
+  PLAYER_CRASH_SHARE,
   applyDamage,
   crashDamage,
   ignite,
@@ -38,15 +39,32 @@ describe('vehicle damage', () => {
     // 23.8 m/s head-on between two sedans: both smoking, neither on fire.
     const each = crashDamage(23.8, 11.9, 11.9);
     expect(each).toBeLessThan(100 * 0.42);
-    // Ramming a parked car: it takes the full hit, the rammer 40% of it.
+    // Ramming a parked car: it takes the full hit, the rammer 30% of it.
     const rammed = crashDamage(20, 0, 20);
     const rammer = crashDamage(20, 20, 0);
     expect(rammed).toBeCloseTo(impactDamage(20));
-    expect(rammer).toBeCloseTo(impactDamage(20) * 0.4);
+    expect(rammer).toBeCloseTo(impactDamage(20) * 0.3);
     // A 13 m/s shunt costs a sports car well under a third of its health.
     expect(crashDamage(13, 0, 13) / 90).toBeLessThan(0.3);
     // Heavier takes less.
     expect(crashDamage(20, 10, 10, 1.6, 0.85)).toBeLessThan(crashDamage(20, 10, 10, 0.85, 1.6));
+  });
+
+  it("the player's own car lasts several big smashes (it's what the game scores)", () => {
+    // A 21 m/s wall hit costs a sports car (90 HP) about a quarter, not 43%.
+    expect((impactDamage(21) * PLAYER_CRASH_SHARE) / 90).toBeLessThan(0.3);
+    // Ramming a parked car at 28 m/s: the victim smokes, the player's car shrugs.
+    const victim = createDamage(100);
+    applyDamage(victim, crashDamage(28, 0, 28));
+    expect(damageStage(victim)).toBe('smoking');
+    expect(crashDamage(28, 28, 0) * PLAYER_CRASH_SHARE).toBeLessThan(15);
+    // Two 28 m/s head-ons into buildings and a sedan still isn't on fire; six rams of parked cars neither.
+    const own = createDamage(100);
+    for (let i = 0; i < 2; i++) applyDamage(own, impactDamage(28) * PLAYER_CRASH_SHARE);
+    expect(own.burning).toBe(false);
+    const rammer = createDamage(100);
+    for (let i = 0; i < 6; i++) applyDamage(rammer, crashDamage(28, 28, 0) * PLAYER_CRASH_SHARE);
+    expect(rammer.burning).toBe(false);
   });
 
   it('a blast close by sets a car alight on a short fuse', () => {

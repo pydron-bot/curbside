@@ -41,6 +41,7 @@ import { provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } fr
 import { WEAPONS, WEAPON_ORDER, type WeaponKind } from './systems/weapons';
 import { PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
+  PLAYER_CRASH_SHARE,
   applyDamage,
   createDamage,
   crashDamage,
@@ -518,7 +519,7 @@ function simulate(dt: number) {
     // A ramp's sides and back are solid to anything not riding up it.
     if (!v.sim.airborne && v.sim.y <= 0 && !enteringRamp(v.sim, ramps)) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact));
     if (impact <= 0) continue;
-    const hit = impactDamage(impact);
+    const hit = impactDamage(impact) * (v === driving ? PLAYER_CRASH_SHARE : 1);
     applyDamage(v.damage, hit);
     if (v === driving && hit > 0) markPlayerHit(v.damage, simTime);
     if (impact > CRASH_EVENT_MIN) {
@@ -534,8 +535,8 @@ function simulate(dt: number) {
       const impact = collideVehicles(a.sim, b.sim, contact, ma, mb);
       if (impact <= 0) continue;
       // The rammer takes less than the car it hits, the heavier car less than the lighter.
-      const hitA = crashDamage(impact, contact.closingA, contact.closingB, ma, mb);
-      const hitB = crashDamage(impact, contact.closingB, contact.closingA, mb, ma);
+      const hitA = crashDamage(impact, contact.closingA, contact.closingB, ma, mb) * (a === driving ? PLAYER_CRASH_SHARE : 1);
+      const hitB = crashDamage(impact, contact.closingB, contact.closingA, mb, ma) * (b === driving ? PLAYER_CRASH_SHARE : 1);
       applyDamage(a.damage, hitA);
       applyDamage(b.damage, hitB);
       const involvesPlayer = driving !== null && (a === driving || b === driving);
