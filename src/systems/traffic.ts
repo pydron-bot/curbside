@@ -17,7 +17,6 @@ import {
   DIR_VEC,
   LANE_OFFSET,
   MAX_NODE,
-  rightOf,
   canLeave,
   chooseTurn,
   dirHeading,
@@ -230,10 +229,10 @@ export function driveAi(
     aim.z = target.z + v.z * ahead;
     if (ai.yielding > 0 || ai.overtaking > 0) {
       // Pull over (hug the kerb), or pull out into the oncoming lane to pass.
-      const r = rightOf(ai.dir);
+      // Right of travel is (-v.z, v.x) (rightOf() without its allocation).
       const shift = ai.overtaking > 0 ? -OVERTAKE_SHIFT : YIELD_SHIFT;
-      aim.x += r.x * shift;
-      aim.z += r.z * shift;
+      aim.x -= v.z * shift;
+      aim.z += v.x * shift;
     }
     ax = aim.x;
     az = aim.z;
@@ -281,7 +280,9 @@ export function driveAi(
     const hurry = panic || ai.urgent;
     const safe = 3 + Math.max(0, vF) * (hurry ? PANIC_GAP : 0.9);
     let gap = clearDistance(car, obstacles, ai.overtaking > 0 ? -OVERTAKE_SHIFT : 0);
-    if (ai.urgent && ai.overtaking <= 0 && ai.phase === 'approach' && gap < safe * 1.8 && !blockerIsPlayer) {
+    // Read before a second clearDistance() (the passing lane) overwrites it.
+    const playerAhead = blockerIsPlayer;
+    if (ai.urgent && ai.overtaking <= 0 && ai.phase === 'approach' && gap < safe * 1.8 && !playerAhead) {
       const passing = clearDistance(car, obstacles, -OVERTAKE_SHIFT);
       if (passing > safe * 1.8) {
         ai.overtaking = OVERTAKE_SECONDS;
@@ -291,7 +292,7 @@ export function driveAi(
     if (gap < safe) {
       wantSpeed = 0;
       ai.waited += dt;
-      ai.blockedByPlayer = blockerIsPlayer ? ai.blockedByPlayer + dt : 0;
+      ai.blockedByPlayer = playerAhead ? ai.blockedByPlayer + dt : 0;
       if (ai.blockedByPlayer > HONK_AFTER && ai.hornCooldown <= 0) honk(ai, 0.5 + rand() * 0.5, 2 + rand());
       if (ai.waited > 4) {
         // Gridlock breaker: ignore blockers briefly (physics still prevents overlap).

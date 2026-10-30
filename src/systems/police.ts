@@ -22,7 +22,7 @@ import type { StaticGrid } from '../world/collision';
 import { DIR_VEC, MAX_NODE, type Dir } from '../world/roads';
 import { carsTouching } from './arrest';
 import { HELI_FROM, HELI_GONE, HELI_REFUEL, HELI_SHIFT, HELI_SPAWN, stepHelicopter, type Helicopter } from './helicopter';
-import { sees } from './sight';
+import { lineOfSight, sees } from './sight';
 import { resumeWalking, spawnPed } from './crowd';
 import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from './pursuit';
 import { CRUISE_SPEED, TURN_SPEED, createDriver, rerouteAi, spawnAi, type AiDriver, type Obstacle } from './traffic';
@@ -681,9 +681,18 @@ export class PoliceForce {
       for (const u of this.units) {
         if ((u.sightIn -= dt) <= 0) {
           u.sightIn += 1 / SIGHT_HZ;
-          u.seesPlayer = !u.dismissed && this.unitSees(u, s, ctx.grid);
           const v = u.vehicle;
-          u.direct = u.seesPlayer && v !== null && sees(ctx.grid, v.sim.x, v.sim.z, s.x, s.z, 6, CAR_SIGHT);
+          let carSees = false;
+          let direct = false;
+          if (!u.dismissed && v) {
+            // One ray per car: a clear line within CAR_SIGHT both sees and
+            // lets it drive straight there; up close it sees regardless.
+            const d = Math.hypot(v.sim.x - s.x, v.sim.z - s.z);
+            direct = d < 6 || (d <= CAR_SIGHT && lineOfSight(ctx.grid, v.sim.x, v.sim.z, s.x, s.z));
+            carSees = direct || d < CAR_PROXIMITY;
+          }
+          u.seesPlayer = !u.dismissed && (carSees || this.officersSee(u, s, ctx.grid));
+          u.direct = direct;
         }
         if (u.seesPlayer) seen = true;
       }
@@ -698,9 +707,8 @@ export class PoliceForce {
     this.seen = seen;
   }
 
-  private unitSees(u: PoliceUnit, s: Suspect, grid: StaticGrid): boolean {
-    const v = u.vehicle;
-    if (v && sees(grid, v.sim.x, v.sim.z, s.x, s.z, CAR_PROXIMITY, CAR_SIGHT)) return true;
+  /** Can any of the unit's officers on their feet see the player? */
+  private officersSee(u: PoliceUnit, s: Suspect, grid: StaticGrid): boolean {
     for (const p of u.officers) {
       if (p.agent.mode === 'down') continue;
       if (sees(grid, p.agent.s.x, p.agent.s.z, s.x, s.z, OFFICER_PROXIMITY, OFFICER_SIGHT)) return true;

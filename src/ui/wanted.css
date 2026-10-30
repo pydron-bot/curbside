@@ -240,6 +240,10 @@ body:has(#radio.in) #wanted {
   animation-delay: 0.95s;
 }
 
+#wasted.busted .ws-fine[hidden] {
+  display: none;
+}
+
 #wasted.busted .ws-fine b {
   color: #ff6b7d;
 }

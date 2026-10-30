@@ -24,6 +24,9 @@ const LEVEL_NAMES = ['', 'WANTED', 'HOT PURSUIT', 'ROADBLOCKS', 'SWAT', 'CHOPPER
 const STAR_PATH = 'M12 1.8l3.1 6.6 7.1.9-5.2 5 1.3 7.1L12 18l-6.3 3.4 1.3-7.1-5.2-5 7.1-.9z';
 /** How long the pop line stays up, s (matches the CSS animation). */
 const POP_SECONDS = 2.2;
+/** Meter fills in 1% steps, built once (no string garbage per frame while a meter runs). */
+const FILLS = Array.from({ length: 101 }, (_, i) => `scaleX(${i / 100})`);
+const fill = (f: number) => FILLS[Math.round(Math.max(0, Math.min(1, f)) * 100)];
 
 /**
  * The wanted level, top centre under the pause button (clear of the radar,
@@ -127,10 +130,10 @@ export class WantedHud {
 
     const grabbing = f.arrest > 0.01;
     this.setArrestHidden(!grabbing);
-    if (grabbing) this.setArrestFill(`scaleX(${f.arrest.toFixed(3)})`);
+    if (grabbing) this.setArrestFill(fill(f.arrest));
     const spraying = f.spray > 0.01 && f.spray < 1;
     this.setSprayHidden(!spraying);
-    if (spraying) this.setSprayFill(`scaleX(${f.spray.toFixed(3)})`);
+    if (spraying) this.setSprayFill(fill(f.spray));
 
     if (this.popLeft > 0 && (this.popLeft -= dt) <= 0) this.pop.hidden = true;
   }

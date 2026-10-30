@@ -205,6 +205,8 @@ export class Wanted {
     this.lastCrime = this.time;
     if (this.level > prev) this.raised(prev);
     else if (this.level < prev) this.bus.emit({ type: 'wanted', level: this.level, prev, reason: this.level === 0 ? 'reset' : 'lost' });
+    // Forced clean: the chase is over (no EVADED bonus carried into the next one).
+    if (this.level === 0) this.peak = 0;
   }
 
   private raised(prev: number): void {

@@ -163,7 +163,8 @@ Mayhem has a cost now. **Wanted level** (`systems/wanted.ts`, pure): heat
 of any police (car, officer, helicopter): knocking someone down +0.3,
 carjack +0.35, a shot +0.05 (at most +0.5 per 5 s), an explosion you
 caused +0.6 (not your own car going up), clearly ramming a police car
-+0.6 (bumps in a chase don't count), bullets into one +0.15 (capped),
++0.6 (bumps in a chase don't count, nor does smashing through a roadblock
+or a chasing cop driving into you), bullets into one +0.15 (capped),
 knocking down an officer +1 (at most +1 per 5 s), wrecking a police car
 +1; stealing one sets at least 1★. Civilian crimes stop at 3★; 4–5★ need
 attacks on the police. Below a star, heat fades after 10 quiet seconds.
@@ -176,23 +177,28 @@ your real position for 2 s after each sighting.
 
 **Response** (`systems/police.ts`): units by stars 2 / 3 / 4 / 6 / 7 (SWAT
 vans from 4★: dark vans, 180 HP), arriving one at a time on a lane 75–140 m
-away, out of view, heading your way and already rolling (mostly ahead on a
+away from where the police believe you are (your real position only
+while they're seeing or tracking you, so breaking line of sight works),
+out of view, heading your way and already rolling (mostly ahead on a
 fresh call, from all round mid-chase, so outrunning them can work). Sight:
 each car sees you within 20 m, or 62 m with a clear line past buildings
-(officers 15 / 40 m), checked 4×/s per unit and shared over the radio. Units that
-fall 210 m behind out of sight, or wedge for good, recycle and a fresh one
-comes. 1–2★ follow and box you in; from 3★ they ram and PIT, and every
+(officers 15 / 40 m), checked 4×/s per unit (one ray per car) and shared
+over the radio. Units 210 m from the last sighting out of view, or wedged
+for good, recycle and a fresh one comes. 1–2★ follow and box you in; from 3★ they ram and PIT, and every
 25 s at speed a roadblock (2–3 cars across the road 120–170 m ahead,
 mid-block, officers behind them) goes up; from 4★ passengers shoot at your
 car (every ~2 s within 20 m); 5★ adds the helicopter
 (`systems/helicopter.ts`): a shadow and a searchlight that keeps you seen
 while it's on you, flying at 27 m/s so a fast car can outrun it, and
-leaving to refuel for 20 s after every 45 s on station. Stopped near you, officers get out (crowd peds
+leaving to refuel for 30 s after every 45 s on station (longer than the
+21 s unseen that drops a star at 5★). Stopped near you, officers get out (crowd peds
 with role 'cop', navy uniforms through the outfit palette): they run you
 down at 5 m/s (you sprint at 6), go for your door if your car is stopped,
-and shoot from 2★ at someone armed or running (from 3★ on sight). When
-the heat drops, spare units collect their officers and go back to
-patrolling as traffic. A unit whose car is wrecked, on fire or stolen
+and shoot from 2★ at someone armed or running (from 3★ on sight), but
+never at someone standing still with empty hands: they come to cuff
+them, so giving up is always a way out alive. When the heat drops, spare
+units collect their officers (waiting at most 12 s for them) and go back
+to patrolling as traffic. A unit whose car is wrecked, on fire or stolen
 fights on on foot. Police cars are lent by Population (`takeVehicle`,
 flagged `police`, so traffic upkeep leaves them alone).
 
@@ -244,11 +250,13 @@ calls beyond one instanced police-car mesh.
 
 **Tuning** was done headless: a copy of the sim loop drives a getaway car
 against each level over many seeds (`__ub.fastForward(seconds)` does the
-same in the browser). A reckless random-turn driver in a sports car shakes
-1★ about 3 times in 4, drops a star at 3★ about 1 time in 4 within 90 s,
-and can't shake 5★ by driving alone (refuel windows, resprays and wrecking
-pursuers are the way out); police cause 20–140 HP of damage per 3★ chase
-(most damage comes from the player's own crashes).
+same in the browser). Over 3 minutes, a sports car whose driver turns
+away from the police at each junction shakes a 3★ chase about half the
+time (and drops at least a star in all but 1 in 8), and gets 5★ down to
+4★ or 3★ about 3 times in 4; a reckless driver taking random turns
+escapes far less often (drops a star at 3★ about 1 time in 2). Resprays
+and wrecking pursuers are the other ways out. Most damage in a chase
+comes from the player's own crashes.
 
 API for other systems:
 

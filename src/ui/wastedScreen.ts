@@ -63,7 +63,9 @@ export class WastedScreen {
     this.title.textContent = title;
     this.title.dataset.text = title;
     this.el.classList.toggle('busted', busted);
+    // No points to lose, no fine line ("−0" reads like a glitch).
     this.rows.fine.textContent = `−${fmt(s.fine ?? 0)}`;
+    this.rows.fine.parentElement!.hidden = !busted || !s.fine;
     this.rows.score.textContent = fmt(s.score);
     this.rows.best.textContent = fmt(s.best);
     this.rows.time.textContent = formatDuration(s.stats.timeAlive);
