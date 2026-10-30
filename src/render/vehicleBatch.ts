@@ -17,7 +17,7 @@ import type { VehicleArchetype } from '../entities/vehicle';
 import type { Rect } from '../world/city';
 import { createCarMesh, placeholderCarGeometry, type CarMesh } from './carMesh';
 import type { ContactShadows } from './contactShadows';
-import { GLOW, type GlowSprites } from './glowSprites';
+import { GLOW, uploadRange, type GlowSprites } from './glowSprites';
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from './shaderLib';
 import { dimsOf, type CarDims, type VehicleModels } from './vehicleModels';
 
@@ -63,6 +63,8 @@ export class CarBatch {
   readonly root = new Group();
   readonly material: MeshStandardMaterial;
   private readonly meshes = new Map<VehicleArchetype, ArchetypeMesh>();
+  /** The same meshes as a list, for allocation-free iteration every frame. */
+  private readonly meshList: ArchetypeMesh[] = [];
   private readonly records: CarRecord[] = [];
   private readonly placeholder = placeholderCarGeometry();
   private models: VehicleModels | null = null;
@@ -105,6 +107,15 @@ export class CarBatch {
     car.paint.set(paint);
   }
 
+  /**
+   * Flash a car's red/blue light bar and the coloured wash on the road
+   * round it (police chases), or stop it. Stays until turned off or the car
+   * is recycled.
+   */
+  setSiren(vehicle: { mesh: CarMesh }, on: boolean): void {
+    setSiren(vehicle, on);
+  }
+
   /** vehicles.glb arrived: every car switches from the placeholder boxes to its model. */
   setModels(models: VehicleModels): void {
     this.models = models;
@@ -116,7 +127,8 @@ export class CarBatch {
    * and its lights. Call once per frame before rendering.
    */
   flush(view: Rect, dt: number, shadows: ContactShadows, glows: GlowSprites): void {
-    for (const am of this.meshes.values()) am.count = 0;
+    const list = this.meshList;
+    for (let k = 0; k < list.length; k++) list[k].count = 0;
     const night = worldUniforms.uNight.value;
     const time = worldUniforms.uTime.value;
     for (const rec of this.records) {
@@ -149,15 +161,15 @@ export class CarBatch {
       shadows.add(x + sin * mid, z + cos * mid, heading, d.halfWidth * 0.98, (d.front + d.rear) / 2, 0.45, 0.62);
       this.addLights(glows, car, rec, d, x, z, sin, cos, heading, night * lights, time);
     }
-    for (const am of this.meshes.values()) {
+    for (let k = 0; k < list.length; k++) {
+      const am = list[k];
       const n = am.count;
       am.mesh.count = n;
       am.mesh.visible = n > 0;
-      for (const a of [am.mesh.instanceMatrix, am.paint, am.state, am.siren]) {
-        a.clearUpdateRanges();
-        a.addUpdateRange(0, n * a.itemSize);
-        a.needsUpdate = true;
-      }
+      uploadRange(am.mesh.instanceMatrix, n);
+      uploadRange(am.paint, n);
+      uploadRange(am.state, n);
+      uploadRange(am.siren, n);
     }
   }
 
@@ -196,7 +208,7 @@ export class CarBatch {
       // Beam on the road ahead, and flares at the lamps themselves.
       const reach = 13;
       glows.addFlat(x + sin * (d.front + reach / 2 - 0.3), 0.07, z + cos * (d.front + reach / 2 - 0.3), heading, 7.5, reach, 0.34 * beams, 0.29 * beams, 0.2 * beams, GLOW.cone);
-      for (const side of [-1, 1]) {
+      for (let side = -1; side <= 1; side += 2) {
         const lx = x + sin * (d.front - 0.1) + cos * side * d.halfWidth * 0.62;
         const lz = z + cos * (d.front - 0.1) - sin * side * d.halfWidth * 0.62;
         glows.addFlat(lx, 0.8, lz, heading, 1.1, 1.1, 0.9 * beams, 0.8 * beams, 0.6 * beams, GLOW.disc);
@@ -236,6 +248,7 @@ export class CarBatch {
     const attr = (size: number) => new InstancedBufferAttribute(new Float32Array(PER_ARCHETYPE * size), size).setUsage(DynamicDrawUsage);
     am = { mesh, paint: attr(3), state: attr(4), siren: attr(1), dims: dimsOf(this.placeholder), count: 0 };
     this.meshes.set(archetype, am);
+    this.meshList.push(am);
     this.useGeometry(am, archetype);
     this.root.add(mesh);
     return am;

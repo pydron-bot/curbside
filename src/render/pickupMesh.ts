@@ -56,26 +56,28 @@ export class PickupMesh {
 
   /** Spin and bob the crates; add rings and light shafts for those near `view`. */
   update(time: number, glows?: GlowSprites, view?: Rect): void {
-    this.pickups.forEach((p, i) => {
+    for (let i = 0; i < this.pickups.length; i++) {
+      const p = this.pickups[i];
       const s = p.respawnAt === 0 ? 1 : 0;
       this.q.setFromAxisAngle(this.up, time * 2 + i);
       const bob = Math.sin(time * 3 + i) * 0.15;
       this.pos.set(p.x, 0.8 + bob, p.z);
       this.m.compose(this.pos, this.q, this.scale.set(s, s, s));
       this.mesh.setMatrixAt(i, this.m);
-      if (!s || !glows || !view) return;
-      if (p.x < view.minX - GLOW_MARGIN || p.x > view.maxX + GLOW_MARGIN) return;
-      if (p.z < view.minZ - GLOW_MARGIN || p.z > view.maxZ + GLOW_MARGIN) return;
+      if (!s || !glows || !view) continue;
+      if (p.x < view.minX - GLOW_MARGIN || p.x > view.maxX + GLOW_MARGIN) continue;
+      if (p.z < view.minZ - GLOW_MARGIN || p.z > view.maxZ + GLOW_MARGIN) continue;
       const c = this.colours[i];
       const pulse = 0.5 + 0.5 * Math.sin(time * 4 + i * 1.7);
       const ring = 2.1 + pulse * 0.5;
       const k = 0.8 + 0.5 * pulse;
       glows.addFlat(p.x, 0.05, p.z, time * 0.8, ring, ring, c.r * k, c.g * k, c.b * k, GLOW.ring);
       glows.addFlat(p.x, 0.04, p.z, 0, 3.2, 3.2, c.r * 0.35, c.g * 0.35, c.b * 0.35, GLOW.disc);
-      for (const yaw of [0.6, 0.6 + Math.PI / 2]) {
-        glows.addUpright(p.x, 0, p.z, yaw + time * 0.3, 0.9, 4.5, c.r * 0.5, c.g * 0.5, c.b * 0.5, GLOW.beam);
-      }
-    });
+      // Two crossed upright quads make the shaft read from any angle.
+      const yaw = 0.6 + time * 0.3;
+      glows.addUpright(p.x, 0, p.z, yaw, 0.9, 4.5, c.r * 0.5, c.g * 0.5, c.b * 0.5, GLOW.beam);
+      glows.addUpright(p.x, 0, p.z, yaw + Math.PI / 2, 0.9, 4.5, c.r * 0.5, c.g * 0.5, c.b * 0.5, GLOW.beam);
+    }
     this.mesh.instanceMatrix.needsUpdate = true;
   }
 }

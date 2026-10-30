@@ -55,6 +55,8 @@ export class Look {
   private readonly view: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
   private dt = 0;
   private player: PlayerView | null = null;
+  private night = 0;
+  private warmedUp = false;
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -92,11 +94,14 @@ export class Look {
     const sky = this.lighting.apply(this.time.hour);
     this.sunShadow.setStrength(sky.shadowStrength);
     this.cars.envIntensity = sky.envIntensity;
+    this.post.setNight(sky.night);
+    this.night = sky.night;
     this.city.update(sky.night);
   }
 
   /** Draw a frame: fill the batched renderers for this view, fit the shadows, render. */
   render(camera: Camera): void {
+    if (!this.warmedUp) this.warmUp(camera);
     const view = this.rig.visibleGround(this.view);
     this.contactShadows.begin();
     this.glows.begin();
@@ -110,6 +115,18 @@ export class Look {
     // Count the whole frame (shadow pass, scene, bloom), not just the last pass.
     this.renderer.info.reset();
     this.renderer.render(this.scene, camera);
+  }
+
+  /**
+   * Compile every program before play, including the night-only glow meshes
+   * that are hidden by day: otherwise the first dusk would stall a frame
+   * compiling them mid-drive.
+   */
+  private warmUp(camera: Camera): void {
+    this.warmedUp = true;
+    this.city.update(1);
+    this.renderer.compile(this.scene, camera);
+    this.city.update(this.night);
   }
 
   /** On foot: a pulsing ring and a heading chevron; driving: a ring round the car that fades at speed. */

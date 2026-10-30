@@ -149,7 +149,12 @@ export class CharacterBatch {
       this.mesh.setMatrixAt(row, this.m);
       model.write(data, row * rowFloats, this.boneCount);
       const e = model.root.matrixWorld.elements;
-      shadows?.add(e[12], e[14], 0, model.lying ? 0.45 : 0.3, model.lying ? 0.9 : 0.3, 0.25, 0.5);
+      if (model.lying) {
+        // Knocked down: flat on the back, head ~1.7 m behind the feet.
+        shadows?.add(e[12] - e[8] * 0.8, e[14] - e[10] * 0.8, Math.atan2(e[8], e[10]), 0.4, 0.9, 0.25, 0.45);
+      } else {
+        shadows?.add(e[12], e[14], 0, 0.3, 0.3, 0.25, 0.5);
+      }
       row++;
     }
     this.mesh.count = row;

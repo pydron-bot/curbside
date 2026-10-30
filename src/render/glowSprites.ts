@@ -97,11 +97,9 @@ export class GlowSprites {
   end(): void {
     const n = this.count;
     this.mesh.count = n;
-    for (const a of [this.mesh.instanceMatrix, this.colour, this.shape]) {
-      a.clearUpdateRanges();
-      a.addUpdateRange(0, n * a.itemSize);
-      a.needsUpdate = true;
-    }
+    uploadRange(this.mesh.instanceMatrix, n);
+    uploadRange(this.colour, n);
+    uploadRange(this.shape, n);
   }
 
   private push(r: number, g: number, b: number, shape: GlowShape): void {
@@ -111,6 +109,13 @@ export class GlowSprites {
     this.colour.setXYZ(i, r, g, b);
     this.shape.setX(i, shape);
   }
+}
+
+/** Upload only the first `count` instances of an instanced attribute. */
+export function uploadRange(a: InstancedBufferAttribute, count: number): void {
+  a.clearUpdateRanges();
+  a.addUpdateRange(0, count * a.itemSize);
+  a.needsUpdate = true;
 }
 
 function material(): ShaderMaterial {
