@@ -240,15 +240,19 @@ export class CarBatch {
       const blue = phase < 0.5;
       const side = blue ? 1 : -1;
       const top = d.height + 0.15;
-      const bx = x + cos * side * 0.45;
-      const bz = z - sin * side * 0.45;
+      // A police bike's lights are smaller and closer together than a car's light bar.
+      const size = Math.min(1, d.halfWidth / 0.9);
+      const bx = x + cos * side * 0.45 * size;
+      const bz = z - sin * side * 0.45 * size;
       const r = blue ? 0.15 : 2.2;
       const g = blue ? 0.45 : 0.1;
       const b = blue ? 2.6 : 0.08;
-      glows.addFlat(bx, top, bz, heading, 2.2, 2.2, r, g, b, GLOW.disc);
+      const flare = 2.2 * (0.5 + 0.5 * size);
+      glows.addFlat(bx, top, bz, heading, flare, flare, r, g, b, GLOW.disc);
       // Wash on the road around the car.
       const wash = 0.18 + 0.22 * worldUniforms.uNight.value;
-      glows.addFlat(x, 0.08, z, heading, 11, 11, r * wash, g * wash, b * wash, GLOW.disc);
+      const pool = 11 * (0.55 + 0.45 * size);
+      glows.addFlat(x, 0.08, z, heading, pool, pool, r * wash, g * wash, b * wash, GLOW.disc);
     }
   }
 

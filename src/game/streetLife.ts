@@ -57,7 +57,9 @@ export interface StreetLifeDeps {
 }
 
 export class StreetLife {
-  private readonly riders = new Map<Vehicle, CharacterModel>();
+  /** Bikes with an NPC rider on, and the rider on each (parallel lists: no per-frame iterators). */
+  private readonly riderBikes: Vehicle[] = [];
+  private readonly riders: CharacterModel[] = [];
   private readonly spare: CharacterModel[] = [];
   private readonly lean = new WeakMap<Vehicle, number>();
   private readonly ids = new WeakMap<Vehicle, number>();
@@ -81,7 +83,8 @@ export class StreetLife {
     d.playerModel.riding = playerBike !== null;
     for (const v of d.vehicles) {
       const near = Math.abs(v.sim.x - focusX) < SOUND_RANGE && Math.abs(v.sim.z - focusZ) < SOUND_RANGE;
-      if (v.emergency && v.ai && !v.damage.wrecked && near && playing) d.audio.siren(`em-${this.idOf(v)}`, v.sim.x, v.sim.z, true, 'wail');
+      // Negative ids: clear of the police units' (positive) siren ids, and no string per frame.
+      if (v.emergency && v.ai && !v.damage.wrecked && near && playing) d.audio.siren(-this.idOf(v), v.sim.x, v.sim.z, true, 'wail');
       if (v.archetype === 'ice_cream_van' && v.ai && !v.damage.burning && playing) this.chime(v, focusX, focusZ);
       if (!isBike(v.archetype) || !v.mesh.root.visible) continue;
       const root = v.mesh.root;
@@ -105,23 +108,27 @@ export class StreetLife {
       }
       if (!this.hasRider(v)) continue;
       seen.add(v);
-      let rider = this.riders.get(v);
+      const k = this.riderBikes.indexOf(v);
+      let rider = k >= 0 ? this.riders[k] : null;
       if (!rider) {
         rider = this.spare.pop() ?? d.createRider(this.outfitFor(v));
         rider.setOutfit(this.outfitFor(v));
         rider.root.visible = true;
         rider.riding = true;
-        this.riders.set(v, rider);
+        this.riderBikes.push(v);
+        this.riders.push(rider);
       }
       this.sit(rider, v);
       rider.update(dt, 0, false);
     }
     // Riders whose bike lost them (thrown off, recycled, parked) go back to the pool.
-    for (const [v, rider] of this.riders) {
-      if (seen.has(v)) continue;
-      this.riders.delete(v);
+    for (let i = this.riderBikes.length - 1; i >= 0; i--) {
+      if (seen.has(this.riderBikes[i])) continue;
+      const rider = this.riders[i];
       rider.root.visible = false;
       this.spare.push(rider);
+      this.riderBikes.splice(i, 1);
+      this.riders.splice(i, 1);
     }
   }
 

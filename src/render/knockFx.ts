@@ -1,6 +1,7 @@
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import type { Rect } from '../world/city';
 import type { Effects } from './effects';
+import type { PropBatch } from './propBatch';
 import { worldUniforms } from './shaderLib';
 import type { WorldProps } from './worldProps';
 
@@ -15,6 +16,8 @@ const MAX_SPRAYS = 6;
 
 interface Flyer {
   kind: string;
+  /** The props family that draws it (street furniture, or a roadblock's barrier from `things`). */
+  family: PropBatch;
   x: number;
   y: number;
   z: number;
@@ -35,8 +38,9 @@ interface Flyer {
  * stood) flies off as a copy of its model, tumbling and bouncing, then
  * shrinks away; a hydrant leaves a column of water gushing from its stump
  * for a while; a little dust and a few sparks off metal. The copies are
- * dynamic instances in the world props' street family (no extra draw
- * call), the rest goes through the shared particles.
+ * dynamic instances in the world props' street family (a roadblock's
+ * sawhorse barrier in `things`; no extra draw call), the rest goes through
+ * the shared particles.
  */
 export class KnockFx {
   private readonly flyers: Flyer[] = [];
@@ -62,8 +66,10 @@ export class KnockFx {
     const a = (Math.random() - 0.5) * 0.9;
     const c = Math.cos(a);
     const sn = Math.sin(a);
+    const street = this.props.street;
     this.flyers.push({
       kind,
+      family: street.kindOf(kind) >= 0 ? street : this.props.things,
       x,
       y: 0,
       z,
@@ -133,7 +139,7 @@ export class KnockFx {
       const shrink = t > 0.8 ? (1 - t) / 0.2 : 1;
       this.q.setFromEuler(this.e.set(f.rx, f.ry, f.rz));
       this.m.compose(this.p.set(f.x, f.y + 0.3, f.z), this.q, this.s.set(shrink, shrink, shrink));
-      this.props.street.addMatrix(f.kind, this.m);
+      f.family.addMatrix(f.kind, this.m);
     }
     for (let i = this.sprays.length - 1; i >= 0; i--) {
       const s = this.sprays[i];

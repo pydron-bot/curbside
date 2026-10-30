@@ -577,7 +577,8 @@ function simulate(dt: number) {
   vehicleStates.length = 0;
   for (const v of vehicles) if (v.sim.y < 0.8) vehicleStates.push(v.sim);
   const target = playerTarget();
-  knockables.step(vehicleStates, dt, knockProp);
+  // Only once the furniture is drawn (props.glb in): nothing invisible to knock.
+  if (look.props.loaded) knockables.step(vehicleStates, dt, knockProp);
   for (const c of population.crowd) {
     copyPedState(c.prev, c.agent.s);
     const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, target);
@@ -618,8 +619,8 @@ function simulate(dt: number) {
       applyDamage(a.damage, hitA);
       applyDamage(b.damage, hitB);
       // A hard hit throws a bike's rider off (whichever of the two is a bike).
-      if (isBike(a.archetype) && bikeThrows(impact)) throwRider(a, impact);
-      if (isBike(b.archetype) && bikeThrows(impact)) throwRider(b, impact);
+      if (isBike(a.archetype) && bikeThrows(impact)) throwRider(a, impact, b === driving);
+      if (isBike(b.archetype) && bikeThrows(impact)) throwRider(b, impact, a === driving);
       const involvesPlayer = driving !== null && (a === driving || b === driving);
       if (involvesPlayer && hitA + hitB > 0) {
         markPlayerHit(a.damage, simTime);
@@ -731,8 +732,10 @@ const BIKE_THROW_HURT = 1.4;
  * A bike crashed hard: the rider is thrown off over the bars and knocked
  * flat (hurt, if it's the player), and the bike is left on its side. A
  * police bike's officer is thrown by the police (they see `tipped`).
+ * `byPlayer`: the player's car rammed it (scored and reported like any
+ * hit-and-run).
  */
-function throwRider(v: Vehicle, impact: number) {
+function throwRider(v: Vehicle, impact: number, byPlayer = false) {
   if (v.tipped) return;
   v.tipped = true;
   const s = v.sim;
@@ -756,7 +759,12 @@ function throwRider(v: Vehicle, impact: number) {
   Object.assign(agent.s, { x: door.x, z: door.z, vx: 0, vz: 0, heading: s.heading });
   knockDown(agent, fromX, fromZ, push, 2.5);
   population.addPed(agent);
-  events.emit({ type: 'pedDown', x: door.x, z: door.z, cause: 'vehicle', byPlayer: false });
+  // Rammed off by the player: a hit-and-run like any other.
+  events.emit({ type: 'pedDown', x: door.x, z: door.z, cause: 'vehicle', byPlayer });
+  if (byPlayer && player.driving) {
+    award(score.award('hitAndRun'));
+    provoke(agent, player.driving.sim.x, player.driving.sim.z);
+  }
 }
 
 /** A car came off a ramp: report the take-off and the flight time to expect. */
