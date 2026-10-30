@@ -70,6 +70,8 @@ import { createCityMesh } from './world/cityMesh';
 import { StaticGrid } from './world/collision';
 import { createGround } from './world/ground';
 import { mulberry32 } from './world/random';
+import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audio/gameAudio';
+import { mountRadioToast } from './ui/radioToast';
 
 const app = document.getElementById('app')!;
 const debugEl = document.getElementById('debug')!;
@@ -267,6 +269,12 @@ const award = (a: Award | null) => {
 /** Sim time each vehicle last earned a near miss, so one pass scores once. */
 const nearMissAt = new Map<Vehicle, number>();
 let simTime = 0;
+
+// --- Audio (unlocks on the first tap / click / key) ---
+const audio = new GameAudio({ best: score.best });
+const audioFrame = createAudioFrame(vehicles);
+const audioCar = createCarSound();
+mountRadioToast(document.body, audio);
 
 // --- Input ---
 const input = new Input();
@@ -765,7 +773,9 @@ function frame(now: number) {
   const alpha = loop.advance(frameSeconds, simulate);
 
   // Interpolate render state between the last two sim steps.
-  const steer = player.driving ? input.readVehicle().steer : 0;
+  // Read once per frame: the wheel steer and the engine sound share it.
+  const controls = player.driving ? input.readVehicle() : null;
+  const steer = controls ? controls.steer : 0;
   for (const v of vehicles) {
     v.mesh.root.position.set(lerp(v.prev.x, v.sim.x, alpha), 0, lerp(v.prev.z, v.sim.z, alpha));
     v.mesh.root.rotation.y = lerpAngle(v.prev.heading, v.sim.heading, alpha);
@@ -813,6 +823,13 @@ function frame(now: number) {
   } else {
     rig.update(frameSeconds, px, pz, ped.vx, ped.vz);
   }
+  audioFrame.x = focus.x;
+  audioFrame.z = focus.z;
+  audioFrame.car = player.driving && controls ? describeCar(audioCar, player.driving.sim, controls, player.driving.archetype) : null;
+  audioFrame.footSpeed = player.driving ? 0 : Math.hypot(ped.vx, ped.vz);
+  audioFrame.health = player.health;
+  audio.update(frameSeconds, audioFrame);
+
   renderer.render(scene, rig.camera);
   resolution.sample(elapsed);
 }
@@ -895,6 +912,7 @@ function setPaused(p: boolean, reason: PauseReason = 'paused') {
   paused = p;
   // Nothing held or queued while paused may leak into play on resume.
   input.resetAll();
+  audio.setPaused(p);
   if (!p) {
     last = performance.now();
     loop.reset();
@@ -939,6 +957,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   rig,
   score,
   events,
+  audio,
   explode,
   updates,
   get paused() {
