@@ -7,7 +7,7 @@
  * cheering a win. Reads the sim; changes nothing in it.
  */
 import type { EventBus } from '../core/events';
-import { driverDoorPosition, lerpAngle, speed } from '../entities/vehicle';
+import { lerpAngle, speed } from '../entities/vehicle';
 import { STORY_BODIES } from '../game/bodies';
 import type { Player } from '../game/player';
 import type { CrowdPed, Vehicle } from '../game/population';
@@ -126,13 +126,16 @@ export class PeoplePose {
       m.root.visible = false;
       return;
     }
-    const door = driverDoorPosition(car.sim, BOARD_DOOR);
+    // The driver's door (as driverDoorPosition, without the garbage): left of the car, a little forward.
+    const h = car.sim.heading;
+    const doorX = car.sim.x + Math.cos(h) * BOARD_DOOR + Math.sin(h) * 0.3;
+    const doorZ = car.sim.z - Math.sin(h) * BOARD_DOOR + Math.cos(h) * 0.3;
     const k = Math.min(1, this.boardTime / (this.boardFor * BOARD_STEP));
     const e = 1 - (1 - k) * (1 - k);
     const from = this.boardFrom;
-    m.root.position.set(lerp(from.x, door.x, e), 0, lerp(from.z, door.z, e));
+    m.root.position.set(lerp(from.x, doorX, e), 0, lerp(from.z, doorZ, e));
     // Facing the car, into the door.
-    m.root.rotation.y = lerpAngle(from.heading, Math.atan2(car.sim.x - door.x, car.sim.z - door.z), e);
+    m.root.rotation.y = lerpAngle(from.heading, Math.atan2(car.sim.x - doorX, car.sim.z - doorZ), e);
   }
 
   /** A win: the player (on foot) and any story character close by cheer. */

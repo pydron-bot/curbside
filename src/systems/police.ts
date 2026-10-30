@@ -84,7 +84,12 @@ const CREW_WAIT = 12;
 const SWAT_HEALTH = 180;
 const POLICE_PAINT = '#f2f2f2';
 const SWAT_PAINT = '#1b1f27';
-export const COP_OUTFIT: Outfit = { shirt: '#1d2f57', pants: '#141b2e', shoes: '#0b0b0d', hair: '#101828' };
+/**
+ * Officers on foot (cop.glb): a police-blue shirt and a navy peaked cap (its
+ * `hair` slot) light enough to tell from hair and asphalt at 20-60 m up;
+ * brim, cap band, duty belt and holster are in `shoes` (black).
+ */
+export const COP_OUTFIT: Outfit = { shirt: '#2c4a8a', pants: '#151d33', shoes: '#0b0b0d', hair: '#203469' };
 export const SWAT_OUTFIT: Outfit = { shirt: '#22262d', pants: '#1a1d22', shoes: '#0b0b0d', hair: '#15171b' };
 const SKIN = ['#e0ac84', '#c68e63', '#8d5a3b', '#f1c9a5', '#5e3b26'];
 

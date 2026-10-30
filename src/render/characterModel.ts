@@ -29,6 +29,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { BodyKind } from '../game/bodies';
 import type { WeaponKind } from '../systems/weapons';
 import { ClipBank, Layer, Pose, type ClipData } from './characterAnim';
+import type { Rect } from '../world/city';
 import type { ContactShadows } from './contactShadows';
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms } from './shaderLib';
 
@@ -52,6 +53,11 @@ const fakeQ = new Quaternion();
 const EXTRA_TEXELS = SLOTS.length + 1;
 /** Rows a body's batch starts with; it doubles when more of that body are on screen. */
 const START_CAPACITY = 16;
+/**
+ * People this far outside the visible ground still get drawn, m: a head
+ * leaning into the frame, and a long sun shadow at dusk reaching into it.
+ */
+const CULL_MARGIN = 8;
 
 /** The skeleton and clips every character of one body shares, built once from its GLB. */
 interface Template {
@@ -164,21 +170,25 @@ export class CharacterBatch {
 
   /**
    * Write every visible character into the instance buffers (call once per
-   * frame before rendering), and give each a contact shadow. Hidden when
-   * nobody wearing this body is visible: an empty batch costs no draw call.
+   * frame before rendering), and give each a contact shadow. With `view`
+   * (the ground the camera sees), people well outside it are left out: the
+   * crowd mostly walks just off-screen, and a body nobody on screen wears
+   * then costs no draw call at all (the batch hides when empty).
    */
-  flush(shadows?: ContactShadows): void {
+  flush(shadows?: ContactShadows, view?: Rect): void {
     let row = 0;
     const shown = this.shown;
     shown.length = 0;
     for (const model of this.models) {
       if (!isShown(model.root)) continue;
+      model.root.updateWorldMatrix(true, false);
+      const w = model.root.matrixWorld.elements;
+      if (view && (w[12] < view.minX - CULL_MARGIN || w[12] > view.maxX + CULL_MARGIN || w[14] < view.minZ - CULL_MARGIN || w[14] > view.maxZ + CULL_MARGIN)) continue;
       if (row >= this.capacity && !this.grow()) {
         if (!this.warned) console.warn(`CharacterBatch ${this.kind}: more than ${this.capacity} people visible`);
         this.warned = true;
         break;
       }
-      model.root.updateWorldMatrix(true, false);
       model.body.updateMatrix();
       this.m.multiplyMatrices(model.root.matrixWorld, model.body.matrix);
       model.instanceMatrix.copy(this.m);
@@ -876,11 +886,10 @@ export class CharacterModel {
 
   /** The whole-body state wanted now (only states whose clip this body has). */
   private wantFull(speed: number): FullState {
-    const pick = (s: Exclude<FullState, 'none'>): FullState => (this.clipFor(s) ? s : 'none');
     if (this.arrested && this.has('Arrested')) return 'arrested';
-    if (this.downPhase !== 'none') return pick(this.downPhase);
+    if (this.downPhase !== 'none') return this.clipFor(this.downPhase) ? this.downPhase : 'none';
     if (this.riding && this.has('Ride')) return 'ride';
-    if (this.enterTime > 0) return pick('enter');
+    if (this.enterTime > 0) return this.has('EnterCar') ? 'enter' : 'none';
     if (this.cowering && this.has('Cower')) return 'cower';
     if (this.cheerTime > 0 && speed < 0.8 && this.has('Cheer')) return 'cheer';
     if (this.staggerTime > 0 && this.has('Stagger')) return 'stagger';

@@ -1,5 +1,6 @@
 import type { Object3D, Vector3 } from 'three';
 import { BODY_KINDS, bodyUrl, type BodyKind } from '../game/bodies';
+import type { Rect } from '../world/city';
 import { CharacterBatch, type CharacterModel, type Outfit } from './characterModel';
 import type { ContactShadows } from './contactShadows';
 import { HeldWeapons } from './heldWeapons';
@@ -45,9 +46,9 @@ export class CharacterBodies {
     return this.byKind[body].create(outfit);
   }
 
-  /** Write everyone visible (and what they hold) for this frame; contact shadows too. */
-  flush(shadows?: ContactShadows): void {
-    for (const b of this.batches) b.flush(shadows);
+  /** Write everyone on screen (`view`: the ground the camera sees) and what they hold; contact shadows too. */
+  flush(shadows?: ContactShadows, view?: Rect): void {
+    for (const b of this.batches) b.flush(shadows, view);
     this.weapons.flush(this.batches);
   }
 

@@ -122,7 +122,7 @@ export class Look {
     const view = this.rig.visibleGround(this.view);
     this.contactShadows.begin();
     this.glows.begin();
-    this.characters.flush(this.contactShadows);
+    this.characters.flush(this.contactShadows, view);
     this.cars.flush(view, this.dt, this.contactShadows, this.glows);
     // A redraw without update() (resized while paused) must not read as motion.
     this.dt = 0;
