@@ -139,8 +139,11 @@ export function exportList(n: number): ExportOrder[] {
     const o = order(pick[0], pick[1]);
     if (!has(o)) out.push(o);
   }
-  // A pool too small for a full list of distinct cars can't happen with the
-  // data above, but keep the list valid if it's ever trimmed.
+  // The draw stalls at seven once an archetype's 'ANY' order shuts out its
+  // colours (about a third of lists): top up with any order not on the list
+  // yet. That can put 'ANY SEDAN' beside 'BLACK SEDAN', which is fine (two
+  // sedans, one black: a car fills one order, colour first, and a sold car
+  // can't be sold again), and it keeps saved lists as they were.
   for (const [a, c] of POOL) if (out.length < ORDERS_PER_LIST && !out.some((x) => x.id === order(a, c).id)) out.push(order(a, c));
   return out;
 }

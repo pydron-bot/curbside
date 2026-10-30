@@ -63,20 +63,13 @@ export class ExportMode implements Mode {
   }
 
   private orderFor(v: Vehicle): ExportOrder | null {
+    if (v.exported) return null;
     return openOrderFor(this.list, this.ctx.progress.data.exports.done, v.archetype, v.paint, v.police === true);
   }
 
   step(dt: number): void {
     const ctx = this.ctx;
-    if (this.sold && (this.soldIn -= dt) <= 0) {
-      const v = this.sold;
-      this.sold = null;
-      const player = ctx.deps.player;
-      if (player.driving !== v) {
-        ctx.deps.population.retireVehicle(v);
-        if (player.lastDriven === v) player.lastDriven = null;
-      }
-    }
+    if (this.sold && (this.soldIn -= dt) <= 0) this.crane();
     const car = ctx.deps.player.driving;
     this.wanted = ctx.freeRoam && car && !car.damage.wrecked ? this.orderFor(car) : null;
     this.syncBlip();
@@ -106,8 +99,9 @@ export class ExportMode implements Mode {
     save.exports.done.push(order.id);
     save.stats.exportsDelivered++;
     ctx.ui.banner('SOLD!', 'pass', `${order.label} · +$${fmt(paid)}`);
-    // Out you get; the crane takes it.
+    // Out you get; the crane takes it. Sold is sold: no getting back in to sell it twice.
     ctx.deps.player.exit();
+    car.exported = true;
     this.sold = car;
     this.soldIn = TAKE_AFTER;
     if (save.exports.done.length >= this.list.length) {
@@ -169,6 +163,17 @@ export class ExportMode implements Mode {
   reset(): void {
     this.held = 0;
     this.refused = '';
+    if (this.sold) this.crane();
+  }
+
+  /** The sold car goes (whoever is near it). */
+  private crane(): void {
+    const v = this.sold!;
+    this.sold = null;
+    const player = this.ctx.deps.player;
+    if (player.driving === v) player.exit();
+    this.ctx.deps.population.retireVehicle(v);
+    if (player.lastDriven === v) player.lastDriven = null;
   }
 
   /** '$' at the docks in free roam; pulsing with an arrow while you drive a wanted car. */

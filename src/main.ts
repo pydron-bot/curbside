@@ -374,7 +374,7 @@ function nearestEnterable(): Vehicle | null {
   let bestDist = ENTER_RANGE;
   for (const v of vehicles) {
     const d = Math.hypot(v.sim.x - player.ped.x, v.sim.z - player.ped.z);
-    if (d < bestDist && speed(v.sim) < ENTER_MAX_SPEED && !v.damage.wrecked) {
+    if (d < bestDist && speed(v.sim) < ENTER_MAX_SPEED && !v.damage.wrecked && !v.exported) {
       best = v;
       bestDist = d;
     }

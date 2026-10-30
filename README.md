@@ -510,7 +510,8 @@ are `src/game/modes/*Mode.ts`.
   "A TAXI", "A POLICE CAR", "ANY VAN"...); stop in the bay with no stars and
   at least half health: compact 300, sedan 400, van / pickup 500, taxi 600,
   sports 900, police 1,500 (+25% for a colour order) × health; the car is
-  craned away. The whole list pays $5,000 and a new one comes in.
+  craned away (`Vehicle.exported`: nobody gets back in to sell it twice).
+  The whole list pays $5,000 and a new one comes in.
 - **Taxi fares** (`modes/taxi.ts`, `taxiMode.ts`): driving a taxi puts you
   on duty. A pedestrian ahead stops and waves under a yellow marker; stop
   beside them for a second and they get in. The destination is 250–700 m
