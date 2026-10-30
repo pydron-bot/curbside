@@ -379,6 +379,11 @@ kbd.pad.b {
   .srow {
     min-height: 44px;
   }
+
+  /* No room on a phone; the pause card still shows the build. */
+  .sheet-body > .build-id {
+    display: none;
+  }
 }
 
 /* 852x340 (Safari toolbar showing): trim padding and gaps so the sheet still fits unscrolled. */
@@ -404,10 +409,6 @@ kbd.pad.b {
     gap: 0;
   }
 
-  /* No room left at 340; the pause card still shows the build. */
-  .sheet-body > .build-id {
-    display: none;
-  }
 }
 
 .srow:hover {
