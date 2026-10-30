@@ -509,8 +509,9 @@ export class Combat {
     const ownCar = inside || (p.lastDriven === v && p.leftBurning);
     const byPlayer = ownCar || blamesPlayer(v.damage, this.d.now());
     this.blast('car', v.sim.x, v.sim.z, byPlayer, v, ownCar);
-    // Losing your own ride isn't a KABOOM.
-    if (this.d.playing() && !ownCar) {
+    // Losing your own ride isn't a KABOOM, and nothing scores once you're
+    // WASTED or BUSTED (fires you started can still go up after).
+    if (this.d.playing() && !ownCar && p.alive && !p.arrested) {
       const at = p.position;
       if (Math.hypot(at.x - v.sim.x, at.z - v.sim.z) < BOOM_SCORE_RANGE) this.d.award(this.d.score.award('boom'));
     }

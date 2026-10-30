@@ -141,7 +141,8 @@ export class Heat {
       this.crime('explosion', e.x, e.z);
       if (e.police) {
         this.crime('copCarWrecked', e.x, e.z);
-        deps.award(deps.score.award('copWreck'));
+        // No points while WASTED or BUSTED (a fire you started can still go up).
+        if (deps.player.alive && !deps.player.arrested) deps.award(deps.score.award('copWreck'));
       }
     });
     bus.on('enterVehicle', (e) => {

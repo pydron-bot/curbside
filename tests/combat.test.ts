@@ -414,6 +414,17 @@ describe('blasts and fire', () => {
     expect(w3.awards()).toContain('boom');
   });
 
+  it('nothing scores once you are WASTED, even a car you set alight going up', () => {
+    const w = setup();
+    const target = car(0, 10);
+    w.vehicles.push(target);
+    target.damage.lastPlayerHit = 0;
+    w.player.hurt(1000);
+    expect(w.player.alive).toBe(false);
+    w.combat.vehicleExploded(target);
+    expect(w.awards()).not.toContain('boom');
+  });
+
   it('a car you bailed out of still hurts you if you stand next to it', () => {
     const w = setup();
     const ride = car(0, 3);
