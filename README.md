@@ -228,8 +228,9 @@ geometry is uploaded at load, not when that model first drives into view.
   (`glowSprites.ts`: headlight beams, tail/brake lights, siren wash, the
   player marker, pickup rings). The city is ~5 instanced meshes per 256 m
   chunk. Measured in Chromium (whole frame, incl. shadow pass), iPhone
-  15 Pro profile ('medium'): 40 draw calls on foot at spawn, 42–48 driving
-  a busy street, 42–48 at night; desktop ('high') is 54–59 including ~14
+  15 Pro profile ('medium'): 40 draw calls on foot at spawn, 42–51 driving
+  a busy street by day or night (each car model in view costs one call,
+  plus one in the shadow pass); desktop ('high') is 54–59 including ~14
   for bloom; 'low' (no shadow map) 22–27. Programs: 15 on phones, 24 on
   desktop, none compiled after start-up over a full day. About 160–250k triangles, most of
   it the instanced city in both passes.
