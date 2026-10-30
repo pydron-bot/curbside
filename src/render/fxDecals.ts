@@ -1,6 +1,7 @@
 import {
   BufferAttribute,
   BufferGeometry,
+  DoubleSide,
   DynamicDrawUsage,
   Mesh,
   NormalBlending,
@@ -259,8 +260,8 @@ function decalMaterial(): ShaderMaterial {
           float x = vUv.x;
           float edge = smoothstep(0.0, 0.18, x) * smoothstep(1.0, 0.82, x);
           float tread = 0.72 + 0.28 * sin(x * 31.4);
-          float patch = 0.65 + 0.35 * noise(vec2(x * 3.0, vUv.y * 1.7));
-          a = edge * tread * patch;
+          float wear = 0.65 + 0.35 * noise(vec2(x * 3.0, vUv.y * 1.7));
+          a = edge * tread * wear;
           col = vec3(0.012, 0.011, 0.01);
         } else if (vKind < 1.5) {
           vec2 p = vUv * 2.0 - 1.0;
@@ -287,6 +288,7 @@ function decalMaterial(): ShaderMaterial {
     transparent: true,
     depthWrite: false,
     blending: NormalBlending,
+    side: DoubleSide,
     polygonOffset: true,
     polygonOffsetFactor: -1,
     polygonOffsetUnits: -2,

@@ -19,6 +19,7 @@ import { DECAL, GroundDecals } from './fxDecals';
 import { FLAG, FRAME, InstanceBuffer, ParticlePool, RAMP, type Frame } from './fxParticles';
 import { GLOW, type GlowShape, type GlowSprites } from './glowSprites';
 import { getQuality } from './quality';
+import { worldUniforms } from './shaderLib';
 
 /** Tracer look per shooter: width (m), head speed (m/s), tint. */
 export type TracerKind = 'pistol' | 'smg' | 'shotgun' | 'npc';
@@ -96,6 +97,8 @@ export class Effects {
   private readonly lLife = new Float32Array(MAX_LIGHTS);
   private readonly lShape = new Uint8Array(MAX_LIGHTS);
   private lightNext = 0;
+  /** Sky light on smoke and dust (the soft particles), dimmer and cooler at night. */
+  private readonly ambient = { value: { r: 1, g: 1, b: 1 } as Rgb };
   /** Explosions in the last moment: chain reactions share one budget. */
   private recentBooms = 0;
 
@@ -107,8 +110,9 @@ export class Effects {
     this.hotOut = new InstanceBuffer(hotCapacity + MAX_TRACERS);
     this.softOut = new InstanceBuffer(softCapacity);
     this.atlas = createFxAtlas();
-    this.hotMesh = particleMesh(this.hotOut, this.atlas, 'fxHot');
-    this.softMesh = particleMesh(this.softOut, this.atlas, 'fxSoft');
+    // Fire, sparks and flashes are their own light: full brightness day and night.
+    this.hotMesh = particleMesh(this.hotOut, this.atlas, { value: { r: 1, g: 1, b: 1 } }, 'fxHot');
+    this.softMesh = particleMesh(this.softOut, this.atlas, this.ambient, 'fxSoft');
     // Fire first, smoke over it, both after every other transparent.
     this.hotMesh.renderOrder = 3;
     this.softMesh.renderOrder = 4;
@@ -587,6 +591,12 @@ export class Effects {
   }
 
   update(dt: number): void {
+    // Smoke and dust are lit by the sky: dim and cool them at night.
+    const night = worldUniforms.uNight.value;
+    const amb = this.ambient.value;
+    amb.r = 1 - 0.74 * night;
+    amb.g = 1 - 0.7 * night;
+    amb.b = 1 - 0.6 * night;
     this.recentBooms = Math.max(0, this.recentBooms - dt * 4);
     this.hot.step(dt);
     this.soft.step(dt);
@@ -716,7 +726,7 @@ const INSTANCE_ATTRIBUTES = ['iPos', 'iAxis', 'iCol', 'iFx'] as const;
  * so one material does both smoke (add 0) and light (add 1). Tone mapping
  * and the output colour space run here like in any built-in material.
  */
-function particleMesh(out: InstanceBuffer, atlas: Texture, name: string): Mesh {
+function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb }, name: string): Mesh {
   const plane = new PlaneGeometry(1, 1);
   const geo = new InstancedBufferGeometry();
   geo.index = plane.index;
@@ -729,7 +739,7 @@ function particleMesh(out: InstanceBuffer, atlas: Texture, name: string): Mesh {
   geo.setAttribute('iFx', attr(out.fx, 2));
   geo.instanceCount = 0;
   const material = new ShaderMaterial({
-    uniforms: { map: { value: atlas } },
+    uniforms: { map: { value: atlas }, uAmbient: ambient },
     vertexShader: /* glsl */ `
       attribute vec4 iPos;
       attribute vec4 iAxis;
@@ -765,6 +775,7 @@ function particleMesh(out: InstanceBuffer, atlas: Texture, name: string): Mesh {
       }`,
     fragmentShader: /* glsl */ `
       uniform sampler2D map;
+      uniform vec3 uAmbient;
       varying vec2 vUv;
       varying vec4 vCol;
       varying float vAdd;
@@ -772,7 +783,7 @@ function particleMesh(out: InstanceBuffer, atlas: Texture, name: string): Mesh {
         vec4 tex = texture2D(map, vUv);
         float a = tex.a * vCol.a;
         if (a < 0.004) discard;
-        gl_FragColor = vec4(vCol.rgb * tex.rgb, 1.0);
+        gl_FragColor = vec4(vCol.rgb * tex.rgb * uAmbient, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
         gl_FragColor = vec4(gl_FragColor.rgb * a, a * (1.0 - vAdd));
