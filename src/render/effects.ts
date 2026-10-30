@@ -407,7 +407,7 @@ export class Effects {
       this.hot.g[i] = 2.3;
       this.hot.b[i] = 1.2;
     }
-    i = this.hot.spawn(x, GUN_Y, z, 0, 0, 0, 0.05, 0.75 * power + 0.35, 0.4, RAMP.flash, FRAME.star);
+    i = this.hot.spawn(x, GUN_Y, z, 0, 0, 0, 0.05, 0.55 * power + 0.3, 0.35, RAMP.flash, FRAME.star);
     if (i >= 0) {
       this.hot.add[i] = 1;
       this.hot.r[i] = 3;
@@ -416,7 +416,8 @@ export class Effects {
     }
     const s = this.soft.spawn(x + dirX * 0.4, GUN_Y, z + dirZ * 0.4, dirX * 2.2 + this.windX * 0.3, 0.6, dirZ * 2.2, 0.5 + Math.random() * 0.3, 0.3, 1 + 0.4 * power, RAMP.smoke, FRAME.puffC);
     if (s >= 0) this.smokeLook(s, 0.6, 0.28);
-    this.light(x + dirX * 0.8, 0.1, z + dirZ * 0.8, 2.6 + power, 3.2 + power, 1.5 * power, 0.95 * power, 0.45 * power, 0.07, GLOW.disc);
+    // Big enough to read as light on the street, not so bright that a shotgun at night blooms into a white ball.
+    this.light(x + dirX * 0.8, 0.1, z + dirZ * 0.8, 2.4 + power * 0.8, 3 + power * 0.8, 1.2 * power, 0.75 * power, 0.35 * power, 0.07, GLOW.disc);
   }
 
   /** Where a bullet stopped: sparks off metal and walls, dust (and a pock) on the ground. */
@@ -488,9 +489,13 @@ export class Effects {
     this.soft.spin[i] = (Math.random() - 0.5) * 1.2;
   }
 
-  /** A pale wind streak hanging in the air at (x, y, z), stretched along (dx, dz) × length. */
-  streak(x: number, y: number, z: number, dx: number, dz: number, length: number, alpha: number, life = 0.28): void {
-    const i = this.hot.spawn(x, y, z, dx, 0, dz, life, 0.07, 0.05, RAMP.flat, FRAME.spark);
+  /**
+   * A pale wind streak hanging in the air at (x, y, z), stretched along
+   * (dx, dz) × length, `width` m across (≥ ~0.1 to stay a solid pixel wide
+   * on a phone at driving height).
+   */
+  streak(x: number, y: number, z: number, dx: number, dz: number, length: number, alpha: number, life = 0.28, width = 0.11): void {
+    const i = this.hot.spawn(x, y, z, dx, 0, dz, life, width, width * 0.7, RAMP.flat, FRAME.spark);
     if (i < 0) return;
     // Velocity only orients it: it hangs still, so the car sweeps past it.
     this.hot.flags[i] = FLAG.stretch | FLAG.still;

@@ -323,7 +323,7 @@ export class FxDirector {
         const side = k % 2 ? 1 : -1;
         const off = side * (1.6 + Math.random() * 1.6);
         const ahead = -3 + Math.random() * 10;
-        this.d.effects.streak(at.x + dx * ahead - dz * off, 0.8 + Math.random() * 1.4, at.z + dz * ahead + dx * off, dx, dz, 4 + Math.random() * 4, 0.45, 0.3);
+        this.d.effects.streak(at.x + dx * ahead - dz * off, 0.8 + Math.random() * 1.4, at.z + dz * ahead + dx * off, dx, dz, 4 + Math.random() * 4, 0.6, 0.32, 0.2);
       }
       this.d.rig.punchFov(-2);
     }
