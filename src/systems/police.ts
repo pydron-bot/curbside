@@ -61,6 +61,8 @@ const ABANDON_RANGE = 30;
 const OFFICER_DESPAWN = 90;
 /** Officers shoot (from 2 stars) at someone on foot further than this, m (closer: they grab). */
 const SHOOT_FROM = 7;
+/** On foot, unarmed and slower than this: giving up (officers hold fire and come to cuff), m/s. */
+const SURRENDER_SPEED = 1;
 /** From 4 stars, passengers shoot at the player's car from this close, m, this often, s. */
 const CAR_SHOT_RANGE = 20;
 const CAR_SHOT_EVERY = 2.2;
@@ -75,6 +77,8 @@ const ROADBLOCK_EVERY = 25;
 /** A roadblock this far behind the player (or this old) packs up and gives chase, m / s. */
 const ROADBLOCK_PASSED = 45;
 const ROADBLOCK_LIFE = 35;
+/** A dismissed unit waits this long for its officers to get back in, then leaves them, s. */
+const CREW_WAIT = 12;
 /** SWAT vans are armoured. */
 const SWAT_HEALTH = 180;
 const POLICE_PAINT = '#f2f2f2';
@@ -109,7 +113,7 @@ export interface PoliceUnit {
   shootIn: number;
   /** The heat no longer calls for it: collect the officers, then go back to patrol. */
   dismissed: boolean;
-  /** Seconds this roadblock has stood. */
+  /** Seconds this roadblock has stood (or, dismissed, waited for its crew). */
   age: number;
 }
 
@@ -284,7 +288,7 @@ export class PoliceForce {
 
   /** Everyone stands down at once (busted, died, a fresh run): units go back to patrol. */
   standDown(): void {
-    for (const u of this.units) u.dismissed = true;
+    for (const u of this.units) dismiss(u);
     this.heli.leaving = this.heli.active;
     this.seen = false;
     this.target.seen = this.target.known = false;
@@ -340,10 +344,10 @@ export class PoliceForce {
         }
       }
       if (!pick) break;
-      pick.dismissed = true;
+      dismiss(pick);
       excess--;
     }
-    if (this.stars === 0) for (const u of this.units) u.dismissed = true;
+    if (this.stars === 0) for (const u of this.units) dismiss(u);
   }
 
   private loseCar(u: PoliceUnit): void {
@@ -372,11 +376,14 @@ export class PoliceForce {
   }
 
   private spawnUnit(kind: UnitKind, ctx: PoliceContext): PoliceUnit | null {
-    const s = ctx.suspect;
-    // Mid-chase, reinforcements come from all round (not always waiting ahead,
-    // or outrunning them would be hopeless); on a fresh call, mostly ahead.
+    // Reinforcements are sent to where the police believe the player is:
+    // spawning round the real position while they're lost would hand the
+    // chase straight back. Mid-chase they come from all round (not always
+    // waiting ahead, or outrunning them would be hopeless); on a fresh call,
+    // mostly ahead.
+    const t = this.target;
     const ahead = this.seen ? 0.3 : 0.65;
-    const spot = policeSpawnPoint(s.x, s.z, s.vx, s.vz, ctx.view, ctx.rand, (x, z) => this.crowded(x, z), ahead);
+    const spot = policeSpawnPoint(t.x, t.z, t.vx, t.vz, ctx.view, ctx.rand, (x, z) => this.crowded(x, z), ahead);
     if (!spot) return null;
     const v = this.borrowCar(kind, spot.x, spot.z, spot.heading, SPAWN_SPEED);
     return this.addUnit(v, kind, 'pursuit', spot.driver);
@@ -468,7 +475,19 @@ export class PoliceForce {
     const onScreen = inView(v.sim.x, v.sim.z, ctx.view, 4);
 
     if (u.dismissed) {
-      if (u.officers.length > 0) return; // waiting for the crew
+      if (u.officers.length > 0) {
+        // Waiting for the crew, but not forever (an officer wedged behind a
+        // building would hold the car, siren going, until the next run).
+        if ((u.age += dt) < CREW_WAIT) return;
+        for (const p of u.officers) this.strays.push(p);
+        u.officers.length = 0;
+        if (u.aboard === 0) {
+          // Nobody left to drive it: an abandoned police car.
+          this.loseCar(u);
+          this.removeUnit(u, false);
+          return;
+        }
+      }
       if (!onScreen && d > 60) this.removeUnit(u, true);
       else this.backToPatrol(u, ctx.rand);
       return;
@@ -486,8 +505,12 @@ export class PoliceForce {
       }
       return;
     }
-    // Fell far behind out of sight, or wedged for good: recycle it (a fresh one spawns closer).
-    if (!onScreen && !u.seesPlayer && (d > DESPAWN_RANGE || isPursuitHopeless(u.driver))) {
+    // Fell far behind out of sight, or wedged for good: recycle it (a fresh one
+    // spawns closer). Behind whom: where the police think the player is, so
+    // units searching the last sighting aren't swapped out while they look.
+    const t = this.target;
+    const behind = Math.hypot(v.sim.x - t.x, v.sim.z - t.z);
+    if (!onScreen && !u.seesPlayer && (behind > DESPAWN_RANGE || isPursuitHopeless(u.driver))) {
       this.removeUnit(u, true);
       return;
     }
@@ -617,9 +640,11 @@ export class PoliceForce {
       return;
     }
     // On foot: from 3 stars they shoot on sight; at 2 only at someone armed or running.
-    // Someone who stops and gives up (or is lying on the ground) just gets cuffed.
-    const running = Math.hypot(s.vx, s.vz) > 3.5;
-    const shoot = !s.down && d > SHOOT_FROM && (this.stars >= 3 || (this.stars >= 2 && (s.armed || running)));
+    // Someone who stops with empty hands and gives up (or is lying on the
+    // ground) just gets cuffed: giving up is always a way out that keeps you alive.
+    const moving = Math.hypot(s.vx, s.vz);
+    const surrendering = !s.armed && moving < SURRENDER_SPEED;
+    const shoot = !s.down && !surrendering && d > SHOOT_FROM && (this.stars >= 3 || (this.stars >= 2 && (s.armed || moving > 3.5)));
     a.mode = shoot ? 'shoot' : 'arrest';
     a.goalX = s.x;
     a.goalZ = s.z;
@@ -848,6 +873,13 @@ export function roadblockSpot(px: number, pz: number, vx: number, vz: number, vi
     return { dirX, dirZ, cars };
   }
   return null;
+}
+
+/** The heat no longer calls for this unit (its crew-wait clock starts now). */
+function dismiss(u: PoliceUnit): void {
+  if (u.dismissed) return;
+  u.dismissed = true;
+  u.age = 0;
 }
 
 /** Nearest officer on their feet in `list` to (x, z), if nearer than `best`. */

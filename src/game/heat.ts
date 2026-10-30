@@ -225,11 +225,15 @@ export class Heat {
     if (!own || !this.live || impact <= 6) return;
     if (other.police || other.archetype === 'police') {
       // In a chase, bumps happen both ways: only a clear ram counts. A cop
-      // ramming, PITting or boxing you in was asking for it.
+      // ramming, PITting or boxing you in was asking for it, and so was one
+      // driving into you (cutting across, overtaking head-on). Smashing
+      // through a roadblock is what it's there for: it costs the car, not
+      // stars (otherwise every 3-star getaway spirals into SWAT).
       const unit = this.police.unitOf(other);
-      const mode = unit?.role === 'pursuit' ? unit.driver.mode : null;
+      if (unit?.role === 'roadblock') return;
+      const mode = unit && !unit.dismissed ? unit.driver.mode : null;
       if (mode === 'ram' || mode === 'pit' || mode === 'box') return;
-      if (!rammedBy(own, other, mode ? CHASE_RAM_MARGIN : RAM_MARGIN)) return;
+      if (mode ? !rammedBy(own, other, CHASE_RAM_MARGIN, CHASE_RAM_COP_CLOSING) : !rammedBy(own, other)) return;
       const last = this.rammed.get(other) ?? -Infinity;
       this.rammed.set(other, this.time);
       if (this.time - last < RAM_REPEAT) return;
@@ -431,14 +435,17 @@ const NO_CONTROLS: VehicleControls = { throttle: 0, steer: 0, handbrake: false }
 
 /** The rammer must have been closing this much faster than the other car, m/s... */
 const RAM_MARGIN = 2;
-/** ...and by this much on a police car that's chasing you. */
+/** ...and by this much on a police car that's chasing you... */
 const CHASE_RAM_MARGIN = 7;
+/** ...which must not itself have been driving into you faster than this, m/s. */
+const CHASE_RAM_COP_CLOSING = 3;
 
 /**
  * Who did the ramming? Judged from the speeds just before the hit (the cars'
- * `prev` states): whoever was closing on the other clearly faster.
+ * `prev` states): whoever was closing on the other clearly faster (by
+ * `margin`), while the other closed no faster than `otherMax`.
  */
-export function rammedBy(rammer: Vehicle, other: Vehicle, margin = RAM_MARGIN): boolean {
+export function rammedBy(rammer: Vehicle, other: Vehicle, margin = RAM_MARGIN, otherMax = Infinity): boolean {
   const a = rammer.prev;
   const b = other.prev;
   const dx = b.x - a.x;
@@ -446,5 +453,5 @@ export function rammedBy(rammer: Vehicle, other: Vehicle, margin = RAM_MARGIN): 
   const d = Math.hypot(dx, dz) || 1;
   const aCloses = (a.vx * dx + a.vz * dz) / d;
   const bCloses = -(b.vx * dx + b.vz * dz) / d;
-  return aCloses > bCloses + margin;
+  return aCloses > bCloses + margin && bCloses <= otherMax;
 }

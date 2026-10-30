@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { HELI_FROM, SPOT_RADIUS, stepHelicopter, type Helicopter } from '../src/systems/helicopter';
-import { SPAWN_RANGE, policeSpawnPoint, roadblockSpot } from '../src/systems/police';
+import { createVehicleState } from '../src/entities/vehicle';
+import type { CrowdPed, Vehicle } from '../src/game/population';
+import { PoliceForce, SPAWN_RANGE, policeSpawnPoint, roadblockSpot, type PoliceContext } from '../src/systems/police';
+import { createDamage } from '../src/systems/damage';
 import { lineOfSight, sees } from '../src/systems/sight';
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, generateCity, type Rect } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
@@ -61,6 +64,30 @@ describe('police spawns', () => {
 
   it('respects a crowded check', () => {
     expect(policeSpawnPoint(0, 0, 0, 0, viewAround(0, 0), random(1), () => true)).toBeNull();
+  });
+
+  it('sends reinforcements to where the player was last seen, not where they really are', () => {
+    const depot = {
+      takeVehicle: (archetype: Vehicle['archetype'], paint: string): Vehicle => {
+        const sim = createVehicleState();
+        return { archetype, paint, sim, prev: { ...sim }, mesh: { siren: false }, ai: null, damage: createDamage(), wreckAge: 0, charred: false } as unknown as Vehicle;
+      },
+      retireVehicle: () => {},
+      addPed: (agent: CrowdPed['agent']) => ({ agent, prev: { ...agent.s } }) as unknown as CrowdPed,
+      removePed: () => {},
+    };
+    const police = new PoliceForce(depot, () => {});
+    const suspect = { x: 260, z: 260, vx: 0, vz: 0, heading: 0, inCar: true, armed: false, down: false, car: null, active: true };
+    // Last seen at the origin; they've since got away to (260, 260).
+    police.report({ ...suspect, x: 0, z: 0 });
+    const ctx: PoliceContext = { stars: 2, tracked: false, suspect, view: viewAround(260, 260), grid, rand: random(6) };
+    for (let i = 0; i < 60 * 8; i++) police.step(DT, ctx);
+    expect(police.units.length).toBeGreaterThan(0);
+    for (const u of police.units) {
+      const v = u.vehicle!.sim;
+      expect(Math.hypot(v.x, v.z)).toBeLessThan(SPAWN_RANGE[1] * 1.15 + 8 * 16);
+      expect(Math.hypot(v.x - 260, v.z - 260)).toBeGreaterThan(150);
+    }
   });
 });
 

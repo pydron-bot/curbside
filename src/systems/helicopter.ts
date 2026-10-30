@@ -19,7 +19,7 @@ export const HELI_GONE = 260;
  * the window to break away from a 5-star chase, s.
  */
 export const HELI_SHIFT = 45;
-export const HELI_REFUEL = 20;
+export const HELI_REFUEL = 30;
 
 export interface Helicopter {
   /** In the air near the player (or leaving). */

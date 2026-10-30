@@ -197,6 +197,60 @@ describe('heat: police response', () => {
     expect(shooting).toBe(0);
   });
 
+  it('someone who stands still with empty hands is cuffed, not shot, even at 3 stars', () => {
+    const w = world(29);
+    w.heat.wanted.force(3);
+    let shooting = 0;
+    const t = w.runUntil(() => {
+      w.heat.police.forEachOfficerMode((mode) => {
+        if (mode === 'shoot') shooting++;
+      });
+      return w.player.arrested;
+    }, 90);
+    expect(t).toBeLessThan(90);
+    expect(shooting).toBe(0);
+    expect(w.player.alive).toBe(true);
+  });
+
+  it('with a gun out at 3 stars, officers open fire', () => {
+    const w = world(29);
+    w.player.arsenal.pickUp('pistol');
+    w.heat.wanted.force(3);
+    let shooting = 0;
+    w.runUntil(() => {
+      w.heat.police.forEachOfficerMode((mode) => {
+        if (mode === 'shoot') shooting++;
+      });
+      return shooting > 0 || w.player.arrested;
+    }, 90);
+    expect(shooting).toBeGreaterThan(0);
+  });
+
+  it('a unit waiting on an officer who can’t get back leaves them after a while', () => {
+    const w = world(31);
+    w.heat.wanted.force(1);
+    // Wait for the crew to get out.
+    w.runUntil(() => w.heat.police.units.some((u) => u.officers.length > 0), 90);
+    const unit = w.heat.police.units.find((u) => u.officers.length > 0)!;
+    expect(unit).toBeDefined();
+    w.heat.wanted.clear('reset');
+    // Pin the officers near the car (too close to give up on it), as if wedged behind a building.
+    const car = unit.vehicle!.sim;
+    const pinned = unit.officers.map((p, i) => ({ p, x: car.x + 8 + i, z: car.z + 8 }));
+    let gone = Infinity;
+    for (let t = 0; t < 30; t += 1 / 60) {
+      for (const { p, x, z } of pinned) Object.assign(p.agent.s, { x, z, vx: 0, vz: 0 });
+      w.step();
+      if (!w.heat.police.units.includes(unit)) {
+        gone = t;
+        break;
+      }
+    }
+    // Not straight away (they get a fair chance), but well before the next run.
+    expect(gone).toBeGreaterThan(5);
+    expect(gone).toBeLessThan(20);
+  });
+
   it('five stars put the helicopter up', () => {
     const w = world(9);
     w.heat.wanted.force(5);
@@ -311,5 +365,34 @@ describe('heat: traffic reactions', () => {
     Object.assign(cop.prev, createVehicleState(0, 5, 0), { vz: -20 });
     w.heat.playerCrash(cop, 15);
     expect(w.heat.wanted.heat).toBe(0);
+  });
+
+  it('in a chase, smashing a roadblock or meeting a cop head-on doesn’t add stars', () => {
+    const w = world(37);
+    w.heat.wanted.force(3);
+    const spawned = w.runUntil(() => w.heat.police.units.length > 0, 30);
+    expect(spawned).toBeLessThan(30);
+    const own = w.population.takeVehicle('sedan', '#fff');
+    own.police = false;
+    w.player.enter(own);
+    const unit = w.heat.police.units[0];
+    const cop = unit.vehicle!;
+    const heat = w.heat.wanted.heat;
+    // Head-on: both closing fast.
+    unit.driver.mode = 'chase';
+    Object.assign(own.prev, createVehicleState(0, 0, 0), { vz: 30 });
+    Object.assign(cop.prev, createVehicleState(0, 5, Math.PI), { vz: -15 });
+    w.heat.playerCrash(cop, 45);
+    expect(w.heat.wanted.heat).toBe(heat);
+    // A parked roadblock.
+    unit.role = 'roadblock';
+    Object.assign(cop.prev, createVehicleState(0, 5, Math.PI / 2), { vz: 0 });
+    w.heat.playerCrash(cop, 30);
+    expect(w.heat.wanted.heat).toBe(heat);
+    // Running down a cop from behind still counts.
+    unit.role = 'pursuit';
+    Object.assign(cop.prev, createVehicleState(0, 5, 0), { vz: 5 });
+    w.heat.playerCrash(cop, 25);
+    expect(w.heat.wanted.heat).toBeGreaterThan(heat);
   });
 });
