@@ -68,7 +68,7 @@ import {
   type CarContact,
 } from './systems/physics';
 import { Score, type Award } from './systems/score';
-import type { Obstacle } from './systems/traffic';
+import { vehicleObstacles, type Obstacle } from './systems/traffic';
 import type { PauseReason } from './ui/pauseOverlay';
 import { loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
@@ -522,12 +522,13 @@ function releasePlayer() {
 const obstacles: Obstacle[] = [];
 /** Obstacle records reused every step (one per car and ped). */
 const obstaclePool: Obstacle[] = [];
-function addObstacle(x: number, z: number, halfWidth: number, isPlayer = false) {
-  const o = obstaclePool[obstacles.length] ?? (obstaclePool[obstacles.length] = { x: 0, z: 0, halfWidth: 0, player: false });
+function addObstacle(x: number, z: number, halfWidth: number, isPlayer = false, owner: Vehicle['sim'] | null = null) {
+  const o = obstaclePool[obstacles.length] ?? (obstaclePool[obstacles.length] = { x: 0, z: 0, halfWidth: 0, player: false, owner: null });
   o.x = x;
   o.z = z;
   o.halfWidth = halfWidth;
   o.player = isPlayer;
+  o.owner = owner;
   obstacles.push(o);
 }
 const vehicleStates: Array<Vehicle['sim']> = [];
@@ -544,7 +545,8 @@ function simulate(dt: number) {
 
   // What AI drivers need to avoid this step.
   obstacles.length = 0;
-  for (const v of vehicles) addObstacle(v.sim.x, v.sim.z, 1, v === driving);
+  // Cars as their middle, long vehicles as a point per body circle (so queues stop at a bus's tail).
+  for (const v of vehicles) vehicleObstacles(v.sim, v === driving, addObstacle);
   if (!driving && !attract.active) addObstacle(player.ped.x, player.ped.z, 0.4, true);
   for (const c of population.crowd) addObstacle(c.agent.s.x, c.agent.s.z, 0.4);
 

@@ -84,6 +84,32 @@ export interface Obstacle {
   halfWidth: number;
   /** It's the player (or their car): being held up by it gets a honk. */
   player?: boolean;
+  /** The vehicle this point is part of (a long one is several points): never in its own way. */
+  owner?: VehicleState | null;
+}
+
+/** Bodies reaching further than this from their middle show other drivers a point per collision circle, m. */
+const LONG_REACH = CAR_BODY.reach + 0.3;
+
+/**
+ * The points other drivers see a vehicle as (`add` gets each): its middle
+ * for a car, one per collision circle along a long body (a bus, a fire
+ * truck, a limo), so whoever queues behind one stops at its tail rather
+ * than its middle, and one crossing ahead is in the way along its length.
+ */
+export function vehicleObstacles(
+  s: VehicleState,
+  isPlayer: boolean,
+  add: (x: number, z: number, halfWidth: number, isPlayer: boolean, owner: VehicleState) => void,
+): void {
+  const body = s.body ?? CAR_BODY;
+  if (body.reach <= LONG_REACH) {
+    add(s.x, s.z, 1, isPlayer, s);
+    return;
+  }
+  const fx = Math.sin(s.heading);
+  const fz = Math.cos(s.heading);
+  for (const o of body.offsets) add(s.x + fx * o, s.z + fz * o, body.halfWidth, isPlayer, s);
 }
 
 export const CRUISE_SPEED = 12;
@@ -455,17 +481,21 @@ let blockerIsPlayer = false;
 export function clearDistance(car: VehicleState, obstacles: Obstacle[], shift = 0): number {
   const fx = Math.sin(car.heading);
   const fz = Math.cos(car.heading);
+  // A long vehicle's nose is further out than a car's: it keeps its distance from there.
+  const longer = Math.max(0, (car.body ?? CAR_BODY).reach - CAR_BODY.reach);
   let best = Infinity;
   blockerIsPlayer = false;
   for (const o of obstacles) {
+    if (o.owner === car) continue;
     const rx = o.x - car.x;
     const rz = o.z - car.z;
     const along = rx * fx + rz * fz;
-    if (along <= 0.5 || along > 30) continue;
+    if (along <= 0.5 || along > 30 + longer) continue;
     // Signed offset to our right (heading north, right is +x).
     const lateral = Math.abs(rz * fx - rx * fz - shift);
-    if (lateral < 1.1 + o.halfWidth && along - 2.4 < best) {
-      best = along - 2.4;
+    const gap = along - 2.4 - longer;
+    if (lateral < 1.1 + o.halfWidth && gap < best) {
+      best = gap;
       blockerIsPlayer = o.player === true;
     }
   }
