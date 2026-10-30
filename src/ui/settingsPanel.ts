@@ -58,7 +58,6 @@ export class SettingsPanel implements Panel {
     close.setAttribute('aria-label', 'Close');
     close.innerHTML = ICONS.close;
     head.append(close);
-    this.nav.add({ el: close, activate: () => this.back() });
 
     const soundRows: Row[] = [
       { kind: 'slider', key: 'masterVolume', label: 'Master' },
@@ -99,6 +98,8 @@ export class SettingsPanel implements Panel {
     for (const r of soundRows) sound.append(this.row(r));
     for (const r of controlRows) controls.append(this.row(r));
     for (const r of displayRows) display.append(this.row(r));
+    // Registered last so opening focuses the first setting, not the close button.
+    this.nav.add({ el: close, activate: () => this.back() });
     parent.append(root);
     onSettingsChange((s) => this.refresh(s));
     this.refresh(settings);

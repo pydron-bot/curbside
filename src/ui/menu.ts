@@ -120,7 +120,9 @@ function nearest(cur: NavItem, items: NavItem[], cmd: NavCommand): NavItem | nul
     const across = Math.abs(vertical ? dx : dy);
     if (along > 4) {
       const score = along + across * 2.2;
-      if (score < bestScore) {
+      // Near-ties (a wide button above two half-width ones) go to the item
+      // registered first, i.e. the left / upper one.
+      if (score < bestScore - 1) {
         bestScore = score;
         best = it;
       }
