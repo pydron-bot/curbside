@@ -60,6 +60,8 @@ export interface SaveData {
   missions: string[];
   /** Purchases and perks ('scanner', 'armour', ...). */
   unlocks: string[];
+  /** First-run pointers: the step reached (game/tutorial.ts; 3 = done). */
+  tutorial: number;
 }
 
 export function defaultStats(): LifetimeStats {
@@ -95,8 +97,14 @@ export function defaultSave(): SaveData {
     taxi: { bestStreak: 0 },
     missions: [],
     unlocks: [],
+    tutorial: 0,
   };
 }
+
+/** The tutorial's last step (game/tutorial.ts's TUTORIAL_DONE). */
+const TUTORIAL_STEPS = 3;
+/** A save from before the tutorial with this much play (s) has no need of it. */
+const TUTORIAL_SKIP_PLAYED = 120;
 
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -142,6 +150,8 @@ export function migrateSave(raw: unknown, legacyBest = 0): SaveData {
     if (isObj(raw.taxi)) save.taxi = { bestStreak: num(raw.taxi.bestStreak) };
     save.missions = strings(raw.missions);
     save.unlocks = strings(raw.unlocks);
+    const veteran = save.stats.playTime >= TUTORIAL_SKIP_PLAYED;
+    save.tutorial = Math.min(TUTORIAL_STEPS, num(raw.tutorial, veteran ? TUTORIAL_STEPS : 0));
   }
   // The free-roam best predates the save: carry it over.
   save.best.free = Math.max(save.best.free ?? 0, num(legacyBest));

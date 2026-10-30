@@ -152,12 +152,17 @@ function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation):
   };
 }
 
-/** Parked at the kerbs around the spawn intersection; put back on every respawn. */
+/**
+ * Parked at the kerbs around the spawn intersection; put back on every
+ * respawn. The yellow sports car waits on the centreline across the
+ * junction, lined up on the ramp a block east: the first car invites the
+ * first STUNT (23 m of run-up, ~0.9 s of air flat out).
+ */
 const PARKED: ParkingSpot[] = [
   { archetype: 'sedan', x: 5.5, z: -14, heading: Math.PI, paint: '#c8342b' },
   { archetype: 'compact', x: -5.5, z: 16, heading: 0, paint: '#2f6fc0' },
   { archetype: 'van', x: 20, z: 5.5, heading: Math.PI / 2, paint: '#d9d6cc' },
-  { archetype: 'sports', x: -22, z: -5.5, heading: -Math.PI / 2, paint: '#e8b923' },
+  { archetype: 'sports', x: -11, z: 0, heading: Math.PI / 2, paint: '#e8b923' },
   { archetype: 'police', x: 5.5, z: 34, heading: Math.PI, paint: '#f2f2f2' },
 ];
 

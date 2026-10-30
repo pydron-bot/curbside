@@ -443,7 +443,7 @@ are `src/game/modes/*Mode.ts`.
 - **Save** (`game/progressSave.ts`): one versioned JSON record,
   `curbside.save`: cash, lifetime stats, best score per mode, medals, race
   times, packages found, frenzies beaten, export orders, taxi streak,
-  missions passed, unlocks. Every field is sanitised on load (a bad value
+  missions passed, unlocks, the first-run pointer reached. Every field is sanitised on load (a bad value
   falls back alone, NaN or negative cash can't get in, a newer save keeps
   what this build understands); corrupt JSON is kept aside as
   `curbside.save.corrupt`; blocked storage never throws. The old
@@ -454,6 +454,16 @@ are `src/game/modes/*Mode.ts`.
   and flushed on pause, app switch, page hide and the end of anything that
   pays. `Progress` (`game/progress.ts`) owns it: `earn`, `spend`, `charge`,
   bests, medals, unlocks, and lifetime stats counted off the bus.
+- **First run** (`game/tutorial.ts`): three pointers on the marker
+  prompt, one at a time, whenever nothing nearer to hand has a prompt:
+  STEAL A CAR (in the device's words: E, Y, the door button) until you
+  drive one; DRIFT · NEAR MISS · SMASH · JUMP — CHAINS BANK AS CASH until
+  the first chain banks; ANSWER THE RINGING PAYPHONE with the radar routed
+  to it until a call is answered (which ends them all). Saved
+  (`save.tutorial`); a save from before them with 2+ minutes of play skips
+  them. The yellow sports car at the spawn waits on the centreline lined
+  up on the ramp a block east. How to Play adds banking, heat and a radar
+  legend (`ui/radarLegend.ts`, also at the foot of PROGRESS).
 - **Bank your chaos** (`game/progressBank.ts`): when a combo chain ends (the
   combo window has run out and no drift is sliding), its points become cash:
   points / 10 × (1 + 0.5 × the highest wanted level during the chain), with

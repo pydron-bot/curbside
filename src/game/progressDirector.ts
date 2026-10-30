@@ -20,6 +20,7 @@ import type { Panel } from '../ui/menu';
 import { ProgressHud } from '../ui/progressHud';
 import { DialogueCard, ResultsCard, ShopSheet, StatsSheet, type StatsModel } from '../ui/progressScreens';
 import type { BlipOptions } from '../ui/radar';
+import { RADAR_LEGEND } from '../ui/radarLegend';
 import { fmt } from '../ui/scoreHud';
 import { formatDuration } from './runStats';
 import type { Rect } from '../world/city';
@@ -43,6 +44,7 @@ import type { Vehicle } from './population';
 import { Progress, bustFine, hospitalBill } from './progress';
 import { ChainBank, chainLive } from './progressBank';
 import { TAXI_GOAL, completion } from './progressStats';
+import { TUTORIAL_DONE, advanceTutorial, tutorialText, type TutorialEvent } from './tutorial';
 
 /** Stand on the safehouse door this long to open the shop, s. */
 const SHOP_HOLD = 0.4;
@@ -87,6 +89,8 @@ export class ProgressDirector implements ModeCtx {
   private nearShop = false;
   private sprayShown: unknown = null;
   private homeBlip = false;
+  /** The first-run pointer has the radar routing to the ringing phone. */
+  private tutorialRoute = false;
 
   constructor(d: DirectorDeps) {
     this.deps = d;
@@ -190,6 +194,7 @@ export class ProgressDirector implements ModeCtx {
     const s = this.progress.stats;
     s.bestChain = Math.max(s.bestChain, cash);
     this.notice(links > 1 ? `BANKED $${fmt(cash)}` : `+$${fmt(cash)}`, 'cash');
+    if (this.freeRoam) this.tutor('banked');
   }
 
   unpin(v: Vehicle): void {
@@ -252,6 +257,7 @@ export class ProgressDirector implements ModeCtx {
     // Bank the chain once the combo runs out.
     if (this.bank.open && !chainLive(this.deps.score)) this.bankChain();
     this.stepShop(dt);
+    this.stepTutorial();
     // Free roam's best as it's beaten (the Chaos Run records its own at the end).
     const total = this.deps.score.total;
     if (!this.chaos.active && total > this.progress.best('free')) this.progress.recordBest('free', total);
@@ -269,6 +275,8 @@ export class ProgressDirector implements ModeCtx {
     if (!this.blocksInput) {
       if (this.nearShop && this.freeRoam && !this.busy) prompt = 'SAFEHOUSE SHOP · STEP ON THE DOOR';
       for (let i = 0; i < this.modes.length && prompt === null; i++) prompt = this.modes[i].prompt();
+      // Nothing nearer to hand: the first run's next pointer.
+      if (prompt === null && this.freeRoam && !this.busy && this.live) prompt = tutorialText(this.progress.data.tutorial, this.deps.input.lastDevice);
     }
     ui.prompt(prompt);
     this.sprayNotice();
@@ -320,10 +328,40 @@ export class ProgressDirector implements ModeCtx {
     this.holdControls = false;
     this.pinned.length = 0;
     this.deps.radar.clearWaypoint();
+    this.tutorialRoute = false;
     this.ui.activity(null);
     this.ui.prompt(null);
     this.ui.clearBanner();
     this.progress.flush();
+  }
+
+  /**
+   * First-run pointers: step on when the player does the thing (in free roam:
+   * the Chaos Run's car doesn't count as stealing one), and route the radar
+   * to the ringing phone for the last one.
+   */
+  private stepTutorial(): void {
+    const step = this.progress.data.tutorial;
+    if (step >= TUTORIAL_DONE) return;
+    if (this.busy === 'mission') this.tutor('mission');
+    else if (this.freeRoam && this.live && this.deps.player.driving) this.tutor('enterVehicle');
+    const phone = this.progress.data.tutorial === 2 && this.freeRoam && !this.busy && this.live ? this.missions.ringing : null;
+    // Only ever set: an activity starting takes the route over, and clears it when it ends.
+    if (phone && !this.tutorialRoute) this.deps.radar.setWaypoint(phone.x, phone.z);
+    this.tutorialRoute = phone !== null;
+  }
+
+  private tutor(event: TutorialEvent): void {
+    const d = this.progress.data;
+    const next = advanceTutorial(d.tutorial, event);
+    if (next === d.tutorial) return;
+    d.tutorial = next;
+    this.progress.markDirty();
+    // Answered: the call takes over (and sets its own route).
+    if (next === TUTORIAL_DONE && this.tutorialRoute) {
+      this.tutorialRoute = false;
+      this.deps.radar.clearWaypoint();
+    }
   }
 
   /** WASTED or BUSTED: the open chain is lost, and the bill comes. */
@@ -475,6 +513,10 @@ export class ProgressDirector implements ModeCtx {
             { label: 'Wasted', value: n(st.wasted) },
             { label: 'Busted', value: n(st.busted) },
           ],
+        },
+        {
+          title: 'RADAR',
+          rows: RADAR_LEGEND.map(([icon, meaning]) => ({ label: meaning, value: icon })),
         },
       ],
     };

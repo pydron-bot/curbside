@@ -3,6 +3,7 @@ import type { InputDevice } from '../core/input';
 import { settings, type Settings } from '../core/settings';
 import { ICONS } from './icons';
 import { MenuNav, overlay, type Panel } from './menu';
+import { RADAR_LEGEND_LINE } from './radarLegend';
 
 type Binding = readonly [action: string, keys: string];
 
@@ -68,7 +69,10 @@ const CONTROLS: Record<Exclude<InputDevice, 'touch'>, { title: string; rows: rea
 const TIPS = [
   ['Chain it', 'Anything within 3 s of the last stunt builds a combo, up to ×10.'],
   ['Score', 'Drifts, near misses, smashes, hit & runs, knockouts, carjacks, explosions and ramp jumps.'],
+  ['Bank it', 'When a chain ends its points bank as cash (more with stars on). WASTED or BUSTED first and the chain is lost.'],
+  ['Heat', "Crimes the police see earn stars. Get out of sight until they fade, or drive into a Pay 'n' Spray."],
   ['Survive', 'Grab health and armour crates. Get WASTED and the run is over — your best is kept.'],
+  ['Radar', RADAR_LEGEND_LINE],
 ] as const;
 
 /**

@@ -63,6 +63,15 @@ describe('save: defaults and migration', () => {
     expect(s.unlocks).toEqual(['scanner']);
   });
 
+  it('a fresh player gets the first-run pointers; a save from before them with real play skips them', () => {
+    expect(defaultSave().tutorial).toBe(0);
+    expect(migrateSave({ cash: 10 }).tutorial).toBe(0);
+    expect(migrateSave({ stats: { playTime: 900 } }).tutorial).toBe(3);
+    expect(migrateSave({ tutorial: 1, stats: { playTime: 900 } }).tutorial).toBe(1);
+    expect(migrateSave({ tutorial: 99 }).tutorial).toBe(3);
+    expect(migrateSave({ tutorial: -1 }).tutorial).toBe(0);
+  });
+
   it('negative or infinite cash is reset, not trusted', () => {
     expect(migrateSave({ cash: -500 }).cash).toBe(0);
     expect(migrateSave({ cash: Infinity }).cash).toBe(0);

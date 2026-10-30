@@ -151,6 +151,11 @@ export class MissionMode implements Mode {
     return this.missions.filter((m) => this.ctx.progress.data.missions.includes(m.id)).length;
   }
 
+  /** The payphone ringing with the next job, if one is (for the first-run pointer). */
+  get ringing(): Spot | null {
+    return this.ringingPhone();
+  }
+
   private ringingPhone(): Spot | null {
     const ctx = this.ctx;
     if (!ctx.freeRoam || this.run || this.calling || ctx.busy) return null;
