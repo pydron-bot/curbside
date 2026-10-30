@@ -164,6 +164,59 @@ The wanted level and police are in (`src/systems/police.ts`, README
   are only glowing floor markings now) and `police_sign` (a blue lamp or
   sign over the station door).
 
+## 8. Second round (for features added since §1–7)
+
+The game gained new weapons, combat moves and activities after the first
+list; these still use stand-ins. Same contracts as above (material
+suffixes on bodies, fixed colours elsewhere, origins on the ground, game +Z
+forward). In priority order:
+
+1. **New weapons** (`weapons.glb`, same grip/`muzzle` contract):
+   `grenade`, `molotov` (bottle with a rag), `rocket_launcher` (shoulder
+   tube, `muzzle` at the front), plus a `rocket` projectile root (≤ 60
+   tris, nose +Z) that the game flies.
+2. **Pickup crates** (`pickups.glb`) for the new pickup kinds: `crate_grenade`,
+   `crate_molotov`, `crate_rocket` (same crate as the guns, with their own
+   stripe colours), `armour` (a folded vest), `ammo_box`. Today these reuse
+   the gun crate.
+3. **Clips** (every character GLB, same rules as §1):
+
+| Clip | Length | Notes |
+|---|---|---|
+| `Throw` | 0.4 s one-shot | overhand throw (grenade, molotov); release at ~55% |
+| `AimRocket` / `ShootRocket` | 0.3 s loop / 0.2 s | launcher on the right shoulder; a bigger kick |
+| `Punch2`, `Uppercut` | 0.33 s / 0.4 s | the second (left hook) and third hit of the 3-punch combo (`Punch` is the first) |
+| `Stagger` | 0.3 s one-shot | rocked back by a hit, back to neutral |
+| `Hail` | 1 s loop | arm raised to wave down a taxi (taxi fares) |
+| `Cower` | 1 s loop | crouched, arms over the head (panicking bystanders) |
+| `Cheer` | 1 s loop (optional) | for mission end cards / the title attract |
+
+4. **Story characters** for the payphone missions (a tow crew, Vex and Lil'
+   Tuna, against Deacon Pike), as separate body GLBs like §2: `vex`
+   (overalls, tool belt, short hair), `tuna` (hoodie, big headphones, short
+   and wide), `pike` (long coat over a suit, slicked hair). They only need to
+   read as different silhouettes from 20–50 m up.
+5. **Vehicles** (`vehicles.glb`, car contract): `tow_truck` (the crew's
+   truck: boom and hook at the back, `amber` beacon) and `ice_cream_van`
+   (a big roof cone, pastel `paint`, for fun).
+6. **Activity props** (`props.glb`):
+   - `start_gantry`: a chequered start/finish arch, ~12 m wide over the road
+     (races).
+   - `export_bay`: an open garage with a big '$' sign readable from above
+     (car exports at the docks).
+   - `safehouse_door`: a garage door with a light over it (the shop).
+   - `frenzy_token`: a chunky floating '!' gem, ≤ 120 tris, origin at its
+     centre (it spins and bobs).
+   - `traffic_cone` and `road_barrier_long` (a 4 m concrete jersey
+     barrier), for dressing roadblocks and races.
+7. **Ambient life (optional, fun):** `pigeon` (≤ 40 tris, one rigid body,
+   plus a `Flap` clip on a 2-bone rig) for flocks that scatter when a car
+   comes through.
+
+The code side will wire these in by name when they land, falling back to
+today's stand-ins until then. Badge on the cop: the code side will add a
+sixth fixed-colour slot so `*_badge` works; until then leave it out.
+
 ---
 
 ### Notes back to the code side
