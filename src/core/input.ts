@@ -2,7 +2,7 @@ import type { MoveInput } from '../entities/pedestrian';
 import type { VehicleControls, VehicleState } from '../entities/vehicle';
 import type { AimState } from './aim';
 import { settings } from './settings';
-import { createDirectionalState, directionalControls, type DirectionalInput } from './steering';
+import { createDirectionalState, directionalControls, resetDirectionalState, type DirectionalInput } from './steering';
 
 /**
  * One input abstraction over keyboard, mouse, touch and gamepad. Every source
@@ -312,7 +312,7 @@ export class Input {
     this.padLatched.fill(true);
     this.padWasDown.fill(false);
     this.navQueue.length = 0;
-    this.directional.reversing = false;
+    resetDirectionalState(this.directional);
     for (const fn of this.resetHooks) fn();
   }
 
@@ -333,7 +333,7 @@ export class Input {
     }
     this.padLatched[PAD_A] = this.padLatched[PAD_X] = this.padLatched[PAD_RT] = true;
     this.gamepad.handbrake = this.gamepad.sprint = false;
-    this.directional.reversing = false;
+    resetDirectionalState(this.directional);
   }
 
   private updateKeyboard(): void {
@@ -451,9 +451,10 @@ export class Input {
   /**
    * Merged driving controls for `car`. Touch in directional mode turns the
    * stick's direction into steering for this car (see core/steering.ts);
-   * everything else steers left/right. The returned object is reused.
+   * everything else steers left/right. `dt` is the sim step this read drives
+   * (0 for an extra read, e.g. for rendering). The returned object is reused.
    */
-  readVehicle(car?: VehicleState): VehicleControls {
+  readVehicle(car?: VehicleState, dt = 0): VehicleControls {
     const out = this.vehicleOut;
     out.steer = out.throttle = 0;
     out.handbrake = false;
@@ -470,7 +471,7 @@ export class Input {
       inp.gas = t.throttle > 0;
       inp.brake = t.throttle < 0;
       inp.handbrake = t.handbrake;
-      const d = directionalControls(inp, car, this.directional, this.directionalOut);
+      const d = directionalControls(inp, car, this.directional, this.directionalOut, dt);
       merge(out, d.steer, d.throttle, d.handbrake);
     }
     return out;

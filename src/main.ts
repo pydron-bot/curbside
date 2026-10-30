@@ -385,7 +385,7 @@ const contact = { x: 0, z: 0 };
 
 function simulate(dt: number) {
   const driving = player.driving;
-  const playerControls = driving ? input.readVehicle(driving.sim) : NO_CONTROLS;
+  const playerControls = driving ? input.readVehicle(driving.sim, dt) : NO_CONTROLS;
 
   // What AI drivers need to avoid this step.
   obstacles.length = 0;

@@ -23,9 +23,14 @@ export interface DirectionalInput {
   handbrake: boolean;
 }
 
-/** Carried between steps: whether a three-point turn's reverse leg is under way. */
+/** Carried between steps. */
 export interface DirectionalState {
+  /** A three-point turn's reverse leg is under way. */
   reversing: boolean;
+  /** Seconds the car has been asked forward but hasn't moved (nose in a wall). */
+  stalled: number;
+  /** Seconds left backing away from whatever it's stuck against. */
+  unstick: number;
 }
 
 export const DIRECTIONAL = {
@@ -48,10 +53,21 @@ export const DIRECTIONAL = {
   reverseSpeed: 4,
   /** The reverse leg ends once the nose is within this of the target (rad). */
   reverseDone: 1.1,
+  /** Asked forward this long (s) while slower than stallSpeed (m/s): stuck, so back off... */
+  stallTime: 0.6,
+  stallSpeed: 0.8,
+  /** ...for this long (s), swinging the nose toward the target. */
+  unstickTime: 0.8,
 } as const;
 
 export function createDirectionalState(): DirectionalState {
-  return { reversing: false };
+  return { reversing: false, stalled: 0, unstick: 0 };
+}
+
+/** Forget any turn or unstick in progress (pause, getting out). */
+export function resetDirectionalState(state: DirectionalState): void {
+  state.reversing = false;
+  state.stalled = state.unstick = 0;
 }
 
 /** World heading for a screen-relative direction (heading h points the nose along (sin h, cos h)). */
@@ -61,20 +77,22 @@ export function screenHeading(x: number, y: number): number {
 
 /**
  * Turn a directional stick into VehicleControls for `car`. Writes into `out`
- * (and `state`) and returns `out`.
+ * (and `state`) and returns `out`. `dt` (s) advances the stuck-against-a-wall
+ * timers; pass 0 for a read that mustn't (a second read in the same frame).
  */
 export function directionalControls(
   input: DirectionalInput,
   car: VehicleState,
   state: DirectionalState,
   out: VehicleControls,
+  dt = 0,
 ): VehicleControls {
   const d = DIRECTIONAL;
   out.handbrake = input.handbrake;
   const mag = Math.min(1, Math.hypot(input.x, input.y));
   const vF = forwardSpeed(car);
   if (mag < d.deadzone) {
-    state.reversing = false;
+    resetDirectionalState(state);
     out.steer = 0;
     out.throttle = input.brake ? -1 : input.gas ? 1 : 0;
     return out;
@@ -96,6 +114,22 @@ export function directionalControls(
     if (err > d.brakeAngle && vF > d.brakeSpeed) throttle = -d.brakeAmount;
     else if (err > d.liftAngle && vF > d.liftSpeed && !input.gas) throttle = Math.min(throttle, d.liftThrottle);
   }
+
+  // Nose in a wall (or another car): pushing on would just grind, and with
+  // auto-gas there's no pedal to let go of. Back off, then try again. The
+  // GAS pedal means "really, forward" and overrides it.
+  if (input.gas || input.brake || state.reversing) state.stalled = state.unstick = 0;
+  else if (state.unstick > 0) {
+    state.unstick = Math.max(0, state.unstick - dt);
+    throttle = -Math.max(0.6, mag);
+  } else if (throttle > 0.25 && Math.abs(vF) < d.stallSpeed) {
+    state.stalled += dt;
+    if (state.stalled >= d.stallTime) {
+      state.stalled = 0;
+      state.unstick = d.unstickTime;
+      throttle = -Math.max(0.6, mag);
+    }
+  } else state.stalled = 0;
 
   // Swing the nose toward the target. Rolling backwards flips which way the
   // wheel yaws the car (see stepVehicle), so the wheel flips too.

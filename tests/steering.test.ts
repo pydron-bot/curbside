@@ -115,4 +115,39 @@ describe('directional steering', () => {
     // Up-right is heading 3π/4: from π that's a decrease.
     expect(wrapAngle(car.heading - before)).toBeLessThan(0);
   });
+
+  it('backs off a wall it is stuck against, then tries again', () => {
+    const car = createVehicleState(0, 0, Math.PI); // nose against a wall up-screen
+    const state = createDirectionalState();
+    const c = out();
+    const dt = 1 / 60;
+    const throttles: number[] = [];
+    for (let t = 0; t < 2; t += dt) {
+      directionalControls(stick(0.3, 0.9), car, state, c, dt); // up and a little right
+      throttles.push(c.throttle);
+      car.vx = car.vz = 0; // the wall: it never moves
+    }
+    const firstReverse = throttles.findIndex((v) => v < 0);
+    expect(firstReverse * dt).toBeCloseTo(DIRECTIONAL.stallTime, 1);
+    const reverseFrames = throttles.slice(firstReverse).findIndex((v) => v > 0);
+    expect(reverseFrames * dt).toBeCloseTo(DIRECTIONAL.unstickTime, 1);
+  });
+
+  it('does not count a standing start, a second read, or GAS as being stuck', () => {
+    const car = createVehicleState(0, 0, Math.PI);
+    const state = createDirectionalState();
+    const c = out();
+    for (let i = 0; i < 120; i++) directionalControls(stick(0, 1), car, state, c, 0); // dt 0: no time passes
+    expect(c.throttle).toBeGreaterThan(0);
+    for (let i = 0; i < 120; i++) directionalControls(stick(0, 1, { gas: true }), car, state, c, 1 / 60);
+    expect(c.throttle).toBe(1);
+    // A real start: moving within a few frames, never reverses.
+    const moving = createVehicleState(0, 0, Math.PI);
+    const s2 = createDirectionalState();
+    for (let i = 0; i < 90; i++) {
+      directionalControls(stick(0, 1), moving, s2, c, 1 / 60);
+      expect(c.throttle).toBeGreaterThan(0);
+      stepVehicle(moving, c, SEDAN, 1 / 60);
+    }
+  });
 });
