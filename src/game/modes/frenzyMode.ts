@@ -155,6 +155,8 @@ export class FrenzyMode implements Mode {
       const { x, z } = tok.spot;
       if (!nearView(x, z, view)) continue;
       const running = this.token === tok;
+      // Other tokens step back while something else is on.
+      if (this.ctx.busy && !running) continue;
       const c = this.beaten(tok.def) ? MARK.gold : MARK.frenzy;
       const pulse = 0.5 + 0.5 * Math.sin(t * (running ? 8 : 3) + i);
       const k = (running ? 0.5 : 0.85) + 0.45 * pulse;

@@ -921,7 +921,7 @@ function updateHud(frameSeconds: number) {
     hudCar.burning = damageStage(v.damage) === 'burning';
   }
   hudFrame.car = v ? hudCar : null;
-  const nearCar = v || attract.active ? null : nearestEnterable();
+  const nearCar = v || attract.active || progress.blocksInput ? null : nearestEnterable();
   hudFrame.nearCar = nearCar ? (nearCar.ai ? 'jack' : 'enter') : null;
   hudFrame.mouseAim = !v && !attract.active && input.mouseAimLive();
   hud.update(frameSeconds, hudFrame);

@@ -138,6 +138,8 @@ export class MissionMode implements Mode {
 
   step(dt: number): void {
     const ctx = this.ctx;
+    const phone = this.ringingPhone();
+    this.syncRingBlip(phone);
     const run = this.run;
     if (run) {
       this.updateView();
@@ -147,8 +149,6 @@ export class MissionMode implements Mode {
       this.updateBlips();
       return;
     }
-    const phone = this.ringingPhone();
-    this.syncRingBlip(phone);
     this.near = null;
     if (!phone || !ctx.live) return;
     const at = ctx.deps.player.position;

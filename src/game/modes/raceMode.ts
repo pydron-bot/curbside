@@ -12,8 +12,9 @@ import { MARK, chequer, gate, groundRing, nearView, type ProgressProps } from '.
 import { fmt } from '../../ui/scoreHud';
 import type { Rect } from '../../world/city';
 import { dirHeading } from '../../world/roads';
-import type { Mode, ModeCtx } from './context';
+import type { Vehicle } from '../population';
 import type { Medal } from '../progressSave';
+import type { Mode, ModeCtx } from './context';
 import { MEDAL_FACTORS, MEDAL_PAY, RACES, RaceRun, START_RADIUS, formatRaceTime, legDir, nodeX, nodeZ, raceMedal, startGrid, type RaceDef } from './races';
 
 /** Out of the car this long and the race is off, s. */
@@ -30,6 +31,8 @@ export class RaceMode implements Mode {
   private shownCount = 0;
   private outOfCar = 0;
   private blipsOn = false;
+  /** The car the race started in: wreck it and the race is over. */
+  private car: Vehicle | null = null;
 
   constructor(private readonly ctx: ModeCtx) {
     for (const r of RACES) this.armed.set(r.id, true);
@@ -44,11 +47,16 @@ export class RaceMode implements Mode {
     const p = ctx.deps.player;
     const run = this.run;
     if (run) {
+      // Any car will do, but wreck the one you started in and it's over.
       const car = p.driving;
-      if (!car || car.damage.wrecked) {
+      if (this.car?.damage.wrecked || car?.damage.wrecked) return this.end(false, 'WRECKED');
+      if (!car) {
         this.outOfCar += dt;
-        if (car?.damage.wrecked || this.outOfCar > OUT_OF_CAR) return this.end(false, car ? 'WRECKED' : 'YOU LEFT THE CAR');
-      } else this.outOfCar = 0;
+        if (this.outOfCar > OUT_OF_CAR) return this.end(false, 'YOU LEFT THE CAR');
+      } else {
+        this.outOfCar = 0;
+        this.car = car;
+      }
       const before = run.phase;
       const at = p.position;
       const r = run.step(dt, at.x, at.z);
@@ -99,6 +107,7 @@ export class RaceMode implements Mode {
     Object.assign(car.prev, car.sim);
     ctx.deps.rig.snapTo(g.x, g.z);
     this.run = new RaceRun(def);
+    this.car = car;
     this.shownCount = 0;
     this.outOfCar = 0;
     ctx.busy = 'race';
@@ -130,6 +139,7 @@ export class RaceMode implements Mode {
       ctx.deps.audio.ui('fail');
     }
     this.run = null;
+    this.car = null;
     if (ctx.busy === 'race') ctx.busy = null;
     ctx.deps.radar.clearWaypoint();
     ctx.unblip('race-next');
@@ -184,7 +194,8 @@ export class RaceMode implements Mode {
       }
       return;
     }
-    if (!this.ctx.freeRoam) return;
+    // Start lines only while nothing else is on (they can't start meanwhile).
+    if (!this.ctx.freeRoam || this.ctx.busy) return;
     for (const def of RACES) {
       const x = nodeX(def.nodes[0]);
       const z = nodeZ(def.nodes[0]);
@@ -199,6 +210,7 @@ export class RaceMode implements Mode {
   reset(): void {
     if (this.run) {
       this.run = null;
+      this.car = null;
       this.ctx.deps.radar.clearWaypoint();
       this.ctx.unblip('race-next');
     }

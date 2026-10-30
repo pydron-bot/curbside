@@ -108,7 +108,10 @@ export class ProgressHud {
     // Restart the chip's animation.
     void this.chip.offsetWidth;
     this.chip.classList.add('show');
-    this.cashEl.classList.toggle('spending', change < 0);
+    // Flash the figure (restart the animation).
+    this.cashEl.classList.remove('up', 'down');
+    void this.cashEl.offsetWidth;
+    this.cashEl.classList.add(change > 0 ? 'up' : 'down');
     if (change > 0) this.audio.ui('cash');
   }
 

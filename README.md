@@ -164,7 +164,14 @@ vibration, show FPS.
   roadblocks, SWAT vans and a searchlight helicopter; BUSTED (fine,
   weapons gone, released at the police station); Pay 'n' Spray bays;
   traffic that panics, rages, honks and pulls over for sirens.
-- Next: **M7 Missions & HUD** (cash, missions, save).
+- **M7 Progression** (`src/game/progress*.ts`, `src/game/modes/`,
+  `src/systems/missions*.ts`; see *Progression* below): a versioned save
+  with cash, lifetime stats, bests and medals; chains bank into cash (lose
+  the chain if WASTED or BUSTED, plus a hospital bill or fine); a CHAOS RUN
+  2:00 mode with medals and a results card; frenzies, hidden packages,
+  checkpoint races, hot-car exports, taxi fares and eight payphone missions
+  in free roam; a safehouse shop; PROGRESS in the pause menu.
+- Next: **M8 Ship** (offline caching, install prompt, performance pass).
 
 ## Heat
 
@@ -235,7 +242,8 @@ clears the heat.
 quarter of the city (glowing gates, 'S' on the radar; the nearest pulses
 and points the way while you're wanted). Stop inside for 2 s: new paint,
 fully repaired, and the heat is gone, unless the police saw you drive in.
-Free for now: `SPRAY_COST` and `HeatDeps.pay` are the hook for cash.
+It costs `SPRAY_COST` ($400, $100 with the shop's spray card), charged
+through `HeatDeps.pay`: broke means no respray.
 
 **Traffic reacts** (`systems/traffic.ts`): hit a driver hard and 55% panic
 (twice cruise speed, half the gap, honking, through corners) for 10 s,
@@ -281,11 +289,144 @@ heat.shops / heat.station                 // landmarks (world/landmarks.ts)
 //      { type: 'respray', x, z, cleared }; pedDown/explosion/bulletHit/enterVehicle carry `cop` / `police` flags.
 ```
 
+## Progression
+
+Goals and a reason to keep playing (M7). Everything hangs off one
+`ProgressDirector` (`src/game/progressDirector.ts`); `main.ts` creates it and
+calls `step(dt)` per sim step, `update(dt)` per frame, multiplies the sim's
+time by `simScale()`, holds the player's car while `holdControls`, ignores
+gameplay input while `blocksInput`, keeps `pinned` cars out of traffic
+recycling, and routes `HeatDeps.pay`, RESTART and quit-to-title through it.
+The rules are pure, tested modules; the runtimes that put them on screen
+are `src/game/modes/*Mode.ts`.
+
+- **Save** (`game/progressSave.ts`): one versioned JSON record,
+  `curbside.save`: cash, lifetime stats, best score per mode, medals, race
+  times, packages found, frenzies beaten, export orders, taxi streak,
+  missions passed, unlocks. Every field is sanitised on load (a bad value
+  falls back alone, NaN or negative cash can't get in, a newer save keeps
+  what this build understands); corrupt JSON is kept aside as
+  `curbside.save.corrupt`; blocked storage never throws. The old
+  `curbside.best` carries over. Writes are batched (every 4 s while dirty)
+  and flushed on pause, app switch, page hide and the end of anything that
+  pays. `Progress` (`game/progress.ts`) owns it: `earn`, `spend`, `charge`,
+  bests, medals, unlocks, and lifetime stats counted off the bus.
+- **Bank your chaos** (`game/progressBank.ts`): when a combo chain ends (the
+  combo window has run out and no drift is sliding), its points become cash:
+  points / 10 × (1 + 0.5 × the highest wanted level during the chain), with
+  a "BANKED $X" feed line. WASTED or BUSTED before then loses the chain
+  ("CHAIN LOST"). WASTED also costs a $200 hospital bill; BUSTED fines 25%
+  of your cash (the share the bust takes off the score), at most $1,500.
+- **Cash HUD**: under the score's BEST line, a rolling counter with a
+  "+$600" / "−$400" chip and the register's ching; the title shows CASH
+  beside BEST.
+- **Pay 'n' Spray** now costs `SPRAY_COST` ($400, $100 with the spray card).
+  Driving in says the price; broke means "NO CASH, NO SPRAY".
+- **Shop** (`game/modes/shop.ts`): stand on the glowing safehouse door 16 m
+  east of the spawn corner ('H' on the radar), or SHOP in the pause menu
+  within 45 m of it. TOUGH SKIN (+50 max health, the stand-in for body
+  armour: `Player.maxHealth`, the health bar shows the share) $3,000;
+  PAY 'N' SPRAY CARD $1,500; PACKAGE SCANNER $2,000; pistol / SMG / shotgun
+  ammo $150 / $400 / $300 (`arsenal.pickUp`).
+- **CHAOS RUN** (title, `modes/chaosRun.ts`, `chaosRunMode.ts`): a sports
+  car at a random crossing, 3-2-1 with the car held, then 2:00 on the clock
+  top centre; +5 s per explosion you cause, +3 s each time a chain reaches
+  ×5 ("+5 S" pops beside the timer); the last ten seconds count down out
+  loud in red tenths. Heat is live. Time up slows the city to a freeze-frame
+  and the results card comes up: score, medal (bronze 15,000 / silver
+  40,000 / gold 80,000), best and NEW BEST, the breakdown (drift, near miss,
+  smash, hit & run, KO, carjack, boom, cops) and RETRY / FREE ROAM / TITLE.
+  WASTED or BUSTED ends the run early (results after the respawn). The best
+  and medal are saved and shown on the title; RESTART in the pause menu
+  starts a fresh run.
+- **Frenzies** (`modes/frenzies.ts`, `frenzyMode.ts`): eight spinning purple
+  gems on pavements ('!' on the radar). Touch one, 3-2-1, then: KNOCK DOWN 15
+  in 60 s (with an SMG), NEAR MISS ×8 in 60 s, CARJACK 5 in 120 s, DRIFT
+  3,000 in 40 s, WRECK 6 CARS in 90 s (with a shotgun), HIT & RUN ×10 in
+  60 s, SMASH ×12 in 50 s, a ×8 COMBO in 45 s. They count the same bus events
+  as the score. $1,000 the first time (the gem turns gold), $150 a replay.
+- **Hidden packages** (`modes/packages.ts`, `packageMode.ts`): 40 green
+  parcels, seeded from the city: about half deep in alleys (with a straight
+  person-wide way out to the street), the rest in park interiors and plaza
+  corners, at least 20 m apart and in every quarter. $100 each,
+  "PACKAGES 12/40"; every tenth is a perk: a pistol every life, banked
+  chains +25%, an SMG every life, health that refills when you lie low.
+  Only on the radar with the scanner.
+- **Checkpoint races** (`modes/races.ts`, `raceMode.ts`): six courses of 8–12
+  crossings authored as data (DOWNTOWN DASH, HARBOUR LOOP, OLD TOWN
+  SCRAMBLE, NEON NIGHTS, CUL-DE-SAC CRAWL, RING ROAD RUN), 'R' on the radar.
+  Drive onto the chequered line: the car lines up, 3-2-1, then gates of
+  light (the next-but-one small), a radar route to the next checkpoint and
+  the time against gold on the card. Medals against a developer time from
+  the course (straights at 31 m/s, 1.6 s a corner): gold ×1.05, silver
+  ×1.2, bronze ×1.4, paying $800 / $400 / $200 the first time (a tenth on a
+  repeat). Out of the car for 8 s, wrecked, WASTED, BUSTED or 2.5× the dev
+  time ends it.
+- **Hot-car exports** (`modes/exports.ts`, `exportMode.ts`): a drive-in bay
+  on an open lot at the docks ('$' on the radar, pulsing with an arrow when
+  you're in a car on the list). An eight-car order list ("YELLOW SPORTS",
+  "A TAXI", "A POLICE CAR", "ANY VAN"...); stop in the bay with no stars and
+  at least half health: compact 300, sedan 400, van / pickup 500, taxi 600,
+  sports 900, police 1,500 (+25% for a colour order) × health; the car is
+  craned away. The whole list pays $5,000 and a new one comes in.
+- **Taxi fares** (`modes/taxi.ts`, `taxiMode.ts`): driving a taxi puts you
+  on duty. A pedestrian ahead stops and waves under a yellow marker; stop
+  beside them for a second and they get in. The destination is 250–700 m
+  away on a pavement (radar route, a beacon), time 15 s + 1 s per 11 m;
+  fare $50 + $0.6/m × (1 + time to spare); every fifth fare in a row +$500.
+  They bail at 2★ or if the cab loses a quarter of its health.
+- **Payphone missions** (`systems/missions.ts`, `missionsData.ts`,
+  `modes/missionMode.ts`): a data-driven engine with steps goto, enter (a
+  tagged car or an archetype), deliver, pickup, destroy, knockOut, survive,
+  loseHeat, collect and race; each with objective text, an optional timer,
+  fail conditions (a tagged car wrecked or left behind) and actions on start
+  / end (spawn a car or a person, set the wanted level, hand over a gun, a
+  passenger boards / alights). Eight jobs for the Graveyard Shift — VEX's
+  tow crew, her mechanic LIL' TUNA, against DEACON PIKE's Chrome Saints —
+  from four payphones; the one with a job waiting rings (a ripple of light,
+  the bell within 55 m, 'M' on the radar with an arrow). Answer on foot or
+  by stopping beside it: the call is a card, the job runs with its objective
+  on the activity card and its targets marked; MIDNIGHT EXPRESS pins the
+  clock at night. Pay $500–$5,000; fail and the phone rings again.
+- **Activity HUD** (`ui/progressHud.ts`, `progress.css`): a compact card top
+  centre under the pause button (what, a big timer, the goal and counter;
+  the wanted stars step down under it, the radio card pushes it down), a
+  banner mid-screen for 3-2-1-GO / PASSED / FAILED, and a prompt pill above
+  the HUD prompt for nearby markers. Checked at 1280×720, 852×393 and
+  852×340 with the iPhone's safe areas.
+- **PROGRESS** in the pause menu (`ui/progressScreens.ts`): completion %
+  (`game/progressStats.ts`: story 30%, frenzies, packages and races 15%
+  each, exports and taxi 10%, the Chaos Run 5%), cash, each activity's
+  progress, the export list, bests with medals, and the lifetime stats.
+
+Cards (results, calls, the shop on the street) freeze the sim and take the
+input; FrontDoor routes keyboard / pad navigation to them. Markers are glow
+quads in the shared batch; packages, payphone booths, parcels and frenzy
+gems are two instanced meshes using the pickup crates' program, drawn only
+while one is in view (+1–2 draw calls then, +1–2 in the shadow pass;
+nothing compiled after start-up).
+
+API for other systems:
+
+```ts
+progress.progress.earn(amount, reason) / spend(cost, reason) / charge(...)  // cash (Progress)
+progress.progress.has(unlock) / unlock(id) / recordBest(mode, score) / recordMedal(id, medal)
+progress.pay(amount, reason, feedLabel)        // earn with a feed line
+progress.busy                                  // the exclusive activity running, or null
+progress.spawnCar(archetype, paint, x, z, h) / unpin(v)   // a parked car kept from recycling
+progress.ui.banner(text, tone, sub?) / ui.activity(label) / ui.timer(s) / ui.goal(text)
+frontDoor.openPanel(panel) / closePanel(panel) // route menu navigation to a screen
+pause.addButton(label, icon, onActivate)       // a button in the pause menu
+title.addInfo(element)                         // a line under the title's best score
+player.maxHealth                               // a life's starting health
+```
+
 ## Layout
 
 ```
-src/core      loop, input
+src/core      loop, input, event bus, settings
 src/entities  vehicle physics (no three.js)
+src/game      player, population, heat, progression (progress*.ts) and modes/ (Chaos Run, activities)
 src/render    camera rig, meshes, dynamic resolution
 src/world     ground / city
 src/ui        title/pause/settings menus, touch controls, HUD, radar, radio card, CSS

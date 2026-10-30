@@ -62,8 +62,8 @@ export const MEDAL_PAY: Readonly<Record<Medal, number>> = { gold: 800, silver: 4
 /** Slower than this × the developer time and the race is lost. */
 export const GIVE_UP_FACTOR = 2.5;
 /** Developer pace: straights at this speed (m/s), plus a cost per corner (s) and the launch. */
-const DEV_SPEED = 31;
-const DEV_CORNER = 1.6;
+const DEV_SPEED = 36;
+const DEV_CORNER = 1.2;
 const DEV_LAUNCH = 2;
 
 export const nodeX = (n: readonly [number, number]) => n[0] * BLOCK_SIZE;

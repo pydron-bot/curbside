@@ -25,12 +25,29 @@
   letter-spacing: 0.02em;
   color: var(--cash);
   text-shadow: 0 2px 0 rgb(0 40 16 / 0.7), 0 0 10px rgb(93 255 154 / 0.35);
-  transition: color 0.3s;
+  transform-origin: right center;
 }
 
-.cash.spending .cash-num {
-  color: #ff8a8a;
-  transition: color 1.2s 0.4s;
+.cash.up .cash-num {
+  animation: cash-up 0.5s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+.cash.down .cash-num {
+  animation: cash-down 1.6s ease-out;
+}
+
+@keyframes cash-up {
+  from {
+    transform: scale(1.25);
+    filter: brightness(1.6);
+  }
+}
+
+@keyframes cash-down {
+  0%,
+  45% {
+    color: #ff6b7d;
+  }
 }
 
 .cash-chip {
@@ -557,6 +574,7 @@ body:not([data-scene='play']) #act-prompt {
 .dlg-lines {
   display: grid;
   gap: 8px;
+  margin-top: 2px;
 }
 
 .dlg-line {
