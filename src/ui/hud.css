@@ -388,10 +388,12 @@ body:not([data-device='touch']) .hud-pause {
   left: 50%;
   bottom: calc(var(--edge-b) + 2px);
   transform: translateX(-50%);
-  font: 600 11px/1 var(--hud-font);
+  font: 600 11px/1.2 var(--hud-font);
   font-variant-numeric: tabular-nums;
   opacity: 0.75;
-  white-space: nowrap;
+  /* 'full' mode is two lines split with \n. */
+  white-space: pre;
+  text-align: center;
 }
 
 .hud-debug[hidden] {

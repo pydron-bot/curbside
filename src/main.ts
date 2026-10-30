@@ -36,6 +36,7 @@ import { Effects } from './render/effects';
 import { FxDirector } from './render/fxDirector';
 import { CameraRig } from './render/cameraRig';
 import { DynamicResolution } from './render/dynamicResolution';
+import { emptySummary, FrameStats, formatFrameStats } from './core/frameStats';
 import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
 import { CombatLook } from './render/combatLook';
@@ -133,6 +134,8 @@ const CRASH_EVENT_MIN = 2.5;
 const renderer = createRenderer();
 app.append(renderer.domElement);
 const resolution = new DynamicResolution(renderer);
+const frameStats = new FrameStats();
+const frameSummary = emptySummary();
 
 // --- Scene ---
 const scene = new Scene();
@@ -848,6 +851,7 @@ let paused = false;
 let maintainTimer = 0;
 
 function frame(now: number) {
+  const t0 = performance.now();
   requestAnimationFrame(frame);
   // Layout is clean at the start of a frame, so reading sizes here is free
   // (after this frame's DOM writes it would force a synchronous layout).
@@ -981,6 +985,7 @@ function frame(now: number) {
   look.update(frameSeconds, viewOfPlayer());
   look.render(rig.camera);
   resolution.sample(elapsed);
+  frameStats.sample(elapsed * 1000, performance.now() - t0);
 }
 
 /** This frame's aim, for Combat (reused). */
@@ -1046,7 +1051,8 @@ function lerp(a: number, b: number, t: number) {
 // --- Front door: HUD, radar, menus, title / attract ---
 const hud = new Hud(document.body, score, events, {
   onPause: () => frontDoor.openPause(),
-  debugText: () => `${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`,
+  debugText: () =>
+    `${formatFrameStats(frameStats.summarize(frameSummary))}\n${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`,
 });
 const combatHud = new CombatHud(document.getElementById('hud')!);
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });

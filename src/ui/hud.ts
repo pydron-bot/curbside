@@ -59,7 +59,7 @@ export function gaugeTopSpeed(spec: Pick<VehicleSpec, 'maxSpeed'>): number {
 export interface HudOptions {
   /** The pause button was pressed. */
   onPause(): void;
-  /** The developer line (fps · resolution · draw calls), polled 4× a second while shown. */
+  /** The perf overlay text (frame stats · resolution · draw calls), polled 4× a second while shown. */
   debugText(): string;
 }
 

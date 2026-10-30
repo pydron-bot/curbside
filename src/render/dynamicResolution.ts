@@ -340,11 +340,11 @@ export class DynamicResolution {
     return this.controller.current.pixelRatio;
   }
 
+  /** Pixel ratio and tier for the perf overlay (fps comes from FrameStats, which sees every frame). */
   summary(): string {
     const c = this.controller;
-    const fps = c.lastInterval > 0 ? Math.round(1000 / c.lastInterval) : 0;
     const capped = c.lastVerdict === 'capped' ? ' capped' : '';
-    return `${fps} fps${capped} · ${c.current.pixelRatio.toFixed(2)}x ${c.current.tier}`;
+    return `${c.current.pixelRatio.toFixed(2)}x ${c.current.tier}${capped}`;
   }
 
   private ladder(): QualityLevel[] {
