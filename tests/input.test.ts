@@ -231,6 +231,25 @@ describe('input', () => {
     expect(input.consumeNav()).toBe(null);
   });
 
+  it('a stick held through a reset (pausing mid-steer) does not navigate until it returns to centre', () => {
+    const { win } = fakeWindow();
+    const input = new Input(win);
+    const pad = fakePad();
+    usePad(pad);
+    pad.axes[0] = -1; // steering hard left...
+    input.pollGamepad(0);
+    input.resetAll(); // ...as the pause menu opens
+    input.consumeNav();
+    input.pollGamepad(100);
+    input.pollGamepad(600); // past the repeat delay: still nothing
+    expect(input.consumeNav()).toBe(null);
+    pad.axes[0] = 0;
+    input.pollGamepad(700);
+    pad.axes[0] = -1; // a fresh push navigates
+    input.pollGamepad(800);
+    expect(input.consumeNav()).toBe('left');
+  });
+
   it('A confirms in menus while still being handbrake; Start is a pause toggle, not a nav command', () => {
     const { win } = fakeWindow();
     const input = new Input(win);

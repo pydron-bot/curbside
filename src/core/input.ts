@@ -169,6 +169,12 @@ export class Input {
   private readonly navQueue: NavCommand[] = [];
   private padNav: NavCommand | null = null;
   private padNavRepeatAt = 0;
+  /**
+   * After a reset (pausing, opening a menu) a stick or D-pad still held from
+   * play must come back to centre before it navigates: steering hard left as
+   * you hit Start mustn't walk the highlight off RESUME.
+   */
+  private padNavLatched = false;
   private device: InputDevice;
   private readonly mousePos = { x: 0, y: 0 };
   private mouseOver = false;
@@ -311,6 +317,7 @@ export class Input {
     for (const s of this.sources) clearSource(s);
     this.padLatched.fill(true);
     this.padWasDown.fill(false);
+    this.padNavLatched = true;
     this.navQueue.length = 0;
     resetDirectionalState(this.directional);
     for (const fn of this.resetHooks) fn();
@@ -362,6 +369,7 @@ export class Input {
       this.padWasDown.fill(false);
       this.padLatched.fill(false);
       this.padNav = null;
+      this.padNavLatched = false;
       return;
     }
     radialDeadzone(pad.axes[0] ?? 0, pad.axes[1] ?? 0, STICK_DEADZONE, this.stick);
@@ -426,6 +434,10 @@ export class Input {
       if (Math.max(Math.abs(x), Math.abs(y)) > NAV_STICK) {
         dir = Math.abs(x) > Math.abs(y) ? (x > 0 ? 'right' : 'left') : y > 0 ? 'down' : 'up';
       }
+    }
+    if (this.padNavLatched) {
+      if (dir) return;
+      this.padNavLatched = false;
     }
     if (dir !== this.padNav) {
       this.padNav = dir;
