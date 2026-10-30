@@ -32,11 +32,11 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Sprint (on foot) | Shift | push joystick to the rim | A |
 | Enter / exit car | E / F / Enter | ENTER / EXIT | Y |
 | Punch / fire (on foot, hold for SMG) | Space / J | PUNCH / FIRE | X |
-| Switch weapon | Q / Tab | ⇄ | RB |
+| Switch weapon | Q / Tab (Shift+Tab back) | ⇄ | RB / LB |
 | Steer | A/D, ←/→ | left-half joystick | left stick |
 | Gas / brake-reverse | W/S, ↑/↓ | GAS / BRAKE | RT / LT |
 | Handbrake | Space | HAND | A |
-| Pause | P / Esc | — (auto on app switch) | — |
+| Pause | P / Esc | — (auto on app switch; tap to resume) | Start (A resumes) |
 
 ## Status
 
@@ -83,7 +83,21 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
   fighters (20%) or armed (10%); provoke one and they punch or shoot back
   (shooters hit your car too). Player health; at 0 → WASTED, respawn, lose
   weapons, run score resets (best kept).
-- Traffic 24 cars incl. new **taxi** and **pickup**; crowd 22.
+- Traffic 24 cars incl. new **taxi** and **pickup**; crowd 22, spawned
+  just off-screen (never inside the camera's ground rectangle) and
+  concentrated near the player; parked/abandoned cars are capped and
+  everything is recycled, so the car list stays bounded.
+- **Event bus** (`src/core/events.ts`): the simulation emits crash,
+  explosion, shot, bulletHit, punch, pedDown, carjack, enter/exitVehicle,
+  pickup, award, weaponSwitch, playerHurt/Died, respawn and pause events;
+  presentation (HUD, effects, audio) subscribes. Player transitions live
+  in `src/game/player.ts`.
+- **Quality tiers** (`src/render/quality.ts`): high / medium / low, 'auto'
+  picks medium on phones; `DynamicResolution` sheds tiers then resolution
+  and treats a steady 30 Hz (Low Power Mode) as a cap, not overload.
+- App updates wait for respawn, the page being hidden, or "restart now" on
+  the pause screen; a lost WebGL context pauses until it's restored.
+  `?debug` in the URL shows fps / pixel ratio / draw calls.
 - Next: **M6 Heat** (wanted level, police).
 
 ## Layout

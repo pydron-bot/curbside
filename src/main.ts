@@ -362,12 +362,12 @@ function leaveVehicle() {
 }
 
 function respawnPlayer() {
-  // The run is over anyway: a good moment to pick up a waiting app update.
-  if (updates.atSafePoint()) return;
   score.resetRun();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true);
+  // The run is over anyway: a good moment to pick up a waiting app update.
+  updates.atSafePoint();
 }
 
 // --- Simulation ---
@@ -892,10 +892,10 @@ function setPaused(p: boolean, reason: PauseReason = 'paused') {
 }
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) return;
-  // Backgrounded: nobody is watching, so a waiting update can go in now.
-  if (updates.atSafePoint()) return;
   pausedForContext = false;
   setPaused(true);
+  // Backgrounded: nobody is watching, so a waiting update can go in now.
+  updates.atSafePoint();
 });
 
 // iOS drops the GL context of backgrounded or memory-starved pages. Say so,
