@@ -93,8 +93,11 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
   presentation (HUD, effects, audio) subscribes. Player transitions live
   in `src/game/player.ts`.
 - **Quality tiers** (`src/render/quality.ts`): high / medium / low, 'auto'
-  picks medium on phones; `DynamicResolution` sheds tiers then resolution
-  and treats a steady 30 Hz (Low Power Mode) as a cap, not overload.
+  picks medium on phones. Each tier has its own pixel-ratio cap, so
+  `DynamicResolution` steps down e.g. medium@1.5x → low@1.25x → low@1x on
+  a phone (never below 1x on high-DPI screens), keeps going past effects-only
+  steps that don't help a fill-bound GPU, and treats a steady 30 Hz (Low
+  Power Mode) as a cap, not overload.
 - App updates wait for respawn, the page being hidden, or "restart now" on
   the pause screen; a lost WebGL context pauses until it's restored.
   `?debug` in the URL shows fps / pixel ratio / draw calls.

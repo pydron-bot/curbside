@@ -25,7 +25,10 @@ import {
  *   prove there's headroom: raises are cautious (6 s good, at most one per
  *   10 s) and a raise that promptly fails backs off longer each time.
  * - A drop that doesn't make frames at least 10% faster wasn't helping
- *   (CPU-bound or capped): it's undone, and drops pause for a while.
+ *   (CPU-bound or capped): it's undone, and drops pause for a while. An
+ *   effects-only drop (same pixel ratio) is the exception: when the GPU is
+ *   busy filling pixels, dropping bloom or shadows may not show, so it's kept
+ *   and the next, resolution drop is judged against where the run began.
  * - The first seconds after boot, resume or a big asset load are noise.
  */
 
@@ -38,15 +41,20 @@ export interface QualityLevel {
 const RATIO_STEP = 0.25;
 
 /**
- * Best to cheapest. With `auto`, effects tiers step down first at the
- * starting pixel ratio, then resolution steps down to the floor (1.0 on
- * high-DPI screens, LOW_DPI_FLOOR on 1x ones).
+ * Best to cheapest. Each tier sits at its own pixel-ratio cap, so with `auto`
+ * a tier step usually lowers resolution too (phone: medium@1.5 → low@1.25;
+ * desktop: high@2 → medium@1.5 → low@1.25); then resolution alone steps down
+ * to the floor (1.0 on high-DPI screens, LOW_DPI_FLOOR on 1x ones).
  */
 export function buildLadder(start: QualityTierName, auto: boolean, devicePixelRatio: number): QualityLevel[] {
   const dpr = devicePixelRatio || 1;
-  const top = Math.min(QUALITY_TIERS[start].maxPixelRatio, dpr);
   const tiers = auto ? TIER_ORDER.slice(TIER_ORDER.indexOf(start)) : [start];
-  const levels: QualityLevel[] = tiers.map((tier) => ({ tier, pixelRatio: top }));
+  const levels: QualityLevel[] = [];
+  let top = dpr;
+  for (const tier of tiers) {
+    top = Math.min(top, QUALITY_TIERS[tier].maxPixelRatio);
+    levels.push({ tier, pixelRatio: round2(top) });
+  }
   const last = tiers[tiers.length - 1];
   const floor = Math.min(top, dpr >= 2 ? QUALITY_TIERS[last].minPixelRatio : LOW_DPI_FLOOR);
   for (let r = top - RATIO_STEP; r > floor + 1e-6; r -= RATIO_STEP) levels.push({ tier: last, pixelRatio: round2(r) });
@@ -95,8 +103,11 @@ export const DEFAULT_OPTIONS: ControllerOptions = {
 
 /** We aim for 60 fps; a faster display (120/144 Hz) needn't be matched. */
 const TARGET_INTERVAL = 1000 / 60;
-/** Intervals longer than this are a stall (tab switch, debugger), not load. */
-const STALL_MS = 250;
+/**
+ * Intervals longer than this are a stall (tab switch, GC, shader compile),
+ * not load. Kept under main's 0.25 s sim clamp so it works on clamped input too.
+ */
+export const STALL_MS = 200;
 const MAX_SAMPLES = 512;
 
 export type WindowVerdict = 'good' | 'capped' | 'slow';
@@ -124,8 +135,13 @@ export class ResolutionController {
   private raisesBlockedUntil = 0;
   private dropBackoff: number;
   private raiseBackoff: number;
-  /** Set right after a drop, to check it was worth it. */
+  /**
+   * Set right after a drop, to check it was worth it: `from` and `baseline`
+   * are the level and frame interval where this run of drops began.
+   */
   private probe: { from: number; baseline: number; until: number } | null = null;
+  /** An effects-only drop that didn't help yet: the next drop is judged together with it. */
+  private carry: { from: number; baseline: number } | null = null;
 
   constructor(ladder: QualityLevel[], options: Partial<ControllerOptions> = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -147,7 +163,7 @@ export class ResolutionController {
   setLadder(ladder: QualityLevel[]): void {
     this.ladder = ladder;
     this.level = 0;
-    this.probe = null;
+    this.probe = this.carry = null;
     this.goodRun = this.slowRun = 0;
     this.holdOff();
   }
@@ -155,6 +171,8 @@ export class ResolutionController {
   /** Ignore frames for a while (resume, context restored, big asset loaded). */
   holdOff(seconds = this.options.warmupSeconds): void {
     this.warmup = Math.max(this.warmup, seconds);
+    // Whatever comes after the pause is judged afresh.
+    this.carry = null;
     this.count = 0;
     this.windowTime = 0;
   }
@@ -213,14 +231,24 @@ export class ResolutionController {
       const { from, baseline } = this.probe;
       this.probe = null;
       if (verdict !== 'good' && baseline / interval - 1 < o.minImprovement) {
-        // Didn't help: put it back and stop trying for a while.
-        this.level = from;
-        this.dropsBlockedUntil = this.now + this.dropBackoff;
-        this.dropBackoff = Math.min(this.dropBackoff * 2, 240);
-        this.goodRun = this.slowRun = 0;
-        return true;
+        const effectsOnly = this.ladder[this.level].pixelRatio >= this.ladder[from].pixelRatio;
+        if (verdict === 'slow' && effectsOnly && this.level < this.ladder.length - 1) {
+          // Fewer effects may cost nothing to a GPU that's busy filling
+          // pixels: keep the step and let the next one, which lowers
+          // resolution, be judged against where this run began.
+          this.carry = { from, baseline };
+        } else {
+          // Didn't help (CPU-bound or capped): put it all back and stop
+          // trying for a while.
+          this.level = from;
+          this.dropsBlockedUntil = this.now + this.dropBackoff;
+          this.dropBackoff = Math.min(this.dropBackoff * 2, 240);
+          this.goodRun = this.slowRun = 0;
+          return true;
+        }
       }
     }
+    if (verdict !== 'slow') this.carry = null;
 
     const w = o.windowSeconds;
     if (verdict === 'good') {
@@ -240,7 +268,9 @@ export class ResolutionController {
         this.raisesBlockedUntil = this.now + this.raiseBackoff;
         this.raiseBackoff = Math.min(this.raiseBackoff * 2, 160);
       }
-      this.probe = { from: this.level, baseline: interval, until: this.now + o.probeSeconds };
+      const run = this.carry ?? { from: this.level, baseline: interval };
+      this.carry = null;
+      this.probe = { from: run.from, baseline: run.baseline, until: this.now + o.probeSeconds };
       this.level++;
       this.lastDrop = this.now;
       this.slowRun = this.goodRun = 0;
@@ -287,7 +317,7 @@ export class DynamicResolution {
     });
   }
 
-  /** Feed the time since the last frame. */
+  /** Feed the real time since the last frame (unclamped, so stalls show as stalls). */
   sample(frameSeconds: number): void {
     if (this.controller.sample(frameSeconds * 1000)) this.apply();
     // Moved to a screen with a different pixel ratio? (checked once a second)
