@@ -191,5 +191,9 @@ describe('sidewalk corners', () => {
     knockDown(p, p.s.x + 2, p.s.z, 3);
     expect(Math.sin(p.s.heading)).toBeCloseTo(1, 5); // facing +X, toward the hit
     expect(p.s.vx).toBeLessThan(0); // sliding away from it
+    // Hit again where they lie: they slide, but don't spin round on the ground.
+    knockDown(p, p.s.x, p.s.z + 2, 3);
+    expect(Math.sin(p.s.heading)).toBeCloseTo(1, 5);
+    expect(p.s.vz).toBeLessThan(0);
   });
 });

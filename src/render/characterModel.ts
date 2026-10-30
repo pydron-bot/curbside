@@ -511,6 +511,8 @@ export class CharacterModel {
   private fakeAim = 0;
   private staggerTime = 0;
   private restagger = false;
+  /** The simulation's stagger countdown as last seen (followStagger). */
+  private simStagger = 0;
   private hailTime = 0;
   private cheerTime = 0;
   private enterTime = 0;
@@ -767,6 +769,16 @@ export class CharacterModel {
     this.staggerTime = Math.max(this.staggerTime, seconds);
   }
 
+  /**
+   * Follow the simulation's stagger countdown (call every frame): a rise is a
+   * new hit; a countdown held still (a card froze the sim while people keep
+   * moving) doesn't restart the Stagger clip.
+   */
+  followStagger(simSeconds: number): void {
+    if (simSeconds > this.simStagger + 1e-3) this.stagger(simSeconds);
+    this.simStagger = simSeconds;
+  }
+
   /** Wave down a cab (or wave someone over) for the next `seconds`; call again to keep waving. */
   hail(seconds = 1): void {
     this.hailTime = Math.max(this.hailTime, seconds);
@@ -822,6 +834,7 @@ export class CharacterModel {
     this.aimPose = false;
     this.wasDown = false;
     this.restagger = false;
+    this.simStagger = 0;
     this.arrested = this.cowering = this.riding = false;
     this.weapon = null;
     this.armed = false;

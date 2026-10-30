@@ -2,6 +2,9 @@ import { AnimationClip, Bone, Color, Group, Matrix4, Quaternion, QuaternionKeyfr
 import { describe, expect, it } from 'vitest';
 import { CharacterModel, poseFor, type CharacterBatch } from '../src/render/characterModel';
 import { ClipBank } from '../src/render/characterAnim';
+import { PeoplePose } from '../src/render/peoplePose';
+import { EventBus } from '../src/core/events';
+import type { Player } from '../src/game/player';
 
 /**
  * A stand-in for a body GLB: root, hips, chest, head and arms, plus whichever
@@ -233,6 +236,22 @@ describe('character animation: whole body', () => {
     expect(Math.abs(fake.m.body.rotation.x)).toBeLessThan(0.02);
   });
 
+  it("follows the sim's stagger: a rise is a hit, a countdown held still (sim frozen) plays it once", () => {
+    const { m, zAngle, angle } = model(ALL);
+    // A hit, then the sim stops (a card over the game) while people keep moving.
+    for (let i = 0; i < 60; i++) {
+      m.followStagger(0.3);
+      m.update(1 / 60, 0);
+    }
+    expect(zAngle('hips')).toBeCloseTo(angle('Idle'), 2); // played once, not restarted every few frames
+    // A fresh hit while the sim runs again.
+    m.followStagger(0.25);
+    m.followStagger(0.3);
+    m.update(1 / 60, 0);
+    m.update(1 / 60, 0);
+    expect((m as unknown as { fullState: string }).fullState).toBe('stagger');
+  });
+
   it('cowers, cheers (standing only), rides and gets in a car on request', () => {
     const { m, zAngle, angle, run } = model(ALL);
     m.cowering = true;
@@ -288,5 +307,26 @@ describe('clip bank', () => {
     expect(bank.upper.map((i) => bank.bones[i]).sort()).toEqual(['armL', 'armR', 'chest', 'head']);
     expect(bank.get('Walk')!.rot.every((r) => r !== null)).toBe(true);
     expect(bank.get('Nope')).toBeNull();
+  });
+});
+
+describe('boarding (PeoplePose)', () => {
+  it('steps to the door of a car at hand, but is in at once when put into one across town', () => {
+    const { m } = model(ALL);
+    const bus = new EventBus();
+    const car = { sim: { x: 0, z: 0, heading: 0, vx: 0, vz: 0 }, mesh: { root: { visible: true } } };
+    const player = { driving: null as typeof car | null, alive: true, down: false };
+    new PeoplePose({ bus, player: player as unknown as Player, model: m, crowd: [], locked: () => false, playing: () => true });
+    // Beside the driver's door (left of the car): EnterCar, still shown.
+    m.root.position.set(2.5, 0, 0.3);
+    player.driving = car;
+    bus.emit({ type: 'enterVehicle', archetype: 'sedan' });
+    expect(m.root.visible).toBe(true);
+    // A Chaos Run's start: boarded 120 m away, no slide across the city.
+    m.reset();
+    m.root.visible = true;
+    m.root.position.set(120, 0, 40);
+    bus.emit({ type: 'enterVehicle', archetype: 'sports' });
+    expect(m.root.visible).toBe(false);
   });
 });

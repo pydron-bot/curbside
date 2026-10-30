@@ -20,6 +20,11 @@ const BOARD_STEP = 0.4;
 const BOARD_DOOR = 1.45;
 /** A car already moving this fast swallows the player at once, m/s. */
 const BOARD_FAST = 4;
+/**
+ * Farther than this from the door (put straight into a car somewhere else:
+ * a Chaos Run's start), they're in at once rather than sliding across town, m.
+ */
+const BOARD_REACH = 4;
 /** The gun stays up this long after the player's last shot, s... */
 const AIM_LINGER = 1.2;
 /** ...and is lowered while sprinting faster than this without aiming, m/s. */
@@ -104,8 +109,9 @@ export class PeoplePose {
     const m = this.d.model;
     const car = p.driving;
     const shown = m.root.visible && this.d.playing() && car !== null;
-    const takes = shown ? m.enterCar() : 0;
-    if (!shown || takes <= 0 || speed(car.sim) > BOARD_FAST) {
+    const near = shown && Math.hypot(m.root.position.x - doorX(car.sim), m.root.position.z - doorZ(car.sim)) < BOARD_REACH;
+    const takes = near ? m.enterCar() : 0;
+    if (!near || takes <= 0 || speed(car.sim) > BOARD_FAST) {
       m.root.visible = false;
       return;
     }
@@ -126,16 +132,14 @@ export class PeoplePose {
       m.root.visible = false;
       return;
     }
-    // The driver's door (as driverDoorPosition, without the garbage): left of the car, a little forward.
-    const h = car.sim.heading;
-    const doorX = car.sim.x + Math.cos(h) * BOARD_DOOR + Math.sin(h) * 0.3;
-    const doorZ = car.sim.z - Math.sin(h) * BOARD_DOOR + Math.cos(h) * 0.3;
+    const dx = doorX(car.sim);
+    const dz = doorZ(car.sim);
     const k = Math.min(1, this.boardTime / (this.boardFor * BOARD_STEP));
     const e = 1 - (1 - k) * (1 - k);
     const from = this.boardFrom;
-    m.root.position.set(lerp(from.x, doorX, e), 0, lerp(from.z, doorZ, e));
+    m.root.position.set(lerp(from.x, dx, e), 0, lerp(from.z, dz, e));
     // Facing the car, into the door.
-    m.root.rotation.y = lerpAngle(from.heading, Math.atan2(car.sim.x - doorX, car.sim.z - doorZ), e);
+    m.root.rotation.y = lerpAngle(from.heading, Math.atan2(car.sim.x - dx, car.sim.z - dz), e);
   }
 
   /** A win: the player (on foot) and any story character close by cheer. */
@@ -160,9 +164,18 @@ function poseCrowdPed(c: CrowdPed, dt: number, alpha: number): void {
   const shooting = a.mode === 'shoot';
   m.hold(shooting ? (c.gun ?? 'pistol') : null, shooting);
   m.cowering = a.cower > 0 && a.mode === 'flee';
-  if (a.stagger > 0) m.stagger(a.stagger);
+  m.followStagger(a.stagger);
   const down = a.mode === 'down';
   m.update(dt, Math.hypot(s.vx, s.vz), down, down ? a.timer : Infinity);
+}
+
+/** The driver's door (as driverDoorPosition, without the garbage): left of the car, a little forward. */
+function doorX(s: { x: number; heading: number }): number {
+  return s.x + Math.cos(s.heading) * BOARD_DOOR + Math.sin(s.heading) * 0.3;
+}
+
+function doorZ(s: { z: number; heading: number }): number {
+  return s.z - Math.sin(s.heading) * BOARD_DOOR + Math.cos(s.heading) * 0.3;
 }
 
 function lerp(a: number, b: number, t: number): number {

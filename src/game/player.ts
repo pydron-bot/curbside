@@ -157,6 +157,7 @@ export class Player {
    * Never shortens a stun or death already running.
    */
   knockDown(fromX: number, fromZ: number, push: number, seconds: number, cause: KnockCause, byPlayer: boolean): void {
+    const wasDown = this.down;
     this.stunned = Math.max(this.stunned, seconds);
     if (this.driving) return;
     const dx = this.ped.x - fromX;
@@ -164,8 +165,9 @@ export class Player {
     const d = Math.hypot(dx, dz) || 1;
     this.ped.vx = (dx / d) * push;
     this.ped.vz = (dz / d) * push;
-    // Bowled over backwards, facing whatever did it (the fall clip lands them on their back).
-    if (push > 0) this.ped.heading = Math.atan2(-dx, -dz);
+    // Bowled over backwards, facing whatever did it (the fall clip lands them on their back);
+    // already lying there, they don't spin round.
+    if (push > 0 && !wasDown) this.ped.heading = Math.atan2(-dx, -dz);
     this.bus.emit({ type: 'pedDown', x: this.ped.x, z: this.ped.z, cause, byPlayer, isPlayer: true });
   }
 

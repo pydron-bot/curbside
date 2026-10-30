@@ -236,11 +236,11 @@ export function knockDown(p: PedAgent, fromX: number, fromZ: number, push = 3, s
   const dx = p.s.x - fromX;
   const dz = p.s.z - fromZ;
   const d = Math.hypot(dx, dz) || 1;
+  // Bowled over backwards: facing whatever hit them (already lying there, they don't spin round).
+  if (p.mode !== 'down') p.s.heading = Math.atan2(-dx, -dz);
   p.mode = 'down';
   p.timer = seconds;
   p.cower = 0;
-  // Bowled over backwards: facing whatever hit them.
-  p.s.heading = Math.atan2(-dx, -dz);
   p.s.vx = (dx / d) * push;
   p.s.vz = (dz / d) * push;
 }
