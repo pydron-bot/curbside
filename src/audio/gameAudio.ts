@@ -17,7 +17,9 @@ import { AmbientBed, EngineVoice, FireVoice, SirenVoice, TyreVoice, type SirenSt
 import {
   AIR_FILTER_BELOW,
   Dip,
+  SILENT_GAIN,
   airCutoff,
+  audioSessionType,
   clamp,
   clamp01,
   distanceGain,
@@ -140,12 +142,15 @@ const OPEN = 20000;
 
 const rnd = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
 
-/** iOS 16.4+: 'playback' keeps sound on with the silent switch; 'ambient' respects it. */
-function applyAudioSession(ignoreSilentSwitch: boolean): void {
+/** iOS 16.4+ audio session: see audioSessionType() for the policy. */
+function applyAudioSession(s: Settings): void {
+  if (typeof navigator === 'undefined') return;
   const nav = navigator as unknown as { audioSession?: { type: string } };
   if (!nav.audioSession) return;
+  const type = audioSessionType(s);
+  if (nav.audioSession.type === type) return;
   try {
-    nav.audioSession.type = ignoreSilentSwitch ? 'playback' : 'ambient';
+    nav.audioSession.type = type;
   } catch {
     // Unsupported value on this browser: keep its default.
   }
@@ -214,6 +219,8 @@ export class GameAudio {
   private listenerZ = 0;
   private paused = false;
   private hidden = false;
+  /** Master volume at zero: the context stays suspended (battery; other apps' audio plays). */
+  private muted = false;
   private dead = false;
   private inCar: boolean | null = null;
   private pauseTimer = 0;
@@ -232,7 +239,7 @@ export class GameAudio {
     const bus = opts.bus ?? defaultBus;
     this.cleanups.push(bus.onAny((e) => this.handle(e)));
     this.cleanups.push(onSettingsChange((s) => this.applySettings(s)));
-    applyAudioSession(settings.ignoreSilentSwitch);
+    applyAudioSession(settings);
     if (typeof window === 'undefined') return;
     const opt = { capture: true, passive: true };
     for (const type of GESTURES) window.addEventListener(type, this.onGesture, opt);
@@ -469,8 +476,10 @@ export class GameAudio {
         : null,
       chaos: { energy: +this.chaos.energy.toFixed(2), level: this.chaos.level },
       muffle: Math.round(this.muffleDip.at(this.ctx?.currentTime ?? 0)),
+      musicDormant: music?.isDormant ?? false,
       paused: this.paused,
       hidden: this.hidden,
+      muted: this.muted,
     };
   }
 
@@ -558,7 +567,7 @@ export class GameAudio {
       return;
     }
     this.ctx = ctx;
-    applyAudioSession(settings.ignoreSilentSwitch);
+    applyAudioSession(settings);
     this.kick(ctx);
     try {
       this.build(ctx);
@@ -590,7 +599,7 @@ export class GameAudio {
 
   private wake(): void {
     const ctx = this.ctx;
-    if (!ctx || this.hidden) return;
+    if (!ctx || this.hidden || this.muted) return;
     if (ctx.state !== 'running') this.kick(ctx);
     else if (this.paused) this.armPauseSuspend();
   }
@@ -647,7 +656,6 @@ export class GameAudio {
     this.musicBus = ctx.createGain();
     this.musicBus.connect(this.master);
 
-    this.applySettings(settings);
     this.music = new MusicPlayer(ctx, bank, this.musicBus, impulse, STATIONS[this.stationIndex]);
     if (this.musicMode !== 'off' && !this.dead) this.music.setMode(this.musicMode);
     this.ambient = new AmbientBed(ctx, bank, this.worldIn, ctx.currentTime);
@@ -659,16 +667,26 @@ export class GameAudio {
       this.muffleDip.hold(600);
       this.worldMuffle.frequency.value = 600;
     }
+    this.applySettings(settings);
   }
 
   private applySettings(s: Settings): void {
-    applyAudioSession(s.ignoreSilentSwitch);
+    applyAudioSession(s);
     const ctx = this.ctx;
     if (!ctx || !this.bank) return;
     const now = ctx.currentTime;
-    this.master.gain.setTargetAtTime(volumeToGain(s.masterVolume), now, 0.03);
+    const master = volumeToGain(s.masterVolume);
+    this.master.gain.setTargetAtTime(master, now, 0.03);
     this.sfxBus.gain.setTargetAtTime(volumeToGain(s.sfxVolume), now, 0.03);
     this.musicBus.gain.setTargetAtTime(this.musicGain(s), now, 0.03);
+    // Silent music costs nothing: no notes booked, its graph not rendered.
+    this.music?.setDormant(master * volumeToGain(s.musicVolume) < SILENT_GAIN);
+    // Fully muted, the whole context sleeps; turning it back up wakes it (or the next gesture does).
+    const muted = master < SILENT_GAIN;
+    if (muted === this.muted) return;
+    this.muted = muted;
+    if (muted) ctx.suspend().catch(() => {});
+    else this.wake();
   }
 
   private musicGain(s: Settings): number {

@@ -3,6 +3,7 @@ import {
   Dip,
   PAN_LIMIT,
   airCutoff,
+  audioSessionType,
   distanceGain,
   dopplerCents,
   panFor,
@@ -131,6 +132,21 @@ describe('dips (world muffle, music duck)', () => {
     expect(d.level).toBe(0.22);
     expect(d.at(0.1)).toBe(0.22);
     expect(d.at(5)).toBeCloseTo(1, 2);
+  });
+});
+
+describe('iOS audio session policy', () => {
+  const base = { masterVolume: 0.8, sfxVolume: 0.9, musicVolume: 0.5, ignoreSilentSwitch: true };
+  it("plays through the silent switch by default ('playback')", () => {
+    expect(audioSessionType(base)).toBe('playback');
+    expect(audioSessionType({ ...base, musicVolume: 0 })).toBe('playback');
+  });
+  it("respects the switch when asked to ('ambient')", () => {
+    expect(audioSessionType({ ...base, ignoreSilentSwitch: false })).toBe('ambient');
+  });
+  it("mixes with other apps' audio when the game is turned all the way down", () => {
+    expect(audioSessionType({ ...base, masterVolume: 0 })).toBe('ambient');
+    expect(audioSessionType({ ...base, sfxVolume: 0, musicVolume: 0 })).toBe('ambient');
   });
 });
 

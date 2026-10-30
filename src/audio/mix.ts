@@ -132,3 +132,23 @@ export class Dip {
     this.tau = Math.max(0.005, recover / 3);
   }
 }
+
+/** Below this a gain is inaudible (-80 dB): treat the bus as off. */
+export const SILENT_GAIN = 1e-4;
+
+/**
+ * iOS audio session for the current settings. 'playback' plays through the
+ * silent switch but stops other apps' audio; 'ambient' mixes with it and
+ * respects the switch. A game turned all the way down shouldn't stop the
+ * player's own music, so it drops to 'ambient' then.
+ */
+export function audioSessionType(s: {
+  masterVolume: number;
+  sfxVolume: number;
+  musicVolume: number;
+  ignoreSilentSwitch: boolean;
+}): 'playback' | 'ambient' {
+  const master = volumeToGain(s.masterVolume);
+  const silent = master < SILENT_GAIN || (volumeToGain(s.sfxVolume) < SILENT_GAIN && volumeToGain(s.musicVolume) < SILENT_GAIN);
+  return s.ignoreSilentSwitch && !silent ? 'playback' : 'ambient';
+}

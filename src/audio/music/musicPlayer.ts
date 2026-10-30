@@ -37,6 +37,8 @@ export class MusicPlayer {
   /** Faded out by setMode('off'), waiting to come back. */
   private off = false;
   private paused = false;
+  /** Volume at zero: nothing booked, rig unhooked from the output (see setDormant). */
+  private dormant = false;
   private readonly duckDip = new Dip(1);
 
   private readonly duckGain: GainNode;
@@ -66,7 +68,7 @@ export class MusicPlayer {
   constructor(
     readonly ctx: BaseAudioContext,
     readonly bank: NoiseBank,
-    out: AudioNode,
+    private readonly out: AudioNode,
     impulse: AudioBuffer,
     station: Station = STATIONS[0],
   ) {
@@ -168,7 +170,7 @@ export class MusicPlayer {
   /** Book every step that starts before `now + lookahead`, and clean up finished notes. */
   pump(now: number, lookahead = LOOKAHEAD): void {
     this.reap(now);
-    if (!this.running) return;
+    if (!this.running || this.dormant) return;
     let guard = 0;
     while (this.clock.due(now, lookahead) && guard++ < 256) {
       const t = this.clock.nextTime;
@@ -257,6 +259,29 @@ export class MusicPlayer {
     const now = this.ctx.currentTime;
     this.pauseLp.frequency.setTargetAtTime(paused ? 650 : 20000, now, paused ? 0.08 : 0.15);
     this.trim.gain.setTargetAtTime(this.sound.trim * (paused ? PAUSE_TRIM : 1), now, 0.1);
+  }
+
+  /**
+   * Music volume at zero: stop booking notes and unhook the rig from the
+   * output, so the destination no longer pulls (renders) its oscillators,
+   * echo and reverb. Waking restarts from the top of a phrase.
+   */
+  setDormant(dormant: boolean): void {
+    if (dormant === this.dormant) return;
+    this.dormant = dormant;
+    if (dormant) {
+      this.duckGain.disconnect();
+      // Notes already booked (a pad holds for seconds) end now and are reaped.
+      const now = this.ctx.currentTime;
+      for (const v of this.notes) v.kill(now);
+      return;
+    }
+    this.duckGain.connect(this.out);
+    if (this.running && !this.off) this.start(this.ctx.currentTime + 0.05);
+  }
+
+  get isDormant(): boolean {
+    return this.dormant;
   }
 
   dispose(): void {

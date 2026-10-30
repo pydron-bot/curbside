@@ -113,12 +113,19 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
 
 - **Unlock and lifecycle.** One `AudioContext`, created on the first
   tap / click / key (iOS needs a user gesture; a one-sample silent buffer
-  completes the unlock). Interrupted or suspended contexts resume on the next
-  gesture. A hidden page suspends it; pausing silences the world and muffles
-  the music (UI sounds still play), and 45 s of pause suspends it to save
-  battery. On iOS 16.4+ `navigator.audioSession.type` is `'playback'` so the
-  silent switch doesn't mute the game (setting `ignoreSilentSwitch`, false →
-  `'ambient'`).
+  completes the unlock). Interrupted or suspended contexts
+  resume on the next gesture. A hidden page suspends it; pausing silences the
+  world and muffles the music (UI sounds still play), and 45 s of pause
+  suspends it to save battery. Master volume at 0 keeps the context
+  suspended; music volume at 0 stops the sequencer and unhooks the music
+  graph, so muted music costs no CPU.
+- **iOS audio session.** On iOS 16.4+ `navigator.audioSession.type` is
+  `'playback'`, so the silent switch doesn't mute the game (setting
+  `ignoreSilentSwitch`; false → `'ambient'`). `'playback'` also stops other
+  apps' audio, so while the game is turned all the way down (master 0, or
+  SFX and music both 0) it drops to `'ambient'` and the player's own music
+  keeps playing. A sound-settings screen should explain the toggle as "Play
+  sound with the silent switch on".
 - **Mix.** World sounds (muted on pause, muffled by close blasts, hits and
   death, with a synthetic street reverb) and UI/stingers → SFX bus; music →
   its own bus; both → master → glue compressor → limiter. Bus gains follow
