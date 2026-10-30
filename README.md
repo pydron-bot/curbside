@@ -261,6 +261,7 @@ look.time.hour                           // current hour, 0..24
 look.cars.setSiren(vehicle, on)          // police light bar + red/blue wash on the road
 look.lighting.sky                        // current SkyState (night, exposure, ...)
 worldUniforms.uWetness.value = 0..1      // wet roads (shaderLib.ts)
+look.exposureBoost = 1.8                 // flash multiplier on the sky's exposure (ease it back to 1 yourself)
 look.addGlowSource((glows, view) => …)   // add faked lights each frame: glows.addFlat / addUpright (glowSprites.ts)
 ```
 

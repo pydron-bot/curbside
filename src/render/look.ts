@@ -61,6 +61,12 @@ export class Look {
   private night = 0;
   private warmedUp = false;
   private readonly glowSources: GlowSource[] = [];
+  /**
+   * Multiplier on the sky's exposure, for flashes (e.g. an explosion kicking
+   * it to 1.8 and easing back). The sky sets exposure every frame, so set
+   * this rather than renderer.toneMappingExposure.
+   */
+  exposureBoost = 1;
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -96,6 +102,7 @@ export class Look {
     this.time.update(dt);
     worldUniforms.uTime.value += dt;
     const sky = this.lighting.apply(this.time.hour);
+    this.renderer.toneMappingExposure *= this.exposureBoost;
     this.sunShadow.setStrength(sky.shadowStrength);
     this.cars.envIntensity = sky.envIntensity;
     this.post.setNight(sky.night);
