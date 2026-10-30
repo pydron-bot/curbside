@@ -91,7 +91,7 @@ describe('roadblocks', () => {
 
 describe('helicopter', () => {
   function heli(x: number, z: number): Helicopter {
-    return { active: true, leaving: false, x, z, vx: 0, vz: 0, heading: 0, spotX: x, spotZ: z, sweep: 0, sees: false };
+    return { active: true, leaving: false, x, z, vx: 0, vz: 0, heading: 0, spotX: x, spotZ: z, sweep: 0, sees: false, shift: 0, refuelling: false };
   }
 
   it('flies to a still target and puts the light on them', () => {

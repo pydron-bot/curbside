@@ -36,6 +36,8 @@ export interface PursuitTarget {
   inCar: boolean;
   /** This pursuer can see them right now (else it's driving on old information). */
   seen: boolean;
+  /** The position is current (seen, or dispatch is tracking them): drive there flat out. */
+  known: boolean;
 }
 
 export interface PursuitDriver {
@@ -65,7 +67,7 @@ export interface PursuitDriver {
 /** Further than this (or out of sight), follow the roads, m. */
 export const ROUTE_DISTANCE = 70;
 /** Aggressive pursuers ram from this close, m. */
-export const RAM_DISTANCE = 16;
+export const RAM_DISTANCE = 14;
 /** A quarry slower than this is boxed in, m/s. */
 export const BOX_SPEED = 3;
 /** Boxing starts within this distance, m. */
@@ -73,22 +75,26 @@ export const BOX_DISTANCE = 32;
 /** Longest lead on the intercept point, s. */
 export const MAX_LEAD = 1.2;
 /** How far behind a chase settles when it isn't ramming, m. */
-export const FOLLOW_GAP = 8;
+export const FOLLOW_GAP = 10;
 /** How much faster than the quarry a ram comes in, m/s (closing speed sets the damage). */
-export const RAM_CLOSING = 7;
+export const RAM_CLOSING = 5;
 /** On foot, cars stop this far short so the officers get out and run, m. */
 export const FOOT_STOP = 7;
 const STEER_GAIN = 2.3;
 const STUCK_SECONDS = 1.2;
 const REVERSE_SECONDS = 1;
 /** After a ram, hang back this long before the next. */
-const RAM_COOLDOWN = 1.4;
+const RAM_COOLDOWN = 2.6;
+/** Meeting the quarry head-on inside this range: slow to ONCOMING_SPEED and pass PASS_OFFSET to the side. */
+const ONCOMING_RANGE = 45;
+const ONCOMING_SPEED = 12;
+const PASS_OFFSET = 5;
 /** Swerve this far sideways round a car in the way, m. */
 const SWERVE = 3.4;
 /** Backed out this often without getting going: hopeless (recycle it when unseen). */
 const HOPELESS_ATTEMPTS = 6;
 /** Pursuers take corners this fast when following the roads, m/s (traffic: 6). */
-const PURSUIT_TURN_SPEED = 9;
+const PURSUIT_TURN_SPEED = 12;
 
 export function createPursuit(road: AiDriver, aggression: number, cruise: number, topSpeed: number, boxes = true): PursuitDriver {
   return {
@@ -178,12 +184,20 @@ export function alongside(car: VehicleState, t: PursuitTarget): boolean {
   return sameWay && along > -5.5 && along < 1.5 && lateral > 1.4 && lateral < 5;
 }
 
+/**
+ * Coming at the quarry head-on (both moving, facing more or less opposite
+ * ways)? Then no ramming: a head-on at a combined 50 m/s wrecks both cars.
+ */
+export function headOn(car: VehicleState, t: PursuitTarget): boolean {
+  return t.inCar && Math.hypot(t.vx, t.vz) > 5 && Math.cos(car.heading - t.heading) < -0.3;
+}
+
 /** Pick this step's mode. */
 export function choosePursuitMode(d: PursuitDriver, car: VehicleState, t: PursuitTarget, distance: number): PursuitMode {
   if (!t.seen || distance > ROUTE_DISTANCE) return 'route';
   const quarrySpeed = Math.hypot(t.vx, t.vz);
   if (d.boxes && distance < BOX_DISTANCE && (!t.inCar || quarrySpeed < BOX_SPEED)) return 'box';
-  if (d.aggression >= 0.5 && d.ramCooldown <= 0 && distance < RAM_DISTANCE) {
+  if (d.aggression >= 0.5 && d.ramCooldown <= 0 && distance < RAM_DISTANCE && !headOn(car, t)) {
     return t.inCar && quarrySpeed > 8 && alongside(car, t) ? 'pit' : 'ram';
   }
   return 'chase';
@@ -215,9 +229,10 @@ export function drivePursuit(
 
   if (mode === 'route') {
     d.stuck = 0;
-    // Flat out toward a sighting relayed over the radio; a steady search pace otherwise.
-    d.road.cruise = t.seen ? d.topSpeed : d.cruise;
+    // Flat out toward a current position; a steady search pace on old information.
+    d.road.cruise = t.known ? d.topSpeed : d.cruise;
     d.road.turnSpeed = PURSUIT_TURN_SPEED;
+    d.road.urgent = true;
     const c = driveAi(d.road, car, obstacles, rand, dt);
     // driveAi picks turns at random as it passes a junction: steer it toward the goal instead.
     if (d.road.phase === 'approach') d.road.next = routeToward(d.road.ix, d.road.iz, d.road.dir, t.x, t.z);
@@ -254,8 +269,16 @@ export function drivePursuit(
     const fz = Math.cos(t.heading);
     aim.x = t.x - fx * 1.4 + t.vx * 0.15;
     aim.z = t.z - fz * 1.4 + t.vz * 0.15;
-    want = quarrySpeed + 4;
+    want = quarrySpeed + 3;
     if (distance < 3.6) d.ramCooldown = RAM_COOLDOWN;
+  } else if (headOn(car, t) && distance < ONCOMING_RANGE) {
+    // Coming the other way: slow, and pass them on our right (keeps to our
+    // side of the road), then turn round after them.
+    const fx = Math.sin(car.heading);
+    const fz = Math.cos(car.heading);
+    aim.x = t.x - fz * PASS_OFFSET;
+    aim.z = t.z + fx * PASS_OFFSET;
+    want = Math.min(quarrySpeed, ONCOMING_SPEED);
   } else {
     interceptPoint(car, t, aim);
     // Close the gap fast, then sit FOLLOW_GAP behind at the quarry's pace.

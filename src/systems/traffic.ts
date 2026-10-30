@@ -15,6 +15,7 @@ import { forwardSpeed, wrapAngle, type VehicleControls, type VehicleState } from
 import { BLOCK_SIZE } from '../world/city';
 import {
   DIR_VEC,
+  LANE_OFFSET,
   MAX_NODE,
   rightOf,
   canLeave,
@@ -65,6 +66,10 @@ export interface AiDriver {
   hornCooldown: number;
   /** Set when the driver honks this step (its length, s); the caller sounds it and clears it. */
   honk: number;
+  /** In a hurry (police on a call): leaves half the gap and overtakes whatever's in the way. */
+  urgent: boolean;
+  /** Seconds left in the oncoming lane, overtaking. */
+  overtaking: number;
 }
 
 export type Mood = 'calm' | 'panic' | 'rage';
@@ -79,7 +84,7 @@ export interface Obstacle {
 }
 
 export const CRUISE_SPEED = 12;
-const TURN_SPEED = 6;
+export const TURN_SPEED = 6;
 const WAYPOINT_RADIUS = 4;
 /** Must close this much on the waypoint to count as progress, m. */
 const PROGRESS_STEP = 0.5;
@@ -109,6 +114,9 @@ const YIELD_SHIFT = 3;
 const YIELD_SPEED = 3;
 /** A siren behind within this distance (same way) makes drivers pull over, m. */
 export const YIELD_RANGE = 40;
+/** Overtaking: this far left of our lane line (into the oncoming lane), for at least this long. */
+const OVERTAKE_SHIFT = 2 * LANE_OFFSET;
+const OVERTAKE_SECONDS = 1.6;
 
 /**
  * Place a new AI car on a random lane. Returns null if the pick was off-map.
@@ -158,6 +166,8 @@ export function createDriver(ix: number, iz: number, dir: Dir, rand: () => numbe
     blockedByPlayer: 0,
     hornCooldown: 0,
     honk: 0,
+    urgent: false,
+    overtaking: 0,
   };
 }
 
@@ -218,11 +228,12 @@ export function driveAi(
     const ahead = Math.min(0, along + LOOKAHEAD);
     aim.x = target.x + v.x * ahead;
     aim.z = target.z + v.z * ahead;
-    if (ai.yielding > 0) {
-      // Pull over: hug the kerb.
+    if (ai.yielding > 0 || ai.overtaking > 0) {
+      // Pull over (hug the kerb), or pull out into the oncoming lane to pass.
       const r = rightOf(ai.dir);
-      aim.x += r.x * YIELD_SHIFT;
-      aim.z += r.z * YIELD_SHIFT;
+      const shift = ai.overtaking > 0 ? -OVERTAKE_SHIFT : YIELD_SHIFT;
+      aim.x += r.x * shift;
+      aim.z += r.z * shift;
     }
     ax = aim.x;
     az = aim.z;
@@ -249,20 +260,34 @@ export function driveAi(
   if (panic) {
     if (Math.abs(diff) > 0.9) wantSpeed = Math.min(wantSpeed, turnSpeed * 1.8);
   } else {
+    // In a hurry, brake later and harder into the corner.
+    const brakeIn = ai.urgent ? 0.7 : 0.3;
     if (ai.phase === 'turning' && turning) wantSpeed = turnSpeed;
-    else if (ai.phase === 'approach' && turning && distToWaypoint < 22 + turnSpeed) wantSpeed = turnSpeed + distToWaypoint * 0.3;
+    else if (ai.phase === 'approach' && turning && distToWaypoint < 22 + turnSpeed) wantSpeed = turnSpeed + distToWaypoint * brakeIn;
     if (Math.abs(diff) > 0.6) wantSpeed = Math.min(wantSpeed, turnSpeed);
   }
   if (ai.yielding > 0 && ai.phase === 'approach') wantSpeed = Math.min(wantSpeed, YIELD_SPEED);
   if (panic && ai.hornCooldown <= 0) honk(ai, 0.2 + rand() * 0.25, 0.8 + rand());
 
-  // Brake for anything in our path.
+  // Brake for anything in our path (in a hurry: pass it if the other lane is clear).
   const vF = forwardSpeed(car);
+  if (ai.overtaking > 0) {
+    ai.overtaking -= dt;
+    if (ai.phase !== 'approach') ai.overtaking = 0;
+  }
   if (ai.pushThrough > 0) {
     ai.pushThrough -= dt;
   } else {
-    const gap = clearDistance(car, obstacles);
-    const safe = 3 + Math.max(0, vF) * (panic ? PANIC_GAP : 0.9);
+    const hurry = panic || ai.urgent;
+    const safe = 3 + Math.max(0, vF) * (hurry ? PANIC_GAP : 0.9);
+    let gap = clearDistance(car, obstacles, ai.overtaking > 0 ? -OVERTAKE_SHIFT : 0);
+    if (ai.urgent && ai.overtaking <= 0 && ai.phase === 'approach' && gap < safe * 1.8 && !blockerIsPlayer) {
+      const passing = clearDistance(car, obstacles, -OVERTAKE_SHIFT);
+      if (passing > safe * 1.8) {
+        ai.overtaking = OVERTAKE_SECONDS;
+        gap = passing;
+      }
+    }
     if (gap < safe) {
       wantSpeed = 0;
       ai.waited += dt;
@@ -389,8 +414,12 @@ export function rerouteAi(ai: AiDriver, car: VehicleState, rand: () => number): 
 /** Whether the nearest obstacle the last clearDistance() found was the player. */
 let blockerIsPlayer = false;
 
-/** Distance to the nearest obstacle ahead within our lane width, or Infinity. */
-export function clearDistance(car: VehicleState, obstacles: Obstacle[]): number {
+/**
+ * Distance to the nearest obstacle ahead within our lane width, or Infinity.
+ * `shift` checks a parallel line that far to our right instead (negative:
+ * left, e.g. the oncoming lane when overtaking).
+ */
+export function clearDistance(car: VehicleState, obstacles: Obstacle[], shift = 0): number {
   const fx = Math.sin(car.heading);
   const fz = Math.cos(car.heading);
   let best = Infinity;
@@ -400,7 +429,8 @@ export function clearDistance(car: VehicleState, obstacles: Obstacle[]): number 
     const rz = o.z - car.z;
     const along = rx * fx + rz * fz;
     if (along <= 0.5 || along > 30) continue;
-    const lateral = Math.abs(rx * fz - rz * fx);
+    // Signed offset to our right (heading north, right is +x).
+    const lateral = Math.abs(rz * fx - rx * fz - shift);
     if (lateral < 1.1 + o.halfWidth && along - 2.4 < best) {
       best = along - 2.4;
       blockerIsPlayer = o.player === true;

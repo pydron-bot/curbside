@@ -21,22 +21,22 @@ import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, type Rect } from '../world/city';
 import type { StaticGrid } from '../world/collision';
 import { DIR_VEC, MAX_NODE, type Dir } from '../world/roads';
 import { carsTouching } from './arrest';
-import { HELI_FROM, HELI_GONE, HELI_SPAWN, stepHelicopter, type Helicopter } from './helicopter';
+import { HELI_FROM, HELI_GONE, HELI_REFUEL, HELI_SHIFT, HELI_SPAWN, stepHelicopter, type Helicopter } from './helicopter';
 import { sees } from './sight';
 import { resumeWalking, spawnPed } from './crowd';
 import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from './pursuit';
-import { CRUISE_SPEED, createDriver, rerouteAi, spawnAi, type AiDriver, type Obstacle } from './traffic';
+import { CRUISE_SPEED, TURN_SPEED, createDriver, rerouteAi, spawnAi, type AiDriver, type Obstacle } from './traffic';
 
 // --- Tunables -------------------------------------------------------------
 /** Units chasing at each wanted level (index = stars). */
-export const UNITS_BY_STARS = [0, 2, 3, 5, 6, 7] as const;
+export const UNITS_BY_STARS = [0, 2, 3, 4, 6, 7] as const;
 /** Of those, dark SWAT vans. */
 export const SWAT_BY_STARS = [0, 0, 0, 0, 2, 3] as const;
 /** Seconds between new units arriving, by stars (the first comes quicker). */
 const SPAWN_EVERY = [0, 5, 3, 2, 1.6, 1.2] as const;
 const FIRST_SPAWN = 0.6;
 /** New units appear this far away, m (off-screen, see VIEW_MARGIN). */
-export const SPAWN_RANGE = [65, 130] as const;
+export const SPAWN_RANGE = [75, 140] as const;
 /** New units arrive already doing this, m/s. */
 const SPAWN_SPEED = 16;
 /** Spawns stay this far outside the visible ground, m. */
@@ -44,11 +44,11 @@ const VIEW_MARGIN = 8;
 /** A unit this far away and out of sight is recycled (it fell behind), m. */
 export const DESPAWN_RANGE = 210;
 /** Seeing the player: always this close, m... */
-export const CAR_PROXIMITY = 26;
+export const CAR_PROXIMITY = 20;
 /** ...and with a clear line of sight this close. */
-export const CAR_SIGHT = 78;
-export const OFFICER_PROXIMITY = 18;
-export const OFFICER_SIGHT = 45;
+export const CAR_SIGHT = 62;
+export const OFFICER_PROXIMITY = 15;
+export const OFFICER_SIGHT = 40;
 /** Line-of-sight checks per unit per second (staggered). */
 const SIGHT_HZ = 4;
 /** Officers get out when their stopped car is this close to the player, m. */
@@ -62,8 +62,8 @@ const OFFICER_DESPAWN = 90;
 /** Officers shoot (from 2 stars) at someone on foot further than this, m (closer: they grab). */
 const SHOOT_FROM = 7;
 /** From 4 stars, passengers shoot at the player's car from this close, m, this often, s. */
-const CAR_SHOT_RANGE = 22;
-const CAR_SHOT_EVERY = 1.4;
+const CAR_SHOT_RANGE = 20;
+const CAR_SHOT_EVERY = 2.2;
 /** Pursuit speeds by stars: cruise when following roads, top when chasing, m/s. */
 const CRUISE_BY_STARS = [0, 20, 22, 25, 26, 27] as const;
 const TOP_BY_STARS = [0, 30, 32, 36, 38, 40] as const;
@@ -101,6 +101,8 @@ export interface PoliceUnit {
   officers: CrowdPed[];
   /** Can see the player (car or officers). */
   seesPlayer: boolean;
+  /** A clear straight line from the car to the player: chase directly (else follow the roads). */
+  direct: boolean;
   /** Seconds to the next line-of-sight check. */
   sightIn: number;
   /** Seconds to the next shot from the car (4 stars and up). */
@@ -137,6 +139,8 @@ export interface Suspect {
 
 export interface PoliceContext {
   stars: number;
+  /** Dispatch is tracking the player (a fresh call): units know where to go without seeing them. */
+  tracked: boolean;
   suspect: Suspect;
   /** Visible ground rectangle (spawns and despawns stay outside it). */
   view: Rect;
@@ -165,11 +169,13 @@ export class PoliceForce {
     spotZ: 0,
     sweep: 0,
     sees: false,
+    shift: 0,
+    refuelling: false,
   };
   /** Somebody (any unit, officer or the helicopter) can see the player now. */
   seen = false;
   /** Where the police believe the player is: shared over the radio. */
-  readonly target: PursuitTarget = { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: false, seen: false };
+  readonly target: PursuitTarget = { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: false, seen: false, known: false };
   private readonly byVehicle = new Map<Vehicle, PoliceUnit>();
   private nextId = 1;
   private spawnIn = FIRST_SPAWN;
@@ -199,16 +205,10 @@ export class PoliceForce {
     this.stars = s.active ? ctx.stars : 0;
     this.checkUnits(s, ctx);
     this.updateSight(dt, ctx);
-    if (this.seen) {
-      const t = this.target;
-      t.x = s.x;
-      t.z = s.z;
-      t.vx = s.vx;
-      t.vz = s.vz;
-      t.heading = s.heading;
-      t.inCar = s.inCar;
-    }
+    const known = this.seen || (ctx.tracked && s.active);
+    if (known) this.report(s);
     this.target.seen = this.seen;
+    this.target.known = known;
     this.staff(dt, ctx);
     if (this.stars >= ROADBLOCK_FROM) this.maybeRoadblock(dt, ctx);
     for (let i = this.units.length - 1; i >= 0; i--) this.stepUnit(this.units[i], dt, ctx);
@@ -222,7 +222,14 @@ export class PoliceForce {
     if (!u) return null;
     // Parked: a roadblock, or officers out on foot (nobody at the wheel).
     if (u.role === 'roadblock' || u.officers.length > 0 || u.aboard === 0) return PARKED;
-    return drivePursuit(u.driver, v.sim, this.target, obstacles, rand, dt);
+    // The shared picture comes over the radio, but only a clear view lets a car
+    // drive straight at them: otherwise it follows the roads there.
+    const t = this.target;
+    const radio = t.seen;
+    t.seen = radio && u.direct;
+    const c = drivePursuit(u.driver, v.sim, t, obstacles, rand, dt);
+    t.seen = radio;
+    return c;
   }
 
   /** Distance from (x, z) to the nearest officer on their feet, m. */
@@ -253,12 +260,26 @@ export class PoliceForce {
     return this.officerWithin(x, z, range);
   }
 
+  /**
+   * A crime was reported at the suspect's position (witnessed, or a new
+   * star): units that can't see them head there.
+   */
+  report(s: Suspect): void {
+    const t = this.target;
+    t.x = s.x;
+    t.z = s.z;
+    t.vx = s.vx;
+    t.vz = s.vz;
+    t.heading = s.heading;
+    t.inCar = s.inCar;
+  }
+
   /** Everyone stands down at once (busted, died, a fresh run): units go back to patrol. */
   standDown(): void {
     for (const u of this.units) u.dismissed = true;
     this.heli.leaving = this.heli.active;
     this.seen = false;
-    this.target.seen = false;
+    this.target.seen = this.target.known = false;
   }
 
   /** Clear the street of police now (back to the title, a fresh run far away). */
@@ -266,9 +287,10 @@ export class PoliceForce {
     for (let i = this.units.length - 1; i >= 0; i--) this.removeUnit(this.units[i], true);
     for (const p of this.strays) this.depot.removePed(p);
     this.strays.length = 0;
-    this.heli.active = this.heli.leaving = this.heli.sees = false;
+    this.heli.active = this.heli.leaving = this.heli.sees = this.heli.refuelling = false;
+    this.heli.shift = 0;
     this.seen = false;
-    this.target.seen = false;
+    this.target.seen = this.target.known = false;
     this.spawnIn = FIRST_SPAWN;
     this.roadblockIn = ROADBLOCK_EVERY / 2;
   }
@@ -343,7 +365,10 @@ export class PoliceForce {
 
   private spawnUnit(kind: UnitKind, ctx: PoliceContext): PoliceUnit | null {
     const s = ctx.suspect;
-    const spot = policeSpawnPoint(s.x, s.z, s.vx, s.vz, ctx.view, ctx.rand, (x, z) => this.crowded(x, z));
+    // Mid-chase, reinforcements come from all round (not always waiting ahead,
+    // or outrunning them would be hopeless); on a fresh call, mostly ahead.
+    const ahead = this.seen ? 0.3 : 0.65;
+    const spot = policeSpawnPoint(s.x, s.z, s.vx, s.vz, ctx.view, ctx.rand, (x, z) => this.crowded(x, z), ahead);
     if (!spot) return null;
     const v = this.borrowCar(kind, spot.x, spot.z, spot.heading, SPAWN_SPEED);
     return this.addUnit(v, kind, 'pursuit', spot.driver);
@@ -381,6 +406,7 @@ export class PoliceForce {
       aboard: 2,
       officers: [],
       seesPlayer: false,
+      direct: false,
       sightIn: this.units.length / (SIGHT_HZ * 8),
       shootIn: CAR_SHOT_EVERY,
       dismissed: false,
@@ -477,6 +503,9 @@ export class PoliceForce {
     const v = u.vehicle!;
     const road = u.driver.road;
     road.cruise = CRUISE_SPEED;
+    road.turnSpeed = TURN_SPEED;
+    road.urgent = false;
+    road.overtaking = 0;
     road.mood = 'calm';
     rerouteAi(road, v.sim, rand);
     this.loseCar(u);
@@ -620,6 +649,8 @@ export class PoliceForce {
         if ((u.sightIn -= dt) <= 0) {
           u.sightIn += 1 / SIGHT_HZ;
           u.seesPlayer = !u.dismissed && this.unitSees(u, s, ctx.grid);
+          const v = u.vehicle;
+          u.direct = u.seesPlayer && v !== null && sees(ctx.grid, v.sim.x, v.sim.z, s.x, s.z, 6, CAR_SIGHT);
         }
         if (u.seesPlayer) seen = true;
       }
@@ -629,7 +660,7 @@ export class PoliceForce {
       }
       if (this.heli.active && !this.heli.leaving && this.heli.sees) seen = true;
     } else {
-      for (const u of this.units) u.seesPlayer = false;
+      for (const u of this.units) u.seesPlayer = u.direct = false;
     }
     this.seen = seen;
   }
@@ -692,7 +723,16 @@ export class PoliceForce {
   private stepHeli(dt: number, ctx: PoliceContext): void {
     const h = this.heli;
     const s = ctx.suspect;
-    const wanted = this.stars >= HELI_FROM && s.active;
+    // Shifts: on station HELI_SHIFT, then away refuelling HELI_REFUEL.
+    h.shift += dt;
+    if (!h.refuelling && h.active && !h.leaving && h.shift > HELI_SHIFT) {
+      h.refuelling = true;
+      h.shift = 0;
+    } else if (h.refuelling && h.shift > HELI_REFUEL) {
+      h.refuelling = false;
+      h.shift = 0;
+    }
+    const wanted = this.stars >= HELI_FROM && s.active && !h.refuelling;
     if (wanted && (!h.active || h.leaving)) {
       if (!h.active) {
         // In from off-screen, ahead of the player and to one side, so it meets them.
@@ -702,6 +742,7 @@ export class PoliceForce {
         h.vx = h.vz = 0;
         h.spotX = h.x;
         h.spotZ = h.z;
+        h.shift = 0;
       }
       h.active = true;
       h.leaving = false;
@@ -727,13 +768,14 @@ export function policeSpawnPoint(
   view: Rect,
   rand: () => number,
   crowded: (x: number, z: number) => boolean,
+  aheadShare = 0.65,
 ): { x: number; z: number; heading: number; driver: AiDriver } | null {
   const [lo, hi] = SPAWN_RANGE;
   const sp = Math.hypot(vx, vz);
   const heading = Math.atan2(vz, vx);
   for (let attempt = 0; attempt < 30; attempt++) {
     // Mostly ahead of a moving player, so they come at you rather than trail behind.
-    const a = sp > 4 && rand() < 0.65 ? heading + (rand() * 2 - 1) * (Math.PI / 3) : rand() * Math.PI * 2;
+    const a = sp > 4 && rand() < aheadShare ? heading + (rand() * 2 - 1) * (Math.PI / 3) : rand() * Math.PI * 2;
     const r = lo + rand() * (hi - lo);
     const sx = px + Math.cos(a) * r;
     const sz = pz + Math.sin(a) * r;

@@ -9,6 +9,7 @@ import {
   GUNFIRE_CAP,
   GUNFIRE_WINDOW,
   MAX_HEAT,
+  RESPONSE_GRACE,
   SEARCH_AFTER,
   Wanted,
   evadeSeconds,
@@ -79,6 +80,12 @@ describe('wanted: crimes', () => {
     expect(w.heat).toBeCloseTo(GUNFIRE_CAP * 2);
   });
 
+  it('knocking down a whole squad at once is one star, not one per officer', () => {
+    const { w } = setup();
+    for (let i = 0; i < 4; i++) w.commit('copDown', true);
+    expect(w.heat).toBeCloseTo(CRIME_HEAT.copDown);
+  });
+
   it('stealing a police car is at least one star, witnessed or not', () => {
     const { w } = setup();
     w.commit('copCarStolen', false);
@@ -108,6 +115,8 @@ describe('wanted: evasion', () => {
   it('blinks after a moment unseen, then drops one star at a time to clear', () => {
     const { w, log } = setup();
     w.force(2.4);
+    // The police find them, then lose them.
+    w.step(DT, true);
     log.length = 0;
     run(w, SEARCH_AFTER - 0.1, false);
     expect(w.searching).toBe(false);
@@ -120,6 +129,17 @@ describe('wanted: evasion', () => {
     expect(w.level).toBe(0);
     expect(w.heat).toBe(0);
     expect(log.at(-1)).toMatchObject({ level: 0, prev: 1, reason: 'evaded' });
+  });
+
+  it('gives the police time to respond before the clock runs', () => {
+    const { w } = setup();
+    for (let i = 0; i < 4; i++) w.commit('assault', true);
+    expect(w.level).toBe(1);
+    run(w, RESPONSE_GRACE - 0.5, false);
+    expect(w.unseen).toBe(0);
+    expect(w.searching).toBe(false);
+    run(w, evadeSeconds(1) + 1, false);
+    expect(w.level).toBe(0);
   });
 
   it('being seen restarts the clock', () => {
@@ -148,7 +168,7 @@ describe('wanted: evasion', () => {
     });
     for (let i = 0; i < 12; i++) w.commit('explosion', true);
     expect(w.level).toBe(3);
-    run(w, evadeSeconds(3) + evadeSeconds(2) + evadeSeconds(1) + 1, false);
+    run(w, RESPONSE_GRACE + evadeSeconds(3) + evadeSeconds(2) + evadeSeconds(1) + 1, false);
     expect(w.level).toBe(0);
     expect(peakAtEvade).toBe(3);
     expect(w.peak).toBe(0);

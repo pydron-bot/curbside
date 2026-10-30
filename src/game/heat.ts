@@ -45,6 +45,8 @@ const RAGE_TOP = 30;
 const GUNFIRE_SCARE = 30;
 /** How often drivers check for sirens behind them, s. */
 const YIELD_EVERY = 0.2;
+/** After losing sight, the radio keeps units on the player's real position this long, s. */
+const TRACK_AFTER_SIGHTING = 2;
 /** A second ram on the same police car within this long doesn't count again, s. */
 const RAM_REPEAT = 1.5;
 
@@ -96,7 +98,7 @@ export class Heat {
     copAtDoor: false,
   };
   /** Road ragers chase the real player, not the police's radio picture. */
-  private readonly rageTarget: PursuitTarget = { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: false, seen: true };
+  private readonly rageTarget: PursuitTarget = { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: false, seen: true, known: true };
   private readonly rammed = new Map<Vehicle, number>();
   private yieldIn = 0;
   private time = 0;
@@ -115,7 +117,7 @@ export class Heat {
     );
     this.shops = placeSprayShops(deps.city);
     this.station = placeStation(deps.city);
-    this.ctx = { stars: 0, suspect: this.suspect, view: deps.view(), grid: deps.grid, rand: deps.rand };
+    this.ctx = { stars: 0, tracked: false, suspect: this.suspect, view: deps.view(), grid: deps.grid, rand: deps.rand };
 
     // --- Crimes, as the simulation reports them ---
     bus.on('pedDown', (e) => {
@@ -130,9 +132,10 @@ export class Heat {
       if (e.byPlayer && e.police) this.crime('shootCop', e.x, e.z);
     });
     bus.on('explosion', (e) => {
-      if (!e.byPlayer || !this.live) return;
+      // Your own car going up isn't a crime (what it takes with it is).
+      if (!e.byPlayer || e.ownCar || !this.live) return;
       this.crime('explosion', e.x, e.z);
-      if (e.police && !e.ownCar) {
+      if (e.police) {
         this.crime('copCarWrecked', e.x, e.z);
         deps.award(deps.score.award('copWreck'));
       }
@@ -160,20 +163,13 @@ export class Heat {
   /** One sim step. */
   step(dt: number): void {
     this.time += dt;
-    const { player } = this.deps;
-    const s = this.suspect;
-    const car = player.driving;
-    const at = player.position;
-    s.x = at.x;
-    s.z = at.z;
-    s.vx = at.vx;
-    s.vz = at.vz;
-    s.heading = car ? car.sim.heading : player.ped.heading;
-    s.inCar = car !== null;
-    s.armed = !car && player.arsenal.current !== null;
-    s.car = car ? car.sim : null;
-    s.active = this.live;
-    this.ctx.stars = this.wanted.level;
+    this.updateSuspect();
+    const level = this.wanted.level;
+    // A new star (however it came: crimes, a script) is a fresh report.
+    if (level > this.ctx.stars) this.police.report(this.suspect);
+    this.ctx.stars = level;
+    // Dispatch tracks them on a fresh call, and for a few seconds after a sighting.
+    this.ctx.tracked = this.wanted.responding || (level > 0 && this.wanted.unseen < TRACK_AFTER_SIGHTING);
     this.ctx.view = this.deps.view();
     this.police.step(dt, this.ctx);
     this.wanted.step(dt, this.police.seen);
@@ -228,7 +224,12 @@ export class Heat {
     const own = this.deps.player.driving;
     if (!own || !this.live || impact <= 6) return;
     if (other.police || other.archetype === 'police') {
-      if (!rammedBy(own, other)) return;
+      // In a chase, bumps happen both ways: only a clear ram counts. A cop
+      // ramming, PITting or boxing you in was asking for it.
+      const unit = this.police.unitOf(other);
+      const mode = unit?.role === 'pursuit' ? unit.driver.mode : null;
+      if (mode === 'ram' || mode === 'pit' || mode === 'box') return;
+      if (!rammedBy(own, other, mode ? CHASE_RAM_MARGIN : RAM_MARGIN)) return;
       const last = this.rammed.get(other) ?? -Infinity;
       this.rammed.set(other, this.time);
       if (this.time - last < RAM_REPEAT) return;
@@ -264,6 +265,24 @@ export class Heat {
     }
   }
 
+  /** The player as the police see them, refreshed. */
+  private updateSuspect(): Suspect {
+    const { player } = this.deps;
+    const s = this.suspect;
+    const car = player.driving;
+    const at = player.position;
+    s.x = at.x;
+    s.z = at.z;
+    s.vx = at.vx;
+    s.vz = at.vz;
+    s.heading = car ? car.sim.heading : player.ped.heading;
+    s.inCar = car !== null;
+    s.armed = !car && player.arsenal.current !== null;
+    s.car = car ? car.sim : null;
+    s.active = this.live;
+    return s;
+  }
+
   /** Was a crime at (x, z) witnessed: on screen, or near any police? */
   witnessed(x: number, z: number): boolean {
     const r = this.ctx.view;
@@ -273,7 +292,10 @@ export class Heat {
 
   private crime(crime: Crime, x: number, z: number): void {
     if (!this.live) return;
-    this.wanted.commit(crime, this.witnessed(x, z));
+    const witnessed = this.witnessed(x, z);
+    this.wanted.commit(crime, witnessed);
+    // Called in: the police know where you are.
+    if (witnessed || crime === 'copCarStolen') this.police.report(this.updateSuspect());
   }
 
   private evadedAward(): Award | null {
@@ -406,11 +428,16 @@ export class Heat {
 
 const NO_CONTROLS: VehicleControls = { throttle: 0, steer: 0, handbrake: false };
 
+/** The rammer must have been closing this much faster than the other car, m/s... */
+const RAM_MARGIN = 2;
+/** ...and by this much on a police car that's chasing you. */
+const CHASE_RAM_MARGIN = 7;
+
 /**
  * Who did the ramming? Judged from the speeds just before the hit (the cars'
- * `prev` states): whoever was closing on the other faster.
+ * `prev` states): whoever was closing on the other clearly faster.
  */
-export function rammedBy(rammer: Vehicle, other: Vehicle): boolean {
+export function rammedBy(rammer: Vehicle, other: Vehicle, margin = RAM_MARGIN): boolean {
   const a = rammer.prev;
   const b = other.prev;
   const dx = b.x - a.x;
@@ -418,5 +445,5 @@ export function rammedBy(rammer: Vehicle, other: Vehicle): boolean {
   const d = Math.hypot(dx, dz) || 1;
   const aCloses = (a.vx * dx + a.vz * dz) / d;
   const bCloses = -(b.vx * dx + b.vz * dz) / d;
-  return aCloses > bCloses;
+  return aCloses > bCloses + margin;
 }

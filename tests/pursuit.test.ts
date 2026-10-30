@@ -25,7 +25,7 @@ const city = generateCity(1337);
 const grid = new StaticGrid(city.obstacles);
 
 function target(over: Partial<PursuitTarget> = {}): PursuitTarget {
-  return { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: true, seen: true, ...over };
+  return { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: true, seen: true, known: true, ...over };
 }
 
 function pursuer(x: number, z: number, heading: number, aggression = 0, seed = 1) {
@@ -142,20 +142,45 @@ describe('pursuit driving (real physics and city)', () => {
     expect(Math.hypot(q.x - car.x, q.z - car.z)).toBeLessThan(20);
   });
 
-  it('an aggressive pursuer rams (makes hard contact) within a few seconds', () => {
+  it('an aggressive pursuer rams from behind: firm contact, not a wrecking blow', () => {
     const q = quarry(18, -25);
     const { car, d, rand } = pursuer(LANE_OFFSET, 0, Math.PI, 1);
     const t = target();
     let hardest = 0;
+    let hits = 0;
     for (let i = 0; i < 60 * 8; i++) {
       stepVehicle(car, drivePursuit(d, car, t, [], rand, DT), POLICE, DT);
       cruise(q, 18);
       track(t, q);
       // Let the collision shove the quarry, then put it back on its line.
       const qs = { ...q };
-      hardest = Math.max(hardest, collideVehicles(car, qs));
+      const impact = collideVehicles(car, qs);
+      if (impact > 1) hits++;
+      hardest = Math.max(hardest, impact);
     }
-    expect(hardest).toBeGreaterThan(4);
+    expect(hits).toBeGreaterThan(0);
+    expect(hardest).toBeGreaterThan(2);
+    expect(hardest).toBeLessThan(10);
+  });
+
+  it('never rams a car coming the other way', () => {
+    // Head-on on the same road: the quarry heads south in its lane, the pursuer north in the other.
+    const q = createVehicleState(-LANE_OFFSET, -40, 0);
+    q.vz = 20;
+    const { car, d, rand } = pursuer(LANE_OFFSET, 0, Math.PI, 1);
+    car.vz = -15;
+    const t = target();
+    let hardest = 0;
+    for (let i = 0; i < 60 * 3; i++) {
+      stepVehicle(car, drivePursuit(d, car, t, [], rand, DT), POLICE, DT);
+      q.z += q.vz * DT;
+      track(t, q);
+      t.heading = 0;
+      // Only once it has turned round to follow them.
+      if (d.mode === 'ram') expect(Math.cos(car.heading - t.heading)).toBeGreaterThan(-0.3);
+      hardest = Math.max(hardest, collideVehicles(car, { ...q }));
+    }
+    expect(hardest).toBeLessThan(4);
   });
 
   it('boxes in a stopped car: pulls up close and stops', () => {
@@ -199,7 +224,7 @@ describe('pursuit driving (real physics and city)', () => {
       const { car, d } = pursuer(sx, sz, Math.PI, 0, 10 + k);
       const gx = sx + (rand() < 0.5 ? -1 : 1) * 4 * BLOCK_SIZE;
       const gz = sz + (rand() < 0.5 ? -1 : 1) * 2 * BLOCK_SIZE;
-      const t = target({ x: gx, z: gz, seen: false });
+      const t = target({ x: gx, z: gz, seen: false, known: false });
       for (let i = 0; i < 60 * 90; i++) {
         stepVehicle(car, drivePursuit(d, car, t, [], rand, DT), POLICE, DT);
         collideVehicleStatic(car, grid);

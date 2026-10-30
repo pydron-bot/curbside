@@ -54,11 +54,19 @@ export const GUNFIRE_CAP = 0.5;
 export const GUNFIRE_WINDOW = 5;
 /** Bullets into police cars: at most this much per window. */
 export const SHOOT_COP_CAP = 0.6;
+/** Officers knocked down: at most this much per window (a blast flooring a squad is one star, not three). */
+export const COP_DOWN_CAP = 1;
 /** Unseen this long, the stars start blinking (a corner turned isn't lost yet), s. */
 export const SEARCH_AFTER = 1.5;
 /** Seconds unseen to drop one star: EVADE_BASE + EVADE_PER_STAR per star held. */
 export const EVADE_BASE = 6;
 export const EVADE_PER_STAR = 3;
+/**
+ * After the level rises the police get this long to respond before the
+ * evasion clock can run (unless they've already seen you): otherwise a
+ * crime far from any patrol car would be forgotten before one arrived, s.
+ */
+export const RESPONSE_GRACE = 8;
 /** Below one star, heat fades this fast (per second)... */
 export const COOL_RATE = 0.03;
 /** ...once this long has passed since the last crime, s. */
@@ -82,13 +90,24 @@ export class Wanted {
   peak = 0;
   private time = 0;
   private lastCrime = -Infinity;
+  /** Seconds left of RESPONSE_GRACE. */
+  private grace = 0;
   private readonly gunfire = new Allowance(GUNFIRE_CAP);
   private readonly shootCop = new Allowance(SHOOT_COP_CAP);
+  private readonly copDown = new Allowance(COP_DOWN_CAP);
 
   constructor(private readonly bus: EventBus) {}
 
   get level(): number {
     return starsFor(this.heat);
+  }
+
+  /**
+   * Still responding to a fresh call (RESPONSE_GRACE after the level rose,
+   * until a cop sees them): dispatch tracks the player for the units.
+   */
+  get responding(): boolean {
+    return this.level > 0 && this.grace > 0;
   }
 
   /** Out of sight long enough that the stars blink (the search is on). */
@@ -119,6 +138,7 @@ export class Wanted {
       let amount = CRIME_HEAT[crime];
       if (crime === 'gunfire') amount = this.gunfire.take(amount, this.time);
       else if (crime === 'shootCop') amount = this.shootCop.take(amount, this.time);
+      else if (crime === 'copDown') amount = this.copDown.take(amount, this.time);
       const cap = AGAINST_POLICE.has(crime) ? MAX_HEAT : CIVILIAN_CAP;
       // A capped crime never lowers heat earned elsewhere.
       if (this.heat < cap) this.heat = Math.min(cap, this.heat + amount);
@@ -141,6 +161,12 @@ export class Wanted {
     }
     if (seen) {
       this.unseen = 0;
+      this.grace = 0;
+      return;
+    }
+    if (this.grace > 0) {
+      // Still responding to the call: nobody's lost you yet.
+      this.grace -= dt;
       return;
     }
     this.unseen += dt;
@@ -162,9 +188,11 @@ export class Wanted {
     const prev = this.level;
     this.heat = 0;
     this.unseen = 0;
+    this.grace = 0;
     this.lastCrime = -Infinity;
     this.gunfire.reset();
     this.shootCop.reset();
+    this.copDown.reset();
     if (prev > 0) this.bus.emit({ type: 'wanted', level: 0, prev, reason });
     this.peak = 0;
   }
@@ -183,6 +211,8 @@ export class Wanted {
     const lvl = this.level;
     if (lvl <= prev) return;
     this.peak = Math.max(this.peak, lvl);
+    this.grace = RESPONSE_GRACE;
+    this.unseen = 0;
     this.bus.emit({ type: 'wanted', level: lvl, prev, reason: 'crime' });
   }
 }

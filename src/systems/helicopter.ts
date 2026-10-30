@@ -14,6 +14,12 @@ const SPOT_WANDER = 3.5;
 /** Spawned / gone this far out, m. */
 export const HELI_SPAWN = 150;
 export const HELI_GONE = 260;
+/**
+ * It stays on station this long, then leaves to refuel for HELI_REFUEL:
+ * the window to break away from a 5-star chase, s.
+ */
+export const HELI_SHIFT = 45;
+export const HELI_REFUEL = 20;
 
 export interface Helicopter {
   /** In the air near the player (or leaving). */
@@ -32,6 +38,9 @@ export interface Helicopter {
   sweep: number;
   /** The spotlight is on the player. */
   sees: boolean;
+  /** Seconds on station this shift (or, while refuelling, seconds until it's back). */
+  shift: number;
+  refuelling: boolean;
 }
 
 /**
