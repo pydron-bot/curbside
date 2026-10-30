@@ -21,6 +21,7 @@ import {
 import { Player } from './game/player';
 import { CROWD_DESPAWN, Population, type CrowdPed, type ParkingSpot, type Vehicle } from './game/population';
 import { Effects } from './render/effects';
+import { FxDirector } from './render/fxDirector';
 import { CameraRig } from './render/cameraRig';
 import { DynamicResolution } from './render/dynamicResolution';
 import { Look, type PlayerView } from './render/look';
@@ -78,7 +79,7 @@ const ENTER_RANGE = 4;
 /** Cars moving faster than this can't be boarded. */
 const ENTER_MAX_SPEED = 6;
 const CAMERA_FOOT = [20, 24] as const;
-const CAMERA_CAR = [26, 58] as const;
+const CAMERA_CAR = [26, 64] as const;
 /** The title screen's slow cruise over traffic. */
 const CAMERA_ATTRACT = [34, 46] as const;
 const BLAST_RADIUS = 9;
@@ -261,11 +262,22 @@ const NO_CONTROLS: VehicleControls = { throttle: 0, steer: 0, handbrake: false }
 const NO_MOVE = { x: 0, y: 0, sprint: false };
 
 // --- Presentation: react to what the simulation reports ---
-events.on('shot', (e) => effects.emitFire(e.x, e.z, 1.2));
-events.on('bulletHit', (e) => effects.tracer(e.fromX ?? e.x, e.fromZ ?? e.z, e.x, e.z));
-events.on('explosion', (e) => {
-  effects.explode(e.x, e.z);
-  rig.shake(Math.max(0, 2.5 - e.distance / 30));
+// Effects, camera feel, hit-stop, body motion and weather (all bus-driven).
+const fx = new FxDirector({
+  bus: events,
+  effects,
+  rig,
+  look,
+  renderer,
+  scene,
+  vehicles,
+  crowd: population.crowd,
+  player,
+  playerModel,
+  score,
+  city,
+  overlayParent: app,
+  audio,
 });
 events.on('enterVehicle', () => {
   playerModel.root.visible = false;
@@ -277,7 +289,6 @@ events.on('exitVehicle', () => {
   rig.setHeights(...CAMERA_FOOT);
   input.resetActions();
 });
-events.on('playerHurt', () => rig.shake(0.4));
 // Nobody keeps fighting a dead man.
 events.on('playerDied', () => calmHostiles());
 
@@ -760,7 +771,8 @@ function frame(now: number) {
     maintainPopulation();
   }
 
-  const alpha = loop.advance(frameSeconds, simulate);
+  // Hit-stop slows the sim on big moments; the camera keeps real time.
+  const alpha = loop.advance(frameSeconds * fx.simScale(frameSeconds), simulate);
 
   // Interpolate render state between the last two sim steps.
   // Read once per frame: the wheel steer and the engine sound share it.
@@ -786,24 +798,9 @@ function frame(now: number) {
   playerModel.root.rotation.y = lerpAngle(prev.heading, ped.heading, alpha);
   playerModel.update(frameSeconds, Math.hypot(ped.vx, ped.vz), player.down);
 
-  // Smoke and fire from damaged cars near the action.
+  // Body motion, tyre marks, damaged-car smoke and fire, weather, particles.
   const focus = attract.active ? attract : player.position;
-  for (const v of vehicles) {
-    if (Math.abs(v.sim.x - focus.x) > 120 || Math.abs(v.sim.z - focus.z) > 120) continue;
-    const stage = damageStage(v.damage);
-    const hoodX = v.sim.x + Math.sin(v.sim.heading) * 1.4;
-    const hoodZ = v.sim.z + Math.cos(v.sim.heading) * 1.4;
-    if (stage === 'smoking' && rand() < frameSeconds * 14) effects.emitSmoke(hoodX, hoodZ, 1.2, 0.2);
-    else if (stage === 'burning') {
-      if (rand() < frameSeconds * 45) effects.emitFire(hoodX, hoodZ, 1.2);
-      if (rand() < frameSeconds * 16) effects.emitSmoke(hoodX, hoodZ, 1.8, 0.9);
-    } else if (stage === 'wrecked' && v.wreckAge < 25) {
-      v.wreckAge += frameSeconds;
-      if (rand() < frameSeconds * 6) effects.emitSmoke(v.sim.x, v.sim.z, 1, 0.8);
-      if (v.wreckAge < 4 && rand() < frameSeconds * 30) effects.emitFire(v.sim.x, v.sim.z, 0.8);
-    }
-  }
-  effects.update(frameSeconds);
+  fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
   updateHud(frameSeconds);
 
   if (attract.active) {
@@ -1030,6 +1027,8 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   resolution,
   rig,
   look,
+  effects,
+  fx,
   score,
   events,
   audio,
