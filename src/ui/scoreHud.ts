@@ -1,4 +1,5 @@
 import { COMBO_WINDOW, type Award, type Score } from '../systems/score';
+import { styleSetter, textSetter } from './domWrite';
 
 const BEST_KEY = 'curbside.best';
 
@@ -33,6 +34,11 @@ export class ScoreHud {
   private shownTotal = -1;
   private startBest: number;
   private celebratedBest = false;
+  private shownLive = false;
+  private shownCombo = -1;
+  private shownDrift = -1;
+  private setComboBar: (width: string) => void;
+  private setDrift: (text: string) => void;
 
   constructor(
     root: HTMLElement,
@@ -56,6 +62,8 @@ export class ScoreHud {
     root.append(this.popups);
     this.startBest = score.best;
     this.bestEl.textContent = score.best > 0 ? `BEST ${fmt(score.best)}` : '';
+    this.setComboBar = styleSetter(this.comboBar, 'width');
+    this.setDrift = textSetter(this.driftEl);
   }
 
   pop(a: Award): void {
@@ -99,13 +107,15 @@ export class ScoreHud {
       this.totalEl.textContent = fmt(s.total);
       if (s.best > 0) this.bestEl.textContent = `BEST ${fmt(s.best)}`;
     }
+    // Only touch the DOM when something visible changed.
     const live = s.combo > 1 && s.comboTimer > 0;
-    this.comboEl.classList.toggle('live', live);
+    if (live !== this.shownLive) this.comboEl.classList.toggle('live', (this.shownLive = live));
     if (live) {
-      this.comboEl.firstElementChild!.textContent = `×${s.combo}`;
-      this.comboBar.style.width = `${Math.min(100, (s.comboTimer / COMBO_WINDOW) * 100)}%`;
+      if (s.combo !== this.shownCombo) this.comboEl.firstElementChild!.textContent = `×${(this.shownCombo = s.combo)}`;
+      this.setComboBar(`${Math.round(Math.min(100, (s.comboTimer / COMBO_WINDOW) * 100))}%`);
     }
-    this.driftEl.textContent = s.driftPoints >= 10 ? `DRIFT ${Math.round(s.driftPoints)}` : '';
+    const drift = s.driftPoints >= 10 ? Math.round(s.driftPoints) : 0;
+    if (drift !== this.shownDrift) this.setDrift((this.shownDrift = drift) ? `DRIFT ${drift}` : '');
   }
 }
 

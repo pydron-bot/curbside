@@ -12,6 +12,8 @@ import { registerSW } from 'virtual:pwa-register';
 import { events } from './core/events';
 import { Input } from './core/input';
 import { FixedStep } from './core/loop';
+import { onSettingsChange, settings } from './core/settings';
+import { UpdateGate } from './core/updateGate';
 import { PLAYER_ON_FOOT, stepPedestrian } from './entities/pedestrian';
 import {
   VEHICLE_HEALTH,
@@ -59,6 +61,8 @@ import {
 } from './systems/physics';
 import { Score, type Award } from './systems/score';
 import { driveAi, type Obstacle } from './systems/traffic';
+import { hiddenSetter, styleSetter, textSetter } from './ui/domWrite';
+import { PauseOverlay, type PauseReason } from './ui/pauseOverlay';
 import { ScoreHud, loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
 import { generateCity, type Rect } from './world/city';
@@ -67,19 +71,28 @@ import { StaticGrid } from './world/collision';
 import { createGround } from './world/ground';
 import { mulberry32 } from './world/random';
 
-registerSW({ immediate: true });
-
 const app = document.getElementById('app')!;
-const speedBox = document.getElementById('speed')!;
-const speedEl = document.getElementById('speed-value')!;
 const debugEl = document.getElementById('debug')!;
-const pausedEl = document.getElementById('paused')!;
-const hintEl = document.getElementById('hint')!;
-const playerHealthBar = document.querySelector<HTMLElement>('#phealth > div')!;
-const weaponEl = document.getElementById('weapon')!;
 const hurtEl = document.getElementById('hurt')!;
 const wastedEl = document.getElementById('wasted')!;
-const healthBar = document.querySelector<HTMLElement>('#vhealth > div')!;
+// Per-frame HUD values, written only when they change.
+const setSpeedHidden = hiddenSetter(document.getElementById('speed')!);
+const setSpeed = textSetter(document.getElementById('speed-value')!);
+const setHintHidden = hiddenSetter(document.getElementById('hint')!);
+const setHint = textSetter(document.getElementById('hint')!);
+const setWeaponLabel = textSetter(document.getElementById('weapon')!);
+const setPlayerHealth = styleSetter(document.querySelector<HTMLElement>('#phealth > div')!, 'width');
+const vehicleHealthBar = document.querySelector<HTMLElement>('#vhealth > div')!;
+const setVehicleHealth = styleSetter(vehicleHealthBar, 'width');
+const setVehicleHealthColour = styleSetter(vehicleHealthBar, 'background');
+const setDebug = textSetter(debugEl);
+/** The fps / draw-call line is for developers: ?debug in the URL or the Show FPS setting. */
+const debugFromUrl = new URLSearchParams(location.search).has('debug');
+const showDebug = () => {
+  debugEl.hidden = !(debugFromUrl || settings.showFps);
+};
+showDebug();
+onSettingsChange(showDebug);
 
 /** How close (m, centre to centre) you must be to get into a car. */
 const ENTER_RANGE = 4;
@@ -349,6 +362,8 @@ function leaveVehicle() {
 }
 
 function respawnPlayer() {
+  // The run is over anyway: a good moment to pick up a waiting app update.
+  if (updates.atSafePoint()) return;
   score.resetRun();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
@@ -694,6 +709,9 @@ let maintainTimer = 0;
 
 function frame(now: number) {
   requestAnimationFrame(frame);
+  // Layout is clean at the start of a frame, so reading sizes here is free
+  // (after this frame's DOM writes it would force a synchronous layout).
+  fitToScreen();
   const frameSeconds = Math.min(0.25, (now - last) / 1000);
   last = now;
   input.pollGamepad();
@@ -765,33 +783,58 @@ function frame(now: number) {
   }
   effects.update(frameSeconds);
   pickupMesh.update(now / 1000);
-  scoreHud.update();
-  playerHealthBar.style.width = `${player.health}%`;
-  const gun = player.arsenal.current;
-  weaponEl.textContent = gun ? `${WEAPONS[gun].label} · ${player.arsenal.ammo.get(gun) ?? 0}` : 'FISTS';
-  touch.setWeapon(gun ? WEAPONS[gun].label : null);
-
-  const nearCar = player.driving ? null : nearestEnterable();
-  touch.setMode(player.driving ? 'car' : 'foot', nearCar !== null);
-  hintEl.hidden = !nearCar || !touchLayer?.hidden;
-  hintEl.textContent = nearCar?.ai ? 'Press E to take this car' : 'Press E to get in';
+  updateHud(frameSeconds);
 
   if (player.driving) {
     const v = player.driving;
     rig.update(frameSeconds, v.mesh.root.position.x, v.mesh.root.position.z, v.sim.vx, v.sim.vz);
-    speedEl.textContent = String(Math.round(Math.abs(forwardSpeed(v.sim)) * 3.6));
-    const hp = v.damage.health / v.damage.maxHealth;
-    healthBar.style.width = `${Math.round(hp * 100)}%`;
-    healthBar.style.background = hp > 0.6 ? '#6cc46c' : hp > 0.25 ? '#e0b040' : '#e05040';
   } else {
     rig.update(frameSeconds, px, pz, ped.vx, ped.vz);
   }
-  speedBox.hidden = !player.driving;
-  fitToScreen();
   renderer.render(scene, rig.camera);
-
   resolution.sample(frameSeconds);
-  debugEl.textContent = `${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`;
+}
+
+let hudGun: WeaponKind | null | undefined;
+let hudAmmo = -1;
+let hudSpeed = -1;
+let hudVehicleHealth = -1;
+let debugTimer = 0;
+/** HUD text and bars; each write is skipped when its value hasn't changed. */
+function updateHud(frameSeconds: number) {
+  scoreHud.update();
+  setPlayerHealth(`${Math.ceil(player.health)}%`);
+  const gun = player.arsenal.current;
+  const ammo = gun ? (player.arsenal.ammo.get(gun) ?? 0) : 0;
+  if (gun !== hudGun || ammo !== hudAmmo) {
+    hudGun = gun;
+    hudAmmo = ammo;
+    setWeaponLabel(gun ? `${WEAPONS[gun].label} · ${ammo}` : 'FISTS');
+  }
+  touch.setWeapon(gun ? WEAPONS[gun].label : null);
+
+  const nearCar = player.driving ? null : nearestEnterable();
+  touch.setMode(player.driving ? 'car' : 'foot', nearCar !== null);
+  setHintHidden(!nearCar || !touchLayer?.hidden);
+  if (nearCar) setHint(nearCar.ai ? 'Press E to take this car' : 'Press E to get in');
+
+  const v = player.driving;
+  setSpeedHidden(!v);
+  if (v) {
+    const kmh = Math.round(Math.abs(forwardSpeed(v.sim)) * 3.6);
+    if (kmh !== hudSpeed) setSpeed(String((hudSpeed = kmh)));
+    const pct = Math.round((v.damage.health / v.damage.maxHealth) * 100);
+    if (pct !== hudVehicleHealth) {
+      hudVehicleHealth = pct;
+      setVehicleHealth(`${pct}%`);
+      setVehicleHealthColour(pct > 60 ? '#6cc46c' : pct > 25 ? '#e0b040' : '#e05040');
+    }
+  }
+
+  if (!debugEl.hidden && (debugTimer -= frameSeconds) <= 0) {
+    debugTimer = 0.25;
+    setDebug(`${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`);
+  }
 }
 requestAnimationFrame(frame);
 
@@ -800,10 +843,34 @@ function lerp(a: number, b: number, t: number) {
 }
 
 // --- Lifecycle ---
-function setPaused(p: boolean) {
+const pauseOverlay = new PauseOverlay(
+  document.getElementById('paused')!,
+  () => setPaused(false),
+  () => updates.atSafePoint(),
+);
+// App updates wait for a moment when reloading costs nothing (see UpdateGate).
+let applyUpdate: ((reload?: boolean) => Promise<void>) | null = null;
+const updates = new UpdateGate(
+  () => {
+    void applyUpdate?.(true);
+    // If the new worker never takes control, reload anyway.
+    setTimeout(() => location.reload(), 4000);
+  },
+  () => pauseOverlay.setUpdateReady(true),
+);
+applyUpdate = registerSW({ immediate: true, onNeedRefresh: () => updates.markReady() });
+
+/** True while the WebGL context is gone: nothing can resume until it's back. */
+let contextLost = false;
+/** Paused only because the context was lost (so resume when it's restored). */
+let pausedForContext = false;
+
+function setPaused(p: boolean, reason: PauseReason = 'paused') {
+  if (!p && contextLost) return;
+  if (p) pauseOverlay.show(reason, input.lastDevice);
+  else pauseOverlay.hide();
   if (p === paused) return;
   paused = p;
-  pausedEl.hidden = !p;
   // Nothing held or queued while paused may leak into play on resume.
   input.resetAll();
   if (!p) {
@@ -814,9 +881,28 @@ function setPaused(p: boolean) {
   events.emit({ type: 'pause', paused: p });
 }
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) setPaused(true);
+  if (!document.hidden) return;
+  // Backgrounded: nobody is watching, so a waiting update can go in now.
+  if (updates.atSafePoint()) return;
+  pausedForContext = false;
+  setPaused(true);
 });
-pausedEl.addEventListener('pointerdown', () => setPaused(false));
+
+// iOS drops the GL context of backgrounded or memory-starved pages. Say so,
+// hold the game, and carry on once three.js has rebuilt its GPU resources.
+renderer.domElement.addEventListener('webglcontextlost', (e) => {
+  e.preventDefault(); // allows the browser to restore it
+  contextLost = true;
+  pausedForContext = !paused;
+  setPaused(true, 'contextLost');
+});
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+  contextLost = false;
+  resolution.holdOff();
+  if (pausedForContext) setPaused(false);
+  else if (paused) pauseOverlay.show('paused', input.lastDevice);
+  pausedForContext = false;
+});
 
 // Debug hook for poking at the sim from the console / automated checks.
 (window as unknown as { __ub: unknown }).__ub = {
@@ -831,6 +917,11 @@ pausedEl.addEventListener('pointerdown', () => setPaused(false));
   score,
   events,
   explode,
+  updates,
+  get paused() {
+    return paused;
+  },
+  setPaused,
   get simTime() {
     return simTime;
   },

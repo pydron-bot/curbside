@@ -14,7 +14,10 @@ export default defineConfig({
   build: { chunkSizeWarningLimit: 800 },
   plugins: [
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt': a new version waits until main.ts finds a safe moment to
+      // reload (respawn, page hidden, or the player asks on the pause screen)
+      // instead of autoUpdate reloading mid-run.
+      registerType: 'prompt',
       includeAssets: ['icons/*.png', 'icons/*.svg'],
       manifest: {
         name: 'Curbside',
