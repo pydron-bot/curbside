@@ -5,8 +5,8 @@ import { ICONS } from './icons';
 import { MenuNav, overlay, type Panel } from './menu';
 
 type SliderKey = 'masterVolume' | 'sfxVolume' | 'musicVolume';
-type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics' | 'showFps';
-type ChoiceKey = 'quality' | 'steering';
+type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics';
+type ChoiceKey = 'quality' | 'steering' | 'perfOverlay';
 
 type Row =
   | { kind: 'slider'; key: SliderKey; label: string }
@@ -99,7 +99,16 @@ export class SettingsPanel implements Panel {
           ['low', 'Low'],
         ],
       },
-      { kind: 'toggle', key: 'showFps', label: 'Show FPS' },
+      {
+        kind: 'choice',
+        key: 'perfOverlay',
+        label: 'Perf overlay',
+        options: [
+          ['off', 'Off'],
+          ['fps', 'FPS'],
+          ['full', 'Full'],
+        ],
+      },
     ];
     for (const r of soundRows) sound.append(this.row(r));
     for (const r of controlRows) controls.append(this.row(r));

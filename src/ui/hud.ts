@@ -59,8 +59,8 @@ export function gaugeTopSpeed(spec: Pick<VehicleSpec, 'maxSpeed'>): number {
 export interface HudOptions {
   /** The pause button was pressed. */
   onPause(): void;
-  /** The perf overlay text (frame stats · resolution · draw calls), polled 4× a second while shown. */
-  debugText(): string;
+  /** The perf overlay text (fps or full frame stats · resolution · draw calls), polled 4× a second while shown. */
+  debugText(full: boolean): string;
 }
 
 /** Below this health the screen edge pulses red. */
@@ -115,6 +115,7 @@ export class Hud {
   private shownCritical = false;
   private shownMouseAim = false;
   private debugTimer = 0;
+  private debugFull = false;
   private bestAtStart: number;
   private playing = false;
   private readonly debugFromUrl = new URLSearchParams(location.search).has('debug');
@@ -185,7 +186,13 @@ export class Hud {
       (e.currentTarget as HTMLElement).blur();
       opts.onPause();
     });
-    const showDebug = () => (this.debug.hidden = !(this.debugFromUrl || settings.showFps));
+    const showDebug = () => {
+      // ?debug forces the full overlay for this session without saving it.
+      const mode = this.debugFromUrl ? 'full' : settings.perfOverlay;
+      this.debugFull = mode === 'full';
+      this.debug.hidden = mode === 'off';
+      this.debugTimer = 0;
+    };
     showDebug();
     onSettingsChange(showDebug);
 
@@ -273,7 +280,7 @@ export class Hud {
 
     if (!this.debug.hidden && (this.debugTimer -= dt) <= 0) {
       this.debugTimer = 0.25;
-      this.setDebug(this.opts.debugText());
+      this.setDebug(this.opts.debugText(this.debugFull));
     }
   }
 

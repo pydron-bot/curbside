@@ -24,7 +24,7 @@ describe('settings: sanitising what was stored', () => {
       steering: 'classic',
       leftHanded: true,
       haptics: false,
-      showFps: true,
+      perfOverlay: 'full',
     };
     expect(sanitizeSettings(stored)).toEqual(stored);
   });
@@ -52,9 +52,8 @@ describe('settings: sanitising what was stored', () => {
   });
 
   it('switches must be booleans', () => {
-    const s = sanitizeSettings({ haptics: 'false', showFps: 1, leftHanded: null, ignoreSilentSwitch: false });
+    const s = sanitizeSettings({ haptics: 'false', leftHanded: null, ignoreSilentSwitch: false });
     expect(s.haptics).toBe(true);
-    expect(s.showFps).toBe(false);
     expect(s.leftHanded).toBe(false);
     expect(s.ignoreSilentSwitch).toBe(false);
   });
@@ -75,6 +74,22 @@ describe('settings: sanitising what was stored', () => {
     expect(Object.getPrototypeOf(s)).toBe(Object.prototype);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
     expect(s).toEqual(DEFAULT_SETTINGS);
+  });
+
+  it('the perf overlay must be a known mode', () => {
+    for (const mode of ['off', 'fps', 'full'] as const) expect(sanitizeSettings({ perfOverlay: mode }).perfOverlay).toBe(mode);
+    for (const bad of [true, 1, 'FULL', 'debug', null, {}]) expect(sanitizeSettings({ perfOverlay: bad }).perfOverlay).toBe('off');
+  });
+
+  it('the old Show FPS switch becomes the one-line overlay', () => {
+    expect(sanitizeSettings({ showFps: true }).perfOverlay).toBe('fps');
+    expect(sanitizeSettings({ showFps: false }).perfOverlay).toBe('off');
+    expect(sanitizeSettings({ showFps: 1 }).perfOverlay).toBe('off');
+    // Once a mode is saved it wins over the legacy switch that is carried along.
+    expect(sanitizeSettings({ showFps: true, perfOverlay: 'off' }).perfOverlay).toBe('off');
+    expect(sanitizeSettings({ showFps: true, perfOverlay: 'full' }).perfOverlay).toBe('full');
+    // A bad mode still falls back to what the legacy switch said.
+    expect(sanitizeSettings({ showFps: true, perfOverlay: 'huge' }).perfOverlay).toBe('fps');
   });
 
   it('settings from before steering and left-handed play fill in the defaults', () => {

@@ -36,7 +36,7 @@ import { Effects } from './render/effects';
 import { FxDirector } from './render/fxDirector';
 import { CameraRig } from './render/cameraRig';
 import { DynamicResolution } from './render/dynamicResolution';
-import { emptySummary, FrameStats, formatFrameStats } from './core/frameStats';
+import { emptySummary, FrameStats, formatFps, formatFrameStats } from './core/frameStats';
 import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
 import { CombatLook } from './render/combatLook';
@@ -1051,8 +1051,11 @@ function lerp(a: number, b: number, t: number) {
 // --- Front door: HUD, radar, menus, title / attract ---
 const hud = new Hud(document.body, score, events, {
   onPause: () => frontDoor.openPause(),
-  debugText: () =>
-    `${formatFrameStats(frameStats.summarize(frameSummary))}\n${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`,
+  debugText: (full) => {
+    const f = frameStats.summarize(frameSummary);
+    const head = full ? `${formatFrameStats(f)}\n` : `${formatFps(f.fps)} fps · `;
+    return `${head}${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`;
+  },
 });
 const combatHud = new CombatHud(document.getElementById('hud')!);
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
