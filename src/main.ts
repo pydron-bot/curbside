@@ -502,10 +502,9 @@ function simulate(dt: number) {
   const target = playerTarget();
   for (const c of population.crowd) {
     Object.assign(c.prev, c.agent.s);
-    const wasDown = c.agent.mode === 'down';
     const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, target);
-    if (!wasDown && c.agent.mode === 'down') pedHitByCar(c, driving);
-    if (event?.kind === 'punch') {
+    if (event?.kind === 'struck') pedHitByCar(c, driving !== null && event.car === driving.sim ? driving : null);
+    else if (event?.kind === 'punch') {
       combat.npcPunch(c);
     } else if (event?.kind === 'shoot') {
       c.model.shoot();
@@ -644,14 +643,17 @@ function carLanded(v: Vehicle, impact: number, isPlayer: boolean) {
   if (impact > 3) events.emit({ type: 'land', x: v.sim.x, z: v.sim.z, impact, involvesPlayer: isPlayer });
 }
 
-/** A ped was knocked over by a car this step: if it was the player's, that's a hit and run. */
-function pedHitByCar(c: CrowdPed, driving: Vehicle | null) {
+/**
+ * A ped was knocked over by a car this step; `playerCar` is set only when it
+ * was the player's car that hit them (a police car running down its own
+ * officer beside you isn't your hit and run).
+ */
+function pedHitByCar(c: CrowdPed, playerCar: Vehicle | null) {
   const s = c.agent.s;
-  const byPlayer = driving !== null && Math.hypot(driving.sim.x - s.x, driving.sim.z - s.z) < 5;
-  events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'vehicle', byPlayer, cop: c.agent.role === 'cop' });
-  if (driving && byPlayer) {
+  events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'vehicle', byPlayer: playerCar !== null, cop: c.agent.role === 'cop' });
+  if (playerCar) {
     award(score.award('hitAndRun'));
-    provoke(c.agent, driving.sim.x, driving.sim.z);
+    provoke(c.agent, playerCar.sim.x, playerCar.sim.z);
   }
 }
 

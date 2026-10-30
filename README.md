@@ -306,7 +306,9 @@ ramps (world/ramps.ts: placeRamps, rampAt, rideRamps) · StuntTracker (systems/s
 
 Mayhem has a cost now. **Wanted level** (`systems/wanted.ts`, pure): heat
 0–5, stars = floor(heat). A crime counts if it's on screen or within 60 m
-of any police (car, officer, helicopter): knocking someone down +0.3,
+of any police (car, officer, helicopter): knocking someone down +0.3
+(with your own car: `stepCrowdPed` reports the car that hit them, so a
+unit running down its officer beside you isn't on you),
 carjack +0.35, a shot +0.05 (at most +0.5 per 5 s), an explosion you
 caused +0.6 (not your own car going up), clearly ramming a police car
 +0.6 (bumps in a chase don't count, nor does smashing through a roadblock

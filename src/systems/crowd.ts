@@ -25,7 +25,11 @@ export type PedRole = 'civilian' | 'cop';
 export type Temper = 'calm' | 'fighter' | 'armed';
 
 /** Something a hostile ped did this step, for the game to resolve. */
-export type CrowdEvent = { kind: 'punch' } | { kind: 'shoot'; dirX: number; dirZ: number };
+export type CrowdEvent =
+  | { kind: 'punch' }
+  | { kind: 'shoot'; dirX: number; dirZ: number }
+  /** Knocked down by `car` this step (who's to blame is the caller's call). */
+  | { kind: 'struck'; car: VehicleState };
 
 /** Who hostile peds go after. */
 export interface Target {
@@ -251,6 +255,7 @@ export function stepCrowdPed(
 ): CrowdEvent | null {
   p.attackCooldown = Math.max(0, p.attackCooldown - dt);
   // --- Hit or about to be hit by a car? ---
+  let struck: VehicleState | null = null;
   for (const v of vehicles) {
     const sp = speed(v);
     if (sp < 3 || p.mode === 'down') continue;
@@ -272,6 +277,7 @@ export function stepCrowdPed(
         p.provoked = false;
         p.timer = KO_SECONDS;
       }
+      struck = v;
       break;
     }
     if (sp > 7) dodge(p, v, sp);
@@ -307,7 +313,8 @@ export function stepCrowdPed(
         provoke(p, target.x, target.z);
       }
     }
-    return null;
+    // Only the car that hit them is to blame (the caller decides whose it was).
+    return struck ? { kind: 'struck', car: struck } : null;
   }
 
   // Reeling from a hit: slide to a stop, no walking, no attacking.

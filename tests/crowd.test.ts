@@ -50,6 +50,20 @@ describe('crowd', () => {
     expect(q.mode).toBe('flee'); // got up and ran
   });
 
+  it('reports which car knocked them down, not just any car nearby', () => {
+    const rand = random(3);
+    const q = spawnPed(8, 8, 0, 0.5, rand);
+    // A parked car right beside them (the player's, say) and another that runs them over.
+    const parked = createVehicleState(q.s.x + 3.4, q.s.z);
+    const hitter = createVehicleState(q.s.x, q.s.z + 2);
+    hitter.vz = -18;
+    const e = stepCrowdPed(q, [parked, hitter], rand, DT);
+    expect(q.mode).toBe('down');
+    expect(e).toEqual({ kind: 'struck', car: hitter });
+    // Lying there afterwards isn't a fresh hit.
+    expect(stepCrowdPed(q, [parked], rand, DT)).toBeNull();
+  });
+
   it('scare sends a ped running away from the source', () => {
     const rand = random(2);
     const p = spawnPed(8, 8, 0, 0.5, rand);
