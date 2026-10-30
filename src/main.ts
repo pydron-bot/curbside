@@ -34,7 +34,10 @@ import { createCarMesh } from './render/carMesh';
 import { CharacterModel } from './render/characterModel';
 import { DynamicResolution } from './render/dynamicResolution';
 import { VehicleModels } from './render/vehicleModels';
-import { knockDown, scare, spawnPed, stepCrowdPed } from './systems/crowd';
+import { PUNCH_REACH, knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
+import { Arsenal, VEHICLE_SHARE, WEAPONS, autoAim, rayCircle, rayRect } from './systems/weapons';
+import { PickupMesh } from './render/pickupMesh';
+import { HEALTH_PICKUP, PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
   applyDamage,
   blastDamage,
@@ -44,6 +47,8 @@ import {
   stepDamage,
 } from './systems/damage';
 import {
+  CAR_CIRCLE_RADIUS,
+  carCircles,
   collidePedStatic,
   collidePedVehicle,
   collideVehicleStatic,
@@ -67,6 +72,10 @@ const speedEl = document.getElementById('speed-value')!;
 const debugEl = document.getElementById('debug')!;
 const pausedEl = document.getElementById('paused')!;
 const hintEl = document.getElementById('hint')!;
+const playerHealthBar = document.querySelector<HTMLElement>('#phealth > div')!;
+const weaponEl = document.getElementById('weapon')!;
+const hurtEl = document.getElementById('hurt')!;
+const wastedEl = document.getElementById('wasted')!;
 const healthBar = document.querySelector<HTMLElement>('#vhealth > div')!;
 
 /** How close (m, centre to centre) you must be to get into a car. */
@@ -83,6 +92,12 @@ const NEAR_MISS_DIST = 3.4;
 const NEAR_MISS_SPEED = 10;
 /** Explosions further than this from the player don't score. */
 const BOOM_SCORE_RANGE = 60;
+const SPAWN_POINT = { x: 9.5, z: 9.5 };
+const NPC_PUNCH_DAMAGE = 9;
+const NPC_SHOT_DAMAGE = 8;
+/** Random aim error of NPC shooters, radians. */
+const NPC_SPREAD = 0.14;
+const RESPAWN_SECONDS = 3;
 
 // --- Renderer ---
 const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -105,6 +120,9 @@ scene.add(createCityMesh(city));
 const rand = mulberry32(Date.now() >>> 0);
 const effects = new Effects(scene);
 const charred = new MeshLambertMaterial({ color: '#1c1a19' });
+const pickups = generatePickups(1337);
+const pickupMesh = new PickupMesh(pickups);
+scene.add(pickupMesh.mesh);
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
@@ -173,6 +191,10 @@ const player = {
   /** Seconds left lying on the ground after a blast. */
   stunned: 0,
   punchCooldown: 0,
+  health: 100,
+  /** Seconds until respawn while "wasted"; 0 when alive. */
+  dead: 0,
+  arsenal: new Arsenal(),
 };
 player.prev = { ...player.ped };
 scene.add(player.model.root);
@@ -282,7 +304,7 @@ function simulate(dt: number) {
 
   Object.assign(player.prev!, player.ped);
   if (!driving) {
-    const stunned = player.stunned > 0;
+    const stunned = player.stunned > 0 || player.dead > 0;
     if (stunned) player.stunned = Math.max(0, player.stunned - dt);
     stepPedestrian(player.ped, stunned ? { x: 0, y: 0, sprint: false } : input.readMove(), PLAYER_ON_FOOT, dt);
   }
@@ -291,10 +313,22 @@ function simulate(dt: number) {
   for (const c of population.crowd) {
     Object.assign(c.prev, c.agent.s);
     const wasDown = c.agent.mode === 'down';
-    stepCrowdPed(c.agent, states, rand, dt);
+    const event = stepCrowdPed(c.agent, states, rand, dt, playerTarget());
     // Knocked over by the player's car?
     if (!wasDown && c.agent.mode === 'down' && driving) {
-      if (Math.hypot(driving.sim.x - c.agent.s.x, driving.sim.z - c.agent.s.z) < 5) award(score.award('hitAndRun'));
+      if (Math.hypot(driving.sim.x - c.agent.s.x, driving.sim.z - c.agent.s.z) < 5) {
+        award(score.award('hitAndRun'));
+        provoke(c.agent, driving.sim.x, driving.sim.z);
+      }
+    }
+    if (event?.kind === 'punch' && !driving && player.dead === 0) {
+      if (Math.hypot(player.ped.x - c.agent.s.x, player.ped.z - c.agent.s.z) < PUNCH_REACH + 0.4) {
+        c.model.punch();
+        hurtPlayer(NPC_PUNCH_DAMAGE);
+      }
+    } else if (event?.kind === 'shoot') {
+      c.model.punch(); // same arm raise reads as aiming
+      npcShoot(c.agent.s.x, c.agent.s.z, event.dirX, event.dirZ);
     }
   }
 
@@ -333,6 +367,25 @@ function simulate(dt: number) {
     }
   }
 
+  // --- Pickups ---
+  respawnPickups(pickups, simTime);
+  if (!driving && player.dead === 0) {
+    const pk = pickupAt(pickups, player.ped.x, player.ped.z);
+    if (pk && (pk.kind !== 'health' || player.health < 100)) {
+      pk.respawnAt = simTime + PICKUP_RESPAWN;
+      if (pk.kind === 'health') {
+        player.health = Math.min(100, player.health + HEALTH_PICKUP);
+        scoreHud.notice('+ HEALTH', 'health');
+      } else {
+        player.arsenal.pickUp(pk.kind);
+        player.arsenal.current = pk.kind;
+        scoreHud.notice(`+ ${WEAPONS[pk.kind].label}`, 'weapon');
+      }
+    }
+  }
+  player.arsenal.step(dt);
+  if (player.dead > 0 && (player.dead -= dt) <= 0) respawn();
+
   // --- Fire and explosions ---
   for (const v of vehicles) {
     // NPC drivers bail out of burning cars.
@@ -361,6 +414,7 @@ function explode(source: Vehicle) {
   if (distance < BOOM_SCORE_RANGE) award(score.award('boom'));
 
   if (player.driving === source) {
+    hurtPlayer(35);
     // Thrown clear of your own car.
     exitVehicle(Math.sin(source.sim.heading + Math.PI / 2) * 4, Math.cos(source.sim.heading + Math.PI / 2) * 4);
     player.stunned = 2.5;
@@ -381,11 +435,134 @@ function explode(source: Vehicle) {
     else if (d < 30) scare(c.agent, x, z, 4);
   }
   if (!player.driving && Math.hypot(player.ped.x - x, player.ped.z - z) < BLAST_RADIUS) {
+    hurtPlayer(blastDamage(Math.hypot(player.ped.x - x, player.ped.z - z), BLAST_RADIUS, 60));
     player.stunned = 2;
     const d = Math.hypot(player.ped.x - x, player.ped.z - z) || 1;
     player.ped.vx = ((player.ped.x - x) / d) * 6;
     player.ped.vz = ((player.ped.z - z) / d) * 6;
   }
+}
+
+function playerTarget(): Target {
+  const at = player.driving ? player.driving.sim : player.ped;
+  return { x: at.x, z: at.z, inCar: player.driving !== null, alive: player.dead === 0 };
+}
+
+function hurtPlayer(amount: number) {
+  if (player.dead > 0 || amount <= 0) return;
+  player.health = Math.max(0, player.health - amount);
+  hurtEl.classList.add('on');
+  requestAnimationFrame(() => requestAnimationFrame(() => hurtEl.classList.remove('on')));
+  rig.shake(0.4);
+  if (player.health === 0) die();
+}
+
+function die() {
+  if (player.driving) exitVehicle();
+  player.dead = RESPAWN_SECONDS;
+  player.stunned = RESPAWN_SECONDS;
+  wastedEl.hidden = false;
+  player.arsenal.clear();
+  // Nobody keeps fighting a dead man.
+  for (const c of population.crowd) if (c.agent.mode === 'fight' || c.agent.mode === 'shoot') resumeWalking(c.agent);
+}
+
+function respawn() {
+  player.dead = 0;
+  player.stunned = 0;
+  player.health = 100;
+  score.resetRun();
+  Object.assign(player.ped, { x: SPAWN_POINT.x, z: SPAWN_POINT.z, vx: 0, vz: 0, heading: Math.PI });
+  Object.assign(player.prev!, player.ped);
+  rig.snapTo(player.ped.x, player.ped.z);
+  wastedEl.hidden = true;
+}
+
+/** Nearest thing a bullet from (ox, oz) along unit (dx, dz) hits within range. */
+function traceBullet(ox: number, oz: number, dx: number, dz: number, range: number, shooterIsPlayer: boolean) {
+  let best = range;
+  let hit: { kind: 'ped'; ped: (typeof population.crowd)[number] } | { kind: 'vehicle'; v: Vehicle } | { kind: 'player' } | null = null;
+  for (const r of collision.near(ox + (dx * range) / 2, oz + (dz * range) / 2, range / 2 + 1)) {
+    best = Math.min(best, rayRect(ox, oz, dx, dz, r));
+  }
+  for (const c of population.crowd) {
+    if (c.agent.mode === 'down') continue;
+    const t = rayCircle(ox, oz, dx, dz, { x: c.agent.s.x, z: c.agent.s.z, r: 0.45 });
+    if (t > 0.3 && t < best) {
+      best = t;
+      hit = { kind: 'ped', ped: c };
+    }
+  }
+  for (const v of vehicles) {
+    if (shooterIsPlayer && v === player.driving) continue;
+    for (const c of carCircles(v.sim)) {
+      const t = rayCircle(ox, oz, dx, dz, { x: c.x, z: c.z, r: CAR_CIRCLE_RADIUS * 0.9 });
+      if (t > 0.3 && t < best) {
+        best = t;
+        hit = { kind: 'vehicle', v };
+      }
+    }
+  }
+  if (!shooterIsPlayer && !player.driving && player.dead === 0) {
+    const t = rayCircle(ox, oz, dx, dz, { x: player.ped.x, z: player.ped.z, r: 0.45 });
+    if (t > 0.3 && t < best) {
+      best = t;
+      hit = { kind: 'player' };
+    }
+  }
+  return { t: best, hit };
+}
+
+function fireWeapon() {
+  const kind = player.arsenal.tryFire();
+  if (!kind) return;
+  const w = WEAPONS[kind];
+  const { x, z, heading } = player.ped;
+  const targets = [
+    ...population.crowd.filter((c) => c.agent.mode !== 'down').map((c) => c.agent.s),
+    ...vehicles.filter((v) => !v.damage.wrecked).map((v) => v.sim),
+  ];
+  const aim = autoAim(x, z, heading, targets, w.range);
+  player.ped.heading = Math.atan2(aim.x, aim.z);
+  const ox = x + aim.x * 0.6;
+  const oz = z + aim.z * 0.6;
+  effects.emitFire(ox, oz, 1.2);
+  player.model.punch();
+  for (let i = 0; i < w.pellets; i++) {
+    const a = Math.atan2(aim.x, aim.z) + (rand() * 2 - 1) * w.spread;
+    const dx = Math.sin(a);
+    const dz = Math.cos(a);
+    const { t, hit } = traceBullet(ox, oz, dx, dz, w.range, true);
+    effects.tracer(ox, oz, ox + dx * t, oz + dz * t);
+    if (hit?.kind === 'ped') {
+      knockDown(hit.ped.agent, x, z, 4, 5);
+      provoke(hit.ped.agent, x, z);
+      award(score.award('knockout'));
+    } else if (hit?.kind === 'vehicle') {
+      applyDamage(hit.v.damage, w.damage * VEHICLE_SHARE);
+      if (hit.v.ai && rand() < 0.25) ejectDriver(hit.v, x, z);
+    }
+  }
+  // Gunfire: most people run; armed ones nearby join in.
+  for (const c of population.crowd) {
+    const d = Math.hypot(c.agent.s.x - x, c.agent.s.z - z);
+    if (d > 25) continue;
+    if (c.agent.temper === 'armed' && d < 18 && rand() < 0.5) provoke(c.agent, x, z);
+    else scare(c.agent, x, z, 4);
+  }
+}
+
+function npcShoot(sx: number, sz: number, dirX: number, dirZ: number) {
+  const a = Math.atan2(dirX, dirZ) + (rand() * 2 - 1) * NPC_SPREAD;
+  const dx = Math.sin(a);
+  const dz = Math.cos(a);
+  const ox = sx + dx * 0.6;
+  const oz = sz + dz * 0.6;
+  const { t, hit } = traceBullet(ox, oz, dx, dz, 26, false);
+  effects.emitFire(ox, oz, 1.2);
+  effects.tracer(ox, oz, ox + dx * t, oz + dz * t);
+  if (hit?.kind === 'player') hurtPlayer(NPC_SHOT_DAMAGE);
+  else if (hit?.kind === 'vehicle') applyDamage(hit.v.damage, NPC_SHOT_DAMAGE);
 }
 
 function tryPunch() {
@@ -401,6 +578,7 @@ function tryPunch() {
     const d = Math.hypot(dx, dz);
     if (d < PUNCH_RANGE && (dx * fx + dz * fz) / (d || 1) > 0.4 && c.agent.mode !== 'down') {
       knockDown(c.agent, x, z);
+      provoke(c.agent, x, z);
       award(score.award('knockout'));
     }
     else if (d < 10) scare(c.agent, x, z, 3);
@@ -421,7 +599,14 @@ function frame(now: number) {
 
   input.pollGamepad();
   player.punchCooldown = Math.max(0, player.punchCooldown - frameSeconds);
-  if (input.consumePunch()) tryPunch();
+  const pressed = input.consumePunch();
+  if (input.consumeCycle() && !player.driving) player.arsenal.cycle();
+  if (!player.driving && player.dead === 0 && player.stunned <= 0) {
+    const gun = player.arsenal.current;
+    if (gun) {
+      if (pressed || (WEAPONS[gun].automatic && input.fireHeld)) fireWeapon();
+    } else if (pressed) tryPunch();
+  }
   if (input.consumeAction() && player.stunned <= 0) {
     if (player.driving) exitVehicle();
     else {
@@ -476,7 +661,12 @@ function frame(now: number) {
     }
   }
   effects.update(frameSeconds);
+  pickupMesh.update(now / 1000);
   scoreHud.update();
+  playerHealthBar.style.width = `${player.health}%`;
+  const gun = player.arsenal.current;
+  weaponEl.textContent = gun ? `${WEAPONS[gun].label} · ${player.arsenal.ammo.get(gun) ?? 0}` : 'FISTS';
+  touch.setWeapon(gun ? WEAPONS[gun].label : null);
 
   const nearCar = player.driving ? null : nearestEnterable();
   touch.setMode(player.driving ? 'car' : 'foot', nearCar !== null);

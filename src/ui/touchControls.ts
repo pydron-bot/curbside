@@ -5,6 +5,8 @@ export type ControlMode = 'foot' | 'car';
 export interface TouchControls {
   /** Switch button layout; `canAct` shows the ENTER button on foot. */
   setMode(mode: ControlMode, canAct: boolean): void;
+  /** Label the attack button for the current weapon (null = fists). */
+  setWeapon(label: string | null): void;
 }
 
 /**
@@ -29,7 +31,8 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): TouchCo
   const brake = button('BRAKE', 'btn-brake car-only');
   const gas = button('GAS', 'btn-gas car-only');
   const punch = button('PUNCH', 'btn-punch foot-only');
-  buttons.append(action, hand, brake, gas, punch);
+  const swap = button('⇄', 'btn-swap foot-only');
+  buttons.append(action, hand, brake, gas, punch, swap);
   layer.append(stickZone, buttons);
   root.append(layer);
 
@@ -98,13 +101,19 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): TouchCo
   bindHold(gas, (v) => ((held.gas = v), sync()));
   bindHold(brake, (v) => ((held.brake = v), sync()));
   bindHold(hand, (v) => ((held.hand = v), sync()));
-  punch.addEventListener('pointerdown', () => {
+  punch.addEventListener('pointerdown', (e) => {
+    punch.setPointerCapture(e.pointerId);
     out.punchPresses++;
+    out.fireHeld = true;
     punch.classList.add('pressed');
   });
-  for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
-    punch.addEventListener(type, () => punch.classList.remove('pressed'));
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
+    punch.addEventListener(type, () => {
+      out.fireHeld = false;
+      punch.classList.remove('pressed');
+    });
   }
+  swap.addEventListener('pointerdown', () => out.cyclePresses++);
   action.addEventListener('pointerdown', () => {
     out.actionPresses++;
     action.classList.add('pressed');
@@ -113,7 +122,14 @@ export function mountTouchControls(root: HTMLElement, out: InputSource): TouchCo
     action.addEventListener(type, () => action.classList.remove('pressed'));
   }
 
+  let weaponLabel: string | null = null;
   return {
+    setWeapon(label) {
+      if (label === weaponLabel) return;
+      weaponLabel = label;
+      punch.textContent = label ? 'FIRE' : 'PUNCH';
+      punch.classList.toggle('armed', label !== null);
+    },
     setMode(mode, canAct) {
       if (layer.dataset.mode !== mode) {
         layer.dataset.mode = mode;

@@ -7,7 +7,21 @@ import { speed, type VehicleState } from '../entities/vehicle';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK } from '../world/city';
 import { CAR_CIRCLE_RADIUS, PED_RADIUS, carCircles } from './physics';
 
-export type PedMode = 'walk' | 'flee' | 'down';
+export type PedMode = 'walk' | 'flee' | 'down' | 'fight' | 'shoot';
+/** How a ped reacts to being attacked. */
+export type Temper = 'calm' | 'fighter' | 'armed';
+
+/** Something a hostile ped did this step, for the game to resolve. */
+export type CrowdEvent = { kind: 'punch' } | { kind: 'shoot'; dirX: number; dirZ: number };
+
+/** Who hostile peds go after. */
+export interface Target {
+  x: number;
+  z: number;
+  /** Fighters can't punch someone in a car; shooters shoot the car. */
+  inCar: boolean;
+  alive: boolean;
+}
 
 export interface PedAgent {
   s: PedState;
@@ -23,9 +37,21 @@ export interface PedAgent {
   fleeZ: number;
   /** 0..1 walking pace multiplier. */
   pace: number;
+  temper: Temper;
+  /** Set when attacked while down: turns hostile on getting up. */
+  provoked: boolean;
+  attackCooldown: number;
 }
 
 export const NPC_SPEC: PedSpec = { ...PLAYER_ON_FOOT, walkSpeed: 2.2, runSpeed: 5.2 };
+/** Chase speed for fighters: a little slower than a sprinting player, so you can escape. */
+const FIGHTER_SPEC: PedSpec = { ...NPC_SPEC, runSpeed: 4.6 };
+export const PUNCH_REACH = 1.3;
+const PUNCH_EVERY = 1.0;
+const SHOOT_EVERY = 1.1;
+const SHOOT_RANGE = 22;
+const HOSTILE_SECONDS = 15;
+const GIVE_UP_DISTANCE = 40;
 
 /** Sidewalk path: midway across the sidewalk, measured from the road centreline. */
 const WALK_INSET = ROAD_WIDTH / 2 + SIDEWALK / 2;
@@ -69,7 +95,36 @@ export function spawnPed(bx: number, bz: number, edge: number, t: number, rand: 
     fleeX: 0,
     fleeZ: 0,
     pace: 0.45 + rand() * 0.25,
+    temper: rollTemper(rand),
+    provoked: false,
+    attackCooldown: 0,
   };
+}
+
+export function rollTemper(rand: () => number): Temper {
+  const r = rand();
+  return r < 0.1 ? 'armed' : r < 0.3 ? 'fighter' : 'calm';
+}
+
+/**
+ * React to an attack from (fromX, fromZ): calm peds run, fighters come at
+ * you, armed peds shoot. A ped who's down reacts when they get up.
+ */
+export function provoke(p: PedAgent, fromX: number, fromZ: number): void {
+  if (p.mode === 'down') {
+    p.provoked = true;
+    return;
+  }
+  if (p.temper === 'fighter') {
+    p.mode = 'fight';
+    p.timer = HOSTILE_SECONDS;
+  } else if (p.temper === 'armed') {
+    p.mode = 'shoot';
+    p.timer = HOSTILE_SECONDS;
+    p.attackCooldown = 0.6; // a beat before the first shot
+  } else {
+    scare(p, fromX, fromZ, 4);
+  }
 }
 
 /** Knock a ped over, sliding away from a point (punch, explosion). */
@@ -85,7 +140,7 @@ export function knockDown(p: PedAgent, fromX: number, fromZ: number, push = 3, s
 
 /** Make a ped run from a point (e.g. a carjacker) for a while. */
 export function scare(p: PedAgent, fromX: number, fromZ: number, seconds = 4): void {
-  if (p.mode === 'down') return;
+  if (p.mode === 'down' || p.mode === 'fight' || p.mode === 'shoot') return;
   const dx = p.s.x - fromX;
   const dz = p.s.z - fromZ;
   const d = Math.hypot(dx, dz) || 1;
@@ -95,7 +150,14 @@ export function scare(p: PedAgent, fromX: number, fromZ: number, seconds = 4): v
   p.fleeZ = dz / d;
 }
 
-export function stepCrowdPed(p: PedAgent, vehicles: VehicleState[], rand: () => number, dt: number): void {
+export function stepCrowdPed(
+  p: PedAgent,
+  vehicles: VehicleState[],
+  rand: () => number,
+  dt: number,
+  target?: Target,
+): CrowdEvent | null {
+  p.attackCooldown = Math.max(0, p.attackCooldown - dt);
   // --- Hit or about to be hit by a car? ---
   for (const v of vehicles) {
     const sp = speed(v);
@@ -127,29 +189,73 @@ export function stepCrowdPed(p: PedAgent, vehicles: VehicleState[], rand: () => 
       const d = Math.hypot(p.s.vx, p.s.vz) || 1;
       p.fleeX = p.s.vx / d || 1;
       p.fleeZ = p.s.vz / d;
+      if (p.provoked && target) {
+        p.provoked = false;
+        provoke(p, target.x, target.z);
+      }
     }
-    return;
+    return null;
   }
+
+  if (p.mode === 'fight' || p.mode === 'shoot') return stepHostile(p, target, dt);
 
   if (p.mode === 'flee') {
     stepPedestrian(p.s, { x: p.fleeX, y: -p.fleeZ, sprint: true }, NPC_SPEC, dt);
     if ((p.timer -= dt) <= 0) resumeWalking(p);
-    return;
+    return null;
   }
 
   // --- Walking the sidewalk loop ---
-  const target = cornerPoint(p.bx, p.bz, p.corner);
-  const dx = target.x - p.s.x;
-  const dz = target.z - p.s.z;
+  const corner = cornerPoint(p.bx, p.bz, p.corner);
+  const dx = corner.x - p.s.x;
+  const dz = corner.z - p.s.z;
   const d = Math.hypot(dx, dz);
   if (d < 0.8) {
     arriveAtCorner(p, rand);
-    return;
+    return null;
   }
   stepPedestrian(p.s, { x: (dx / d) * p.pace, y: (-dz / d) * p.pace, sprint: false }, NPC_SPEC, dt);
+  return null;
+}
+
+function stepHostile(p: PedAgent, target: Target | undefined, dt: number): CrowdEvent | null {
+  p.timer -= dt;
+  const dx = target ? target.x - p.s.x : 0;
+  const dz = target ? target.z - p.s.z : 0;
+  const d = Math.hypot(dx, dz);
+  const done = !target || !target.alive || p.timer <= 0 || d > GIVE_UP_DISTANCE;
+  if (done || (p.mode === 'fight' && target!.inCar)) {
+    resumeWalking(p);
+    return null;
+  }
+  const ux = dx / (d || 1);
+  const uz = dz / (d || 1);
+  const still = { x: 0, y: 0, sprint: false };
+
+  if (p.mode === 'fight') {
+    if (d > PUNCH_REACH) {
+      stepPedestrian(p.s, { x: ux, y: -uz, sprint: true }, FIGHTER_SPEC, dt);
+      return null;
+    }
+    stepPedestrian(p.s, still, NPC_SPEC, dt);
+    p.s.heading = Math.atan2(ux, uz);
+    if (p.attackCooldown > 0) return null;
+    p.attackCooldown = PUNCH_EVERY;
+    return { kind: 'punch' };
+  }
+
+  // Shooter: hold a middle distance, face the target, fire on a cadence.
+  if (d > 12) stepPedestrian(p.s, { x: ux * 0.8, y: -uz * 0.8, sprint: false }, NPC_SPEC, dt);
+  else if (d < 6) stepPedestrian(p.s, { x: -ux * 0.6, y: uz * 0.6, sprint: false }, NPC_SPEC, dt);
+  else stepPedestrian(p.s, still, NPC_SPEC, dt);
+  p.s.heading = Math.atan2(ux, uz);
+  if (p.attackCooldown > 0 || d > SHOOT_RANGE) return null;
+  p.attackCooldown = SHOOT_EVERY;
+  return { kind: 'shoot', dirX: ux, dirZ: uz };
 }
 
 function dodge(p: PedAgent, v: VehicleState, sp: number) {
+  if (p.mode === 'fight' || p.mode === 'shoot') return; // too angry to notice
   const fx = v.vx / sp;
   const fz = v.vz / sp;
   const rx = p.s.x - v.x;
@@ -166,7 +272,8 @@ function dodge(p: PedAgent, v: VehicleState, sp: number) {
   p.fleeZ = -fx * side;
 }
 
-function resumeWalking(p: PedAgent) {
+/** Calm down and head back to the sidewalk loop. */
+export function resumeWalking(p: PedAgent) {
   const { bx, bz } = blockAt(p.s.x, p.s.z);
   p.bx = bx;
   p.bz = bz;

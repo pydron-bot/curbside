@@ -17,8 +17,12 @@ export interface InputSource {
   sprint: boolean;
   /** Enter/exit presses not yet consumed by the game. */
   actionPresses: number;
-  /** Punch presses (on foot) not yet consumed. */
+  /** Punch/fire presses (on foot) not yet consumed. */
   punchPresses: number;
+  /** Fire button currently held (automatic weapons). */
+  fireHeld: boolean;
+  /** Weapon-switch presses not yet consumed. */
+  cyclePresses: number;
 }
 
 export const emptySource = (): InputSource => ({
@@ -30,6 +34,8 @@ export const emptySource = (): InputSource => ({
   sprint: false,
   actionPresses: 0,
   punchPresses: 0,
+  fireHeld: false,
+  cyclePresses: 0,
 });
 
 export class Input {
@@ -39,6 +45,7 @@ export class Input {
   private keys = new Set<string>();
   private padActionWasDown = false;
   private padPunchWasDown = false;
+  private padCycleWasDown = false;
 
   constructor(target: Window = window) {
     target.addEventListener('keydown', (e) => {
@@ -47,6 +54,10 @@ export class Input {
         this.keyboard.actionPresses++;
       }
       if (!e.repeat && (e.code === 'Space' || e.code === 'KeyJ')) this.keyboard.punchPresses++;
+      if (!e.repeat && (e.code === 'KeyQ' || e.code === 'Tab')) {
+        e.preventDefault();
+        this.keyboard.cyclePresses++;
+      }
       this.keys.add(e.code);
       this.updateKeyboard();
     });
@@ -72,6 +83,7 @@ export class Input {
     kb.throttle = kb.moveY = (up ? 1 : 0) - (down ? 1 : 0);
     kb.handbrake = k.has('Space');
     kb.sprint = k.has('ShiftLeft') || k.has('ShiftRight');
+    kb.fireHeld = k.has('Space') || k.has('KeyJ');
   }
 
   /** Call once per frame before reading. */
@@ -96,6 +108,10 @@ export class Input {
     const punch = pad.buttons[2]?.pressed ?? false; // X
     if (punch && !this.padPunchWasDown) g.punchPresses++;
     this.padPunchWasDown = punch;
+    g.fireHeld = punch;
+    const cycle = pad.buttons[5]?.pressed ?? false; // RB
+    if (cycle && !this.padCycleWasDown) g.cyclePresses++;
+    this.padCycleWasDown = cycle;
   }
 
   readVehicle(): VehicleControls {
@@ -123,6 +139,19 @@ export class Input {
     for (const s of [this.keyboard, this.touch, this.gamepad]) {
       if (s.punchPresses > 0) pressed = true;
       s.punchPresses = 0;
+    }
+    return pressed;
+  }
+
+  get fireHeld(): boolean {
+    return this.keyboard.fireHeld || this.touch.fireHeld || this.gamepad.fireHeld;
+  }
+
+  consumeCycle(): boolean {
+    let pressed = false;
+    for (const s of [this.keyboard, this.touch, this.gamepad]) {
+      if (s.cyclePresses > 0) pressed = true;
+      s.cyclePresses = 0;
     }
     return pressed;
   }

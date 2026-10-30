@@ -16,6 +16,7 @@ _Plan written 2026-10-29 as "Urban Blight"; renamed **Curbside** the same day (o
 | M3 | Blender pipeline | 🟡 Characters + 5 vehicle archetypes; road tiles / building kit to do |
 | M4 | On foot | ✅ Walk/sprint, enter/exit, carjacking, punching (weapons → later) |
 | M5 | Living city | ✅ Traffic, pedestrians, damage → smoke → fire → explosion, wrecks (polish: traffic lights, AI reacting to hits) |
+| + | Weapons & fight-back | ✅ Pistol/SMG/shotgun + health crates; peds may punch or shoot back; player health, WASTED + respawn; taxi + pickup archetypes |
 | + | Chaos score | ✅ Combo-chained points for drifts, near misses, smashes, knockouts, carjacks, explosions; best score saved |
 | M6–M8 | Heat, Missions & HUD, Ship | ⬜ Not started |
 

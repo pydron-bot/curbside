@@ -1,7 +1,11 @@
 import {
   AdditiveBlending,
+  BufferAttribute,
+  BufferGeometry,
   CanvasTexture,
   Color,
+  LineBasicMaterial,
+  LineSegments,
   DynamicDrawUsage,
   InstancedMesh,
   Matrix4,
@@ -43,6 +47,12 @@ export class Effects {
   private readonly c = new Color();
   private readonly s = new Vector3();
   private readonly p = new Vector3();
+  private tracers: Array<{ x1: number; z1: number; x2: number; z2: number; age: number }> = [];
+  private readonly tracerLines: LineSegments;
+  private readonly tracerPos: Float32Array;
+  private readonly tracerCol: Float32Array;
+  private static readonly MAX_TRACERS = 48;
+  private static readonly TRACER_LIFE = 0.09;
 
   constructor(
     scene: Scene,
@@ -68,6 +78,19 @@ export class Effects {
       mesh.renderOrder = 2;
       scene.add(mesh);
     }
+    const n = Effects.MAX_TRACERS * 2;
+    this.tracerPos = new Float32Array(n * 3);
+    this.tracerCol = new Float32Array(n * 3);
+    const tg = new BufferGeometry();
+    tg.setAttribute('position', new BufferAttribute(this.tracerPos, 3).setUsage(DynamicDrawUsage));
+    tg.setAttribute('color', new BufferAttribute(this.tracerCol, 3).setUsage(DynamicDrawUsage));
+    this.tracerLines = new LineSegments(
+      tg,
+      new LineBasicMaterial({ vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false }),
+    );
+    this.tracerLines.frustumCulled = false;
+    scene.add(this.tracerLines);
+
     // Ensure instanceColor exists before first use.
     this.smokeMesh.setColorAt(0, this.c.set('#000'));
     this.fireMesh.setColorAt(0, this.c.set('#000'));
@@ -134,9 +157,29 @@ export class Effects {
     }
   }
 
+  /** A bright streak from the muzzle to where the bullet stopped. */
+  tracer(x1: number, z1: number, x2: number, z2: number): void {
+    if (this.tracers.length >= Effects.MAX_TRACERS) this.tracers.shift();
+    this.tracers.push({ x1, z1, x2, z2, age: 0 });
+  }
+
   update(dt: number): void {
     this.updatePool(this.smoke, this.smokeMesh, dt, 0.6);
     this.updatePool(this.fire, this.fireMesh, dt, 0.2);
+    let n = 0;
+    for (const t of this.tracers) {
+      t.age += dt;
+      if (t.age >= Effects.TRACER_LIFE) continue;
+      const k = 1 - t.age / Effects.TRACER_LIFE;
+      this.tracerPos.set([t.x1, 1.25, t.z1, t.x2, 1.25, t.z2], n * 6);
+      this.tracerCol.set([k, k * 0.9, k * 0.5, k * 0.6, k * 0.5, k * 0.2], n * 6);
+      this.tracers[n++] = t;
+    }
+    this.tracers.length = n;
+    const g = this.tracerLines.geometry;
+    g.setDrawRange(0, n * 2);
+    g.attributes.position.needsUpdate = true;
+    g.attributes.color.needsUpdate = true;
   }
 
   private updatePool(list: Particle[], mesh: InstancedMesh, dt: number, drag: number) {

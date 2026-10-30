@@ -75,7 +75,7 @@ export const SEDAN: VehicleSpec = {
   handbrakeYawBoost: 1.5,
 };
 
-export type VehicleArchetype = 'sedan' | 'compact' | 'sports' | 'van' | 'police';
+export type VehicleArchetype = 'sedan' | 'compact' | 'sports' | 'van' | 'police' | 'taxi' | 'pickup';
 
 /** Handling per archetype, as tweaks on the sedan baseline. */
 export const VEHICLE_SPECS: Record<VehicleArchetype, VehicleSpec> = {
@@ -84,6 +84,8 @@ export const VEHICLE_SPECS: Record<VehicleArchetype, VehicleSpec> = {
   sports: { ...SEDAN, maxSpeed: 50, accel: 20, brakeDecel: 30, steerRate: 2.8, grip: 10, handbrakeGrip: 1.2 },
   van: { ...SEDAN, maxSpeed: 30, accel: 9, brakeDecel: 20, steerRate: 2.1, grip: 7.5, handbrakeGrip: 1.8 },
   police: { ...SEDAN, maxSpeed: 44, accel: 17, brakeDecel: 28, steerRate: 2.7 },
+  taxi: { ...SEDAN, maxSpeed: 36, accel: 13 },
+  pickup: { ...SEDAN, maxSpeed: 36, accel: 12, steerRate: 2.3, grip: 8, handbrakeGrip: 1.6 },
 };
 
 /** Max health per archetype. */
@@ -93,6 +95,8 @@ export const VEHICLE_HEALTH: Record<VehicleArchetype, number> = {
   sports: 80,
   van: 130,
   police: 120,
+  taxi: 100,
+  pickup: 120,
 };
 
 export function createVehicleState(x = 0, z = 0, heading = Math.PI): VehicleState {

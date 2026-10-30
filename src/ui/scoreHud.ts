@@ -77,6 +77,15 @@ export class ScoreHud {
     saveBest(this.score.best);
   }
 
+  /** A pop-up without points, e.g. "+ PISTOL". */
+  notice(text: string, kind = 'notice'): void {
+    const el = document.createElement('div');
+    el.className = `popup popup-${kind}`;
+    el.textContent = text;
+    el.addEventListener('animationend', () => el.remove());
+    this.popups.append(el);
+  }
+
   update(): void {
     const s = this.score;
     if (s.total !== this.shownTotal) {

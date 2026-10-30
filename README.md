@@ -31,7 +31,8 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Walk (on foot) | WASD / arrows | left-half joystick | left stick |
 | Sprint (on foot) | Shift | push joystick to the rim | A |
 | Enter / exit car | E / F / Enter | ENTER / EXIT | Y |
-| Punch (on foot) | Space / J | PUNCH | X |
+| Punch / fire (on foot, hold for SMG) | Space / J | PUNCH / FIRE | X |
+| Switch weapon | Q / Tab | ⇄ | RB |
 | Steer | A/D, ←/→ | left-half joystick | left stick |
 | Gas / brake-reverse | W/S, ↑/↓ | GAS / BRAKE | RT / LT |
 | Handbrake | Space | HAND | A |
@@ -75,6 +76,14 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
   near misses, smashes, hit-and-runs, knockouts, carjacks and explosions
   score points; anything within 3 s of the last event raises a ×2…×10
   combo. Best score is kept in localStorage (`curbside.best`).
+- **Weapons** (`src/systems/weapons.ts`, `src/world/pickups.ts`): pistol,
+  SMG, shotgun and health crates on sidewalks (respawn 30 s); hitscan with
+  aim assist, tracers, walls stop bullets, cars take damage.
+- **Fighting back** (`src/systems/crowd.ts`): peds are calm (70%),
+  fighters (20%) or armed (10%); provoke one and they punch or shoot back
+  (shooters hit your car too). Player health; at 0 → WASTED, respawn, lose
+  weapons, run score resets (best kept).
+- Traffic 24 cars incl. new **taxi** and **pickup**; crowd 22.
 - Next: **M6 Heat** (wanted level, police).
 
 ## Layout

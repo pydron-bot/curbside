@@ -69,6 +69,14 @@ export class Score {
     return pts >= MIN_DRIFT_BANK ? this.bank('drift', pts) : null;
   }
 
+  /** Start a fresh run (after dying); the best score is kept. */
+  resetRun(): void {
+    this.total = 0;
+    this.combo = 1;
+    this.comboTimer = 0;
+    this.driftPoints = 0;
+  }
+
   step(dt: number): void {
     if (this.comboTimer > 0) {
       this.comboTimer -= dt;

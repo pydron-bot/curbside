@@ -33,19 +33,23 @@ export interface CrowdPed {
   model: CharacterModel;
 }
 
-export const TRAFFIC_COUNT = 16;
-export const CROWD_COUNT = 14;
+export const TRAFFIC_COUNT = 24;
+export const CROWD_COUNT = 22;
 const TRAFFIC_SPAWN = [90, 220] as const;
 const TRAFFIC_DESPAWN = 280;
 const CROWD_SPAWN = [45, 100] as const;
 const CROWD_DESPAWN = 130;
 
 const TRAFFIC_MIX: Array<[VehicleArchetype, number]> = [
-  ['sedan', 0.4],
-  ['compact', 0.3],
-  ['van', 0.18],
-  ['sports', 0.12],
+  ['sedan', 0.3],
+  ['compact', 0.22],
+  ['taxi', 0.14],
+  ['pickup', 0.12],
+  ['van', 0.12],
+  ['sports', 0.1],
 ];
+/** Archetypes with a fixed livery rather than a random paint job. */
+const LIVERY: Partial<Record<VehicleArchetype, string>> = { taxi: '#f2c12e' };
 const PAINTS = ['#c8342b', '#2f6fc0', '#d9d6cc', '#e8b923', '#3d7a4a', '#1f2328', '#8a8f96', '#7a2f5a', '#c86a2b'];
 const SHIRTS = ['#c94f4f', '#4f7cc9', '#5aa36a', '#d8d2c0', '#2f2f35', '#a0662f', '#7d4fc9', '#e08a3c'];
 const PANTS = ['#2e3a5c', '#3b3b3b', '#6b5a45', '#1f2a24', '#59606b'];
@@ -85,7 +89,8 @@ export class Population {
       if (v.ai) aiCount++;
     }
     for (; aiCount < TRAFFIC_COUNT; aiCount++) {
-      const v = this.makeVehicle(pickWeighted(TRAFFIC_MIX, this.rand), pick(PAINTS, this.rand));
+      const archetype = pickWeighted(TRAFFIC_MIX, this.rand);
+      const v = this.makeVehicle(archetype, LIVERY[archetype] ?? pick(PAINTS, this.rand));
       if (!this.placeAi(v, px, pz)) v.sim.x = 1e6; // try again next time it's far
     }
 

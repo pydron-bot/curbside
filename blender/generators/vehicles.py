@@ -30,6 +30,11 @@ ARCHETYPES = {
                 cabin_h=0.85, taper=0.12, wheelbase=3.0, wheel_r=0.38),
     "police": dict(length=4.5, width=1.9, body_h=0.62, clearance=0.32, cabin_len=2.2, cabin_off=0.2,
                    cabin_h=0.58, taper=0.32, wheelbase=2.75, wheel_r=0.34, lightbar=True),
+    "taxi": dict(length=4.5, width=1.9, body_h=0.62, clearance=0.32, cabin_len=2.2, cabin_off=0.2,
+                 cabin_h=0.58, taper=0.32, wheelbase=2.75, wheel_r=0.34, taxi_sign=True),
+    # Cab up front (-Y), open bed behind it.
+    "pickup": dict(length=4.9, width=2.0, body_h=0.7, clearance=0.42, cabin_len=1.7, cabin_off=-0.75,
+                   cabin_h=0.7, taper=0.18, wheelbase=3.0, wheel_r=0.4, bed=True),
 }
 
 
@@ -93,6 +98,22 @@ def build_vehicle(arch, p, mats):
                          (x, -L / 2 - 0.01, z_body + p["body_h"] * 0.6), mats["headlight"]))
         parts.append(box(f"{arch}_tail_{'L' if x > 0 else 'R'}", (0.38, 0.06, 0.14),
                          (x, L / 2 + 0.01, z_body + p["body_h"] * 0.6), mats["taillight"]))
+
+    if p.get("taxi_sign"):
+        roof_z = body_top + p["cabin_h"] + 0.14
+        parts.append(box(f"{arch}_sign", (0.7, 0.22, 0.2), (0, p["cabin_off"], roof_z), mats["headlight"]))
+
+    if p.get("bed"):
+        # Low walls and tailgate around the load bed, behind the cab.
+        bed_front = p["cabin_off"] + p["cabin_len"] / 2
+        bed_len = L / 2 - bed_front
+        bed_mid = bed_front + bed_len / 2
+        wall_h = 0.3
+        for x in (-1, 1):
+            parts.append(box(f"{arch}_bedwall_{'L' if x > 0 else 'R'}", (0.08, bed_len, wall_h),
+                             (x * (W / 2 - 0.04), bed_mid, body_top + wall_h / 2), mats["paint"]))
+        parts.append(box(f"{arch}_tailgate", (W, 0.08, wall_h), (0, L / 2 - 0.04, body_top + wall_h / 2), mats["paint"]))
+        parts.append(box(f"{arch}_bedfloor", (W - 0.16, bed_len - 0.1, 0.02), (0, bed_mid, body_top + 0.01), mats["trim"]))
 
     if p.get("lightbar"):
         roof_z = body_top + p["cabin_h"] + 0.1
