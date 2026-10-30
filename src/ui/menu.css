@@ -325,10 +325,12 @@ kbd.pad.b {
   padding: 6px 14px 14px;
 }
 
-/* Which build is running: small print at the foot of Settings and the pause card. */
+/* Which build is running: small print at the foot of Settings and the pause card.
+   In Settings it sits in the body's bottom padding, so both columns still fit
+   unscrolled at 393 high. */
 .build-id {
   grid-column: 1 / -1;
-  margin: 6px 6px 0;
+  margin: 0 6px -8px;
   text-align: center;
   font: 10px/1.2 var(--hud-font);
   letter-spacing: 0.08em;
