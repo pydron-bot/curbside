@@ -492,11 +492,14 @@ body:not([data-device='touch']) .hud-pause {
 }
 
 .score-feed {
+  --feed-gap: 0px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 1px;
   margin-top: 5px;
+  /* Stop short of the radio card at top centre (max-width 240): long lines wrap instead. */
+  max-width: calc(50vw - max(var(--edge-l), var(--edge-r)) - 125px - var(--feed-gap));
 }
 
 .feed-line {
@@ -511,6 +514,11 @@ body:not([data-device='touch']) .hud-pause {
   transform-origin: right center;
   animation: feed-in 0.28s cubic-bezier(0.2, 1.4, 0.4, 1);
   transition: opacity 0.3s, transform 0.3s;
+}
+
+.feed-line span {
+  white-space: normal;
+  text-wrap: balance;
 }
 
 .feed-line b {
@@ -885,7 +893,8 @@ body:not([data-scene='play']) #threats {
 
 /* In a car on touch, EXIT sits under the score: the feed keeps to its left. */
 body[data-device='touch'][data-mode='car'] .score-feed {
-  margin-right: 72px;
+  --feed-gap: 72px;
+  margin-right: var(--feed-gap);
 }
 
 /* Left-handed touch: the right thumb steers, so the radar and gauges swap
@@ -928,6 +937,6 @@ body[data-device='touch'][data-hand='left'] .score-feed {
 
 body[data-device='touch'][data-hand='left'][data-mode='car'] .score-feed {
   margin-right: 0;
-  margin-left: 72px;
+  margin-left: var(--feed-gap);
 }
 
