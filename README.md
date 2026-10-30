@@ -94,7 +94,8 @@ vibration, show FPS.
 - **Fighting back** (`src/systems/crowd.ts`): peds are calm (70%),
   fighters (20%) or armed (10%); provoke one and they punch or shoot back
   (shooters hit your car too). Player health; at 0 → WASTED, respawn, lose
-  weapons, run score resets (best kept).
+  weapons, run score resets (best kept). A fresh run (PLAY, RESTART, quit
+  to title) also starts empty-handed; package perks re-arm on `respawn`.
 - Traffic 24 cars incl. new **taxi** and **pickup**; crowd 22, spawned
   just off-screen (never inside the camera's ground rectangle) and
   concentrated near the player; parked/abandoned cars are capped and
@@ -460,7 +461,9 @@ are `src/game/modes/*Mode.ts`.
   PAY 'N' SPRAY CARD $1,500; PACKAGE SCANNER $2,000; pistol / SMG / shotgun
   ammo $150 / $400 / $300 (`arsenal.pickUp`).
 - **CHAOS RUN** (title, `modes/chaosRun.ts`, `chaosRunMode.ts`): a sports
-  car at a random crossing, 3-2-1 with the car held, then 2:00 on the clock
+  car at a random crossing and the same loadout every run (`CHAOS_LOADOUT`:
+  a pistol, whatever free roam or the shop left in your pockets; RETRY too),
+  3-2-1 with the car held, then 2:00 on the clock
   top centre; +5 s per explosion you cause, +3 s each time a chain reaches
   ×5 ("+5 S" pops beside the timer); the last ten seconds count down out
   loud in red tenths (the last five as smaller red digits up top, off the

@@ -4,13 +4,16 @@ import {
   CHAOS_MEDALS,
   CHAOS_RUN_SECONDS,
   COMBO_BONUS,
+  CHAOS_LOADOUT,
   ChaosRun,
+  armForRun,
   categoryOf,
   chaosMedal,
   nextMedal,
   type ChaosCue,
 } from '../src/game/modes/chaosRun';
 import type { Award } from '../src/systems/score';
+import { Arsenal, WEAPONS } from '../src/systems/weapons';
 
 const award = (kind: Award['kind'], points: number, multiplier = 1): Award => ({ kind, label: '', points, multiplier });
 
@@ -95,5 +98,17 @@ describe('chaos run: medals', () => {
     expect(nextMedal(0)).toEqual({ medal: 'bronze', at: CHAOS_MEDALS.bronze });
     expect(nextMedal(CHAOS_MEDALS.bronze)).toEqual({ medal: 'silver', at: CHAOS_MEDALS.silver });
     expect(nextMedal(CHAOS_MEDALS.gold)).toBeNull();
+  });
+});
+
+describe('chaos run: loadout', () => {
+  it('every run starts with the same guns, whatever was carried in', () => {
+    const a = new Arsenal();
+    for (const k of ['rocket', 'grenade', 'smg', 'smg'] as const) a.pickUp(k);
+    a.current = 'rocket';
+    armForRun(a);
+    expect([...a.ammo.entries()].filter(([, n]) => n > 0)).toEqual(CHAOS_LOADOUT.map((k) => [k, WEAPONS[k].pickupAmmo]));
+    expect(a.current).toBe(CHAOS_LOADOUT[0]);
+    expect(a.has('rocket')).toBe(false);
   });
 });

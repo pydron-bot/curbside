@@ -422,6 +422,8 @@ function respawnPlayer() {
   combat.reset();
   nitro.reset();
   stunts.cancel();
+  // A fresh run starts empty-handed (perks re-arm on the respawn event).
+  player.arsenal.clear();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true);

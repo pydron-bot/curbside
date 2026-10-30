@@ -13,7 +13,7 @@ import type { ResultsCard, ResultsData } from '../../ui/progressScreens';
 import { fmt } from '../../ui/scoreHud';
 import type { TitleMode } from '../../ui/titleScreen';
 import type { Vehicle } from '../population';
-import { CHAOS_CATEGORIES, CHAOS_MEDALS, CHAOS_RUN_ID, CHAOS_RUN_SECONDS, ChaosRun, FINAL_COUNT, chaosMedal, nextMedal, type ChaosEnd } from './chaosRun';
+import { CHAOS_CATEGORIES, CHAOS_MEDALS, CHAOS_RUN_ID, CHAOS_RUN_SECONDS, ChaosRun, FINAL_COUNT, armForRun, chaosMedal, nextMedal, type ChaosEnd } from './chaosRun';
 import type { Mode, ModeCtx } from './context';
 
 const PAINTS = ['#e8b923', '#ff2e88', '#2ee6ff', '#ff6a3d', '#3ddc84', '#f6f1e4'];
@@ -101,6 +101,8 @@ export class ChaosRunMode implements Mode {
     const paint = PAINTS[Math.floor(rand() * PAINTS.length)];
     this.car = this.ctx.spawnCar('sports', paint, spot.x, spot.z, spot.heading);
     this.ctx.board(this.car);
+    // Same guns every run (RETRY comes through here too).
+    armForRun(deps.player.arsenal);
     // The run's own best on the BEST line (free roam's comes back in reset()).
     deps.hud.setBest(this.ctx.progress.best(CHAOS_RUN_ID));
     this.run = new ChaosRun();
