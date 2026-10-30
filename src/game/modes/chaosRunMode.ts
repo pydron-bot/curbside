@@ -104,13 +104,14 @@ export class ChaosRunMode implements Mode {
     this.car = this.ctx.spawnCar('sports', paint, spot.x, spot.z, spot.heading);
     // Armoured (a recycled car gets its stock health back when it's reset).
     this.car.damage = createDamage(VEHICLE_HEALTH.sports * CHAOS_CAR_HEALTH);
+    // In the run before boarding: free roam's listeners (the export feed line) must see it.
+    this.phase = 'countdown';
     this.ctx.board(this.car);
     // Same guns every run (RETRY comes through here too).
     armForRun(deps.player.arsenal);
     // The run's own best on the BEST line (free roam's comes back in reset()).
     deps.hud.setBest(this.ctx.progress.best(CHAOS_RUN_ID));
     this.run = new ChaosRun();
-    this.phase = 'countdown';
     this.countdown = COUNTDOWN;
     this.shownCount = 0;
     this.ctx.holdControls = true;

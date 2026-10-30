@@ -13,7 +13,7 @@ import { generateCity } from '../src/world/city';
 
 const DT = 1 / 60;
 
-function setup() {
+function setup(busy: string | null = null) {
   const bus = new EventBus();
   const player = new Player(bus, 0, 0);
   const progress = new Progress(defaultSave(), null);
@@ -30,7 +30,7 @@ function setup() {
     ui: { banner() {} },
     freeRoam: true,
     live: true,
-    busy: null,
+    busy,
     pay: (amount: number) => progress.earn(amount, 'export'),
     notice() {},
     blip() {},
@@ -70,5 +70,38 @@ describe('export mode', () => {
     expect(progress.data.exports.done).toEqual(['sedan-black']);
     expect(retired).toEqual([car]);
     expect(player.driving).toBeNull();
+  });
+
+  it('the bay takes nothing mid-activity: a fare (or a race) keeps its car', () => {
+    const { mode, player, progress } = setup('taxi');
+    const car = blackSedanIn(mode);
+    player.enter(car);
+    for (let t = 0; t < 3; t += DT) mode.step(DT);
+    expect(car.exported).toBeFalsy();
+    expect(player.driving).toBe(car);
+    expect(progress.data.exports.done).toEqual([]);
+    expect(mode.prompt()).toContain('DROP YOUR FARE FIRST');
+  });
+
+  it("a car a mission delivered to the docks sells only after it drives out and back in", () => {
+    const w = setup('mission');
+    const ctx = (w.mode as unknown as { ctx: ModeCtx }).ctx;
+    const car = blackSedanIn(w.mode);
+    w.player.enter(car);
+    for (let t = 0; t < 2; t += DT) w.mode.step(DT);
+    expect(car.exported).toBeFalsy();
+    // MISSION PASSED, CONTINUE: still parked in the bay, not sold.
+    ctx.busy = null;
+    for (let t = 0; t < 3; t += DT) w.mode.step(DT);
+    expect(car.exported).toBeFalsy();
+    expect(w.player.driving).toBe(car);
+    expect(w.mode.prompt()).toContain('DRIVE OUT AND BACK IN');
+    // Out of the bay and back: sold.
+    car.sim.x += 40;
+    w.mode.step(DT);
+    car.sim.x -= 40;
+    for (let t = 0; t < 1 && !car.exported; t += DT) w.mode.step(DT);
+    expect(car.exported).toBe(true);
+    expect(w.progress.data.exports.done).toEqual(['sedan-black']);
   });
 });
