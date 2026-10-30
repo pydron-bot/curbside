@@ -12,7 +12,7 @@ import struct
 import sys
 from pathlib import Path
 
-CHAR_SLOTS = ("skin", "hair", "shirt", "pants", "shoes")
+CHAR_SLOTS = ("skin", "hair", "shirt", "pants", "shoes", "badge")
 CAR_KINDS = {"paint", "glass", "headlight", "taillight", "tyre", "trim", "siren_red", "siren_blue"}
 CHAR_BONES = {"root", "hips", "chest", "head", "arm.L", "arm.R", "leg.L", "leg.R"}
 CHAR_CLIPS = {
