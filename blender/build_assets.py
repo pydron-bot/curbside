@@ -13,7 +13,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-GENERATORS = ["characters", "vehicles", "props", "pickups", "debris", "heli"]
+GENERATORS = ["characters", "vehicles", "props", "pickups", "debris", "heli", "pigeon"]
 
 
 def main():
