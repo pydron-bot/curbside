@@ -91,8 +91,14 @@ export const VIEW_MARGIN = 4;
 /** New traffic placed per maintain() call (outside the seed pass), to spread the cost. */
 const TRAFFIC_SPAWNS_PER_CALL = 4;
 const CROWD_TRIES_PER_CALL = 24;
-/** Pooled ped models kept for reuse; extras are disposed. */
+/** Pooled ped models kept for reuse; past this the longest-waiting one is disposed. */
 const MAX_SPARE_MODELS = 40;
+/**
+ * Every outfit slot back to the model's own colour: a pooled model is dressed
+ * over this, so nothing of its last outfit (an officer's black shoes, the
+ * Collector's white suit on Deacon Pike) carries over to whoever wears it next.
+ */
+const BARE: Outfit = { skin: undefined, hair: undefined, shirt: undefined, pants: undefined, shoes: undefined };
 /** Minimum gap between a new car and any other, m. */
 const SPAWN_GAP = 10;
 /** A parking spot counts as taken when a car is this close to it (each axis), m. */
@@ -182,8 +188,6 @@ export class Population {
   private readonly spareVehicles: Vehicle[] = [];
   private readonly spareModels: CharacterModel[] = [];
   private readonly idle: Vehicle[] = [];
-  /** Pooled models last dressed in a uniform: re-dressed before a civilian wears them. */
-  private readonly uniformed = new WeakSet<CharacterModel>();
   private created = 0;
 
   constructor(
@@ -234,13 +238,8 @@ export class Population {
       model = spares.splice(i, 1)[0];
       model.reset();
       model.root.visible = true;
-      if (outfit) model.setOutfit(outfit);
-      // Out of uniform: shoes back to the model's own colour.
-      else if (this.uniformed.has(model)) model.setOutfit({ ...this.randomOutfit(body), shoes: undefined });
-      else model.setOutfit(this.randomOutfit(body));
+      model.setOutfit({ ...BARE, ...(outfit ?? this.randomOutfit(body)) });
     } else model = this.hooks.createPedModel(outfit ?? this.randomOutfit(body), body);
-    if (outfit) this.uniformed.add(model);
-    else this.uniformed.delete(model);
     const ped = { agent, prev: { ...agent.s }, model };
     this.crowd.push(ped);
     return ped;
@@ -464,12 +463,11 @@ export class Population {
   private removePedAt(index: number): void {
     const { model } = this.crowd[index];
     this.crowd.splice(index, 1);
-    if (this.spareModels.length < MAX_SPARE_MODELS) {
-      model.root.visible = false;
-      this.spareModels.push(model);
-    } else {
-      model.dispose();
-    }
+    model.root.visible = false;
+    // Full: the longest-waiting spare goes, so the pool follows the bodies in
+    // demand (a chase's worth of officers can't crowd out the street bodies).
+    if (this.spareModels.length >= MAX_SPARE_MODELS) this.spareModels.shift()!.dispose();
+    this.spareModels.push(model);
   }
 
   /**

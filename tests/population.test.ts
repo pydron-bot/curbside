@@ -201,6 +201,16 @@ describe('population: recycling', () => {
     expect(again.model).toBe(tuna.model); // the pooled one, reset
     expect(again.model.reset).toHaveBeenCalled();
     expect(created.models).toBe(before + 1);
+    // Dressed up as someone else (the Collector in white), then back as themselves:
+    // every slot is set, so nothing of the white suit is left on Deacon Pike.
+    pop.removePed(again);
+    const collector = pop.addPed(spawnPed(5, 5, 0, 0.5, random(5)), { shirt: '#e5e5e5' }, 'tuna');
+    pop.removePed(collector);
+    const self = pop.addPed(spawnPed(5, 5, 0, 0.5, random(6)), undefined, 'tuna');
+    expect(self.model).toBe(tuna.model);
+    const last = vi.mocked(self.model.setOutfit).mock.calls.at(-1)![0];
+    expect(Object.keys(last).sort()).toEqual(['hair', 'pants', 'shirt', 'shoes', 'skin']);
+    expect(Object.values(last).every((c) => c === undefined)).toBe(true);
   });
 
   it('reuses ped models instead of building new ones', () => {
