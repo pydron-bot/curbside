@@ -723,7 +723,10 @@ function frame(now: number) {
   const resized = fitToScreen();
   // Real time since the last frame; the sim never takes more than 0.25 s of it.
   const elapsed = (now - last) / 1000;
-  const frameSeconds = Math.min(0.25, elapsed);
+  // Never negative: a frame's timestamp can predate `last` when RESUME / PLAY
+  // reset it mid-frame on a busy main thread, and easing, springs and clips
+  // stepped backwards blow up (the camera once ended up under the street).
+  const frameSeconds = Math.min(0.25, Math.max(0, elapsed));
   last = now;
   input.pollGamepad();
   // The pad's Select / View tunes the radio anywhere, like R or tapping the radio card.

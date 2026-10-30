@@ -615,6 +615,8 @@ export class CharacterModel {
    * (Infinity: not known, e.g. dead), so GetUp can finish just as they rise.
    */
   update(dt: number, groundSpeed: number, down = false, downLeft = Infinity): void {
+    // Clips and crossfades only ever run forward.
+    if (!(dt > 0)) dt = 0;
     this.flashTime = Math.max(0, this.flashTime - dt);
     this.staggerTime = Math.max(0, this.staggerTime - dt);
     this.hailTime = Math.max(0, this.hailTime - dt);

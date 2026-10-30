@@ -146,6 +146,7 @@ export class PigeonLook {
     crowd: readonly Walker[],
     player: PlayerLike | null,
   ): void {
+    if (!(dt > 0)) return;
     const threats = this.threats;
     threats.length = 0;
     const r2 = THREAT_RANGE * THREAT_RANGE;
