@@ -47,24 +47,28 @@ export function canLeave(ix: number, iz: number, d: Dir): boolean {
   return nodeValid(ix + v.x, iz + v.z);
 }
 
-/** Point on the right-hand lane for travel in `d`, `along` metres past node (ix, iz). */
-export function lanePoint(ix: number, iz: number, d: Dir, along: number): { x: number; z: number } {
+type Point = { x: number; z: number };
+
+/**
+ * Point on the right-hand lane for travel in `d`, `along` metres past node
+ * (ix, iz). Pass `out` to reuse storage (AI calls this every step).
+ */
+export function lanePoint(ix: number, iz: number, d: Dir, along: number, out: Point = { x: 0, z: 0 }): Point {
   const v = DIR_VEC[d];
-  const r = rightOf(d);
-  return {
-    x: ix * BLOCK_SIZE + v.x * along + r.x * LANE_OFFSET,
-    z: iz * BLOCK_SIZE + v.z * along + r.z * LANE_OFFSET,
-  };
+  // Right of travel is (-v.z, v.x).
+  out.x = ix * BLOCK_SIZE + v.x * along - v.z * LANE_OFFSET;
+  out.z = iz * BLOCK_SIZE + v.z * along + v.x * LANE_OFFSET;
+  return out;
 }
 
 /** Lane point just before arriving at node (ix, iz) travelling in d. */
-export function entryPoint(ix: number, iz: number, d: Dir) {
-  return lanePoint(ix, iz, d, -STOP_BACK);
+export function entryPoint(ix: number, iz: number, d: Dir, out?: Point): Point {
+  return lanePoint(ix, iz, d, -STOP_BACK, out);
 }
 
 /** Lane point just after leaving node (ix, iz) in d. */
-export function exitPoint(ix: number, iz: number, d: Dir) {
-  return lanePoint(ix, iz, d, STOP_BACK);
+export function exitPoint(ix: number, iz: number, d: Dir, out?: Point): Point {
+  return lanePoint(ix, iz, d, STOP_BACK, out);
 }
 
 /** Pick where to go at node (ix, iz) when arriving in `d`: mostly straight, never off the map. */

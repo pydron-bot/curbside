@@ -1,18 +1,22 @@
 /**
  * AI drivers. Each follows lane waypoints from intersection to intersection,
  * steering with pure pursuit and producing the same VehicleControls a player
- * would, so AI cars use the exact same physics.
+ * would, so AI cars use the exact same physics. Pure pursuit has no notion of
+ * walls, so a driver that stops closing on its waypoint backs out and turns,
+ * and one shoved far off its lane picks a fresh route from where it is.
  */
 import { forwardSpeed, wrapAngle, type VehicleControls, type VehicleState } from '../entities/vehicle';
 import { BLOCK_SIZE } from '../world/city';
 import {
   DIR_VEC,
+  MAX_NODE,
   canLeave,
   chooseTurn,
   dirHeading,
   entryPoint,
   exitPoint,
   lanePoint,
+  reverse,
   type Dir,
 } from '../world/roads';
 
@@ -28,6 +32,18 @@ export interface AiDriver {
   waited: number;
   pushThrough: number;
   cruise: number;
+  /** Closest the car has got to the current waypoint, m. */
+  progress: number;
+  /** Seconds trying to move without getting closer to the waypoint. */
+  stuck: number;
+  /** Seconds left backing out after getting stuck. */
+  reversing: number;
+  /** Seconds since the driver last made real progress (for recycling hopeless cars). */
+  stalled: number;
+  /** Times it has backed out since last making real progress. */
+  attempts: number;
+  /** Closest it got to the waypoint before the current trouble, m. */
+  bestProgress: number;
 }
 
 export interface Obstacle {
@@ -40,6 +56,21 @@ export interface Obstacle {
 export const CRUISE_SPEED = 12;
 const TURN_SPEED = 6;
 const WAYPOINT_RADIUS = 4;
+/** Must close this much on the waypoint to count as progress, m. */
+const PROGRESS_STEP = 0.5;
+/** No progress for this long while trying to move = stuck. */
+export const STUCK_SECONDS = 1.5;
+const REVERSE_SECONDS = 1;
+const REVERSE_THROTTLE = -0.7;
+/** Further than this from the lane line (shoved by a crash or blast): re-route. */
+export const REROUTE_DISTANCE = 20;
+/** This far past the waypoint it was approaching: re-route rather than U-turn. */
+const OVERSHOOT_DISTANCE = 12;
+/** On approach, steer for a point this far ahead along the lane line, m. */
+const LOOKAHEAD = 10;
+/** Stuck this long, or backed out this often, without real progress: give up. */
+const HOPELESS_SECONDS = 10;
+const HOPELESS_ATTEMPTS = 6;
 
 /**
  * Place a new AI car on a random lane. Returns null if the pick was off-map.
@@ -66,6 +97,12 @@ export function spawnAi(
       waited: 0,
       pushThrough: 0,
       cruise: CRUISE_SPEED * (0.85 + rand() * 0.3),
+      progress: Infinity,
+      stuck: 0,
+      reversing: 0,
+      stalled: 0,
+      attempts: 0,
+      bestProgress: Infinity,
     },
     x: p.x,
     z: p.z,
@@ -73,7 +110,20 @@ export function spawnAi(
   };
 }
 
-/** Advance the driver's route and return controls for this step. */
+/** Reused output of driveAi (consume it before the next call). */
+const controls: VehicleControls = { throttle: 0, steer: 0, handbrake: false };
+const waypoint = { x: 0, z: 0 };
+const aim = { x: 0, z: 0 };
+
+/** The point the driver is heading for: the entry to (ix, iz), or the exit when turning. */
+function currentWaypoint(ai: AiDriver): { x: number; z: number } {
+  return ai.phase === 'approach' ? entryPoint(ai.ix, ai.iz, ai.dir, waypoint) : exitPoint(ai.ix, ai.iz, ai.next, waypoint);
+}
+
+/**
+ * Advance the driver's route and return controls for this step. The returned
+ * object is reused: pass it to stepVehicle before calling again.
+ */
 export function driveAi(
   ai: AiDriver,
   car: VehicleState,
@@ -81,8 +131,11 @@ export function driveAi(
   rand: () => number,
   dt: number,
 ): VehicleControls {
-  let target = ai.phase === 'approach' ? entryPoint(ai.ix, ai.iz, ai.dir) : exitPoint(ai.ix, ai.iz, ai.next);
+  if (ai.phase === 'approach' && offRoute(ai, car)) rerouteAi(ai, car, rand);
+  let target = currentWaypoint(ai);
   if (Math.hypot(target.x - car.x, target.z - car.z) < WAYPOINT_RADIUS) {
+    ai.progress = ai.bestProgress = Infinity;
+    ai.stuck = ai.stalled = ai.attempts = 0;
     if (ai.phase === 'approach') {
       ai.phase = 'turning';
     } else {
@@ -94,20 +147,44 @@ export function driveAi(
       ai.next = chooseTurn(ai.ix, ai.iz, ai.dir, rand);
       ai.phase = 'approach';
     }
-    target = ai.phase === 'approach' ? entryPoint(ai.ix, ai.iz, ai.dir) : exitPoint(ai.ix, ai.iz, ai.next);
+    target = currentWaypoint(ai);
   }
+  const distToWaypoint = Math.hypot(target.x - car.x, target.z - car.z);
 
-  // Pure pursuit toward the waypoint.
-  const desired = Math.atan2(target.x - car.x, target.z - car.z);
+  // Pure pursuit. On approach, chase a point a little ahead on the lane line
+  // rather than the far waypoint, so a car knocked sideways merges back onto
+  // the road instead of cutting across the pavement into a building corner.
+  let ax = target.x;
+  let az = target.z;
+  if (ai.phase === 'approach') {
+    const v = DIR_VEC[ai.dir];
+    const along = (car.x - target.x) * v.x + (car.z - target.z) * v.z;
+    const ahead = Math.min(0, along + LOOKAHEAD);
+    aim.x = target.x + v.x * ahead;
+    aim.z = target.z + v.z * ahead;
+    ax = aim.x;
+    az = aim.z;
+  }
+  const desired = Math.atan2(ax - car.x, az - car.z);
   const diff = wrapAngle(desired - car.heading);
   const steer = Math.max(-1, Math.min(1, -diff * 2.5));
 
+  if (ai.reversing > 0) {
+    // Back out with opposite lock: steering flips in reverse, so this swings
+    // the nose toward the waypoint. Already lined up (nose in a corner)?
+    // Swing a different way each time so the next try takes another line.
+    ai.reversing -= dt;
+    controls.throttle = REVERSE_THROTTLE;
+    controls.steer = Math.abs(steer) > 0.3 ? -steer : ai.attempts % 2 ? 0.8 : -0.8;
+    controls.handbrake = false;
+    return controls;
+  }
+
   // Slow for turns (and while about to make one).
   const turning = ai.next !== ai.dir;
-  const distToEntry = Math.hypot(target.x - car.x, target.z - car.z);
   let wantSpeed = ai.cruise;
   if (ai.phase === 'turning' && turning) wantSpeed = TURN_SPEED;
-  else if (ai.phase === 'approach' && turning && distToEntry < 22) wantSpeed = TURN_SPEED + distToEntry * 0.3;
+  else if (ai.phase === 'approach' && turning && distToWaypoint < 22) wantSpeed = TURN_SPEED + distToWaypoint * 0.3;
   if (Math.abs(diff) > 0.6) wantSpeed = Math.min(wantSpeed, TURN_SPEED);
 
   // Brake for anything in our path.
@@ -131,10 +208,110 @@ export function driveAi(
     }
   }
 
+  trackProgress(ai, distToWaypoint, wantSpeed, dt);
+
   let throttle = Math.max(-1, Math.min(1, (wantSpeed - vF) * 0.4));
   // Our physics reverses on brake at a standstill; AI never wants that.
   if (vF < 0.6 && throttle < 0) throttle = 0;
-  return { throttle, steer, handbrake: false };
+  controls.throttle = throttle;
+  controls.steer = steer;
+  controls.handbrake = false;
+  return controls;
+}
+
+/**
+ * Wanting to move but not closing on the waypoint (nose in a wall, wedged on
+ * a kerb) for STUCK_SECONDS starts a reverse. Standing still on purpose
+ * (queueing behind a car) doesn't count.
+ */
+function trackProgress(ai: AiDriver, dist: number, wantSpeed: number, dt: number) {
+  if (wantSpeed < 1) {
+    ai.stuck = 0;
+    return;
+  }
+  if (Number.isNaN(ai.progress)) {
+    ai.progress = dist; // fresh baseline after backing out
+    return;
+  }
+  if (dist < ai.progress - PROGRESS_STEP) {
+    ai.progress = dist;
+    ai.stuck = 0;
+    if (ai.attempts === 0 || dist < ai.bestProgress - PROGRESS_STEP * 4) {
+      // Genuinely further along than before the trouble started.
+      ai.stalled = 0;
+      ai.attempts = 0;
+      ai.bestProgress = dist;
+    }
+    return;
+  }
+  ai.stuck += dt;
+  ai.stalled += dt;
+  if (ai.stuck > STUCK_SECONDS) {
+    ai.stuck = 0;
+    ai.reversing = REVERSE_SECONDS;
+    ai.attempts++;
+    ai.progress = NaN;
+  }
+}
+
+/** Wedged somewhere it can't drive out of: better recycled (when nobody's looking). */
+export function isHopeless(ai: AiDriver): boolean {
+  return ai.stalled > HOPELESS_SECONDS || ai.attempts >= HOPELESS_ATTEMPTS;
+}
+
+/** Is an approaching car far from its lane line, or well past its waypoint? */
+function offRoute(ai: AiDriver, car: VehicleState): boolean {
+  const e = entryPoint(ai.ix, ai.iz, ai.dir, aim);
+  const v = DIR_VEC[ai.dir];
+  const rx = car.x - e.x;
+  const rz = car.z - e.z;
+  const along = rx * v.x + rz * v.z;
+  const lateral = Math.abs(rx * v.z - rz * v.x);
+  return lateral > REROUTE_DISTANCE || along > OVERSHOOT_DISTANCE;
+}
+
+/**
+ * Pick a fresh route from where the car is now: the nearest road line, in the
+ * direction the car is roughly facing, toward the next intersection ahead.
+ */
+export function rerouteAi(ai: AiDriver, car: VehicleState, rand: () => number): void {
+  const clampNode = (n: number) => Math.max(-MAX_NODE, Math.min(MAX_NODE, n));
+  const fx = Math.sin(car.heading);
+  const fz = Math.cos(car.heading);
+  // Closer to a north-south road (x on a multiple of BLOCK_SIZE) or an east-west one?
+  const offX = Math.abs(car.x - Math.round(car.x / BLOCK_SIZE) * BLOCK_SIZE);
+  const offZ = Math.abs(car.z - Math.round(car.z / BLOCK_SIZE) * BLOCK_SIZE);
+  let dir: Dir = offX < offZ ? (fz < 0 ? 0 : 2) : fx > 0 ? 1 : 3;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const v = DIR_VEC[dir];
+    // The road line we'll drive along...
+    const ix0 = v.x === 0 ? clampNode(Math.round(car.x / BLOCK_SIZE)) : 0;
+    const iz0 = v.z === 0 ? clampNode(Math.round(car.z / BLOCK_SIZE)) : 0;
+    // ...and the first intersection on it whose entry point is still ahead.
+    const pos = v.x !== 0 ? car.x : car.z;
+    const sign = v.x !== 0 ? v.x : v.z;
+    let n = sign > 0 ? Math.ceil(pos / BLOCK_SIZE) : Math.floor(pos / BLOCK_SIZE);
+    const e = (k: number) => entryPoint(v.x !== 0 ? k : ix0, v.z !== 0 ? k : iz0, dir);
+    const ahead = (k: number) => {
+      const p = e(k);
+      return (p.x - car.x) * v.x + (p.z - car.z) * v.z > 2;
+    };
+    if (!ahead(n)) n += sign;
+    const ix = v.x !== 0 ? n : ix0;
+    const iz = v.z !== 0 ? n : iz0;
+    if (Math.abs(ix) <= MAX_NODE && Math.abs(iz) <= MAX_NODE && canLeave(ix - v.x, iz - v.z, dir)) {
+      ai.ix = ix;
+      ai.iz = iz;
+      ai.dir = dir;
+      ai.next = chooseTurn(ix, iz, dir, rand);
+      ai.phase = 'approach';
+      ai.progress = Infinity;
+      ai.bestProgress = Infinity;
+      ai.stuck = 0;
+      return;
+    }
+    dir = reverse(dir); // off the edge of the map that way: turn round
+  }
 }
 
 /** Distance to the nearest obstacle ahead within our lane width, or Infinity. */
