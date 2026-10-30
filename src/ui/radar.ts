@@ -73,6 +73,8 @@ export class Radar {
   private readonly ctx: CanvasRenderingContext2D | null;
   private map: HTMLCanvasElement | null = null;
   private readonly blips = new Map<string, Blip>();
+  /** The same blips as an array: drawing iterates it without allocating. */
+  private readonly blipList: Blip[] = [];
   private waypoint: { x: number; z: number } | null = null;
   private readonly route: number[] = [];
   private range = RANGE_FOOT;
@@ -105,7 +107,7 @@ export class Radar {
       return;
     }
     const kind = opts.kind ?? 'marker';
-    this.blips.set(id, {
+    const blip: Blip = {
       x: opts.x,
       z: opts.z,
       kind,
@@ -114,11 +116,16 @@ export class Radar {
       pulse: opts.pulse ?? false,
       edgeArrow: opts.edgeArrow ?? false,
       size: opts.size ?? (opts.icon ? 6 : 4),
-    });
+    };
+    this.blips.set(id, blip);
+    this.blipList.push(blip);
   }
 
   removeBlip(id: string): void {
+    const b = this.blips.get(id);
+    if (!b) return;
     this.blips.delete(id);
+    this.blipList.splice(this.blipList.indexOf(b), 1);
   }
 
   /** Mark a destination: a route along the roads, and an arrow on the rim when it's off the radar. */
@@ -171,9 +178,9 @@ export class Radar {
     ctx.fillRect(0, 0, S, S);
     this.drawMap(ctx, px, pz, k);
 
-    // World → radar: north-up, +Z is down the screen like the camera.
-    const sx = (wx: number) => R + (wx - px) * k;
-    const sy = (wz: number) => R + (wz - pz) * k;
+    // World → radar: north-up, +Z is down the screen like the camera:
+    // (x, z) → (R + (x - px)·k, R + (z - pz)·k). Written out inline, so a
+    // redraw allocates nothing.
     const reach = this.range * 1.45;
 
     if (this.waypoint) this.drawRoute(ctx, px, pz, k, R);
@@ -187,7 +194,7 @@ export class Radar {
       const c = Math.cos(v.sim.heading);
       const s = Math.sin(v.sim.heading);
       // Rotate so local +Z (the nose) points along (sin h, cos h).
-      ctx.setTransform(c, -s, s, c, sx(v.sim.x), sy(v.sim.z));
+      ctx.setTransform(c, -s, s, c, R + dx * k, R + dz * k);
       ctx.fillStyle = v.damage.wrecked ? 'rgba(20, 20, 24, 0.9)' : v.ai ? 'rgba(225, 230, 240, 0.5)' : 'rgba(225, 230, 240, 0.75)';
       const w = Math.max(2.2 * d, 2 * k);
       const h = Math.max(4 * d, 4.4 * k);
@@ -198,7 +205,7 @@ export class Radar {
     // Pickups.
     for (const p of this.sources.pickups) {
       if (p.respawnAt !== 0 || Math.abs(p.x - px) > reach || Math.abs(p.z - pz) > reach) continue;
-      dot(ctx, sx(p.x), sy(p.z), 2.8 * d, p.kind === 'health' ? '#5fe08a' : '#ffb02e', d);
+      dot(ctx, R + (p.x - px) * k, R + (p.z - pz) * k, 2.8 * d, p.kind === 'health' ? '#5fe08a' : '#ffb02e', d);
     }
 
     // People who are after the player.
@@ -207,19 +214,21 @@ export class Radar {
       if (m !== 'fight' && m !== 'shoot') continue;
       const s = c.agent.s;
       if (Math.abs(s.x - px) > reach || Math.abs(s.z - pz) > reach) continue;
-      dot(ctx, sx(s.x), sy(s.z), 2.6 * d, m === 'shoot' ? '#ff3b4f' : '#ff8a3c', d);
+      dot(ctx, R + (s.x - px) * k, R + (s.z - pz) * k, 2.6 * d, m === 'shoot' ? '#ff3b4f' : '#ff8a3c', d);
     }
 
     // Blips (inside the radar; the rest go on the rim below).
-    for (const b of this.blips.values()) {
-      const bx = sx(b.x);
-      const by = sy(b.z);
+    const blips = this.blipList;
+    for (let i = 0; i < blips.length; i++) {
+      const b = blips[i];
+      const bx = R + (b.x - px) * k;
+      const by = R + (b.z - pz) * k;
       if (Math.hypot(bx - R, by - R) > R - 6 * d) continue;
       this.drawBlip(ctx, b, bx, by, d);
     }
     if (this.waypoint) {
-      const wx = sx(this.waypoint.x);
-      const wy = sy(this.waypoint.z);
+      const wx = R + (this.waypoint.x - px) * k;
+      const wy = R + (this.waypoint.z - pz) * k;
       if (Math.hypot(wx - R, wy - R) <= R - 6 * d) flag(ctx, wx, wy, d);
     }
 
@@ -240,15 +249,16 @@ export class Radar {
     ctx.restore();
 
     // Off-radar blips and the waypoint ride the rim, pointing their way.
-    for (const b of this.blips.values()) {
+    for (let i = 0; i < blips.length; i++) {
+      const b = blips[i];
       if (!b.edgeArrow) continue;
-      const bx = sx(b.x);
-      const by = sy(b.z);
-      if (Math.hypot(bx - R, by - R) > R - 6 * d) edgeArrow(ctx, R, bx - R, by - R, b.colour, d);
+      const bx = (b.x - px) * k;
+      const by = (b.z - pz) * k;
+      if (Math.hypot(bx, by) > R - 6 * d) edgeArrow(ctx, R, bx, by, b.colour, d);
     }
     if (this.waypoint) {
-      const wx = sx(this.waypoint.x) - R;
-      const wy = sy(this.waypoint.z) - R;
+      const wx = (this.waypoint.x - px) * k;
+      const wy = (this.waypoint.z - pz) * k;
       if (Math.hypot(wx, wy) > R - 6 * d) edgeArrow(ctx, R, wx, wy, WAYPOINT, d);
     }
   }

@@ -105,6 +105,8 @@ export class Hud {
   private shownCarState = '';
   private shownIdle = false;
   private shownPrompt = '';
+  private promptKeyText = '';
+  private promptDevice: InputDevice | '' = '';
   private shownCritical = false;
   private shownMouseAim = false;
   private debugTimer = 0;
@@ -288,9 +290,11 @@ export class Hud {
       key = f.device === 'gamepad' ? 'Y' : 'E';
       text = f.nearCar === 'jack' ? 'STEAL THIS CAR' : 'GET IN';
     }
-    const id = `${f.device}|${key}|${text}`;
-    if (id === this.shownPrompt) return;
-    this.shownPrompt = id;
+    // Compare the parts, not a joined string: this runs every frame.
+    if (f.device === this.promptDevice && key === this.promptKeyText && text === this.shownPrompt) return;
+    this.promptDevice = f.device;
+    this.promptKeyText = key;
+    this.shownPrompt = text;
     this.setPromptHidden(!text);
     if (!text) return;
     this.promptKey.textContent = key;
