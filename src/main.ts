@@ -216,16 +216,18 @@ let viewH = 0;
  * Match the drawing buffer to #app's laid-out size. Checked every frame rather
  * than on 'resize': iOS home-screen apps fire resize before the rotated
  * dimensions are available, which left the canvas stuck at portrait size.
+ * Returns true when the size changed (the buffer is cleared and must be redrawn).
  */
-function fitToScreen() {
+function fitToScreen(): boolean {
   const w = app.clientWidth;
   const h = app.clientHeight;
-  if (w === viewW && h === viewH) return;
-  if (w === 0 || h === 0) return;
+  if (w === viewW && h === viewH) return false;
+  if (w === 0 || h === 0) return false;
   viewW = w;
   viewH = h;
   renderer.setSize(w, h, false); // CSS sizes the canvas; only set the buffer
   rig.resize(w / h);
+  return true;
 }
 fitToScreen();
 rig.setHeights(...CAMERA_FOOT);
@@ -720,12 +722,19 @@ function frame(now: number) {
   requestAnimationFrame(frame);
   // Layout is clean at the start of a frame, so reading sizes here is free
   // (after this frame's DOM writes it would force a synchronous layout).
-  fitToScreen();
-  const frameSeconds = Math.min(0.25, (now - last) / 1000);
+  const resized = fitToScreen();
+  // Real time since the last frame; the sim never takes more than 0.25 s of it.
+  const elapsed = (now - last) / 1000;
+  const frameSeconds = Math.min(0.25, elapsed);
   last = now;
   input.pollGamepad();
   if (input.consumePause() % 2 === 1 || (paused && input.consumeConfirm())) setPaused(!paused);
-  if (paused) return;
+  if (paused) {
+    // Resizing clears the canvas (rotating the phone while paused): redraw the
+    // frozen scene behind the pause card.
+    if (resized && !contextLost) renderer.render(scene, rig.camera);
+    return;
+  }
 
   const pressed = input.consumePunch();
   const cycle = input.consumeCycle();
@@ -802,7 +811,7 @@ function frame(now: number) {
     rig.update(frameSeconds, px, pz, ped.vx, ped.vz);
   }
   renderer.render(scene, rig.camera);
-  resolution.sample(frameSeconds);
+  resolution.sample(elapsed);
 }
 
 let hudGun: WeaponKind | null | undefined;
@@ -923,6 +932,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   city,
   population,
   renderer,
+  resolution,
   rig,
   score,
   events,
