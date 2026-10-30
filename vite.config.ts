@@ -26,7 +26,9 @@ export default defineConfig({
       // reload (respawn, page hidden, or the player asks on the pause screen)
       // instead of autoUpdate reloading mid-run.
       registerType: 'prompt',
-      includeAssets: ['icons/*.png', 'icons/*.svg'],
+      // globPatterns below already precaches public/icons; listing them here
+      // too put every icon in the manifest twice.
+      includeManifestIcons: false,
       manifest: {
         name: 'Curbside',
         short_name: 'Curbside',
@@ -45,6 +47,11 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,png,svg,glb,ktx2,json}'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        // The default skips revisions for everything under assets/, assuming
+        // hashed names, but the GLBs are copied there unhashed from public/:
+        // with no revision an installed copy never re-downloads changed art.
+        // Only Vite's hashed bundles may go without one.
+        dontCacheBustURLsMatching: /^assets\/.+-[\w-]{8}\.(?:js|css)$/,
       },
     }),
   ],

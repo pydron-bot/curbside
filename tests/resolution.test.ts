@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ResolutionController, STALL_MS, buildLadder, type QualityLevel } from '../src/render/dynamicResolution';
 import { QUALITY_TIERS, tierForPreset } from '../src/render/quality';
+import type { QualityPreset } from '../src/core/settings';
 
 const HZ60 = 1000 / 60;
 
@@ -24,6 +25,13 @@ describe('quality tiers', () => {
     expect(tierForPreset('auto', { handheld: true, pixelRatio: 3 })).toBe('medium');
     expect(tierForPreset('auto', { handheld: false, pixelRatio: 2 })).toBe('high');
     expect(tierForPreset('low', { handheld: false, pixelRatio: 2 })).toBe('low');
+  });
+
+  it("a preset with no tier (a newer build's, a hand edit) acts as 'auto'", () => {
+    for (const name of ['ultra', 'toString', '']) {
+      expect(tierForPreset(name as QualityPreset, { handheld: true, pixelRatio: 3 })).toBe('medium');
+      expect(tierForPreset(name as QualityPreset, { handheld: false, pixelRatio: 2 })).toBe('high');
+    }
   });
 
   it('phones cap the pixel ratio at 1.5-2', () => {
