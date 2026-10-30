@@ -70,8 +70,9 @@ export const MIN_THROW = 3;
 export const GRENADE_FUSE = 2;
 const GRENADE_RADIUS = 0.15;
 const BOUNCE = 0.3;
-const BOUNCE_FRICTION = 0.45;
-const ROLL_FRICTION = 9;
+/** Bounces and rolling bleed speed fast, so a grenade goes off within ~1.5 m of its landing marker. */
+const BOUNCE_FRICTION = 0.25;
+const ROLL_FRICTION = 14;
 /** Rockets: flight speed (m/s), the height they fly at (m) and hit radius (m). */
 export const ROCKET_SPEED = 26;
 export const ROCKET_HEIGHT = 1.2;

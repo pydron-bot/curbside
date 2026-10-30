@@ -72,7 +72,7 @@ describe('grenades', () => {
     expect(booms).toHaveLength(1);
     expect(booms[0].kind).toBe('grenade');
     expect(booms[0].z).toBeGreaterThan(11.5); // landed near the aim, rolled a little on
-    expect(booms[0].z).toBeLessThan(16);
+    expect(booms[0].z).toBeLessThan(13.5); // within ~1.5 m of the landing marker
     expect(g.age).toBeCloseTo(GRENADE_FUSE, 1);
     expect(g.alive).toBe(false);
   });
