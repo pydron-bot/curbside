@@ -168,4 +168,89 @@ The wanted level and police are in (`src/systems/police.ts`, README
 
 ### Notes back to the code side
 
-_(Blender session: list here what you exported, so the code can wire it up.)_
+_Blender session 2026-10-30, branch `blender/assets`. Items 1–6 are done
+except the `cop_bike` (lowest priority, needs its own physics). Run
+`python3 blender/check_assets.py` after `npm run assets`: it parses every GLB
+and checks budgets, material names, bones and clip lengths against this file._
+
+**1. Clips (`player.glb`, and every body below).** All clips key every bone, so
+each one can be played or crossfaded on its own. Lengths are whole frames at 24 fps:
+
+| Clip | Length | Notes |
+|---|---|---|
+| `Idle`, `Walk` | 2 s, 1 s | unchanged look, but see the timing fix below |
+| `Run` | 0.625 s loop | authored for 5.5 m/s; exported as `runSpeed` next to `walkSpeed` in the rig's extras |
+| `Punch` | 0.333 s | right jab; replaces the `punchArm` fake in `CharacterModel` |
+| `Aim` / `AimBoth` | 0.292 s loop | one-handed (pistol) / two-handed (SMG, shotgun) |
+| `Shoot` / `ShootBoth` | 0.125 s | full poses (aim + kick), not additive: play over the matching Aim |
+| `Fall` | 0.5 s | ends flat on the back, head ~1.7 m behind the feet |
+| `Down` | 1 s loop | lying, breathing |
+| `GetUp` | 0.917 s | from `Down` back to standing |
+| `EnterCar` | 0.5 s | reach and duck; hide the body at the end |
+
+- `Fall` / `Down` / `GetUp` lay the body down with the **root bone** (rotated
+  and lifted 0.15 m so the back rests on the ground). When playing them, stop
+  tipping `CharacterModel.body` and base `lying` on the clip instead, or the
+  body goes over twice.
+- **Timing fix:** clips used to start at frame 1, so the exporter put the
+  first key at 1/24 s. three.js held that pose for the gap, so every Walk
+  cycle froze for a frame and ran 1.042 s instead of 1 s. Clips now key from
+  frame 0.
+
+**2. Bodies: one GLB each, not extra roots in `player.glb`.**
+`CharacterBatch.useModel` merges every mesh in a file into one person, so
+variants inside `player.glb` would all be drawn on top of each other. Each body
+is a separate file with the same structure (one rig root, same 8 bones, same
+clips), so it works with the existing loader as one more batch:
+`new CharacterBatch('assets/cop.glb')`.
+- `ped_slim.glb` (taller, narrow, backpack), `ped_stocky.glb` (broad, rounder
+  torso, baseball cap), `ped_coat.glb` (knee-length coat/dress, long hair),
+  `cop.glb` (peaked cap, short sleeves, duty belt and holster).
+- Accessories are baked into the variants because the batch can't toggle
+  parts per person. Their slots: backpack = `pants`, ball cap = `hair`.
+- Cop: cap crown = `hair` (set it navy), brim, cap band, belt and holster =
+  `shoes`. **No badge:** an unknown material suffix falls back to the
+  `skin` slot, so a fixed-colour part isn't possible in a character file.
+  If you want one, add a sixth slot to `SLOTS`.
+- All bodies are 484–592 tris.
+
+**3. `props.glb`:** roots `streetlamp`, `traffic_light`, `hydrant`, `bench`,
+`trash_bin`, `dumpster`, `bollard`, `newspaper_box`, `mailbox`, `payphone`,
+`ac_unit`, `vent`, `water_tank`, `satellite_dish`, `rooftop_door`, `antenna`,
+`tree_round`, `tree_tall`, `palm`, `ramp`, `kicker` (40–204 tris).
+- Origins are at the ground contact point. Roots are laid out side by side in
+  the file, so reset `position` on load as `VehicleModels` does.
+- `streetlamp`: the arm reaches 1.85 m toward the model's front (game +Z), so
+  face +Z at the road. The head's underside uses material `lamp`.
+- `traffic_light`: lenses `light_red` / `light_amber` / `light_green` face +Z.
+- `ramp` (6 m long, 1.6 m lip, 3.2 m wide) and `kicker` (2.5 m, 0.6 m): the low
+  edge is at −Z and the lip at +Z, so a car driving +Z goes up and off.
+  The top of the lip uses a `hazard` stripe.
+- `payphone`: a blue sign on a yellow hood, readable from above.
+- Every material in this file is fixed colour.
+
+**4. `weapons.glb`** (`pistol`, `smg`, `shotgun`; 48–88 tris):
+- Origin is at the grip, the barrel points game +Z, and Y is up.
+- Each root has a `muzzle` extra: the distance in metres from the grip to the
+  muzzle along +Z, for muzzle flashes.
+
+**`pickups.glb`** (`crate_pistol`, `crate_smg`, `crate_shotgun`, `health_kit`,
+`package`, `cash`; 36–168 tris): origin is at ground centre. Each crate has the
+gun lying on its lid plus a coloured stripe (pistol yellow, SMG orange, shotgun
+red).
+
+**5. `vehicles.glb`, new roots:** `police_suv`, `muscle`, `limo` (car builder),
+and `bus` (12 m), `ambulance` (6 m), `firetruck` (9.2 m), `garbage_truck`
+(8.6 m). All are under 700 tris, and the original seven are unchanged.
+- The bodies use `paint`, so pick the colour at spawn: ambulance white, fire
+  truck red, police SUV white (its doors/roof are `trim`).
+- Siren bars use `siren_red` / `siren_blue` on `police_suv`, `ambulance` (cab
+  bar plus two module corner flashers) and `firetruck`.
+- New fixed-colour materials: `chrome`, `sign` (bus destination board),
+  `amb_red`, `hazard`, `amber` (garbage beacon), `dark`.
+- Extra rear axles on the trucks are named `_wheel_RL2` / `_RR2`. They don't
+  steer, and the `_F[LR]$` test leaves them alone.
+
+**6. `debris.glb`:** `door`, `hood`, `bumper`, `wheel`, `panel_a/b/c`, all
+18–56 tris. Origins are at the chunk centre so they can tumble, and they use
+only `paint` / `trim` / `tyre`.
