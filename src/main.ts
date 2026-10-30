@@ -86,6 +86,7 @@ import { StaticGrid } from './world/collision';
 import { mulberry32 } from './world/random';
 import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audio/gameAudio';
 import { mountRadioToast } from './ui/radioToast';
+import { publicUrl } from './core/paths';
 
 const app = document.getElementById('app')!;
 
@@ -189,7 +190,7 @@ const population = new Population(
 );
 
 // Placeholder boxes show until the Blender-built models arrive.
-VehicleModels.load('/assets/vehicles.glb').then(
+VehicleModels.load(publicUrl('assets/vehicles.glb')).then(
   (models) => {
     look.cars.setModels(models);
     resolution.holdOff(2); // new geometry uploads

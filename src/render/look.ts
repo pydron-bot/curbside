@@ -18,6 +18,7 @@ import { worldUniforms } from './shaderLib';
 import { SunShadow } from './sunShadow';
 import { TimeOfDay } from './timeOfDay';
 import { CarBatch } from './vehicleBatch';
+import { publicUrl } from '../core/paths';
 
 /** Where the player is, for the marker that keeps them findable. */
 export interface PlayerView {
@@ -82,7 +83,7 @@ export class Look {
     scene.add(createGround(city));
     this.city = createCityMesh(city);
     scene.add(this.city.root);
-    this.characters = new CharacterBatch('/assets/player.glb');
+    this.characters = new CharacterBatch(publicUrl('assets/player.glb'));
     this.cars = new CarBatch(renderer);
     this.pickups = new PickupMesh(pickups);
     scene.add(this.characters.mesh, this.cars.root, this.pickups.mesh, this.contactShadows.mesh, this.glows.mesh);

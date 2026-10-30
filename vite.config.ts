@@ -3,6 +3,9 @@ import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
+  // The site path the game is served from: '/' locally, '/curbside/' when the
+  // Pages workflow builds it for deeek.org/curbside/ (CURBSIDE_BASE).
+  base: process.env.CURBSIDE_BASE ?? '/',
   server: {
     host: true,
     port: 5173,
