@@ -37,7 +37,7 @@ import { getQuality } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
 import { charVehicle, createVehicleMesh, dressAll, restoreVehicleLook } from './render/vehicleLooks';
 import { PUNCH_REACH, knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
-import { VEHICLE_SHARE, WEAPONS, autoAim, rayCircle, rayRect, type WeaponKind } from './systems/weapons';
+import { VEHICLE_SHARE, WEAPONS, WEAPON_ORDER, autoAim, rayCircle, rayRect, type WeaponKind } from './systems/weapons';
 import { PickupMesh } from './render/pickupMesh';
 import { HEALTH_PICKUP, PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
@@ -875,10 +875,16 @@ function updateHud(frameSeconds: number) {
   hudFrame.nearCar = nearCar ? (nearCar.ai ? 'jack' : 'enter') : null;
   hudFrame.mouseAim = !v && !attract.active && input.mouseAimLive();
   hud.update(frameSeconds, hudFrame);
-  touch.setWeapon(gun);
+  touch.setWeapon(gun, gun !== null || ownsGun());
   touch.setMode(v ? 'car' : 'foot', nearCar !== null);
 }
 requestAnimationFrame(frame);
+
+/** Any gun with ammo left, i.e. something for the swap button to switch to. */
+function ownsGun(): boolean {
+  for (const k of WEAPON_ORDER) if ((player.arsenal.ammo.get(k) ?? 0) > 0) return true;
+  return false;
+}
 
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;

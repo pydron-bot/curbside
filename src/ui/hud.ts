@@ -100,6 +100,7 @@ export class Hud {
   private readonly setGhostScale: (s: string) => void;
   private shownHealth = -1;
   private shownWeapon: WeaponKind | null | undefined;
+  private shownAmmo = -1;
   private shownKmh = -1;
   private shownCarHealth = -1;
   private shownCarState = '';
@@ -238,7 +239,11 @@ export class Hud {
       if (weapon !== undefined) this.weaponIcon.innerHTML = ICONS[weapon ?? 'fist'];
       this.status.classList.toggle('armed', !!weapon);
     }
-    this.setAmmo(weapon ? String(f.ammo) : '');
+    const ammo = weapon ? f.ammo : -1;
+    if (ammo !== this.shownAmmo) {
+      this.shownAmmo = ammo;
+      this.setAmmo(ammo >= 0 ? String(ammo) : '');
+    }
 
     this.updatePrompt(f);
 

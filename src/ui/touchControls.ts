@@ -17,8 +17,11 @@ export interface TouchControls {
   readonly layer: HTMLElement;
   /** Switch button layout; `canAct` shows (and pulses) the ENTER button on foot. */
   setMode(mode: ControlMode, canAct: boolean): void;
-  /** Show the current weapon on the fire button (null = fists). */
-  setWeapon(weapon: WeaponKind | null): void;
+  /**
+   * Show the current weapon on the fire button (null = fists); `canSwap`
+   * (a gun is owned) shows the swap button, which is no use with fists alone.
+   */
+  setWeapon(weapon: WeaponKind | null, canSwap: boolean): void;
   /** Release every on-screen control (pause, blur, lost touches). */
   reset(): void;
 }
@@ -359,6 +362,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
 
   let doorText = '';
   let weapon: WeaponKind | null | undefined;
+  let swapShown: boolean | undefined;
   return {
     layer,
     reset() {
@@ -368,7 +372,8 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
       out.fireHeld = false;
       for (const b of [fire, swap, door]) b.classList.remove('pressed');
     },
-    setWeapon(w) {
+    setWeapon(w, canSwap) {
+      if (canSwap !== swapShown) swap.classList.toggle('idle', !(swapShown = canSwap));
       if (w === weapon) return;
       weapon = w;
       fireIcon.innerHTML = WEAPON_ICON[w ?? 'fists'];
