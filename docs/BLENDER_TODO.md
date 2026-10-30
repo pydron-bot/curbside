@@ -468,3 +468,67 @@ the `_seat` empty.
 - **Known issue:** Pike's ankle-length coat is rigid on the hips, so when
   he's seated it hangs straight down through the bike. If he needs to ride,
   either accept it or tell me and I'll split the coat onto the leg bones.
+
+---
+
+### Code side integrated: people (2026-10-30, branch `stage6/people`)
+
+Wired in (README → *Look → People* has the details):
+
+- **Clips (§1, §7, §8.3):** all 22, by name, sampled per bone without an
+  `AnimationMixer` (`render/characterAnim.ts`). Walk/Run share one gait
+  phase at the exported `walkSpeed` / `runSpeed`. Aim / AimBoth / AimRocket
+  by weapon with Shoot / ShootBoth / ShootRocket per shot, Punch → Punch2 →
+  Uppercut for the combo, Throw, Stagger, Fall → Down → GetUp, Arrested
+  (BUSTED), EnterCar (at the driver's door, then the body is hidden),
+  Hail (taxi fares, mission characters waiting), Cower (timid bystanders
+  beside gunfire), Cheer (mission pass, Chaos Run medal), Ride (API only:
+  `model.riding`, root at the seat minus 0.75 m). As the notes asked,
+  `CharacterModel.body` is no longer tipped while Fall / Down / GetUp /
+  Arrested / Cower play: the root bone lays the body down. The upper-body
+  clips are laid over the legs on arm.L/R, chest and head only.
+- **Bodies (§2, §8.4):** one batch per GLB. The crowd mixes `player`,
+  `ped_slim`, `ped_stocky`, `ped_coat`; officers wear `cop`; Tuna wears
+  `tuna`, Vex waits at the docks yard in `vex`, Pike guards his car in LAST
+  CALL in `pike`, and the Collector wears `pike` in white.
+- **`*_badge`:** the sixth palette slot exists (fixed colour: the GLB's own,
+  never an outfit's). A badge mesh on `cop.glb` with a `cop_badge` material
+  will just work.
+- **Weapons (§4, §8.1):** all six in the right fist (grip origin, barrel +Z),
+  one instanced draw call; the `muzzle` extra places muzzle flashes and
+  tracer starts. `rocket` isn't used yet (projectiles keep their stand-in).
+- **Pigeon (§8.7):** body + `wing.L` / `wing.R` with `Flap` sampled into
+  the vertex shader; flocks scatter at cars, runners and gunfire.
+
+What looks off in game, for a future adjustment pass (judged from 20 m up
+on the iPhone profile and 27 m on desktop, by day and at night):
+
+1. **Weapons read as thin dark slivers.** From 20–27 m the pistol and
+   SMG are a few dark pixels against the arm; the grenade and molotov
+   vanish in the fist. Chunkier silhouettes (+30–50% across) or a light
+   accent (the crate stripe colours: pistol yellow, SMG orange, shotgun
+   red) on the top of each gun would make the held weapon readable.
+2. **AimRocket holds the tube low.** The right hand sits ~0.33 m below the
+   shoulder and the tube only 0.11 m above the grip, so the launcher reads
+   as hip-held rather than on the shoulder. Raise arm.R in AimRocket /
+   ShootRocket, or move the tube higher over the grip in `rocket_launcher`.
+3. **Cops from above.** The cap crown is the main read; the game now uses a
+   lighter police blue shirt and navy cap, but a light cap band or the badge
+   (now possible, see above) would set officers apart from dark-clad
+   civilians at night.
+4. **Street bodies from 27 m.** The stocky ball cap (the game gives it cap
+   colours) and the coat's hem read; the slim body's backpack barely shows
+   from above. A bigger, boxier backpack would help.
+5. **GetUp is often rushed.** Ordinary knock-downs last 2.5 s and the game
+   starts GetUp 0.7 s before the ped may move, playing it up to 2.2× to
+   fit. A second, quicker `GetUpFast` (~0.5 s) would look less sped up.
+6. **Throw releases late for the game.** The game throws on the press (the
+   grenade leaves at once), so the clip starts 0.1 s in at 1.6× (release
+   ~0.08 s after the press). A clip with its release at ~25% would line up
+   without speeding it up.
+7. **Pigeons are hard to see at night** (dark grey on dark asphalt, 34
+   tris, drawn 1.3× by the game and lit by street lamps). A paler back or
+   white wing bars would keep flocks readable after dark.
+8. **Pike at night:** the black coat on dark asphalt nearly disappears; a
+   lighter collar or lapels (`badge` or `hair` slot) would help. Vex's
+   orange hair and Tuna's teal headphones read well from above.

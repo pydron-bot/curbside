@@ -56,8 +56,10 @@ vibration, show FPS.
   speed-zoom chase camera, keyboard/touch/gamepad input, placeholder road-grid
   world with non-colliding blocks, dynamic resolution, pause on background.
 - **M3 Blender pipeline** — started: `blender/build_assets.py` runs generators headless;
-  `characters.py` builds the player (rigid parts on an armature, Idle + Walk
-  clips) → `public/assets/player.glb`, loaded with GLTFLoader + AnimationMixer.
+  `characters.py` builds eight bodies (the player, three street bodies, the
+  cop, Vex, Lil' Tuna, Deacon Pike: rigid parts on one 8-bone armature, 22
+  clips each) → `public/assets/*.glb`, each drawn as one GPU-skinned batch
+  (see *Look → People*).
   `vehicles.py` builds five parametric cars (sedan, compact, sports, van,
   police) → `public/assets/vehicles.glb`; the game tints the `paint` material
   per car and steers the `*_wheel_F*` nodes. Each archetype has its own
@@ -285,11 +287,16 @@ the road. STUNT = 1000/s of airtime + 20/m + 500 per half-turn of spin
 (GREAT ≥ 2000, INSANE ≥ 3500, 180/360 prefixes); jumps over 0.9 s get a
 beat of slow motion near the top.
 
-**Animation hooks** (`render/characterModel.ts`): clips are found by name
-(`Run`, `Punch`, `Aim`, `Shoot`, `Fall`, `Down`, `GetUp`, see
-`docs/BLENDER_TODO.md`); each missing one falls back to a procedural fake.
-Locomotion blends Idle/Walk/Run by speed; Aim/Shoot/Punch play on the
-arms, chest and head over the legs. Still one instanced draw call.
+**Character clips** (`render/characterModel.ts`, `characterAnim.ts`):
+every gameplay state plays its Blender clip, found by name (each missing
+one falls back to a procedural fake): Idle/Walk/Run by speed; the aim per
+weapon (pistol `Aim`, SMG/shotgun `AimBoth`, launcher `AimRocket`; a gun is
+lowered while sprinting unaimed) with its `Shoot*` kick per shot; the jab,
+left hook and uppercut of the combo (`Punch`, `Punch2`, `Uppercut`);
+`Throw` for grenades and molotovs; `Stagger` on a hit; knocked down
+`Fall` → `Down` → `GetUp`, the get-up timed to end as they're allowed up;
+`Arrested` when BUSTED; `EnterCar` at the driver's door before the body
+vanishes; `Hail`, `Cower`, `Cheer`, `Ride`. See *Look → People*.
 
 **Budget**: ramps +1 draw call (+1 in the shadow pass) when in view,
 projectiles +1 only while something flies; rings, arcs, fire glows and
@@ -731,9 +738,10 @@ and the whole city is drawn once with culling off before the first real
 frame (and after a restored context), so no chunk uploads its buffers
 the first time it comes into view.
 
-- **Draw calls.** All people are one GPU-skinned `InstancedMesh`
-  (`characterModel.ts`: the GLB's 13 rigid parts merged at load, bones and
-  outfit palette per person in a float texture), all cars one instanced mesh
+- **Draw calls.** All people wearing one body are one GPU-skinned
+  `InstancedMesh` (`characterModel.ts`: the GLB's rigid parts merged at
+  load, bones and palette per person in a float texture; see *People*
+  below), all cars one instanced mesh
   per model (`vehicleBatch.ts`: paint, steering, brake lights, charring and
   sirens are per-instance attributes), all contact shadows one mesh
   (`contactShadows.ts`) and all faked lights one additive mesh
@@ -773,6 +781,75 @@ the first time it comes into view.
   frames the view. Desktops render into a half-float buffer so the 'high'
   tier can bloom (threshold follows the time of day: only real lights bloom
   by day). Cars' paint and glass alone reflect a PMREM studio environment.
+
+
+### People
+
+Everyone in the city is drawn from the Blender bodies in `public/assets/`
+(rebuild scripts in `blender/`, contracts in `docs/BLENDER_TODO.md`):
+
+- **Bodies, one batch each** (`render/characterBodies.ts`,
+  `characterModel.ts`, `game/bodies.ts`): `player`, the street bodies
+  `ped_slim` (backpack), `ped_stocky` (ball cap) and `ped_coat` (long coat or
+  dress), `cop`, and the story characters `vex`, `tuna` and `pike`. Each GLB
+  is one `CharacterBatch`: one draw call plus its shadow pass, and none at
+  all while nobody wearing it is on screen (people more than 8 m outside
+  the visible ground are left out, so the crowd walking just off-screen
+  costs nothing). Batches grow as needed. Palette slots by material suffix:
+  `skin`, `hair` (the ball cap, the cop's cap crown), `shirt` (coats too),
+  `pants` (the backpack, Vex's overalls), `shoes` (the cop's brim, belt and
+  holster, Tuna's headphones), and a fixed-colour `badge` for later.
+- **Who wears what.** The crowd is a mix of `player` / `ped_slim` /
+  `ped_stocky` / `ped_coat` (28/26/24/22%) in the street palettes (caps get
+  brighter colours than hair); pooled models only come back as the same
+  body. Officers on foot wear `cop` in police blue with a navy cap (SWAT in
+  charcoal, with SMGs). Lil' Tuna (both pick-ups) wears `tuna`; Vex waits
+  at the docks yard for every delivery there; Deacon Pike guards his car in
+  LAST CALL; the Collector wears Pike's coat in white. Story characters
+  keep their own colours.
+- **Clips** (`characterAnim.ts`): the 22 clips are sampled by hand from
+  shared interpolants (no `AnimationMixer` per person, no per-frame
+  garbage) into three layers: legs (Idle/Walk/Run on one gait phase at the
+  authored `walkSpeed` / `runSpeed`), a whole-body layer (Fall, Down, GetUp,
+  Arrested, Cower, Cheer, EnterCar, Ride, Stagger: these move the root
+  bone, so the instance is never tipped while they play) and the arms,
+  chest and head (aims, shots, punches, Throw, Hail), crossfaded by weight.
+  `render/peoplePose.ts` turns the simulation's state into them every
+  frame, outside `main.ts`. Hit-stop freezes people with the world.
+- **Weapons in hand** (`render/heldWeapons.ts`): `weapons.glb`'s pistol,
+  SMG, shotgun, grenade, molotov and launcher merged into ONE instanced
+  draw call (each instance shows only its own model); each follows its
+  holder's right fist, along the arm when lowered and straight ahead when
+  aimed. Muzzle flashes and tracers start at the end of the barrel (the
+  `muzzle` extra). Hidden in cars, while down, kneeling or just thrown.
+- **Moments.** Gunfire right beside a timid bystander makes them cower
+  before they run; anyone knocked down falls on their back away from the
+  hit; the player ducks into the driver's door before vanishing, rocks
+  back from hits, kneels with hands on head when BUSTED, and cheers a
+  passed mission or a Chaos Run medal (event `celebrate`) with any story
+  character nearby; hailing fares and waiting mission characters wave.
+- **Pigeons** (`systems/pigeons.ts` pure, `render/pigeonMesh.ts`): up to
+  three flocks settle out of view on plazas, parks and the kerb side of
+  pavements and scatter at a passing car, a runner, the player walking up,
+  gunfire, blasts and horns: one instanced draw call with the `Flap` clip
+  sampled into the vertex shader, a contact shadow each, none when no bird
+  is in view.
+- **Budget** (`?debug`, whole frame): each body on screen costs 2 calls
+  (scene and shadow pass), the weapons in hand 1 and the pigeons 1 while
+  any are in view; nothing for anyone off screen. iPhone profile
+  ('medium'), the moments measured before this work: on foot at the spawn
+  44 → 42, a fight among six people with an SMG 44 → 49, driving a busy
+  street 48 → 53; the posing scenes 41–50 (two officers on foot 49–57, the
+  three story bodies together 44–48). Desktop ('high'): 58 / 60 / 64 →
+  63 / 67 / 69, scenes 55–70. Per frame, posing allocates nothing.
+- **For other code**: `look.characters.create(outfit, body)`;
+  `model.hold(weapon, aiming)`, `model.armed` (the aim pose),
+  `model.arrested` / `cowering` / `riding` (Ride: put the root at the
+  bike's `<arch>_seat` minus 0.75 m), `model.punch(step)`, `shoot()`,
+  `throw()`, `stagger(s)`, `hail(s)`, `cheer(s)`, `enterCar()` (returns its
+  length), `reset()`, `hasClip(name)`, `update(dt, speed, down, downLeft)`;
+  `population.addPed(agent, outfit?, body?)`; CrowdPed `gun`; bus event
+  `celebrate`.
 
 ## Effects and camera
 
