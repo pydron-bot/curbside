@@ -100,23 +100,34 @@ export class FrontDoor {
     if (this.title.isOpen) this.title.setDevice(this.input.lastDevice);
   }
 
-  /** The HUD's pause button. */
+  /** The HUD's pause button (also mid 3-2-1: stay paused, with the menu). */
   openPause(): void {
-    if (!this.title.isOpen && !this.hooks.isPaused()) this.hooks.setPaused(true, 'paused');
+    if (this.title.isOpen) return;
+    if (!this.hooks.isPaused() || this.countdown.isRunning) this.hooks.setPaused(true, 'paused');
   }
 
   /** Called from main's setPaused(true, reason). */
   showPause(reason: PauseReason): void {
+    if (reason === 'paused' && this.countdown.isRunning) {
+      // The menu (pause button, P, an app switch) wins over a 3-2-1 in progress,
+      // which would otherwise resume the game from under it.
+      this.countdown.cancel();
+      this.pausedForRotate = false;
+    }
     this.pause.show(reason, this.input.lastDevice);
     const i = this.stack.indexOf(this.pause);
     if (reason === 'paused' && i < 0) this.stack.push(this.pause);
-    else if (reason !== 'paused' && i >= 0) this.stack.splice(i);
+    else if (reason !== 'paused') this.closeFrom(i);
   }
 
   /** Called from main's setPaused(false): the pause menu and anything opened from it close. */
   hidePause(): void {
     this.pause.hide();
-    const i = this.stack.indexOf(this.pause);
+    this.closeFrom(this.stack.indexOf(this.pause));
+  }
+
+  /** Drop stack entries from `i` up, hiding any settings / how-to opened over them. */
+  private closeFrom(i: number): void {
     if (i < 0) return;
     for (const p of this.stack.splice(i)) {
       if (p === this.settings && this.settings.isOpen) this.settings.root.hidden = true;
@@ -133,9 +144,7 @@ export class FrontDoor {
 
   private togglePause(): void {
     if (this.countdown.isRunning) {
-      // Mid 3-2-1: stay paused, with the menu this time.
-      this.countdown.cancel();
-      this.pausedForRotate = false;
+      // Mid 3-2-1: stay paused, with the menu this time (showPause stops the count).
       this.hooks.setPaused(true, 'paused');
       return;
     }
