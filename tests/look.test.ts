@@ -167,6 +167,12 @@ describe('districts and building plans', () => {
     expect(plans.reduce((n, p) => n + p.props.length, 0)).toBeGreaterThan(city.buildings.length);
   });
 
+  it('keeps pitched tile roofs clear of bulkheads and plant boxes', () => {
+    const pitched = plans.filter((p) => p.roof === 'terracotta');
+    expect(pitched.length).toBeGreaterThan(0);
+    for (const plan of pitched) for (const p of plan.props) expect(['chimney', 'solar']).toContain(p.kind);
+  });
+
   it('puts helipads only on tall downtown towers, and has at least one', () => {
     const pads = plans.map((p, i) => [p, city.buildings[i]] as const).filter(([p]) => p.roof === 'helipad');
     expect(pads.length).toBeGreaterThan(0);

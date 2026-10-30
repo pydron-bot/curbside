@@ -14,15 +14,16 @@ import './look.css';
 
 /**
  * The game's tone curve: ACES Filmic, then a light grade — a little more
- * saturation (ACES greys out saturated paint and neon), slightly cool
- * shadows and warm highlights. Installed as three's CustomToneMapping, so it
+ * saturation in mid-tones and highlights (ACES greys out saturated paint and
+ * neon) but a little less in the darks (night reads blue-grey, not as
+ * glowing red roofs), slightly cool shadows and warm highlights. Installed as three's CustomToneMapping, so it
  * runs inside the materials on phones and in the output pass on desktops:
  * no extra full-screen pass anywhere. Must be patched before anything compiles.
  */
 const GRADE = /* glsl */ `vec3 CustomToneMapping( vec3 color ) {
 	vec3 c = ACESFilmicToneMapping( color );
 	float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-	c = max( mix( vec3( l ), c, 1.16 ), 0.0 );
+	c = max( mix( vec3( l ), c, mix( 0.88, 1.16, smoothstep( 0.015, 0.12, l ) ) ), 0.0 );
 	c *= mix( vec3( 0.95, 0.99, 1.06 ), vec3( 1.03, 1.0, 0.95 ), smoothstep( 0.02, 0.45, l ) );
 	return saturate( c );
 }`;

@@ -203,14 +203,15 @@ vec3 asphalt(vec2 w, float a, float b, float roadAxis, bool horizontal, float px
     float cover = 1.0 - smoothstep(0.36 - px, 0.36 + px, md);
     float rim = ubLine(md - 0.36, 0.04, px);
     float grooves = ubLine(fract(md * 9.0) - 0.5, 0.18, 0.2) * fineFade;
-    c = mix(c, srgb(0.22, 0.22, 0.23) * (1.0 - 0.25 * grooves), cover);
-    c *= 1.0 - rim * 0.5;
+    c = mix(c, srgb(0.27, 0.27, 0.28) * (1.0 - 0.2 * grooves), cover);
+    c *= 1.0 - rim * 0.35;
   }
-  // Cracks: thin lines along a noise contour, clustered by a slow noise.
-  float crackMask = smoothstep(0.55, 0.8, ubNoise(w * 0.05 + 3.0));
+  // Cracks: hairlines along a noise contour, in a few clustered patches,
+  // gone by the time a line would be thinner than a pixel (no scribble when zoomed out).
+  float crackMask = smoothstep(0.7, 0.9, ubNoise(w * 0.05 + 3.0)) * (1.0 - smoothstep(0.025, 0.055, px));
   float n = ubNoise(w * 0.42 + 31.0) - 0.5;
-  float crack = 1.0 - smoothstep(0.0, 0.012 + px * 0.5, abs(n));
-  c *= 1.0 - crack * crackMask * 0.45;
+  float crack = 1.0 - smoothstep(0.0, 0.008 + px * 0.5, abs(n));
+  c *= 1.0 - crack * crackMask * 0.25;
   return c;
 }
 
@@ -258,7 +259,7 @@ vec3 paving(vec2 w, vec2 p, float style, float d, float px) {
     float tile = ubLine(fr.x - 0.5, 0.47, px) * ubLine(fr.y - 0.5, 0.47, px);
     float h = ubHash(cell + 7.0);
     c = mod(cell.x + cell.y, 2.0) < 0.5 ? srgb(0.68, 0.66, 0.62) : srgb(0.56, 0.54, 0.52);
-    if (h > 0.9) c = h > 0.97 ? srgb(0.78, 0.25, 0.36) : (h > 0.935 ? srgb(0.16, 0.56, 0.58) : srgb(0.86, 0.66, 0.2));
+    if (h > 0.965) c = h > 0.988 ? srgb(0.66, 0.3, 0.36) : (h > 0.976 ? srgb(0.24, 0.5, 0.52) : srgb(0.74, 0.6, 0.28));
     c *= 1.0 - (1.0 - tile) * 0.3 * jointFade;
   } else if (style < 3.5) {
     // Poured concrete with expansion joints.

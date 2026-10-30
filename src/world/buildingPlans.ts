@@ -82,6 +82,12 @@ const PROP_WEIGHTS: Readonly<Record<District, ReadonlyArray<readonly [PropKind, 
   ],
 };
 
+/** Props that suit a pitched tile roof. */
+const PITCHED_PROPS: ReadonlyArray<readonly [PropKind, number]> = [
+  ['chimney', 3],
+  ['solar', 2],
+];
+
 const PROP_SIZE: Readonly<Record<PropKind, (r: () => number) => [w: number, d: number, h: number]>> = {
   ac: (r) => [1 + r() * 0.6, 1.4 + r() * 0.8, 0.8 + r() * 0.4],
   vent: (r) => {
@@ -114,7 +120,9 @@ export function planBuilding(b: Building, index: number, citySeed: number): Buil
   const seed = rand();
 
   const props: RoofProp[] = [];
-  if (b.roofBox && !helipad) props.push({ ...b.roofBox, kind: 'housing', y0: b.height });
+  // Pitched tile roofs carry no stair bulkheads or plant boxes, just chimneys and solar panels.
+  const pitched = roof === 'terracotta';
+  if (b.roofBox && !helipad && !pitched) props.push({ ...b.roofBox, kind: 'housing', y0: b.height });
   if (!helipad) placeProps(b, roof, rand, props);
 
   const { shopSides, shopfronts } = planShops(b, rand);
@@ -133,7 +141,7 @@ function placeProps(b: Building, roof: RoofType, rand: () => number, out: RoofPr
   if (iw < 1.5 || id < 1.5) return;
   const gardenFactor = roof === 'garden' ? 0.4 : 1;
   const wanted = Math.min(9, Math.floor(((iw * id) / 34) * gardenFactor * (0.6 + rand() * 0.8)));
-  const weights = PROP_WEIGHTS[b.district];
+  const weights = roof === 'terracotta' ? PITCHED_PROPS : PROP_WEIGHTS[b.district];
   for (let attempt = 0, placed = 0; attempt < wanted * 6 && placed < wanted; attempt++) {
     const kind = pickWeighted(weights, rand());
     let [pw, pd, ph] = PROP_SIZE[kind](rand);

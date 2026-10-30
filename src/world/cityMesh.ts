@@ -30,7 +30,7 @@ const CHUNKS_PER_SIDE = BLOCKS_PER_SIDE / CHUNK_BLOCKS;
 
 /** Roof colours (sRGB) by roof type; one is picked per building. */
 const ROOF_COLOURS: Readonly<Record<RoofType, readonly string[]>> = {
-  tar: ['#3d3a37', '#34333a', '#48423c', '#3a3633'],
+  tar: ['#4a4744', '#43424a', '#544d46', '#474240'],
   gravel: ['#a69e90', '#9c978e', '#b4ab99', '#8f8a80'],
   metal: ['#8f9aa1', '#a4aaad', '#7e8a86', '#8a6a50'],
   garden: ['#5b7f3c', '#4e7535', '#668a42'],
@@ -42,12 +42,13 @@ const ROOF_COLOURS: Readonly<Record<RoofType, readonly string[]>> = {
 const PROP_COLOURS: Readonly<Record<RoofProp['kind'], readonly string[]>> = {
   ac: ['#b9bcbd', '#a9adb0', '#c4c2bb'],
   vent: ['#8d9396', '#9da1a3', '#7f8486'],
-  tank: ['#7a5a3a', '#6e5236', '#9da3a6'],
+  tank: ['#9a7148', '#8c6a46', '#a9aeb0'],
   chimney: ['#8a4a3a', '#7c4436', '#6f6a66'],
   solar: ['#22355a', '#1d2f4f'],
   housing: [],
 };
-const LAMP_POST = '#3c4146';
+const LAMP_POST = '#535b5f';
+const HOUSING_GREY = new Color('#8e8c88');
 const LAMP_HEAD = '#ffe2b0';
 const LAMP_GLOW = '#ff9a3c';
 
@@ -175,7 +176,8 @@ function addRoofProps(c: ChunkBuilder, plan: BuildingPlan, wall: Color, m: Matri
   const color = new Color();
   for (const p of plan.props) {
     const options = PROP_COLOURS[p.kind];
-    if (p.kind === 'housing') color.copy(wall).multiplyScalar(0.85);
+    // Stair bulkheads: the wall colour, toned down toward roof grey so loud facades don't shout from the roof.
+    if (p.kind === 'housing') color.copy(wall).lerp(HOUSING_GREY, 0.55);
     else color.set(options[Math.floor((p.minX * 3.1 + p.minZ * 1.7) * 10) % options.length]);
     if (p.kind === 'vent' || p.kind === 'tank') {
       const legs = p.kind === 'tank' ? 0.9 : 0;
@@ -191,6 +193,12 @@ function addRoofProps(c: ChunkBuilder, plan: BuildingPlan, wall: Color, m: Matri
         color.set(options[Math.floor(p.minX * 13) % options.length]);
       }
       c.add('cylinders', boxMatrix(p, p.y0 + legs, p.height, m), color, [0]);
+      if (legs) {
+        // A narrower, darker lid on top: the classic water-tank cap seen from above.
+        const inset = (p.maxX - p.minX) * 0.14;
+        const lid = { minX: p.minX + inset, minZ: p.minZ + inset, maxX: p.maxX - inset, maxZ: p.maxZ - inset };
+        c.add('cylinders', boxMatrix(lid, p.y0 + legs + p.height, 0.3, m), color.multiplyScalar(0.62), [0]);
+      }
     } else if (p.kind === 'solar') {
       // Panels tilted up toward the midday sun (south, +Z).
       tiltedBox(p, p.y0 + 0.2, 0.06, 0.26, m);
@@ -638,14 +646,27 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     c = mix(c, bSrgb(0.62, 0.72, 0.78), sky);
     glow += sky * vec3(0.9, 0.95, 1.0) * 0.18 * uNight;
   } else if (type < ${ROOF.garden} + 0.5) {
-    // Planted beds, a timber deck down the middle, planter edging.
-    vec3 green = c * (0.7 + 0.5 * ubFbm(sp * 0.7));
-    vec3 soil = bSrgb(0.3, 0.22, 0.16);
-    c = mix(soil, green, smoothstep(0.32, 0.45, ubNoise(sp * 1.6)));
+    // Roof garden: a timber deck down the middle, rows of raised planter
+    // beds either side (shrubs, some in flower), pale gravel between.
+    vec3 leafC = c;
+    c = bSrgb(0.6, 0.58, 0.54) * (0.92 + 0.08 * ubNoise(sp) + 0.1 * (ubHash(floor(sp * 10.0)) - 0.5) * fine);
+    float hA = longX ? hs.x : hs.y;
+    float hC = longX ? hs.y : hs.x;
+    float rowI = floor((abs(across) - 1.3) / 3.0);
+    vec2 gi = vec2(floor(along / 4.0), (rowI + 1.0) * sign(across));
+    vec2 gf = vec2(along - (gi.x + 0.5) * 4.0, abs(across) - 1.3 - (rowI + 0.5) * 3.0);
+    float fits = step(abs((gi.x + 0.5) * 4.0) + 1.6, hA - 0.7) * step(1.3 + (rowI + 1.0) * 3.0 - 0.5, hC - 0.7) * step(0.0, rowI);
+    float bed = ubLine(gf.x, 1.55, px) * ubLine(gf.y, 0.95, px) * fits;
+    float soilIn = ubLine(gf.x, 1.42, px) * ubLine(gf.y, 0.82, px) * fits;
+    float bh = ubHash(gi + seed * 30.0);
+    vec3 leaves = leafC * (0.6 + 0.55 * ubNoise(sp * 2.7 + bh * 9.0));
+    float flower = step(0.8, ubHash(floor(sp * 5.0))) * step(0.5, bh) * fine;
+    leaves = mix(leaves, bh > 0.78 ? bSrgb(0.92, 0.32, 0.42) : bSrgb(0.95, 0.8, 0.26), flower);
+    c = mix(c, bSrgb(0.46, 0.33, 0.22), bed);
+    c = mix(c, leaves, soilIn);
     float deck = ubLine(across, 1.0, px) * step(1.0, e);
     vec3 wood = bSrgb(0.55, 0.38, 0.24) * (0.85 + 0.15 * ubLine(fract(along / 0.16) - 0.5, 0.42, px / 0.16));
     c = mix(c, wood, deck);
-    c = mix(c, bSrgb(0.62, 0.6, 0.56), ubBand(e, 0.34, 0.75, px) + ubBand(abs(across), 1.0, 1.2, px) * step(1.0, e));
   } else if (type < ${ROOF.membrane} + 0.5) {
     float seam = ubLine(fract(across / 2.0) - 0.5, 0.49, px / 2.0);
     c *= (0.95 + 0.06 * ubNoise(sp * 0.4)) * (1.0 - (1.0 - seam) * 0.12);

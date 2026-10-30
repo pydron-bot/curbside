@@ -52,14 +52,18 @@ uint ubPcg(uint v) {
   uint word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
   return (word >> 22u) ^ word;
 }
-/** Hash of an integer lattice point (pass floor()ed coordinates), 0..1. */
+/**
+ * Hash of an integer lattice point (pass floor()ed coordinates), 0..1. The
+ * coordinates are mixed by odd multipliers and go through one PCG round: half
+ * the cost of nesting a round per axis, and noise calls a lot of these.
+ */
 float ubHash(vec2 p) {
   uvec2 q = uvec2(ivec2(p) + 1048576);
-  return float(ubPcg(q.x + ubPcg(q.y))) * (1.0 / 4294967296.0);
+  return float(ubPcg(q.x * 1597334677u ^ q.y * 3812015801u)) * (1.0 / 4294967296.0);
 }
 float ubHash3(vec3 p) {
   uvec3 q = uvec3(ivec3(p) + 1048576);
-  return float(ubPcg(q.x + ubPcg(q.y + ubPcg(q.z)))) * (1.0 / 4294967296.0);
+  return float(ubPcg(q.x * 1597334677u ^ q.y * 3812015801u ^ q.z * 2798796415u)) * (1.0 / 4294967296.0);
 }
 /** Smooth value noise, 0..1. */
 float ubNoise(vec2 p) {
