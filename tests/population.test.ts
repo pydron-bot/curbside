@@ -11,6 +11,7 @@ import {
   VIEW_MARGIN,
   inRect,
   type MaintainContext,
+  type ParkingSpot,
   type Vehicle,
 } from '../src/game/population';
 import type { CarMesh } from '../src/render/carMesh';
@@ -131,6 +132,40 @@ describe('population: recycling', () => {
       expect(wreck.damage.wrecked).toBe(false);
       expect(wreck.ai).not.toBeNull();
     }
+  });
+
+  it('puts the spawn point\'s parked cars back on respawn, reusing retired cars', () => {
+    const { pop, vehicles, created } = setup(21);
+    const parked: ParkingSpot[] = [
+      { archetype: 'police', paint: '#f2f2f2', x: 5.5, z: 34, heading: Math.PI },
+      { archetype: 'sports', paint: '#e8b923', x: -22, z: -5.5, heading: -Math.PI / 2 },
+    ];
+    pop.maintain(ctx(9.5, 9.5, { seed: true, parked }));
+    const atSpot = (spot: ParkingSpot) =>
+      vehicles.find((v) => !v.ai && Math.hypot(v.sim.x - spot.x, v.sim.z - spot.z) < 0.01);
+    for (const spot of parked) expect(atSpot(spot)?.archetype).toBe(spot.archetype);
+    // One gets wrecked, then the player drives far away: both are recycled.
+    atSpot(parked[1])!.damage.wrecked = true;
+    atSpot(parked[1])!.charred = true;
+    for (let i = 0; i < 10; i++) pop.maintain(ctx(600, 0));
+    for (const spot of parked) expect(atSpot(spot)).toBeUndefined();
+    const built = created.vehicles;
+    // Wasted out there; respawn at the start.
+    pop.maintain(ctx(9.5, 9.5, { seed: true, parked }));
+    for (const spot of parked) {
+      const car = atSpot(spot)!;
+      expect(car.archetype).toBe(spot.archetype);
+      expect(car.paint).toBe(spot.paint);
+      expect(car.mesh.root.visible).toBe(true);
+      expect(car.charred).toBe(false);
+      expect(car.damage.wrecked).toBe(false);
+    }
+    expect(created.vehicles).toBe(built); // all from the spare pool
+    // Spots that already have a car aren't doubled up.
+    const n = vehicles.length;
+    pop.maintain(ctx(9.5, 9.5, { seed: true, parked }));
+    expect(vehicles.length).toBe(n);
+    expect(vehicles.length).toBeLessThanOrEqual(Population.maxVehicles());
   });
 
   it('recycles a hopelessly stuck AI car once it is off-screen', () => {

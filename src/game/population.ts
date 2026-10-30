@@ -81,6 +81,8 @@ const CROWD_TRIES_PER_CALL = 24;
 const MAX_SPARE_MODELS = 40;
 /** Minimum gap between a new car and any other, m. */
 const SPAWN_GAP = 10;
+/** A parking spot counts as taken when a car is this close to it (each axis), m. */
+const PARK_CLEAR = 4;
 
 const TRAFFIC_MIX: Array<[VehicleArchetype, number]> = [
   ['sedan', 0.3],
@@ -127,6 +129,15 @@ export interface PopulationHooks {
   createPedModel(outfit: Outfit): CharacterModel;
 }
 
+/** A kerbside spot that should have a particular parked car (e.g. at the spawn point). */
+export interface ParkingSpot {
+  archetype: VehicleArchetype;
+  paint: ColorRepresentation;
+  x: number;
+  z: number;
+  heading: number;
+}
+
 export interface MaintainContext {
   /** Player position: the centre of the spawn rings. */
   x: number;
@@ -143,6 +154,12 @@ export interface MaintainContext {
   crowdScale?: number;
   /** First fill (game start, respawn): closer rings, no per-call limits. */
   seed?: boolean;
+  /**
+   * Spots to fill with parked cars this call (game start, respawn), so the
+   * spawn point always has cars to grab even after the originals were
+   * recycled. A spot with any car on it is left alone.
+   */
+  parked?: readonly ParkingSpot[];
 }
 
 export class Population {
@@ -216,6 +233,8 @@ export class Population {
       if (v.ai) aiCount++;
       else idle.push(v);
     }
+    // After retiring (so far-off cars are free to reuse), before the idle cap.
+    if (ctx.parked) for (const spot of ctx.parked) this.park(spot, idle);
 
     // Too many parked / abandoned / wrecked cars: recycle the furthest unseen ones.
     if (idle.length > MAX_IDLE_VEHICLES) {
@@ -249,12 +268,44 @@ export class Population {
     }
   }
 
-  private newVehicle(): Vehicle {
-    const archetype = pickWeighted(TRAFFIC_MIX, this.rand);
-    const v = this.hooks.createVehicle(archetype, LIVERY[archetype] ?? pick(PAINTS, this.rand));
+  private newVehicle(
+    archetype: VehicleArchetype = pickWeighted(TRAFFIC_MIX, this.rand),
+    paint: ColorRepresentation = LIVERY[archetype] ?? pick(PAINTS, this.rand),
+  ): Vehicle {
+    const v = this.hooks.createVehicle(archetype, paint);
     v.mesh.root.visible = false;
     this.created++;
     return v;
+  }
+
+  /**
+   * Put the spot's car there unless something already stands on it: a spare
+   * of the same model and paint if one is waiting, else any spare restyled,
+   * else a new car.
+   */
+  private park(spot: ParkingSpot, idle: Vehicle[]): void {
+    for (const o of this.vehicles) {
+      if (Math.abs(o.sim.x - spot.x) < PARK_CLEAR && Math.abs(o.sim.z - spot.z) < PARK_CLEAR) return;
+    }
+    const spares = this.spareVehicles;
+    let i = spares.findIndex((v) => v.archetype === spot.archetype && v.paint === spot.paint && !v.charred);
+    const restyle = i < 0;
+    if (restyle) i = spares.length - 1;
+    let v: Vehicle;
+    if (i >= 0) {
+      v = spares.splice(i, 1)[0];
+      v.archetype = spot.archetype;
+      v.paint = spot.paint;
+      this.hooks.resetVehicle(v, restyle);
+    } else {
+      v = this.newVehicle(spot.archetype, spot.paint);
+    }
+    Object.assign(v.sim, createVehicleState(spot.x, spot.z, spot.heading));
+    Object.assign(v.prev, v.sim);
+    v.ai = null;
+    v.mesh.root.visible = true;
+    this.vehicles.push(v);
+    idle.push(v);
   }
 
   /** Take a car out of play: hidden, driverless, waiting in the spare pool. */

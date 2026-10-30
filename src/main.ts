@@ -29,7 +29,7 @@ import {
   type VehicleControls,
 } from './entities/vehicle';
 import { Player } from './game/player';
-import { CROWD_DESPAWN, Population, type CrowdPed, type Vehicle } from './game/population';
+import { CROWD_DESPAWN, Population, type CrowdPed, type ParkingSpot, type Vehicle } from './game/population';
 import { Effects } from './render/effects';
 import { CameraRig } from './render/cameraRig';
 import { CharacterModel } from './render/characterModel';
@@ -145,8 +145,8 @@ scene.add(pickupMesh.mesh);
 const vehicles: Vehicle[] = [];
 let vehicleModels: VehicleModels | null = null;
 
-function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation, x = 0, z = 0, heading = 0): Vehicle {
-  const sim = createVehicleState(x, z, heading);
+function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation): Vehicle {
+  const sim = createVehicleState(0, 0, 0);
   const mesh = createVehicleMesh(paint);
   vehicleModels?.dress(mesh, archetype, paint);
   scene.add(mesh.root);
@@ -163,15 +163,14 @@ function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation, 
   };
 }
 
-// A few parked at the kerbs around the spawn intersection.
-const PARKED: Array<[VehicleArchetype, number, number, number, ColorRepresentation]> = [
-  ['sedan', 5.5, -14, Math.PI, '#c8342b'],
-  ['compact', -5.5, 16, 0, '#2f6fc0'],
-  ['van', 20, 5.5, Math.PI / 2, '#d9d6cc'],
-  ['sports', -22, -5.5, -Math.PI / 2, '#e8b923'],
-  ['police', 5.5, 34, Math.PI, '#f2f2f2'],
+/** Parked at the kerbs around the spawn intersection; put back on every respawn. */
+const PARKED: ParkingSpot[] = [
+  { archetype: 'sedan', x: 5.5, z: -14, heading: Math.PI, paint: '#c8342b' },
+  { archetype: 'compact', x: -5.5, z: 16, heading: 0, paint: '#2f6fc0' },
+  { archetype: 'van', x: 20, z: 5.5, heading: Math.PI / 2, paint: '#d9d6cc' },
+  { archetype: 'sports', x: -22, z: -5.5, heading: -Math.PI / 2, paint: '#e8b923' },
+  { archetype: 'police', x: 5.5, z: 34, heading: Math.PI, paint: '#f2f2f2' },
 ];
-for (const [archetype, x, z, h, paint] of PARKED) vehicles.push(createVehicle(archetype, paint, x, z, h));
 
 /** Ready a recycled car for traffic: full health, and its proper look if it was a wreck or restyled. */
 function resetVehicle(v: Vehicle, restyled: boolean) {
@@ -183,7 +182,7 @@ function resetVehicle(v: Vehicle, restyled: boolean) {
 const population = new Population(
   vehicles,
   {
-    createVehicle: (a, p) => createVehicle(a, p),
+    createVehicle,
     resetVehicle,
     createPedModel: (outfit) => {
       const model = new CharacterModel('/assets/player.glb', outfit);
@@ -235,7 +234,10 @@ rig.snapTo(player.ped.x, player.ped.z);
 
 const viewRect: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 const keepVehicles: Array<Vehicle | null> = [null, null];
-/** Recycle and top up traffic and crowd; `seed` fills the streets from scratch. */
+/**
+ * Recycle and top up traffic and crowd; `seed` fills the streets from scratch
+ * and puts the spawn point's parked cars back.
+ */
 function maintainPopulation(seed = false) {
   const at = player.position;
   keepVehicles[0] = player.driving;
@@ -250,6 +252,7 @@ function maintainPopulation(seed = false) {
     trafficScale: getQuality().trafficScale,
     crowdScale: getQuality().crowdScale,
     seed,
+    parked: seed ? PARKED : undefined,
   });
 }
 maintainPopulation(true);

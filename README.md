@@ -86,7 +86,8 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 - Traffic 24 cars incl. new **taxi** and **pickup**; crowd 22, spawned
   just off-screen (never inside the camera's ground rectangle) and
   concentrated near the player; parked/abandoned cars are capped and
-  everything is recycled, so the car list stays bounded.
+  everything is recycled, so the car list stays bounded. The five cars
+  parked at the spawn corner are put back on every respawn.
 - **Event bus** (`src/core/events.ts`): the simulation emits crash,
   explosion, shot, bulletHit, punch, pedDown, carjack, enter/exitVehicle,
   pickup, award, weaponSwitch, playerHurt/Died, respawn and pause events;
