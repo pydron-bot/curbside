@@ -307,7 +307,10 @@ are `src/game/modes/*Mode.ts`.
   falls back alone, NaN or negative cash can't get in, a newer save keeps
   what this build understands); corrupt JSON is kept aside as
   `curbside.save.corrupt`; blocked storage never throws. The old
-  `curbside.best` carries over. Writes are batched (every 4 s while dirty)
+  `curbside.best` carries over into a fresh save only (the score HUD still
+  writes it, Chaos Runs included, so a save never reads it again); the
+  director puts the save's free-roam best on the score at boot and keeps it
+  as it's beaten. Writes are batched (every 4 s while dirty)
   and flushed on pause, app switch, page hide and the end of anything that
   pays. `Progress` (`game/progress.ts`) owns it: `earn`, `spend`, `charge`,
   bests, medals, unlocks, and lifetime stats counted off the bus.
@@ -332,8 +335,12 @@ are `src/game/modes/*Mode.ts`.
   car at a random crossing, 3-2-1 with the car held, then 2:00 on the clock
   top centre; +5 s per explosion you cause, +3 s each time a chain reaches
   ×5 ("+5 S" pops beside the timer); the last ten seconds count down out
-  loud in red tenths. Heat is live. Time up slows the city to a freeze-frame
-  and the results card comes up: score, medal (bronze 15,000 / silver
+  loud in red tenths (the last five as smaller red digits up top, off the
+  car). The BEST line shows the run's own best (`Hud.setBest`); leaving the
+  run zeroes the score and puts free roam's back, so a run never counts
+  toward free roam. Heat is live. Time up slows the city to a freeze-frame,
+  the chain still running is banked, and the results card comes up: score,
+  medal (bronze 15,000 / silver
   40,000 / gold 80,000), best and NEW BEST, the breakdown (drift, near miss,
   smash, hit & run, KO, carjack, boom, cops) and RETRY / FREE ROAM / TITLE.
   WASTED or BUSTED ends the run early (results after the respawn). The best
@@ -395,13 +402,15 @@ are `src/game/modes/*Mode.ts`.
 - **Activity HUD** (`ui/progressHud.ts`, `progress.css`): a compact card top
   centre under the pause button (what, a big timer, the goal and counter;
   the wanted stars step down under it, the radio card pushes it down), a
-  banner mid-screen for 3-2-1-GO / PASSED / FAILED, and a prompt pill above
+  banner mid-screen for 3-2-1-GO / PASSED / FAILED (on a phone a held
+  3-2-1 drops onto the car, clear of the card's clock), and a prompt pill above
   the HUD prompt for nearby markers. Checked at 1280×720, 852×393 and
   852×340 with the iPhone's safe areas.
 - **PROGRESS** in the pause menu (`ui/progressScreens.ts`): completion %
   (`game/progressStats.ts`: story 30%, frenzies, packages and races 15%
   each, exports and taxi 10%, the Chaos Run 5%), cash, each activity's
-  progress, the export list, bests with medals, and the lifetime stats.
+  progress, the export list, bests with medals, and the lifetime stats
+  (up / down scroll it on a keyboard or gamepad).
 
 Cards (results, calls, the shop on the street) freeze the sim and take the
 input; FrontDoor routes keyboard / pad navigation to them. Free roam's best
