@@ -28,6 +28,8 @@ const ROOF_SIGN_HEIGHT = 4.4;
 /** The landmarks with a roof to open. */
 const ROOFED = new Set(['spray_booth', 'export_bay']);
 
+/** How far in off the kerb a signal's night spill lands (on the lanes it governs), m. */
+const SPILL_IN = 4.5;
 /** Lens heights on the traffic_light model (red, amber, green), m. */
 const LENS_Y = [3.85, 3.55, 3.25] as const;
 /** Lens colours (linear) for the glow beside each lit lens. */
@@ -198,8 +200,9 @@ export class WorldProps {
       const a = 0.9 + 0.6 * night;
       glows.addFlat(x + fx * 0.45, LENS_Y[k], z + fz * 0.45, d[o + 2], 1.1, 1.1, r * a, g * a, b * a, GLOW.disc);
       if (night > 0.05) {
+        // On the lanes it governs: ahead of the pole and in off the kerb (the pole stands right of them).
         const w = 0.35 * night;
-        glows.addFlat(x + fx * 3.2, 0.06, z + fz * 3.2, d[o + 2], 4.5, 5.5, r * w, g * w, b * w, GLOW.disc);
+        glows.addFlat(x + fx * 3.2 - fz * SPILL_IN, 0.06, z + fz * 3.2 + fx * SPILL_IN, d[o + 2], 4.5, 5.5, r * w, g * w, b * w, GLOW.disc);
       }
     }
     // The station's blue lamp (a slow pulse) and the safehouse's light: a halo and a pool below, at night.
@@ -212,7 +215,9 @@ export class WorldProps {
         if (x < view.minX - 6 || x > view.maxX + 6 || z < view.minZ - 6 || z > view.maxZ + 6) continue;
         const police = w[o + 3] < 0.5;
         const k = night * (police ? 0.75 + 0.25 * Math.sin(t * 2.6) : 1);
-        const [r, g, b] = police ? [0.15, 0.35, 1.0] : [1.0, 0.72, 0.4];
+        const r = police ? 0.15 : 1.0;
+        const g = police ? 0.35 : 0.72;
+        const b = police ? 1.0 : 0.4;
         glows.addFlat(x, w[o + 1], z, 0, 1.6, 1.6, r * 1.4 * k, g * 1.4 * k, b * 1.4 * k, GLOW.disc);
         glows.addFlat(x, 0.06, z, 0, 5.5, 5.5, r * 0.4 * k, g * 0.4 * k, b * 0.4 * k, GLOW.disc);
       }
