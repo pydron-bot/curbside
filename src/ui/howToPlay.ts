@@ -1,26 +1,34 @@
 import type { GameAudio } from '../audio/gameAudio';
 import type { InputDevice } from '../core/input';
+import { settings, type Settings } from '../core/settings';
 import { ICONS } from './icons';
 import { MenuNav, overlay, type Panel } from './menu';
 
 type Binding = readonly [action: string, keys: string];
 
+/**
+ * Touch rows follow the settings: which thumb does what (left-handed) and
+ * what the stick does in a car (directional vs classic steering).
+ */
+function touchRows(s: Settings): Binding[] {
+  const [stick, other] = s.leftHanded ? ['Right', 'Left'] : ['Left', 'Right'];
+  return [
+    ['Walk / run', `${stick} thumb anywhere — push further to run`],
+    s.steering === 'directional'
+      ? ['Drive', 'Point the stick where to go; push further for more gas']
+      : ['Steer', 'Stick left / right; GAS to go'],
+    ['Gas · brake · handbrake', `${other} thumb — slide between pedals`],
+    ['Drift', 'The DRIFT band presses gas + handbrake'],
+    ['Aim & shoot', `${other} thumb anywhere: drag to aim, push far to fire, tap to fire`],
+    ['Punch / fire', 'The big button'],
+    ['Switch weapon', '[[⇄]]'],
+    ['Get in / out', 'The door button (it pulses next to a car)'],
+    ['Pause', '[[❚❚]] top centre'],
+  ];
+}
+
 /** `[[Space]]` renders as a key cap; the rest is plain text. */
-const CONTROLS: Record<InputDevice, { title: string; rows: readonly Binding[] }> = {
-  touch: {
-    title: 'TOUCH',
-    rows: [
-      ['Walk / run', 'Left thumb anywhere — push further to run'],
-      ['Drive', 'Point the stick where to go; push further for more gas'],
-      ['Gas · brake · handbrake', 'Right thumb — slide between pedals'],
-      ['Drift', 'The DRIFT band presses gas + handbrake'],
-      ['Aim & shoot', 'Right thumb anywhere: drag to aim, push far to fire, tap to fire'],
-      ['Punch / fire', 'The big button'],
-      ['Switch weapon', '[[⇄]]'],
-      ['Get in / out', 'The door button (it pulses next to a car)'],
-      ['Pause', '[[❚❚]] top centre'],
-    ],
-  },
+const CONTROLS: Record<Exclude<InputDevice, 'touch'>, { title: string; rows: readonly Binding[] }> = {
   keyboard: {
     title: 'KEYBOARD & MOUSE',
     rows: [
@@ -139,7 +147,7 @@ export class HowToPlay implements Panel {
     this.device = device;
     for (const [d, b] of this.tabs) b.classList.toggle('selected', d === device);
     this.table.textContent = '';
-    for (const [action, keys] of CONTROLS[device].rows) {
+    for (const [action, keys] of device === 'touch' ? touchRows(settings) : CONTROLS[device].rows) {
       const row = document.createElement('div');
       row.className = 'howto-row';
       const a = document.createElement('span');

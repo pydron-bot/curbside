@@ -2,8 +2,8 @@
 
 :root {
   /* The radar's diameter; the status column sits beside it. */
-  --radar: clamp(84px, 25vmin, 148px);
-  --status-w: clamp(112px, 27vmin, 168px);
+  --radar: clamp(84px, 25vmin, 168px);
+  --status-w: clamp(112px, 27vmin, 184px);
 }
 
 #hud {
@@ -156,7 +156,7 @@ body:not([data-scene='play']) #wasted {
   position: absolute;
   top: calc(var(--edge-t) + 22px);
   left: calc(var(--edge-l) + var(--radar) + 6px);
-  width: clamp(80px, 24vmin, 124px);
+  width: clamp(80px, 24vmin, 140px);
   aspect-ratio: 1;
 }
 
@@ -416,7 +416,7 @@ body:not([data-device='touch']) .hud-pause {
 }
 
 .score-total {
-  font: italic 900 clamp(26px, 8vmin, 46px)/1 var(--display-font);
+  font: italic 900 clamp(26px, 8vmin, 54px)/1 var(--display-font);
   letter-spacing: 0.01em;
   color: #fff;
   text-shadow: 0 2px 0 rgb(0 0 0 / 0.55), 0 0 16px rgb(255 46 136 / 0.35);
