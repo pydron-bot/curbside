@@ -32,6 +32,7 @@ import { Effects } from './render/effects';
 import { CameraRig } from './render/cameraRig';
 import { CharacterModel } from './render/characterModel';
 import { DynamicResolution } from './render/dynamicResolution';
+import { getQuality } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
 import { charVehicle, createVehicleMesh, dressAll, restoreVehicleLook } from './render/vehicleLooks';
 import { PUNCH_REACH, knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
@@ -185,6 +186,7 @@ VehicleModels.load('/assets/vehicles.glb').then(
   (models) => {
     vehicleModels = models;
     dressAll([...vehicles, ...population.spares], models);
+    resolution.holdOff(2); // first draws of the new materials compile shaders
   },
   (err) => console.error('Failed to load vehicles.glb', err),
 );
@@ -230,6 +232,8 @@ function maintainPopulation(seed = false) {
     vz: at.vz,
     view: rig.visibleGround(viewRect),
     keep: keepVehicles,
+    trafficScale: getQuality().trafficScale,
+    crowdScale: getQuality().crowdScale,
     seed,
   });
 }
@@ -805,6 +809,7 @@ function setPaused(p: boolean) {
   if (!p) {
     last = performance.now();
     loop.reset();
+    resolution.holdOff();
   }
   events.emit({ type: 'pause', paused: p });
 }
