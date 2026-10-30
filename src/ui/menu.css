@@ -241,9 +241,12 @@ kbd.pad.b {
   display: none;
 }
 
-/* Paused because the phone is upright: the rotate card says it all. */
+/* Paused because the phone is upright: the rotate card says it all. Back
+   in landscape, during the 3-2-1, touches go through to the controls (thumbs
+   placed then are live at GO) and the pause button. */
 #paused.rotate {
   background: none;
+  pointer-events: none;
 }
 
 #paused.rotate .pause-card {

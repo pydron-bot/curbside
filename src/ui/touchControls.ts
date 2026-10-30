@@ -22,7 +22,11 @@ export interface TouchControls {
    * (a gun is owned) shows the swap button, which is no use with fists alone.
    */
   setWeapon(weapon: WeaponKind | null, canSwap: boolean): void;
-  /** Release every on-screen control (pause, blur, lost touches). */
+  /**
+   * Release every on-screen control (pause, resume, blur). A thumb that
+   * stays on a stick or the pedals takes it back when it next moves; the
+   * buttons need a fresh press.
+   */
   reset(): void;
 }
 
@@ -126,6 +130,13 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   const thumb: Vec2 = { x: 0, y: 0 };
   const shaped: Vec2 = { x: 0, y: 0 };
   let stickPointer: number | null = null;
+  /**
+   * A reset (pause, resume) let go of the stick while the thumb stayed down.
+   * That thumb takes it back when it next moves, so thumbs placed during the
+   * 3-2-1 after turning the phone back are live at GO; a new touch takes
+   * the stick at once (a parked pointer may never report its release).
+   */
+  let stickParked = false;
 
   /** Where the stick waits when nobody's touching it. */
   function restStick() {
@@ -133,7 +144,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     const left = !settings.leftHanded;
     const x = left ? s.left + STICK_REST_GAP + STICK_R : window.innerWidth - s.right - STICK_REST_GAP - STICK_R;
     const y = window.innerHeight - Math.max(s.bottom, 8) - STICK_REST_GAP - STICK_R;
-    if (stickPointer === null) placeBase(stickBase, x, y);
+    if (stickPointer === null || stickParked) placeBase(stickBase, x, y);
   }
 
   /** Keep a stick origin inside its half of the screen and the safe area. */
@@ -148,11 +159,12 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   }
 
   stickZone.addEventListener('pointerdown', (e) => {
-    if (stickPointer !== null) return;
+    if (stickPointer !== null && !stickParked) return;
     // Swipes from the bottom edge belong to the home indicator.
     const s = safeInsets();
     if (s.bottom > 0 && e.clientY > window.innerHeight - s.bottom) return;
     stickPointer = e.pointerId;
+    stickParked = false;
     stickZone.setPointerCapture(e.pointerId);
     origin.x = thumb.x = e.clientX;
     origin.y = thumb.y = e.clientY;
@@ -162,6 +174,10 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   });
   stickZone.addEventListener('pointermove', (e) => {
     if (e.pointerId !== stickPointer) return;
+    if (stickParked) {
+      stickParked = false;
+      stickBase.classList.add('active');
+    }
     thumb.x = e.clientX;
     thumb.y = e.clientY;
     updateStick();
@@ -169,12 +185,22 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   const releaseStick = (e: { pointerId: number }) => {
     if (e.pointerId !== stickPointer) return;
     stickPointer = null;
+    stickParked = false;
+    idleStick();
+  };
+  /** Let go of the stick but remember the thumb (see stickParked). */
+  function parkStick() {
+    if (stickPointer === null) return;
+    stickParked = true;
+    idleStick();
+  }
+  function idleStick() {
     stickBase.classList.remove('active');
     out.steer = out.moveX = out.moveY = 0;
     out.sprint = false;
     moveKnob(stickKnob, 0, 0);
     restStick();
-  };
+  }
   stickZone.addEventListener('pointerup', releaseStick);
   stickZone.addEventListener('pointercancel', releaseStick);
   stickZone.addEventListener('lostpointercapture', releaseStick);
@@ -192,7 +218,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   }
 
   function writeStick(dx: number, dy: number) {
-    if (stickPointer === null) return;
+    if (stickPointer === null || stickParked) return;
     if (mode === 'car') {
       out.steer = shapeAxis(dx / STICK_R, STEER_DZ, STEER_EXPO);
       const m = shapeStick(dx, dy, STICK_R, DRIVE_DZ, DRIVE_EXPO, shaped);
@@ -217,6 +243,8 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   const aimOrigin: Vec2 = { x: 0, y: 0 };
   const aimThumb: Vec2 = { x: 0, y: 0 };
   let aimPointer: number | null = null;
+  /** As stickParked, for the aim stick. */
+  let aimParked = false;
   let aimDownAt = 0;
   let aimTravel = 0;
   let armed = false;
@@ -227,12 +255,13 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
    * pure CSS (touch.css), so it follows the layout without measuring.
    */
   function restAim() {
-    aimBase.classList.toggle('resting', armed && mode === 'foot' && aimPointer === null);
+    aimBase.classList.toggle('resting', armed && mode === 'foot' && (aimPointer === null || aimParked));
   }
 
   aimZone.addEventListener('pointerdown', (e) => {
-    if (aimPointer !== null || mode !== 'foot') return;
+    if ((aimPointer !== null && !aimParked) || mode !== 'foot') return;
     aimPointer = e.pointerId;
+    aimParked = false;
     aimZone.setPointerCapture(e.pointerId);
     aimOrigin.x = aimThumb.x = e.clientX;
     aimOrigin.y = aimThumb.y = e.clientY;
@@ -245,6 +274,11 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   });
   aimZone.addEventListener('pointermove', (e) => {
     if (e.pointerId !== aimPointer) return;
+    if (aimParked) {
+      aimParked = false;
+      aimBase.classList.remove('resting');
+      aimBase.classList.add('active');
+    }
     aimTravel += Math.abs(e.clientX - aimThumb.x) + Math.abs(e.clientY - aimThumb.y);
     aimThumb.x = e.clientX;
     aimThumb.y = e.clientY;
@@ -253,13 +287,24 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   const releaseAim = (e: { pointerId: number; type?: string }) => {
     if (e.pointerId !== aimPointer) return;
     aimPointer = null;
-    if (e.type === 'pointerup' && aimTravel < TAP_PX && performance.now() - aimDownAt < TAP_MS) out.punchPresses++;
+    const tap = !aimParked && e.type === 'pointerup' && aimTravel < TAP_PX && performance.now() - aimDownAt < TAP_MS;
+    if (tap) out.punchPresses++;
+    aimParked = false;
+    idleAim();
+  };
+  /** Let go of the aim stick but remember the thumb (see stickParked). */
+  function parkAim() {
+    if (aimPointer === null) return;
+    aimParked = true;
+    idleAim();
+  }
+  function idleAim() {
     out.aimX = out.aimY = 0;
     out.aimFire = false;
     aimBase.classList.remove('active', 'firing');
     moveKnob(aimKnob, 0, 0);
     restAim();
-  };
+  }
   aimZone.addEventListener('pointerup', releaseAim);
   aimZone.addEventListener('pointercancel', releaseAim);
   aimZone.addEventListener('lostpointercapture', releaseAim);
@@ -285,6 +330,8 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
 
   // ---------------------------------------------------------------- pedals
   const fingers = new Map<number, Vec2>();
+  /** Fingers a reset let go of while they stayed down: they press again when they move (see stickParked). */
+  const parkedFingers = new Set<number>();
   const held: PedalState = { gas: false, brake: false, hand: false };
   const next: PedalState = { gas: false, brake: false, hand: false };
   let layout: PedalLayout | null = null;
@@ -323,13 +370,18 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     haptics?.touch(true);
   });
   pad.addEventListener('pointermove', (e) => {
-    const f = fingers.get(e.pointerId);
-    if (!f) return;
+    let f = fingers.get(e.pointerId);
+    if (!f) {
+      if (!parkedFingers.delete(e.pointerId)) return;
+      if (!layout) layout = measurePedals();
+      fingers.set(e.pointerId, (f = { x: 0, y: 0 }));
+    }
     f.x = e.clientX;
     f.y = e.clientY;
     updatePedals();
   });
   const liftFinger = (e: PointerEvent) => {
+    parkedFingers.delete(e.pointerId);
     if (!fingers.delete(e.pointerId)) return;
     updatePedals();
   };
@@ -337,7 +389,10 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   pad.addEventListener('pointercancel', liftFinger);
   pad.addEventListener('lostpointercapture', liftFinger);
 
-  function releasePedals() {
+  /** Let go of every pedal; `park` remembers the fingers still down. */
+  function releasePedals(park = false) {
+    if (park) for (const id of fingers.keys()) parkedFingers.add(id);
+    else parkedFingers.clear();
     fingers.clear();
     updatePedals();
   }
@@ -366,9 +421,10 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   return {
     layer,
     reset() {
-      if (stickPointer !== null) releaseStick({ pointerId: stickPointer });
-      if (aimPointer !== null) releaseAim({ pointerId: aimPointer });
-      releasePedals();
+      // Thumbs still down take their control back when they next move.
+      parkStick();
+      parkAim();
+      releasePedals(true);
       out.fireHeld = false;
       for (const b of [fire, swap, door]) b.classList.remove('pressed');
     },
