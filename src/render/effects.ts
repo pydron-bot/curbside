@@ -9,6 +9,7 @@ import {
   PlaneGeometry,
   ShaderMaterial,
   DynamicDrawUsage,
+  Vector4,
   type Scene,
   type Texture,
 } from 'three';
@@ -99,6 +100,8 @@ export class Effects {
   private lightNext = 0;
   /** Sky light on smoke and dust (the soft particles), dimmer and cooler at night. */
   private readonly ambient = { value: { r: 1, g: 1, b: 1 } as Rgb };
+  /** Where smoke thins on screen (see seeThrough): world x, y, z and radius (0 = off). */
+  private readonly hole = { value: new Vector4(0, 0, 0, 0) };
   /** Explosions in the last moment: chain reactions share one budget. */
   private recentBooms = 0;
 
@@ -111,8 +114,8 @@ export class Effects {
     this.softOut = new InstanceBuffer(softCapacity);
     this.atlas = createFxAtlas();
     // Fire, sparks and flashes are their own light: full brightness day and night.
-    this.hotMesh = particleMesh(this.hotOut, this.atlas, { value: { r: 1, g: 1, b: 1 } }, 'fxHot');
-    this.softMesh = particleMesh(this.softOut, this.atlas, this.ambient, 'fxSoft');
+    this.hotMesh = particleMesh(this.hotOut, this.atlas, { value: { r: 1, g: 1, b: 1 } }, { value: new Vector4(0, 0, 0, 0) }, 'fxHot');
+    this.softMesh = particleMesh(this.softOut, this.atlas, this.ambient, this.hole, 'fxSoft');
     // Fire first, smoke over it, both after every other transparent.
     this.hotMesh.renderOrder = 3;
     this.softMesh.renderOrder = 4;
@@ -243,7 +246,10 @@ export class Effects {
       this.hot.drag[i] = 3.2;
       if (Math.random() < 0.35) this.hot.flags[i] = FLAG.handoff;
     }
-    // Rising column of dark smoke that spreads into a cap.
+    // Rising column of dark smoke that spreads into a cap. Kept translucent
+    // and not too wide (with the burnt-out fire's smoke below): it rises
+    // toward the camera, and a blast at the view centre (your own car) mustn't
+    // hide the player under a dark veil for seconds.
     for (let k = n(14); k > 0; k--) {
       const a = Math.random() * Math.PI * 2;
       const r = Math.random() * 1.5;
@@ -256,13 +262,13 @@ export class Effects {
         Math.sin(a) * 1.5 + this.windZ,
         2.6 + Math.random() * 1.6,
         2.4,
-        6.5 + Math.random() * 3,
+        5.5 + Math.random() * 2.5,
         RAMP.smoke,
         puffFrame(),
       );
       if (i < 0) break;
       const shade = 0.06 + Math.random() * 0.07;
-      this.smokeLook(i, shade, 0.85);
+      this.smokeLook(i, shade, 0.7);
       this.soft.drag[i] = 0.9;
     }
     // Dust kicked out along the ground by the shockwave.
@@ -597,6 +603,15 @@ export class Effects {
     }
   }
 
+  /**
+   * Thin smoke and dust where they cover (x, y, z) on screen, within about
+   * `radius` m of it: the player on foot stays visible inside a blast's smoke
+   * cloud. 0 turns it off. A uniform, so it costs nothing per particle.
+   */
+  seeThrough(x: number, y: number, z: number, radius: number): void {
+    this.hole.value.set(x, y, z, radius);
+  }
+
   /** Drop everything in flight (a fresh run, the title). Ground marks stay unless `marks`. */
   clear(marks = false): void {
     this.hot.clear();
@@ -682,12 +697,12 @@ export class Effects {
       pool.vz[i] * 0.4 + this.windZ,
       1.8 + Math.random() * 1.4,
       pool.size1[i] * 0.8,
-      pool.size1[i] * 1.9,
+      pool.size1[i] * 1.5,
       RAMP.smoke,
       puffFrame(),
     );
     if (j < 0) return;
-    this.smokeLook(j, 0.07 + Math.random() * 0.06, 0.75);
+    this.smokeLook(j, 0.07 + Math.random() * 0.06, 0.55);
     this.soft.drag[j] = 0.8;
   }
 
@@ -743,7 +758,7 @@ const INSTANCE_ATTRIBUTES = ['iPos', 'iAxis', 'iCol', 'iFx'] as const;
  * so one material does both smoke (add 0) and light (add 1). Tone mapping
  * and the output colour space run here like in any built-in material.
  */
-function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb }, name: string): Mesh {
+function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb }, hole: { value: Vector4 }, name: string): Mesh {
   const plane = new PlaneGeometry(1, 1);
   const geo = new InstancedBufferGeometry();
   geo.index = plane.index;
@@ -756,15 +771,18 @@ function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb
   geo.setAttribute('iFx', attr(out.fx, 2));
   geo.instanceCount = 0;
   const material = new ShaderMaterial({
-    uniforms: { map: { value: atlas }, uAmbient: ambient },
+    uniforms: { map: { value: atlas }, uAmbient: ambient, uHole: hole },
     vertexShader: /* glsl */ `
       attribute vec4 iPos;
       attribute vec4 iAxis;
       attribute vec4 iCol;
       attribute vec2 iFx;
+      uniform vec4 uHole;
       varying vec2 vUv;
       varying vec4 vCol;
       varying float vAdd;
+      varying vec3 vClip;
+      varying vec4 vHole;
       void main() {
         vec4 mv = modelViewMatrix * vec4(iPos.xyz, 1.0);
         float size = iPos.w;
@@ -786,6 +804,11 @@ function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb
         }
         mv.xy += offset;
         gl_Position = projectionMatrix * mv;
+        // The see-through hole: this vertex and the hole's centre on screen, the
+        // hole's radius in NDC at its depth, and the aspect to keep it round.
+        vClip = gl_Position.xyw;
+        vec4 hc = projectionMatrix * viewMatrix * vec4(uHole.xyz, 1.0);
+        vHole = vec4(hc.xy / hc.w, uHole.w * projectionMatrix[1][1] / hc.w, projectionMatrix[1][1] / projectionMatrix[0][0]);
         float f = iFx.x;
         vec2 cell = vec2(mod(f, ${ATLAS_CELLS.toFixed(1)}), ${(ATLAS_CELLS - 1).toFixed(1)} - floor(f / ${ATLAS_CELLS.toFixed(1)}));
         vUv = (cell + uv) / ${ATLAS_CELLS.toFixed(1)};
@@ -798,9 +821,15 @@ function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb
       varying vec2 vUv;
       varying vec4 vCol;
       varying float vAdd;
+      varying vec3 vClip;
+      varying vec4 vHole;
       void main() {
         vec4 tex = texture2D(map, vUv);
         float a = tex.a * vCol.a;
+        if (vHole.z > 0.0) {
+          vec2 d = (vClip.xy / vClip.z - vHole.xy) * vec2(vHole.w, 1.0);
+          a *= mix(0.2, 1.0, smoothstep(vHole.z * 0.4, vHole.z, length(d)));
+        }
         if (a < 0.004) discard;
         gl_FragColor = vec4(vCol.rgb * tex.rgb * uAmbient, 1.0);
         #include <tonemapping_fragment>

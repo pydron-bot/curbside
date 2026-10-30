@@ -498,6 +498,20 @@ describe('effects budget', () => {
     expect(decals.mesh.visible).toBe(false);
   });
 
+  it('thins smoke over the player without touching fire, sharing one program', async () => {
+    const { Scene, ShaderMaterial, Mesh } = await import('three');
+    const { Effects } = await import('../src/render/effects');
+    const scene = new Scene();
+    const fx = new Effects(scene);
+    fx.seeThrough(4, 0.9, -2, 2.8);
+    const hole = (name: string) => ((scene.getObjectByName(name) as InstanceType<typeof Mesh>).material as InstanceType<typeof ShaderMaterial>).uniforms.uHole.value;
+    expect(hole('fxSoft').toArray()).toEqual([4, 0.9, -2, 2.8]);
+    expect(hole('fxHot').w).toBe(0);
+    const mat = (name: string) => (scene.getObjectByName(name) as InstanceType<typeof Mesh>).material as InstanceType<typeof ShaderMaterial>;
+    expect(mat('fxSoft').fragmentShader).toBe(mat('fxHot').fragmentShader);
+    expect(mat('fxSoft').vertexShader).toBe(mat('fxHot').vertexShader);
+  });
+
   it('tracers, muzzle flashes and impacts draw and expire', async () => {
     const { Scene } = await import('three');
     const { Effects } = await import('../src/render/effects');

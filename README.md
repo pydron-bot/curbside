@@ -321,8 +321,10 @@ focusZ, playing)` once per frame after placing cars and people.
   dust). Two camera-facing instanced draws, fire then smoke over it, with
   premultiplied blending so one shader does both alpha smoke and additive
   light: stacked flames saturate to yellow-orange, not white. Smoke is
-  dimmed by the sky at night. Counts scale with the tier's `particleScale`;
-  explosions close together share one budget.
+  dimmed by the sky at night, and thins on screen over the player on foot
+  (`effects.seeThrough`, a uniform), so a blast's smoke cloud, your own
+  car's included, never hides your character. Counts scale with the tier's
+  `particleScale`; explosions close together share one budget.
 - **Ground marks** (`fxDecals.ts`): skid ribbons, scorches, bullet pocks
   and scrapes are quads in one ring-buffered mesh that fades them in the
   vertex shader (skids ~22 s, scorches ~75 s in their own 32-slot ring).
@@ -396,6 +398,7 @@ effects.sparks(x, y, z, n, lo, hi, dirX, dirZ) / effects.embers(x, z, n, lo, hi)
 effects.muzzleFlash(x, z, dirX, dirZ, power) / effects.tracer(x1, z1, x2, z2, kind)
 effects.burst(x, z, r, g, b, n, radius)    // sparkle + ring (pickups, rewards)
 effects.light(x, y, z, r0, r1, r, g, b, life, GLOW.disc | GLOW.ring)  // a fake light
+effects.seeThrough(x, y, z, radius)        // thin smoke over a point on screen (FxDirector: the player on foot)
 effects.decals.stamp(x, z, r, angle, opacity, life, DECAL.scorch)
 rig.addTrauma(0..1); rig.kick(dirX, dirZ, metres); rig.punchFov(degrees)
 fx.hitStop.hit(seconds, slow?)             // slow the sim for a moment

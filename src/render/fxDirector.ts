@@ -35,6 +35,8 @@ const ARMED_LIFT = 5;
 /** Shot at or punched recently: lift a little even with bare fists. */
 const FIGHT_LIFT = 3.5;
 const FIGHT_SECONDS = 4;
+/** Smoke over the player on foot thins within about this radius, m. */
+const SEE_THROUGH = 2.8;
 /** Where crash sparks, flares and chips start, m: just over a car's roof. */
 const CRASH_Y = 1.6;
 
@@ -156,6 +158,10 @@ export class FxDirector {
       if (this.realTime - this.lastCombat < FIGHT_SECONDS) lift = Math.max(lift, FIGHT_LIFT);
     }
     d.rig.lift = lift;
+    // On foot the player is small: smoke thins over them, so a blast (your own
+    // car's included) never hides your character. A car is big enough to read.
+    const p = d.player.ped;
+    d.effects.seeThrough(p.x, 0.9, p.z, playing && !driving ? SEE_THROUGH : 0);
 
     // Flash and weather.
     this.flash *= Math.exp(-realDt / 0.065);
