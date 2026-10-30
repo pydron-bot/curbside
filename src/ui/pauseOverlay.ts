@@ -146,6 +146,9 @@ export class PauseOverlay implements Panel {
     if (onReload) {
       this.hint.textContent = 'Still waiting for the graphics — your progress is saved';
       this.nav.focusElement(this.reload);
+    } else if (this.reload.classList.contains('nav-focus')) {
+      // Graphics back to the pause menu: the highlight leaves the hidden button.
+      this.nav.focusElement(this.resumeBtn);
     }
   }
 
