@@ -147,6 +147,16 @@ vibration, show FPS.
   (the city pre-rendered once, traffic, pickups, hostiles, blips and a
   waypoint route, zooming out with speed, ≤30 Hz) and red edge chevrons for
   off-screen attackers.
+- **Juice** (`src/render/fx*.ts`, see *Effects and camera* below): every
+  crash, shot, knockout and explosion has particles, light, sound and a
+  camera response. Skid marks and tyre smoke (the player's drift smoke
+  warms to gold, then pink, as the points pile up), sparks and scrapes,
+  glass and panels flying, thick tracers and muzzle flares (NPCs too),
+  shell casings, a blast sequence with flash, shockwave ring, fireball,
+  smoke column, debris and a scorch; cars lean, dip, squash and hop;
+  trauma shake, kicks, FOV punches and a brief hit-stop on big moments; a
+  per-axis look-ahead that shows ~1.5 s of road; screen-edge flashes at ×5
+  and ×10; rain showers that wet the streets.
 - Next: **M6 Heat** (wanted level, police).
 
 ## Layout
@@ -290,6 +300,86 @@ geometry is uploaded at load, not when that model first drives into view.
   frames the view. Desktops render into a half-float buffer so the 'high'
   tier can bloom (threshold follows the time of day: only real lights bloom
   by day). Cars' paint and glass alone reflect a PMREM studio environment.
+
+## Effects and camera
+
+Everything that makes an action land lives in `src/render/fx*.ts` and
+`effects.ts`, driven by `FxDirector` (`fxDirector.ts`), which subscribes to
+the event bus. `main.ts` only creates it, scales the time it feeds the sim
+by `fx.simScale(dt)` (hit-stop) and calls `fx.update(dt, controls, focusX,
+focusZ, playing)` once per frame after placing cars and people.
+
+- **Particles** (`fxParticles.ts`, pure and tested): struct-of-arrays pools
+  with a free list, nothing allocated per particle or per frame. Each
+  particle has drag, gravity, spin, optional ground bounce and stretch
+  along its velocity, and a colour/opacity ramp over its life: fire runs
+  white → yellow → orange → red and hands off to smoke as it dies, smoke
+  fades in and out (it no longer shrinks), sparks streak, embers flicker.
+  Sprites come from a 4×4 atlas drawn on a canvas at start-up
+  (`fxAtlas.ts`: fbm puffs, flame, spark, star, ring, tracer, muzzle flare,
+  dust). Two camera-facing instanced draws, fire then smoke over it, with
+  premultiplied blending so one shader does both alpha smoke and additive
+  light: stacked flames saturate to yellow-orange, not white. Smoke is
+  dimmed by the sky at night. Counts scale with the tier's `particleScale`;
+  explosions close together share one budget.
+- **Ground marks** (`fxDecals.ts`): skid ribbons, scorches, bullet pocks
+  and scrapes are quads in one ring-buffered mesh that fades them in the
+  vertex shader (skids ~22 s, scorches ~75 s in their own 32-slot ring).
+  Transparent and drawn first among transparents, i.e. after the ground.
+- **Debris** (`fxDebris.ts`): panels in the exploding car's paint, chips,
+  glass and brass casings as one instanced lit box mesh with bounce,
+  friction and spin.
+- **Fake lights**: ground flashes, shockwave rings, muzzle splashes, pickup
+  rings and burning-car glows go into the shared glow mesh through
+  `look.addGlowSource` (no draw call, no real lights).
+- **Cars** (`fxCarBody.ts`, `fxDriving.ts`): bodies lean out of turns, dip
+  under braking, squat on launch, lurch on impacts and hop and tumble in
+  blasts, applied to the car root (Euler order YXZ) after main.ts places
+  it. Rear wheels lay skid marks when sliding, handbraking, braking hard
+  or spinning up; tyre smoke on a real slide; dust off park lawns; wind
+  streaks past the player above ~65% of top speed; damaged cars smoke,
+  burning ones flame with embers and a flickering glow (stronger at
+  night), wrecks burn down and smoulder.
+- **Camera** (`cameraRig.ts`, `fxMotion.ts`): trauma shake (smooth noise ×
+  trauma², slight roll), directional kicks on springs, FOV punches; fed by
+  crashes (by impact), explosions (by distance), gunfire (a little recoil)
+  and getting hurt. Look-ahead per screen axis, soft-limited to a share of
+  what's visible on that axis, with velocity feed-forward so it never
+  trails the car: ~1.3–1.5 s of road up the screen at cruising speed with
+  the car kept out of the bottom quarter (away from the thumbs). On foot
+  the camera lifts 5 m with a gun out and 3.5 m in a recent fight.
+  `prefers-reduced-motion` keeps a third of the shake, no roll or FOV
+  punches.
+- **Hit-stop** (`HitStop` in `fxMotion.ts`): 40–80 ms of near-frozen sim on
+  close or player-caused explosions, heavy crashes and knockouts; overlaps
+  keep the longest hold and a cooldown stops chains turning into slow
+  motion. The camera, shake and HUD keep real time.
+- **Weather** (`fxWeather.ts`): every few minutes a shower of a minute or
+  two eases in; streets get wet behind it (`uWetness`) and dry slowly. Rain
+  is one instanced draw animated in the vertex shader (world-anchored
+  streaks that fan out from the view centre, plus splash rings); exposure
+  dips a little; `audio.setRain` adds a hiss-and-patter loop.
+- **Overlay** (`src/ui/fxOverlay.ts`, `fx.css`): screen-edge flashes at the
+  ×5 and ×10 combo, animated with the Web Animations API.
+
+Budget: at most 5 draw calls for all of it (fire, smoke, debris, ground
+marks, rain), each skipped when empty. Measured with `?debug` in the
+iPhone 15 Pro profile: see the numbers in *Look* plus the ones below.
+
+API for other systems:
+
+```ts
+effects.explode(x, z, paint?)              // the whole blast sequence (FxDirector does this on 'explosion')
+effects.sparks(x, y, z, n, lo, hi, dirX, dirZ) / effects.embers(x, z, n, lo, hi)
+effects.muzzleFlash(x, z, dirX, dirZ, power) / effects.tracer(x1, z1, x2, z2, kind)
+effects.burst(x, z, r, g, b, n, radius)    // sparkle + ring (pickups, rewards)
+effects.light(x, y, z, r0, r1, r, g, b, life, GLOW.disc | GLOW.ring)  // a fake light
+effects.decals.stamp(x, z, r, angle, opacity, life, DECAL.scorch)
+rig.addTrauma(0..1); rig.kick(dirX, dirZ, metres); rig.punchFov(degrees)
+fx.hitStop.hit(seconds, slow?)             // slow the sim for a moment
+fx.setRain(true | false, seconds?)         // start or stop a shower (missions, debug)
+fx.overlay.edgeFlash(cssColour, strength)
+```
 
 ## UI
 
