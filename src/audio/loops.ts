@@ -235,6 +235,44 @@ export class FireVoice {
 }
 
 /**
+ * Rain: a bright hiss of high-passed noise and a softer band of patter.
+ * On foot it's open and airy; from inside a car the hiss dulls and the
+ * patter on the roof comes forward.
+ */
+export class RainVoice {
+  readonly v: Voice;
+  private readonly hiss: GainNode;
+  private readonly patter: GainNode;
+  private readonly lp: BiquadFilterNode;
+
+  constructor(ctx: BaseAudioContext, bank: NoiseBank, dest: AudioNode, now: number) {
+    const v = (this.v = new Voice(ctx, bank, now, 1));
+    v.out.connect(dest);
+    const white = v.noise(bank.white, now, undefined, 1, true);
+    const hp = v.filter('highpass', 1100, 0.5);
+    this.lp = v.filter('lowpass', 7500, 0.4);
+    this.hiss = v.gain(0);
+    v.chain(white, hp, this.lp, this.hiss, v.out);
+    const pink = v.noise(bank.pink, now, undefined, 1.4, true);
+    const bp = v.filter('bandpass', 1500, 0.9);
+    this.patter = v.gain(0);
+    v.chain(pink, bp, this.patter, v.out);
+  }
+
+  /** `amount` 0..1 (how hard it's raining). */
+  apply(amount: number, inCar: boolean, now: number): void {
+    const a = clamp01(amount);
+    to(this.hiss.gain, a * (inCar ? 0.035 : 0.075), now, 0.4);
+    to(this.patter.gain, a * (inCar ? 0.11 : 0.05), now, 0.4);
+    to(this.lp.frequency, inCar ? 2600 : 7500, now, 0.4);
+  }
+
+  release(now: number): number {
+    return this.v.release(now, 1.2);
+  }
+}
+
+/**
  * The city at night: a soft filtered wash that drifts, a low rumble, brighter
  * and fuller on foot, duller from inside a car.
  */

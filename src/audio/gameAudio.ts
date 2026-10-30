@@ -13,7 +13,7 @@ import { onSettingsChange, settings, type Settings } from '../core/settings';
 import type { Award } from '../systems/score';
 import type { CarSound } from './carSound';
 import { ChaosMeter, MAX_INTENSITY } from './chaos';
-import { AmbientBed, EngineVoice, FireVoice, SirenVoice, TyreVoice, type SirenStyle } from './loops';
+import { AmbientBed, EngineVoice, FireVoice, RainVoice, SirenVoice, TyreVoice, type SirenStyle } from './loops';
 import {
   AIR_FILTER_BELOW,
   Dip,
@@ -204,6 +204,9 @@ export class GameAudio {
   private tyres: TyreVoice | null = null;
   private fire: FireVoice | null = null;
   private ambient: AmbientBed | null = null;
+  private rain: RainVoice | null = null;
+  private rainAmount = 0;
+  private rainIdle = 0;
   private readonly sirens: SirenVoice[] = [];
   /** Released continuous voices, disconnected once they've faded. */
   private readonly retiring: Voice[] = [];
@@ -290,6 +293,7 @@ export class GameAudio {
     this.updateFootsteps(f, dt);
     if (push) {
       this.updateFire(f.vehicles, this.paramDt, now);
+      this.updateRain(f.car !== null, this.paramDt, now);
       this.updateSirens(this.paramDt, now);
       this.paramDt = 0;
     }
@@ -334,6 +338,11 @@ export class GameAudio {
   }
 
   /** A car horn at (x, z). */
+  /** How hard it's raining, 0..1 (a weather loop; 0 fades it out). Call whenever it changes. */
+  setRain(amount: number): void {
+    this.rainAmount = clamp01(amount);
+  }
+
   horn(x: number, z: number, duration = 0.4): void {
     const v = this.voice({ x, z }, FALLOFF.horn, 0.55, 0.25);
     if (!v) return;
@@ -468,6 +477,7 @@ export class GameAudio {
       nodesCreated: nodeStats.created,
       sirens: this.sirens.length,
       fire: this.fire !== null,
+      rain: this.rain !== null,
       engine: m ? { archetype: this.engine!.archetype, rpm: Math.round(m.rpm), gear: m.gear, load: +m.load.toFixed(2), cranking: m.cranking } : null,
       music: music
         ? {
@@ -512,7 +522,7 @@ export class GameAudio {
     this.retiring.length = 0;
     this.music?.dispose();
     for (const s of this.sirens) s.v.dispose();
-    for (const x of [this.engine, this.tyres, this.fire, this.ambient]) x?.v.dispose();
+    for (const x of [this.engine, this.tyres, this.fire, this.ambient, this.rain]) x?.v.dispose();
     this.ctx?.close().catch(() => {});
     this.ctx = null;
   }
@@ -1056,6 +1066,18 @@ export class GameAudio {
     if (this.fire.idle > 4) {
       this.retire(this.fire.v, this.fire.release(now));
       this.fire = null;
+    }
+  }
+
+  private updateRain(inCar: boolean, dt: number, now: number): void {
+    const amount = this.rainAmount;
+    if (amount > 0.01 && !this.rain) this.rain = new RainVoice(this.ctx!, this.bank!, this.worldIn, now);
+    if (!this.rain) return;
+    this.rain.apply(amount, inCar, now);
+    this.rainIdle = amount > 0.005 ? 0 : this.rainIdle + dt;
+    if (this.rainIdle > 3) {
+      this.retire(this.rain.v, this.rain.release(now));
+      this.rain = null;
     }
   }
 
