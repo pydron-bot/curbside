@@ -35,6 +35,7 @@ import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
 import { CombatLook } from './render/combatLook';
 import { PeoplePose } from './render/peoplePose';
+import { PigeonLook } from './render/pigeonMesh';
 import { createRenderer, precompile } from './render/post';
 import { getQuality } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
@@ -133,6 +134,8 @@ const ramps = placeRamps(1337);
 const rampGrid = new StaticGrid(rampSolids(ramps));
 scene.add(new RampMesh(ramps, look).mesh);
 const stunts = new StuntTracker();
+/** Pigeon flocks on plazas, parks and pavements that scatter at cars, runners and gunfire (one draw call). */
+const pigeons = new PigeonLook(scene, look, city, collision, events, mulberry32((Date.now() ^ 0x5eed) >>> 0));
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
@@ -812,6 +815,7 @@ function frame(now: number) {
 
   // Body motion, tyre marks, damaged-car smoke and fire, weather, particles.
   const focus = attract.active ? attract : player.position;
+  pigeons.update(frameSeconds * fx.hitStop.scale, focus.x, focus.z, rig, vehicles, population.crowd, attract.active ? null : player);
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
   combatLook.update(frameSeconds * fx.hitStop.scale);
   updateHud(frameSeconds);
@@ -1094,6 +1098,8 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
 (window as unknown as { __ub: unknown }).__ub = {
   player,
   playerModel,
+  people,
+  pigeons,
   vehicles,
   input,
   city,
