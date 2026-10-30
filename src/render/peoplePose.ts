@@ -147,7 +147,8 @@ export class PeoplePose {
     const p = this.d.player;
     if (!p.driving && p.alive && !p.down && this.d.model.root.visible) this.d.model.cheer(PLAYER_CHEER);
     for (const c of this.d.crowd) {
-      if (!STORY_BODIES.includes(c.model.bodyKind) || c.agent.mode === 'down') continue;
+      // Friends only: Deacon Pike (or his Collector) doesn't cheer you taking him down.
+      if (!STORY_BODIES.includes(c.model.bodyKind) || c.agent.temper !== 'calm' || c.agent.mode === 'down') continue;
       if (Math.hypot(c.agent.s.x - x, c.agent.s.z - z) < CHEER_RANGE) c.model.cheer(STORY_CHEER);
     }
   }

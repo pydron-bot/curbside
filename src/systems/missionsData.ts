@@ -324,6 +324,7 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
           z: docks.z,
           r: 7,
           text: 'BRING IT HOME TO THE DOCKS',
+          start: [{ do: 'spawnPed', tag: 'vex', ...vex, body: 'vex' }],
           fail: [
             { wrecked: 'pikecar', reason: "PIKE'S CAR IS WRECKED" },
             { lost: 'pikecar', reason: 'YOU LEFT THE CAR BEHIND' },
