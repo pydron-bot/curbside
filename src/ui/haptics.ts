@@ -26,6 +26,8 @@ interface RumbleActuator {
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 export class Haptics {
+  /** Off behind the title: attract-mode crashes and explosions aren't the player's to feel. */
+  enabled = true;
   private readonly iosLabel: HTMLLabelElement | null;
   private iosPendingAt = -Infinity;
   private iosLastAt = -Infinity;
@@ -57,7 +59,7 @@ export class Haptics {
    * an iOS tick queued by a recent event, or one for this press if `press`.
    */
   touch(press = false): void {
-    if (!this.iosLabel || !settings.haptics) return;
+    if (!this.iosLabel || !settings.haptics || !this.enabled) return;
     const now = performance.now();
     if (!press && now - this.iosPendingAt > IOS_PENDING_MS) return;
     if (now - this.iosLastAt < IOS_MIN_GAP_MS) return;
@@ -68,7 +70,7 @@ export class Haptics {
 
   /** One haptic bump: strength 0..1 for `ms` milliseconds, on the device in use. */
   pulse(strength: number, ms: number): void {
-    if (!settings.haptics || strength <= 0) return;
+    if (!settings.haptics || !this.enabled || strength <= 0) return;
     const device = this.input.lastDevice;
     if (device === 'gamepad') this.rumble(strength, ms);
     else if (device === 'touch') {

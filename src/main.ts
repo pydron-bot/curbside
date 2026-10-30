@@ -924,6 +924,7 @@ function startGame() {
   attract.stop();
   hud.setScene('play');
   radar.visible = true;
+  haptics.enabled = true;
   playerModel.root.visible = true;
   rig.setHeights(...CAMERA_FOOT);
   respawnPlayer();
@@ -941,6 +942,7 @@ function enterTitle() {
   rig.setHeights(...CAMERA_ATTRACT);
   hud.setScene('title');
   radar.visible = false;
+  haptics.enabled = false;
   audio.setMusicMode('menu');
   frontDoor.showTitle(score.best);
 }
@@ -950,6 +952,7 @@ playerModel.root.visible = false;
 rig.setHeights(...CAMERA_ATTRACT);
 hud.setScene('title');
 radar.visible = false;
+haptics.enabled = false;
 audio.setMusicMode('menu');
 frontDoor.showTitle(score.best);
 frontDoor.rotate.check();
