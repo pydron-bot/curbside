@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BASE_POINTS, COMBO_WINDOW, EVADE_BONUS_FROM, MAX_COMBO, Score, evadeBonus } from '../src/systems/score';
+import { createVehicleState } from '../src/entities/vehicle';
+import { collideVehicles, type CarContact } from '../src/systems/physics';
+import { BASE_POINTS, COMBO_WINDOW, EVADE_BONUS_FROM, MAX_COMBO, Score, evadeBonus, rammed, smashCredit } from '../src/systems/score';
 
 describe('chaos score', () => {
   it('chains events into a growing multiplier', () => {
@@ -89,5 +91,50 @@ describe('police scoring', () => {
     const s = new Score();
     expect(s.award('evaded', evadeBonus(4)).points).toBe(evadeBonus(4));
     expect(s.award('copRam').label).toBe('COP RAM');
+  });
+});
+
+describe('who rammed whom', () => {
+  // A real contact between car A (x, z, heading, vx, vz) and car B; returns
+  // [impact, A's closing speed, B's closing speed].
+  function hit(a: number[], b: number[]): [number, number, number] {
+    const ca = createVehicleState(a[0], a[1], a[2]);
+    const cb = createVehicleState(b[0], b[1], b[2]);
+    ca.vx = a[3];
+    ca.vz = a[4];
+    cb.vx = b[3];
+    cb.vz = b[4];
+    const contact: CarContact = { x: 0, z: 0, nx: 0, nz: 0, closingA: 0, closingB: 0 };
+    const impact = collideVehicles(ca, cb, contact);
+    return [impact, contact.closingA, contact.closingB];
+  }
+
+  it('the stopped car that gets rear-ended scores nothing; the rammer does', () => {
+    const [impact, rammer, stopped] = hit([0, 0, Math.PI / 2, 15, 0], [4.4, 0, Math.PI / 2, 0, 0]);
+    expect(impact).toBeGreaterThan(6);
+    expect(smashCredit(impact, stopped, rammer)).toBe(false);
+    expect(smashCredit(impact, rammer, stopped)).toBe(true);
+  });
+
+  it('a head-on counts for both cars', () => {
+    const [impact, a, b] = hit([0, 0, Math.PI / 2, 10, 0], [4.4, 0, -Math.PI / 2, -10, 0]);
+    expect(smashCredit(impact, a, b)).toBe(true);
+    expect(smashCredit(impact, b, a)).toBe(true);
+  });
+
+  it('driving across and getting T-boned is not ramming', () => {
+    // B crosses along +z; A drives into its side along +x.
+    const [impact, a, b] = hit([-3.2, 0, Math.PI / 2, 15, 0], [0, 0, 0, 0, 10]);
+    expect(impact).toBeGreaterThan(6);
+    expect(smashCredit(impact, b, a)).toBe(false);
+    expect(smashCredit(impact, a, b)).toBe(true);
+  });
+
+  it('pulling away from a car that rams you is not ramming; a light bump never scores', () => {
+    expect(rammed(-2, 17)).toBe(false); // rear-ended while moving off
+    expect(rammed(2, 0)).toBe(false); // too slow to be a ram
+    expect(rammed(6, 10)).toBe(false); // under 40% of the closing speed
+    expect(rammed(8, 10)).toBe(true);
+    expect(smashCredit(5, 5, 0)).toBe(false);
   });
 });

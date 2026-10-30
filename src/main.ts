@@ -69,7 +69,7 @@ import {
   collideVehicles,
   type CarContact,
 } from './systems/physics';
-import { Score, type Award } from './systems/score';
+import { Score, rammed, smashCredit, type Award } from './systems/score';
 import { vehicleObstacles, type Obstacle } from './systems/traffic';
 import type { PauseReason } from './ui/pauseOverlay';
 import { loadBest } from './ui/scoreHud';
@@ -638,9 +638,10 @@ function simulate(dt: number) {
       const hitB = crashDamage(impact, contact.closingB, contact.closingA, mb, ma) * (b === driving ? PLAYER_CRASH_SHARE : 1);
       applyDamage(a.damage, hitA);
       applyDamage(b.damage, hitB);
-      // A hard hit throws a bike's rider off (whichever of the two is a bike).
-      if (isBike(a.archetype) && bikeThrows(impact)) throwRider(a, impact, b === driving);
-      if (isBike(b.archetype) && bikeThrows(impact)) throwRider(b, impact, a === driving);
+      // A hard hit throws a bike's rider off (whichever of the two is a bike);
+      // it's the player's doing only if the player's car did the ramming.
+      if (isBike(a.archetype) && bikeThrows(impact)) throwRider(a, impact, b === driving && rammed(contact.closingB, contact.closingA));
+      if (isBike(b.archetype) && bikeThrows(impact)) throwRider(b, impact, a === driving && rammed(contact.closingA, contact.closingB));
       const involvesPlayer = driving !== null && (a === driving || b === driving);
       if (involvesPlayer && hitA + hitB > 0) {
         markPlayerHit(a.damage, simTime);
@@ -650,7 +651,10 @@ function simulate(dt: number) {
         events.emit({ type: 'crash', x: contact.x, z: contact.z, impact, against: 'vehicle', involvesPlayer });
       }
       if (involvesPlayer && impact > 6) {
-        award(score.award('smash', Math.round(impact * 4)));
+        // SMASH only for ramming, not for being rammed.
+        const own = a === driving ? contact.closingA : contact.closingB;
+        const other = a === driving ? contact.closingB : contact.closingA;
+        if (smashCredit(impact, own, other)) award(score.award('smash', Math.round(impact * 4)));
         // Ramming a cop is a crime; an ordinary driver may panic, rage or bail.
         heat.playerCrash(a === driving ? b : a, impact);
         // A hit isn't a near miss.
