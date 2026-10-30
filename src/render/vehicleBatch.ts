@@ -182,6 +182,8 @@ export class CarBatch {
       const n = am.count;
       am.mesh.count = n;
       am.mesh.visible = n > 0 || this.uploadAll;
+      // An empty archetype's mesh is hidden, so there is nothing to upload.
+      if (n === 0 && !this.uploadAll) continue;
       uploadRange(am.mesh.instanceMatrix, n);
       uploadRange(am.paint, n);
       uploadRange(am.state, n);

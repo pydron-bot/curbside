@@ -16,7 +16,7 @@ import type { CrowdPed } from '../game/population';
 import { GRENADE_FUSE, THROW_GRAVITY, THROW_HEIGHT, throwVelocity, type Projectile } from '../systems/projectiles';
 import type { Rect } from '../world/city';
 import type { Effects } from './effects';
-import { GLOW, type GlowSprites } from './glowSprites';
+import { GLOW, uploadRange, type GlowSprites } from './glowSprites';
 import type { Look } from './look';
 import { worldUniforms } from './shaderLib';
 
@@ -97,13 +97,9 @@ export class CombatLook {
       }
     }
     this.mesh.count = n;
-    this.mesh.instanceMatrix.clearUpdateRanges();
-    this.mesh.instanceMatrix.addUpdateRange(0, n * 16);
-    this.mesh.instanceMatrix.needsUpdate = n > 0;
-    if (this.mesh.instanceColor && n > 0) {
-      this.mesh.instanceColor.clearUpdateRanges();
-      this.mesh.instanceColor.addUpdateRange(0, n * 3);
-      this.mesh.instanceColor.needsUpdate = true;
+    if (n > 0) {
+      uploadRange(this.mesh.instanceMatrix, n);
+      if (this.mesh.instanceColor) uploadRange(this.mesh.instanceColor, n);
     }
     if (dt <= 0) return;
 
