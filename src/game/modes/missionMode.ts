@@ -21,6 +21,7 @@ import type { DialogueCard } from '../../ui/progressScreens';
 import type { BlipOptions } from '../../ui/radar';
 import { fmt } from '../../ui/scoreHud';
 import { BLOCK_SIZE, type Rect } from '../../world/city';
+import { STORY_BODIES, type BodyKind } from '../bodies';
 import type { CrowdPed, Vehicle } from '../population';
 import { KeyedText, type Mode, type ModeCtx } from './context';
 import { CAR_NAMES } from './exports';
@@ -57,7 +58,10 @@ interface MissionPed {
   blipId: string;
   x: number;
   z: number;
-  shirt: string;
+  /** Shirt colour (story characters keep their own: undefined). */
+  shirt: string | undefined;
+  /** Who they're drawn as (a crowd body if unset). */
+  body: BodyKind | undefined;
   armed: boolean;
   hostile: boolean;
   ped: CrowdPed | null;
@@ -260,6 +264,9 @@ export class MissionMode implements Mode {
         ctx.progress.complete('missions', m.id);
         this.nextJob = undefined;
         const paid = ctx.pay(m.reward, 'mission', 'MISSION');
+        // Whoever's on foot at the finish (you, Vex, Tuna) cheers.
+        const at = ctx.deps.player.position;
+        ctx.deps.bus.emit({ type: 'celebrate', x: at.x, z: at.z });
         // The debrief card says MISSION PASSED and the pay (no banner under it).
         ctx.deps.audio.ui('success');
         ctx.progress.flush();
@@ -296,6 +303,8 @@ export class MissionMode implements Mode {
     this.cars.clear();
     this.carList.length = 0;
     for (const m of this.pedList) {
+      // A passed job's story characters stay put to cheer (the crowd recycles them once you're gone).
+      if (passed && m.body && STORY_BODIES.includes(m.body)) continue;
       if (m.ped && ctx.deps.population.crowd.includes(m.ped) && m.ped.agent.mode === 'arrest') resumeWalking(m.ped.agent);
     }
     this.peds.clear();
@@ -328,7 +337,8 @@ export class MissionMode implements Mode {
             blipId: `m-${a.tag}`,
             x: a.x,
             z: a.z,
-            shirt: a.shirt ?? '#e5e5e5',
+            shirt: a.shirt ?? (a.body && STORY_BODIES.includes(a.body) ? undefined : '#e5e5e5'),
+            body: a.body,
             armed: a.armed === true,
             hostile: a.hostile === true,
             ped: null,
@@ -366,8 +376,14 @@ export class MissionMode implements Mode {
           const agent = spawnPed(0, 0, 0, 0, ctx.deps.rand);
           agent.temper = 'calm';
           Object.assign(agent.s, { x: door.x, z: door.z, vx: 0, vz: 0, heading: car.sim.heading });
-          resumeWalking(agent);
-          ctx.deps.population.addPed(agent, { shirt: m?.shirt ?? '#e5e5e5' });
+          const story = m?.body !== undefined && STORY_BODIES.includes(m.body);
+          if (story) {
+            // A story character stands by the car (to cheer the finish) rather than wandering off.
+            agent.mode = 'arrest';
+            agent.goalX = door.x;
+            agent.goalZ = door.z;
+          } else resumeWalking(agent);
+          ctx.deps.population.addPed(agent, story ? undefined : { shirt: m?.shirt ?? '#e5e5e5' }, m?.body);
           break;
         }
       }
@@ -411,7 +427,7 @@ export class MissionMode implements Mode {
         agent.mode = 'arrest';
         agent.goalX = m.x;
         agent.goalZ = m.z;
-        m.ped = pop.addPed(agent, { shirt: m.shirt, pants: '#1d1d24' });
+        m.ped = pop.addPed(agent, m.shirt === undefined ? undefined : { shirt: m.shirt, pants: '#1d1d24' }, m.body);
       }
       const a = m.ped.agent;
       if (a.mode === 'down') {
@@ -431,7 +447,7 @@ export class MissionMode implements Mode {
       }
       if (a.mode === 'arrest' && d < 45 && (m.wave -= dt) <= 0) {
         m.wave = 0.8;
-        m.ped.model.punch();
+        m.ped.model.hail(1.1);
         a.s.heading = Math.atan2(at.x - a.s.x, at.z - a.s.z);
       }
     }

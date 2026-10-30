@@ -255,6 +255,10 @@ export class ChaosRunMode implements Mode {
     // The game is frozen now: the chain running when time ran out is earned (RETRY or TITLE would drop it).
     this.ctx.bankChain();
     deps.audio.ui(r.medal ? 'success' : 'fail');
+    if (r.medal) {
+      const at = deps.player.position;
+      deps.bus.emit({ type: 'celebrate', x: at.x, z: at.z });
+    }
     this.ctx.openModal(this.results);
     this.results.show(
       r,

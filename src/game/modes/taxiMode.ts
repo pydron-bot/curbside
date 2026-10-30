@@ -65,7 +65,7 @@ export class TaxiMode implements Mode {
     }
     if (fareOk && (this.wave -= dt) <= 0) {
       this.wave = WAVE_EVERY;
-      f.model.punch(); // the arm goes up: a wave
+      f.model.hail(WAVE_EVERY + 0.3); // the arm goes up and waves
       f.agent.s.heading = Math.atan2(i.x - f.agent.s.x, i.z - f.agent.s.z);
     }
     const r = this.duty.step(dt, i);
@@ -199,7 +199,9 @@ export class TaxiMode implements Mode {
     Object.assign(agent.s, { x: door.x, z: door.z, vx: 0, vz: 0, heading: car.sim.heading });
     if (run) scare(agent, car.sim.x, car.sim.z, 5);
     else resumeWalking(agent);
-    deps.population.addPed(agent);
+    const ped = deps.population.addPed(agent);
+    // A paying fare waves goodbye as they walk off.
+    if (!run) ped.model.hail(1.4);
   }
 
   hud(): boolean {

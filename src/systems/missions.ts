@@ -10,6 +10,7 @@
  * MissionView (positions and states by tag, provided by the glue) and says
  * when a step is done, the mission passed or failed. Pure logic, unit-tested.
  */
+import type { BodyKind } from '../game/bodies';
 import type { VehicleArchetype } from '../entities/vehicle';
 import type { WeaponKind } from './weapons';
 
@@ -22,8 +23,12 @@ export interface DialogueLine {
 export type MissionAction =
   /** A parked car (or, with `drive`, one driven by traffic AI) for the mission, kept until the mission ends. */
   | { do: 'spawnCar'; tag: string; archetype: VehicleArchetype; paint: string; x: number; z: number; heading: number; drive?: boolean }
-  /** Someone for the mission; `hostile` ones fight (armed: shoot) when the player comes close. */
-  | { do: 'spawnPed'; tag: string; x: number; z: number; shirt?: string; armed?: boolean; hostile?: boolean }
+  /**
+   * Someone for the mission; `hostile` ones fight (armed: shoot) when the
+   * player comes close. `body`: who they're drawn as (a story character's
+   * own GLB and colours; a crowd body if left out).
+   */
+  | { do: 'spawnPed'; tag: string; x: number; z: number; shirt?: string; armed?: boolean; hostile?: boolean; body?: BodyKind }
   | { do: 'wanted'; stars: number }
   | { do: 'give'; weapon: WeaponKind }
   /** The tagged person gets into the player's car (off the street). */

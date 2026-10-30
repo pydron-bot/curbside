@@ -7,7 +7,7 @@
  * clear of buildings; the docks and the safehouse are passed in.
  */
 import { pavement } from '../game/modes/places';
-import { BLOCK_SIZE } from '../world/city';
+import { BLOCK_SIZE, ROAD_WIDTH, SIDEWALK } from '../world/city';
 import { DIR_VEC, dirHeading, type Dir } from '../world/roads';
 import type { MissionDef } from './missions';
 
@@ -20,16 +20,40 @@ function kerb(ix: number, iz: number, d: Dir, along: number): { x: number; z: nu
   return { x: ix * BLOCK_SIZE + v.x * along - v.z * right, z: iz * BLOCK_SIZE + v.z * along + v.x * right, heading: dirHeading(d) };
 }
 
+/** On the pavement beside a kerb() spot (the walking line, as crowd.ts walks it). */
+function kerbside(ix: number, iz: number, d: Dir, along: number): Point {
+  const v = DIR_VEC[d];
+  const right = ROAD_WIDTH / 2 + SIDEWALK / 2;
+  return { x: ix * BLOCK_SIZE + v.x * along - v.z * right, z: iz * BLOCK_SIZE + v.z * along + v.x * right };
+}
+
+/**
+ * Where Vex waits for a delivery at the docks yard: beside the bay's mouth,
+ * just inside the lot (the bay you drive into faces `heading`).
+ */
+function besideBay(bay: Point & { heading?: number; halfWidth?: number; halfLength?: number }): Point {
+  const h = bay.heading ?? 0;
+  const fx = Math.sin(h);
+  const fz = Math.cos(h);
+  const back = (bay.halfLength ?? 4.6) - 1;
+  const side = (bay.halfWidth ?? 3.6) + 1.8;
+  return { x: bay.x - fx * back + fz * side, z: bay.z - fz * back - fx * side };
+}
+
 const pt = (p: Point): [number, number] => [p.x, p.z];
 
 const VEX = 'VEX';
 const TUNA = "LIL' TUNA";
 const PIKE = 'DEACON PIKE';
 
-export function buildMissions(docks: Point, safehouse: Point): MissionDef[] {
+export function buildMissions(docks: Point & { heading?: number; halfWidth?: number; halfLength?: number }, safehouse: Point): MissionDef[] {
   const saintCar = kerb(-4, 4, 1, 26);
   const vans = [kerb(-3, -3, 1, 18), kerb(-3, -3, 1, 23.5), kerb(-3, -3, 1, 29)];
   const pikeCar = kerb(5, 6, 0, 30);
+  // Deacon Pike himself, guarding his car from the pavement beside it.
+  const pike = kerbside(5, 6, 0, 30);
+  // Vex waits at the docks yard for whatever you bring her.
+  const vex = besideBay(docks);
   const tuna = pavement(9, 3, 2, 0.5);
   const tuna2 = pavement(11, 2, 3, 0.5);
   const collector = pavement(3, 12, 0, 0.5);
@@ -49,7 +73,16 @@ export function buildMissions(docks: Point, safehouse: Point): MissionDef[] {
       outro: [{ who: VEX, text: 'Huh. All four wheels. Most auditions bring me three.' }],
       steps: [
         { kind: 'enter', archetype: 'sedan', text: 'STEAL A SEDAN' },
-        { kind: 'deliver', archetype: 'sedan', x: docks.x, z: docks.z, r: 7, minHealth: 0.5, text: 'DELIVER IT TO THE DOCKS YARD' },
+        {
+          kind: 'deliver',
+          archetype: 'sedan',
+          x: docks.x,
+          z: docks.z,
+          r: 7,
+          minHealth: 0.5,
+          text: 'DELIVER IT TO THE DOCKS YARD',
+          start: [{ do: 'spawnPed', tag: 'vex', ...vex, body: 'vex' }],
+        },
       ],
     },
     {
@@ -70,7 +103,7 @@ export function buildMissions(docks: Point, safehouse: Point): MissionDef[] {
           tag: 'tuna',
           text: "PICK UP LIL' TUNA",
           timer: 100,
-          start: [{ do: 'spawnPed', tag: 'tuna', ...tuna, shirt: '#ffd23f' }],
+          start: [{ do: 'spawnPed', tag: 'tuna', ...tuna, body: 'tuna' }],
           done: [{ do: 'board', tag: 'tuna' }],
         },
         {
@@ -119,6 +152,7 @@ export function buildMissions(docks: Point, safehouse: Point): MissionDef[] {
           r: 7,
           minHealth: 0.3,
           text: 'BRING IT TO THE DOCKS YARD',
+          start: [{ do: 'spawnPed', tag: 'vex', ...vex, body: 'vex' }],
           fail: [
             { wrecked: 'saintcar', reason: "THE SAINTS' CAR IS WRECKED" },
             { lost: 'saintcar', reason: 'YOU LEFT THE CAR BEHIND' },
@@ -190,7 +224,7 @@ export function buildMissions(docks: Point, safehouse: Point): MissionDef[] {
           tag: 'tuna2',
           text: 'PICK UP TUNA BEFORE THE SAINTS DO',
           timer: 100,
-          start: [{ do: 'spawnPed', tag: 'tuna2', ...tuna2, shirt: '#ffd23f' }],
+          start: [{ do: 'spawnPed', tag: 'tuna2', ...tuna2, body: 'tuna' }],
           done: [{ do: 'board', tag: 'tuna2' }],
         },
         {
@@ -200,7 +234,16 @@ export function buildMissions(docks: Point, safehouse: Point): MissionDef[] {
           timer: 150,
           start: [{ do: 'wanted', stars: 3 }],
         },
-        { kind: 'deliver', x: docks.x, z: docks.z, r: 8, text: 'GET TUNA TO THE DOCKS YARD', timer: 120, done: [{ do: 'alight', tag: 'tuna2' }] },
+        {
+          kind: 'deliver',
+          x: docks.x,
+          z: docks.z,
+          r: 8,
+          text: 'GET TUNA TO THE DOCKS YARD',
+          timer: 120,
+          start: [{ do: 'spawnPed', tag: 'vex', ...vex, body: 'vex' }],
+          done: [{ do: 'alight', tag: 'tuna2' }],
+        },
       ],
     },
     {
@@ -222,7 +265,8 @@ export function buildMissions(docks: Point, safehouse: Point): MissionDef[] {
           text: 'FIND THE COLLECTOR IN THE SUBURBS',
           start: [
             { do: 'give', weapon: 'pistol' },
-            { do: 'spawnPed', tag: 'collector', ...collector, shirt: '#e5e5e5', armed: true, hostile: true },
+            // Pike's money man dresses like his boss, in white.
+            { do: 'spawnPed', tag: 'collector', ...collector, shirt: '#e5e5e5', armed: true, hostile: true, body: 'pike' },
           ],
         },
         { kind: 'knockOut', tag: 'collector', text: 'TAKE DOWN THE COLLECTOR', timer: 120 },
@@ -249,7 +293,10 @@ export function buildMissions(docks: Point, safehouse: Point): MissionDef[] {
           kind: 'enter',
           tag: 'pikecar',
           text: "STEAL PIKE'S BLACK SPORTS CAR",
-          start: [{ do: 'spawnCar', tag: 'pikecar', archetype: 'sports', paint: '#1f2328', ...pikeCar }],
+          start: [
+            { do: 'spawnCar', tag: 'pikecar', archetype: 'sports', paint: '#1f2328', ...pikeCar },
+            { do: 'spawnPed', tag: 'pike', ...pike, hostile: true, body: 'pike' },
+          ],
           fail: [{ wrecked: 'pikecar', reason: "PIKE'S CAR IS WRECKED" }],
         },
         {
