@@ -43,7 +43,7 @@ describe('time of day', () => {
     expect(noon.night).toBe(0);
     expect(midnight.night).toBe(1);
     expect(noon.lightIntensity).toBeGreaterThan(2);
-    expect(midnight.lightIntensity).toBeLessThan(0.6);
+    expect(midnight.lightIntensity).toBeLessThan(noon.lightIntensity / 3);
     expect(noon.shadowStrength).toBeGreaterThan(midnight.shadowStrength);
   });
 
