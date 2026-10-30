@@ -416,7 +416,7 @@ body:not([data-scene='play']) #act-prompt {
 
 /* Keyboard / pad: the phone's width cap isn't needed; one line for the usual prompts. */
 body:not([data-device='touch']) #act-prompt {
-  max-width: min(70vw, 560px);
+  max-width: min(70vw, 680px);
 }
 
 /* In a car on touch the bottom centre belongs to NOS and the pedals: the
