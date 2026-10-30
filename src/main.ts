@@ -54,7 +54,7 @@ import {
   stepDamage,
 } from './systems/damage';
 import { StuntTracker } from './systems/stunts';
-import { RAMP_HEIGHT, enteringRamp, placeRamps, rampSolids, rideRamps } from './world/ramps';
+import { enteringRamp, placeKickers, placeRamps, rampSolids, rideRamps } from './world/ramps';
 import { RampMesh } from './render/rampMesh';
 import {
   bodyDistance,
@@ -86,6 +86,7 @@ import { WantedHud } from './ui/wantedHud';
 import { generateCity, type Rect } from './world/city';
 import { StaticGrid } from './world/collision';
 import { mulberry32 } from './world/random';
+import { TrafficSignals } from './world/signals';
 import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audio/gameAudio';
 import { mountRadioToast } from './ui/radioToast';
 
@@ -131,11 +132,14 @@ const rig = new CameraRig(1);
 // Lights, time of day, ground, city, and the batched people/car/glow renderers.
 const look = new Look(renderer, scene, city, rig, pickups, app);
 const effects = new Effects(scene);
-/** Stunt ramps: drawn as one instanced mesh; their sides and backs are solid. */
-const ramps = placeRamps(1337);
+/** Stunt ramps and kickers: their sides and backs are solid. */
+const bigRamps = placeRamps(1337);
+const ramps = [...bigRamps, ...placeKickers(1337, bigRamps)];
 const rampGrid = new StaticGrid(rampSolids(ramps));
 scene.add(new RampMesh(ramps, look).mesh);
 const stunts = new StuntTracker();
+/** Traffic lights: their clock runs with the sim; traffic stops on red, the lenses show it. */
+const signals = new TrafficSignals();
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
@@ -298,6 +302,7 @@ const heat = new Heat({
   // A race or Chaos Run 3-2-1 holds the car: no bust while it can't move.
   held: () => progress.holdControls,
   bustFine: () => progress.bustShare(),
+  signals,
 });
 addHeatLook(look, heat);
 
@@ -583,6 +588,7 @@ function simulate(dt: number) {
 
   // --- Stunt scoring ---
   simTime += dt;
+  signals.step(dt);
   score.step(dt);
   if (driving) {
     const stunt = stunts.step(driving.sim, dt);
@@ -660,7 +666,8 @@ function simulate(dt: number) {
 /** A car came off a ramp: report the take-off and the flight time to expect. */
 function carJumped(v: Vehicle, isPlayer: boolean) {
   const s = v.sim;
-  const airtime = (s.vy + Math.sqrt(s.vy * s.vy + 2 * GRAVITY * RAMP_HEIGHT)) / GRAVITY;
+  // Off the lip at its height (s.y): a ramp's 1.6 m, a kicker's 0.6 m.
+  const airtime = (s.vy + Math.sqrt(s.vy * s.vy + 2 * GRAVITY * Math.max(0, s.y))) / GRAVITY;
   events.emit({ type: 'jump', x: s.x, z: s.z, speed: speed(s), airtime, involvesPlayer: isPlayer });
 }
 

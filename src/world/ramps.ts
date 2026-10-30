@@ -1,5 +1,5 @@
 /**
- * Stunt ramps: kicker wedges on the centreline of a road just past a
+ * Stunt ramps (and smaller kickers): wedges on the centreline of a road just past a
  * junction, facing along the road, so there's a long straight run-up behind
  * them and the rest of the block to land in. Traffic keeps to its lanes
  * (4 m either side of the centreline) and never touches them; the player
@@ -18,7 +18,10 @@ import { BLOCK_SIZE, ROAD_WIDTH, type Rect } from './city';
 import { DIR_VEC, MAX_NODE, dirHeading, type Dir } from './roads';
 import { mulberry32 } from './random';
 
+export type RampKind = 'ramp' | 'kicker';
+
 export interface Ramp {
+  kind: RampKind;
   /** Centre of the footprint. */
   x: number;
   z: number;
@@ -26,37 +29,62 @@ export interface Ramp {
   dir: Dir;
   /** Vehicle heading of travel up the slope. */
   heading: number;
+  /** Footprint along the road and across it, and the lip's height, m. */
+  length: number;
+  width: number;
+  height: number;
+  /** Vertical speed of a launch per m/s over the lip. */
+  kick: number;
 }
 
-/** Footprint along the road (m), across it (m), and the lip's height (m). */
-export const RAMP_LENGTH = 7;
-export const RAMP_WIDTH = 3.6;
-export const RAMP_HEIGHT = 1.5;
+/**
+ * The two models in props.glb (docs/BLENDER_TODO.md §3): the stunt ramp is
+ * 6 m long, 3.2 m wide with a 1.6 m lip; the kicker 2.5 m, 2.2 m and 0.6 m,
+ * a hop rather than a flight (it kicks two thirds as hard).
+ */
+export const RAMP_SIZES: Readonly<Record<RampKind, Pick<Ramp, 'length' | 'width' | 'height' | 'kick'>>> = {
+  ramp: { length: 6, width: 3.2, height: 1.6, kick: 0.36 },
+  kicker: { length: 2.5, width: 2.2, height: 0.6, kick: 0.24 },
+};
+
+/** The stunt ramp's footprint along the road (m), across it (m), and the lip's height (m). */
+export const RAMP_LENGTH = RAMP_SIZES.ramp.length;
+export const RAMP_WIDTH = RAMP_SIZES.ramp.width;
+export const RAMP_HEIGHT = RAMP_SIZES.ramp.height;
 /** Over the lip faster than this (m/s along the ramp) it's a full launch. */
 export const LAUNCH_SPEED = 14;
-/** Vertical speed of a launch per m/s over the lip. */
-export const KICK = 0.36;
-/** The first stretch of the slope is low enough to drive onto from the front, m. */
+/** Vertical speed of a stunt ramp's launch per m/s over the lip. */
+export const KICK = RAMP_SIZES.ramp.kick;
+/** The first stretch of the slope is low enough to drive onto from the front, m (a kicker's, less). */
 const ENTRY = 2;
 /** How far past the junction's edge the ramp starts, m. */
 const SETBACK = 4;
 /** Ramps at least this far apart, m. */
 const SPACING = 170;
 export const RAMP_COUNT = 10;
+/** Kickers: smaller hops on other roads, at least this far from any ramp, m. */
+export const KICKER_COUNT = 8;
+const KICKER_SPACING = 120;
 
 /** Where the ramp starts (the low edge's centre). */
 function start(r: Ramp, out: { x: number; z: number }): { x: number; z: number } {
   const v = DIR_VEC[r.dir];
-  out.x = r.x - v.x * (RAMP_LENGTH / 2);
-  out.z = r.z - v.z * (RAMP_LENGTH / 2);
+  out.x = r.x - v.x * (r.length / 2);
+  out.z = r.z - v.z * (r.length / 2);
   return out;
 }
 
-/** A ramp on the road leaving junction (ix, iz) heading `d`. */
-export function rampAt(ix: number, iz: number, d: Dir): Ramp {
+/** The low stretch of a ramp's slope that can be driven onto from the front, m. */
+function entryOf(r: Ramp): number {
+  return Math.min(ENTRY, r.length * 0.4);
+}
+
+/** A ramp (or a kicker) on the road leaving junction (ix, iz) heading `d`. */
+export function rampAt(ix: number, iz: number, d: Dir, kind: RampKind = 'ramp'): Ramp {
   const v = DIR_VEC[d];
-  const along = ROAD_WIDTH / 2 + SETBACK + RAMP_LENGTH / 2;
-  return { x: ix * BLOCK_SIZE + v.x * along, z: iz * BLOCK_SIZE + v.z * along, dir: d, heading: dirHeading(d) };
+  const size = RAMP_SIZES[kind];
+  const along = ROAD_WIDTH / 2 + SETBACK + size.length / 2;
+  return { kind, x: ix * BLOCK_SIZE + v.x * along, z: iz * BLOCK_SIZE + v.z * along, dir: d, heading: dirHeading(d), ...size };
 }
 
 /**
@@ -83,6 +111,28 @@ export function placeRamps(seed: number, count = RAMP_COUNT): Ramp[] {
 }
 
 /**
+ * Kickers: low hops on roads with no ramp, well away from the ramps and
+ * each other (also off the outer ring). The same every game.
+ */
+export function placeKickers(seed: number, ramps: readonly Ramp[], count = KICKER_COUNT): Ramp[] {
+  const rand = mulberry32(seed ^ 0x51c4);
+  const out: Ramp[] = [];
+  const inner = MAX_NODE - 1;
+  for (let tries = 0; out.length < count && tries < 4000; tries++) {
+    const ix = Math.floor(rand() * (inner * 2 + 1)) - inner;
+    const iz = Math.floor(rand() * (inner * 2 + 1)) - inner;
+    const d = Math.floor(rand() * 4) as Dir;
+    const v = DIR_VEC[d];
+    if (Math.abs(ix + v.x) > inner || Math.abs(iz + v.z) > inner) continue;
+    const k = rampAt(ix, iz, d, 'kicker');
+    if (ramps.some((q) => Math.hypot(q.x - k.x, q.z - k.z) < KICKER_SPACING)) continue;
+    if (out.some((q) => Math.hypot(q.x - k.x, q.z - k.z) < KICKER_SPACING)) continue;
+    out.push(k);
+  }
+  return out;
+}
+
+/**
  * The parts of each ramp a car can't drive through (all but the low entry
  * at the front), as rects for a StaticGrid. Ramps are axis-aligned.
  */
@@ -91,11 +141,11 @@ export function rampSolids(ramps: readonly Ramp[]): Rect[] {
   return ramps.map((r) => {
     start(r, s);
     const v = DIR_VEC[r.dir];
-    const ax = s.x + v.x * ENTRY;
-    const az = s.z + v.z * ENTRY;
-    const bx = s.x + v.x * RAMP_LENGTH;
-    const bz = s.z + v.z * RAMP_LENGTH;
-    const hw = RAMP_WIDTH / 2;
+    const ax = s.x + v.x * entryOf(r);
+    const az = s.z + v.z * entryOf(r);
+    const bx = s.x + v.x * r.length;
+    const bz = s.z + v.z * r.length;
+    const hw = r.width / 2;
     return {
       minX: Math.min(ax, bx) - (v.x === 0 ? hw : 0),
       maxX: Math.max(ax, bx) + (v.x === 0 ? hw : 0),
@@ -113,21 +163,21 @@ export function rampSolids(ramps: readonly Ramp[]): Rect[] {
  */
 export function enteringRamp(s: VehicleState, ramps: readonly Ramp[]): boolean {
   for (const r of ramps) {
-    if (Math.abs(s.x - r.x) > RAMP_LENGTH + 6 || Math.abs(s.z - r.z) > RAMP_LENGTH + 6) continue;
+    if (Math.abs(s.x - r.x) > r.length + 6 || Math.abs(s.z - r.z) > r.length + 6) continue;
     const v = DIR_VEC[r.dir];
     start(r, scratch);
     const along = (s.x - scratch.x) * v.x + (s.z - scratch.z) * v.z;
     const across = Math.abs((s.x - r.x) * -v.z + (s.z - r.z) * v.x);
     const forward = s.vx * v.x + s.vz * v.z;
     const square = Math.sin(s.heading) * v.x + Math.cos(s.heading) * v.z;
-    if (along > -5 && along < ENTRY + 1 && across < RAMP_WIDTH / 2 + 0.4 && forward > 0.5 && square > 0.7) return true;
+    if (along > -5 && along < entryOf(r) + 1 && across < r.width / 2 + 0.4 && forward > 0.5 && square > 0.7) return true;
   }
   return false;
 }
 
-/** Height of the slope `along` m up the ramp. */
-export function rampHeight(along: number): number {
-  return RAMP_HEIGHT * Math.min(1, Math.max(0, along / RAMP_LENGTH));
+/** Height of the slope `along` m up the ramp (the stunt ramp unless another is given). */
+export function rampHeight(along: number, r: Pick<Ramp, 'length' | 'height'> = RAMP_SIZES.ramp): number {
+  return r.height * Math.min(1, Math.max(0, along / r.length));
 }
 
 /** What happened to a car on the ramps this step. */
@@ -144,23 +194,23 @@ export function rideRamps(s: VehicleState, ramps: readonly Ramp[]): RampEvent {
   if (s.airborne) return 'none';
   const riding = s.y > 0;
   for (const r of ramps) {
-    if (Math.abs(s.x - r.x) > RAMP_LENGTH + 2 || Math.abs(s.z - r.z) > RAMP_LENGTH + 2) continue;
+    if (Math.abs(s.x - r.x) > r.length + 2 || Math.abs(s.z - r.z) > r.length + 2) continue;
     const v = DIR_VEC[r.dir];
     start(r, scratch);
     const along = (s.x - scratch.x) * v.x + (s.z - scratch.z) * v.z;
     const across = Math.abs((s.x - r.x) * -v.z + (s.z - r.z) * v.x);
     // Once on, a little slack at the edges (a wheel over the side doesn't drop it).
-    const onSlope = across <= RAMP_WIDTH / 2 + (riding ? 0.5 : 0) && along >= 0 && along <= RAMP_LENGTH;
+    const onSlope = across <= r.width / 2 + (riding ? 0.5 : 0) && along >= 0 && along <= r.length;
     if (onSlope) {
       // Only from the front: the low edge, moving up the slope (or already on it).
       const forward = s.vx * v.x + s.vz * v.z;
-      if (!riding && !(along < ENTRY + 1 && forward > 0)) continue;
-      s.y = rampHeight(along);
+      if (!riding && !(along < entryOf(r) + 1 && forward > 0)) continue;
+      s.y = rampHeight(along, r);
       return 'riding';
     }
     if (!riding) continue;
     // Was on this ramp's slope and isn't now.
-    if (across > RAMP_WIDTH / 2 + 0.5 || along < -0.5) {
+    if (across > r.width / 2 + 0.5 || along < -0.5) {
       if (along < 0) {
         s.y = 0; // rolled back off the front
         return 'none';
@@ -168,11 +218,11 @@ export function rideRamps(s: VehicleState, ramps: readonly Ramp[]): RampEvent {
       launch(s, 0); // off the side: a drop
       return 'drop';
     }
-    if (along > RAMP_LENGTH) {
+    if (along > r.length) {
       const speedUp = s.vx * v.x + s.vz * v.z;
       const k = Math.min(1, Math.max(0, (speedUp - LAUNCH_SPEED * 0.55) / (LAUNCH_SPEED * 0.45)));
-      s.y = RAMP_HEIGHT;
-      launch(s, KICK * Math.max(0, speedUp) * k);
+      s.y = r.height;
+      launch(s, r.kick * Math.max(0, speedUp) * k);
       return k > 0.5 ? 'launch' : 'drop';
     }
     if (along < 0) {

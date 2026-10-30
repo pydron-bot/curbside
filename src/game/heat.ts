@@ -22,6 +22,7 @@ import { driveAi, reactToHit, rerouteAi, scareDriver, shouldYield, YIELD_RANGE, 
 import { Wanted, WITNESS_RANGE, type Crime } from '../systems/wanted';
 import type { City, Rect } from '../world/city';
 import type { StaticGrid } from '../world/collision';
+import type { SignalView } from '../world/signals';
 import { inShop, placeSprayShops, placeStation, type SprayShop, type Station } from '../world/landmarks';
 import type { Player } from './player';
 import type { Population, Vehicle } from './population';
@@ -76,6 +77,8 @@ export interface HeatDeps {
   held?(): boolean;
   /** The share of the score a bust takes (default BUST_FINE). */
   bustFine?(): number;
+  /** Traffic lights: ordinary traffic stops on red. */
+  signals?: SignalView;
 }
 
 export class Heat {
@@ -212,7 +215,7 @@ export class Heat {
       ai.mood = 'calm';
       rerouteAi(ai, v.sim, rand);
     }
-    const c = driveAi(ai, v.sim, obstacles, rand, dt);
+    const c = driveAi(ai, v.sim, obstacles, rand, dt, this.deps.signals);
     if (ai.honk > 0) {
       this.deps.bus.emit({ type: 'horn', x: v.sim.x, z: v.sim.z, duration: ai.honk });
       ai.honk = 0;

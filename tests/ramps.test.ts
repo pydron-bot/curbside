@@ -5,15 +5,15 @@ import { collideVehicleStatic } from '../src/systems/physics';
 import { MIN_AIRTIME, StuntTracker, stuntLabel, stuntPoints, type StuntResult } from '../src/systems/stunts';
 import { BLOCK_SIZE, generateCity } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
-import { KICK, RAMP_COUNT, RAMP_HEIGHT, RAMP_LENGTH, RAMP_WIDTH, enteringRamp, placeRamps, rampAt, rampSolids, rideRamps } from '../src/world/ramps';
+import { KICK, KICKER_COUNT, RAMP_COUNT, RAMP_HEIGHT, RAMP_LENGTH, RAMP_SIZES, RAMP_WIDTH, enteringRamp, placeKickers, placeRamps, rampAt, rampSolids, rideRamps, type RampKind } from '../src/world/ramps';
 import { DIR_VEC, LANE_OFFSET, MAX_NODE } from '../src/world/roads';
 
 const DT = 1 / 60;
 const full = { throttle: 1, steer: 0, handbrake: false };
 
 /** Drive a car flat out along `ramp`'s line from `runUp` m before it; record the jump. */
-function jump(v0: number, spec = SEDAN, runUp = 30, throttle = 1) {
-  const ramp = rampAt(0, 0, 1); // east along z = 0
+function jump(v0: number, spec = SEDAN, runUp = 30, throttle = 1, kind: RampKind = 'ramp') {
+  const ramp = rampAt(0, 0, 1, kind); // east along z = 0
   const s = createVehicleState(ramp.x - runUp, 0, ramp.heading);
   s.vx = v0;
   const tracker = new StuntTracker();
@@ -168,5 +168,36 @@ describe('stunt scoring', () => {
     expect(r).not.toBeNull();
     expect(r!.spin).toBeGreaterThan(330);
     expect(r!.label.startsWith('360')).toBe(true);
+  });
+});
+
+describe('ramps match their models', () => {
+  it('the stunt ramp is the 6 m / 1.6 m model, the kicker 2.5 m / 0.6 m', () => {
+    expect([RAMP_LENGTH, RAMP_WIDTH, RAMP_HEIGHT]).toEqual([6, 3.2, 1.6]);
+    const k = rampAt(0, 0, 1, 'kicker');
+    expect([k.length, k.width, k.height]).toEqual([2.5, 2.2, 0.6]);
+    expect(RAMP_SIZES.kicker.kick).toBeLessThan(KICK);
+  });
+
+  it('kickers sit on inner roads clear of the ramps and of each other', () => {
+    const ramps = placeRamps(1337);
+    const kickers = placeKickers(1337, ramps);
+    expect(kickers).toHaveLength(KICKER_COUNT);
+    expect(placeKickers(1337, ramps)).toEqual(kickers);
+    for (const k of kickers) {
+      expect(k.kind).toBe('kicker');
+      for (const r of ramps) expect(Math.hypot(r.x - k.x, r.z - k.z)).toBeGreaterThan(100);
+      // On the centreline, clear of both lanes.
+      expect(k.width / 2).toBeLessThan(LANE_OFFSET - 1.2);
+    }
+  });
+
+  it('a kicker throws a car into a short hop, well below a ramp jump', () => {
+    const hop = jump(26, SEDAN, 30, 1, 'kicker');
+    const big = jump(26);
+    expect(hop.launched).toBe(true);
+    expect(hop.maxY).toBeGreaterThan(RAMP_SIZES.kicker.height + 0.5);
+    expect(hop.maxY).toBeLessThan(big.maxY - 1);
+    expect(hop.landing).toBeLessThan(big.landing);
   });
 });

@@ -15,7 +15,7 @@ import {
   Vector3,
 } from 'three';
 import type { Rect } from '../world/city';
-import { RAMP_HEIGHT, RAMP_LENGTH, RAMP_WIDTH, type Ramp } from '../world/ramps';
+import type { Ramp } from '../world/ramps';
 import { GLOW, type GlowSprites } from './glowSprites';
 import type { Look } from './look';
 import { after, useWorldUniforms } from './shaderLib';
@@ -98,10 +98,10 @@ export class RampMesh {
     const m = new Matrix4();
     const q = new Quaternion();
     const up = new Vector3(0, 1, 0);
-    const scale = new Vector3(RAMP_WIDTH, RAMP_HEIGHT, RAMP_LENGTH);
+    const scale = new Vector3();
     ramps.forEach((r, i) => {
       q.setFromAxisAngle(up, r.heading);
-      m.compose(new Vector3(r.x, 0, r.z), q, scale);
+      m.compose(new Vector3(r.x, 0, r.z), q, scale.set(r.width, r.height, r.length));
       this.mesh.setMatrixAt(i, m);
     });
     this.mesh.count = ramps.length;
@@ -120,7 +120,7 @@ export class RampMesh {
       const fx = Math.sin(r.heading);
       const fz = Math.cos(r.heading);
       for (let k = 0; k < 3; k++) {
-        const back = RAMP_LENGTH / 2 + 3 + k * 2.6;
+        const back = r.length / 2 + 3 + k * 2.6;
         const a = 0.35 + 0.65 * Math.max(0, Math.sin(t * 5 - k * 1.1));
         glows.addFlat(r.x - fx * back, 0.06, r.z - fz * back, r.heading, 2.2, 1.6, 1.3 * a, 0.85 * a, 0.12 * a, GLOW.chevron);
       }

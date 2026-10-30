@@ -9,9 +9,12 @@
  * honking, through corners and gaps it would normally wait for), fly into a
  * road rage (the game hands it a pursuit controller) or bail out; anyone
  * held up by the player leans on the horn; and a siren coming up behind
- * makes them pull over to the kerb and slow.
+ * makes them pull over to the kerb and slow. Given the traffic lights, they
+ * stop at the line on red (and on amber when there's room to), queue behind
+ * each other without the gridlock breaker pushing through, and go on green;
+ * panicking or urgent drivers run them.
  */
-import { forwardSpeed, wrapAngle, type VehicleControls, type VehicleState } from '../entities/vehicle';
+import { CAR_BODY, forwardSpeed, wrapAngle, type VehicleControls, type VehicleState } from '../entities/vehicle';
 import { BLOCK_SIZE } from '../world/city';
 import {
   DIR_VEC,
@@ -27,6 +30,7 @@ import {
   reverse,
   type Dir,
 } from '../world/roads';
+import type { SignalView } from '../world/signals';
 
 export interface AiDriver {
   /** Intersection being driven toward. */
@@ -113,6 +117,13 @@ const YIELD_SHIFT = 3;
 const YIELD_SPEED = 3;
 /** A siren behind within this distance (same way) makes drivers pull over, m. */
 export const YIELD_RANGE = 40;
+/** Stop with the nose this far short of the approach waypoint, m (the stop line is ~2 m before it). */
+const STOP_SHORT = 2.8;
+/** Braking for a light: the deceleration a driver judges an amber by, and the gentler one they brake with, m/s². */
+const SIGNAL_DECEL = 7;
+const SIGNAL_EASE = 4;
+/** Queued behind a red within this distance of the line, the wait doesn't count toward pushing through, m. */
+const SIGNAL_QUEUE = 70;
 /** Overtaking: this far left of our lane line (into the oncoming lane), for at least this long. */
 const OVERTAKE_SHIFT = 2 * LANE_OFFSET;
 const OVERTAKE_SECONDS = 1.6;
@@ -190,6 +201,7 @@ export function driveAi(
   obstacles: Obstacle[],
   rand: () => number,
   dt: number,
+  signals?: SignalView | null,
 ): VehicleControls {
   ai.hornCooldown = Math.max(0, ai.hornCooldown - dt);
   ai.yielding = Math.max(0, ai.yielding - dt);
@@ -198,7 +210,12 @@ export function driveAi(
   const panic = ai.mood === 'panic';
   if (ai.phase === 'approach' && offRoute(ai, car)) rerouteAi(ai, car, rand);
   let target = currentWaypoint(ai);
-  if (Math.hypot(target.x - car.x, target.z - car.z) < WAYPOINT_RADIUS) {
+  // Traffic lights (the light facing us as we approach): how far our nose is from the stop line.
+  const light = signals && ai.phase === 'approach' && !panic && !ai.urgent ? signals.at(ai.ix, ai.iz, ai.dir) : null;
+  const toLine = light && light !== 'green' ? Math.hypot(target.x - car.x, target.z - car.z) - STOP_SHORT - Math.max(1.7, (car.body ?? CAR_BODY).reach) : 0;
+  // Held at a red short of the line: never on into the junction, however close the waypoint.
+  const heldAtRed = light === 'red' && toLine > -0.5;
+  if (Math.hypot(target.x - car.x, target.z - car.z) < WAYPOINT_RADIUS && !heldAtRed) {
     ai.progress = ai.bestProgress = Infinity;
     ai.stuck = ai.stalled = ai.attempts = 0;
     if (ai.phase === 'approach') {
@@ -268,6 +285,20 @@ export function driveAi(
   if (ai.yielding > 0 && ai.phase === 'approach') wantSpeed = Math.min(wantSpeed, YIELD_SPEED);
   if (panic && ai.hornCooldown <= 0) honk(ai, 0.2 + rand() * 0.25, 0.8 + rand());
 
+  // Stop at the line on red, and on amber if there's room to stop.
+  let queued = false;
+  if (light && light !== 'green' && ai.phase === 'approach') {
+    const vNow = Math.max(0, forwardSpeed(car));
+    const stopping = light === 'red' || toLine >= (vNow * vNow) / (2 * SIGNAL_DECEL);
+    if (stopping && toLine > -0.5) {
+      // A braking profile gentler than the one the amber decision assumes, so
+      // a driver who has decided to stop stays able to; the last bit, a stop.
+      const d = Math.max(0, toLine);
+      wantSpeed = d < 0.4 ? 0 : Math.min(wantSpeed, Math.sqrt(2 * SIGNAL_EASE * d), d * 1.2);
+      queued = toLine < SIGNAL_QUEUE;
+    }
+  }
+
   // Brake for anything in our path (in a hurry: pass it if the other lane is clear).
   const vF = forwardSpeed(car);
   if (ai.overtaking > 0) {
@@ -291,7 +322,8 @@ export function driveAi(
     }
     if (gap < safe) {
       wantSpeed = 0;
-      ai.waited += dt;
+      // Waiting behind cars at a red light isn't a jam.
+      if (!queued) ai.waited += dt;
       ai.blockedByPlayer = playerAhead ? ai.blockedByPlayer + dt : 0;
       if (ai.blockedByPlayer > HONK_AFTER && ai.hornCooldown <= 0) honk(ai, 0.5 + rand() * 0.5, 2 + rand());
       if (ai.waited > 4) {
