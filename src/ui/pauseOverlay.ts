@@ -76,7 +76,6 @@ export class PauseOverlay implements Panel {
     this.update.hidden = true;
     this.reload = menuButton('RELOAD THE GAME', { icon: 'restart', className: 'pause-update' });
     this.reload.hidden = true;
-    this.reload.addEventListener('click', () => this.onReload?.());
     card.append(this.title, this.hint, this.menu, this.update, this.reload);
     el.append(card);
 
@@ -86,6 +85,8 @@ export class PauseOverlay implements Panel {
     this.nav.add({ el: restart, activate: () => this.confirm(restart, 'SURE? RESTART', actions.restart) });
     this.nav.add({ el: quit, activate: () => this.confirm(quit, 'SURE? QUIT', actions.quit) });
     this.nav.add({ el: this.update, activate: () => actions.update() });
+    // A nav item (not a bare click listener) so keyboard / pad can reach it too.
+    this.nav.add({ el: this.reload, activate: () => this.onReload?.() });
   }
 
   /** Showing the pause menu itself (not the context-lost notice or the rotate pause). */
@@ -142,7 +143,10 @@ export class PauseOverlay implements Panel {
   offerReload(onReload: (() => void) | null): void {
     this.onReload = onReload;
     this.reload.hidden = onReload === null;
-    if (onReload) this.hint.textContent = 'Still waiting for the graphics — your progress is saved';
+    if (onReload) {
+      this.hint.textContent = 'Still waiting for the graphics — your progress is saved';
+      this.nav.focusElement(this.reload);
+    }
   }
 
   /** Offer the waiting update on the pause screen. */
