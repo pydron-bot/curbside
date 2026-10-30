@@ -2,7 +2,8 @@
  * Collision response for moving bodies. Cars are three circles along their
  * length; peds are one circle. Static obstacles come from a StaticGrid.
  * Each function returns the impact speed (m/s along the contact normal) so
- * damage/sound can hook in later; 0 means no hit.
+ * damage/sound can hook in; 0 means no hit. The hot paths here run for every
+ * car/ped pair every step, so they reuse scratch objects instead of allocating.
  */
 import type { PedState } from '../entities/pedestrian';
 import type { VehicleState } from '../entities/vehicle';
@@ -16,19 +17,51 @@ export const PED_RADIUS = 0.35;
 const WALL_RESTITUTION = 0.25;
 const WALL_FRICTION = 0.85;
 const CAR_RESTITUTION = 0.35;
+/** Centre distance beyond which two cars can't touch. */
+const CAR_REACH = (CAR_CIRCLE_OFFSETS[2] + CAR_CIRCLE_RADIUS) * 2;
+/** Centre distance beyond which a ped can't touch a car. */
+const PED_CAR_REACH = CAR_CIRCLE_OFFSETS[2] + CAR_CIRCLE_RADIUS + PED_RADIUS;
 
-export function carCircles(s: VehicleState): Array<{ x: number; z: number }> {
-  const fx = Math.sin(s.heading);
-  const fz = Math.cos(s.heading);
-  return CAR_CIRCLE_OFFSETS.map((o) => ({ x: s.x + fx * o, z: s.z + fz * o }));
+export interface Point {
+  x: number;
+  z: number;
 }
 
-export function collideVehicleStatic(s: VehicleState, grid: StaticGrid): number {
+const newCircles = (): Point[] => [
+  { x: 0, z: 0 },
+  { x: 0, z: 0 },
+  { x: 0, z: 0 },
+];
+const scratchA = newCircles();
+const scratchB = newCircles();
+const scratchPos: Point = { x: 0, z: 0 };
+
+/**
+ * The car's three collision-circle centres. Pass `out` (three points) to
+ * reuse storage; without it a fresh array is returned.
+ */
+export function carCircles(s: VehicleState, out: Point[] = newCircles()): Point[] {
+  const fx = Math.sin(s.heading);
+  const fz = Math.cos(s.heading);
+  for (let i = 0; i < 3; i++) {
+    out[i].x = s.x + fx * CAR_CIRCLE_OFFSETS[i];
+    out[i].z = s.z + fz * CAR_CIRCLE_OFFSETS[i];
+  }
+  return out;
+}
+
+/**
+ * Push a car out of walls and bounce it. If `contact` is given and the car
+ * hit something, it receives the point of impact (on the wall surface).
+ */
+export function collideVehicleStatic(s: VehicleState, grid: StaticGrid, contact?: Point): number {
   let impact = 0;
+  const fx = Math.sin(s.heading);
+  const fz = Math.cos(s.heading);
+  const pos = scratchPos;
   for (const offset of CAR_CIRCLE_OFFSETS) {
-    const fx = Math.sin(s.heading);
-    const fz = Math.cos(s.heading);
-    const pos = { x: s.x + fx * offset, z: s.z + fz * offset };
+    pos.x = s.x + fx * offset;
+    pos.z = s.z + fz * offset;
     const c = grid.resolveCircle(pos, CAR_CIRCLE_RADIUS);
     if (!c) continue;
     // Shift the whole car by however far this circle was pushed.
@@ -41,20 +74,29 @@ export function collideVehicleStatic(s: VehicleState, grid: StaticGrid): number 
       s.vx *= WALL_FRICTION;
       s.vz *= WALL_FRICTION;
       s.yawRate *= 0.6;
-      impact = Math.max(impact, -vn);
+      if (-vn > impact) {
+        impact = -vn;
+        if (contact) {
+          contact.x = pos.x - c.nx * CAR_CIRCLE_RADIUS;
+          contact.z = pos.z - c.nz * CAR_CIRCLE_RADIUS;
+        }
+      }
     }
   }
   return impact;
 }
 
-export function collideVehicles(a: VehicleState, b: VehicleState): number {
+/**
+ * Separate two overlapping cars and exchange momentum (equal masses). If
+ * `contact` is given and they hit, it receives the point where they touched.
+ */
+export function collideVehicles(a: VehicleState, b: VehicleState, contact?: Point): number {
   // Cheap reject: centres further apart than the cars' full lengths.
-  const reach = (CAR_CIRCLE_OFFSETS[2] + CAR_CIRCLE_RADIUS) * 2;
-  if (Math.abs(a.x - b.x) > reach || Math.abs(a.z - b.z) > reach) return 0;
+  if (Math.abs(a.x - b.x) > CAR_REACH || Math.abs(a.z - b.z) > CAR_REACH) return 0;
 
   let impact = 0;
-  const ca = carCircles(a);
-  const cb = carCircles(b);
+  const ca = carCircles(a, scratchA);
+  const cb = carCircles(b, scratchB);
   for (const p of ca) {
     for (const q of cb) {
       let dx = p.x - q.x;
@@ -68,6 +110,10 @@ export function collideVehicles(a: VehicleState, b: VehicleState): number {
       } else {
         dx = 1;
         dz = 0;
+      }
+      if (contact) {
+        contact.x = (p.x + q.x) / 2;
+        contact.z = (p.z + q.z) / 2;
       }
       // Separate equally, then exchange momentum along the normal (equal masses).
       a.x += dx * overlap * 0.5;
@@ -99,8 +145,9 @@ export function collidePedStatic(p: PedState, grid: StaticGrid): number {
 
 /** Peds can't walk through cars; the car isn't affected (it's far heavier). */
 export function collidePedVehicle(p: PedState, v: VehicleState): number {
+  if (Math.abs(p.x - v.x) > PED_CAR_REACH || Math.abs(p.z - v.z) > PED_CAR_REACH) return 0;
   let impact = 0;
-  for (const q of carCircles(v)) {
+  for (const q of carCircles(v, scratchA)) {
     let dx = p.x - q.x;
     let dz = p.z - q.z;
     const d = Math.hypot(dx, dz);

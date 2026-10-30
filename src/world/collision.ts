@@ -15,6 +15,8 @@ export interface Contact {
 
 export class StaticGrid {
   private cells = new Map<number, Rect[]>();
+  /** Reused result for queries spanning several cells. */
+  private readonly scratch: Rect[] = [];
 
   constructor(
     obstacles: Rect[],
@@ -38,17 +40,27 @@ export class StaticGrid {
     return [Math.floor(minX / s), Math.floor(minZ / s), Math.floor(maxX / s), Math.floor(maxZ / s)];
   }
 
-  /** Obstacles whose cells overlap the circle's bounding box (may repeat). */
-  near(x: number, z: number, r: number): Rect[] {
-    const [x0, z0, x1, z1] = this.range(x - r, z - r, x + r, z + r);
-    if (x0 === x1 && z0 === z1) return this.cells.get(cellKey(x0, z0)) ?? [];
-    const out = new Set<Rect>();
+  /**
+   * Obstacles whose cells overlap the circle's bounding box, each once. The
+   * returned array is shared: read it before the next query, don't keep it.
+   */
+  near(x: number, z: number, r: number): readonly Rect[] {
+    const s = this.cellSize;
+    const x0 = Math.floor((x - r) / s);
+    const z0 = Math.floor((z - r) / s);
+    const x1 = Math.floor((x + r) / s);
+    const z1 = Math.floor((z + r) / s);
+    if (x0 === x1 && z0 === z1) return this.cells.get(cellKey(x0, z0)) ?? EMPTY;
+    const out = this.scratch;
+    out.length = 0;
     for (let cx = x0; cx <= x1; cx++) {
       for (let cz = z0; cz <= z1; cz++) {
-        for (const rect of this.cells.get(cellKey(cx, cz)) ?? []) out.add(rect);
+        const list = this.cells.get(cellKey(cx, cz));
+        if (!list) continue;
+        for (const rect of list) if (!out.includes(rect)) out.push(rect);
       }
     }
-    return [...out];
+    return out;
   }
 
   /**
@@ -68,6 +80,8 @@ export class StaticGrid {
     return deepest;
   }
 }
+
+const EMPTY: readonly Rect[] = [];
 
 function cellKey(cx: number, cz: number): number {
   // Pack two signed 16-bit ints; the world is far smaller than ±32k cells.

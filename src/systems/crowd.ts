@@ -166,7 +166,7 @@ export function stepCrowdPed(
       if (sp > 7) dodge(p, v, sp);
       continue;
     }
-    const hit = carCircles(v).some((c) => Math.hypot(c.x - p.s.x, c.z - p.s.z) < CAR_CIRCLE_RADIUS + PED_RADIUS + 0.1);
+    const hit = touchesCar(p.s, v);
     if (hit && sp > 4) {
       p.mode = 'down';
       p.timer = 3;
@@ -252,6 +252,20 @@ function stepHostile(p: PedAgent, target: Target | undefined, dt: number): Crowd
   if (p.attackCooldown > 0 || d > SHOOT_RANGE) return null;
   p.attackCooldown = SHOOT_EVERY;
   return { kind: 'shoot', dirX: ux, dirZ: uz };
+}
+
+const circles = [
+  { x: 0, z: 0 },
+  { x: 0, z: 0 },
+  { x: 0, z: 0 },
+];
+
+/** Is the ped within reach of any of the car's collision circles? */
+function touchesCar(s: PedState, v: VehicleState): boolean {
+  for (const c of carCircles(v, circles)) {
+    if (Math.hypot(c.x - s.x, c.z - s.z) < CAR_CIRCLE_RADIUS + PED_RADIUS + 0.1) return true;
+  }
+  return false;
 }
 
 function dodge(p: PedAgent, v: VehicleState, sp: number) {
