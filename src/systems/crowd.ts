@@ -17,7 +17,7 @@
 import { PLAYER_ON_FOOT, createPedState, stepPedestrian, type PedSpec, type PedState } from '../entities/pedestrian';
 import { speed, type VehicleState } from '../entities/vehicle';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK } from '../world/city';
-import { CAR_CIRCLE_RADIUS, PED_RADIUS, carCircles } from './physics';
+import { PED_RADIUS, bodyOf, carCircles } from './physics';
 
 export type PedMode = 'walk' | 'flee' | 'down' | 'fight' | 'shoot' | 'arrest';
 export type PedRole = 'civilian' | 'cop';
@@ -438,15 +438,12 @@ function stepHostile(p: PedAgent, target: Target | undefined, dt: number): Crowd
   return { kind: 'shoot', dirX: ux, dirZ: uz };
 }
 
-const circles = [
-  { x: 0, z: 0 },
-  { x: 0, z: 0 },
-  { x: 0, z: 0 },
-];
+/** Reused for each car's collision circles (carCircles resizes it to the body). */
+const circles: Array<{ x: number; z: number }> = [];
 
 /** Is the ped within reach of any of the car's collision circles? */
 function touchesCar(s: PedState, v: VehicleState): boolean {
-  const reach = CAR_CIRCLE_RADIUS + PED_RADIUS + 0.1;
+  const reach = bodyOf(v).radius + PED_RADIUS + 0.1;
   for (const c of carCircles(v, circles)) {
     const dx = c.x - s.x;
     const dz = c.z - s.z;

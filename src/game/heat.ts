@@ -11,7 +11,7 @@
  * state in heatPresenter.ts.
  */
 import type { EventBus } from '../core/events';
-import { VEHICLE_HEALTH, speed, type VehicleControls } from '../entities/vehicle';
+import { VEHICLE_HEALTH, isPoliceArchetype, speed, type VehicleControls } from '../entities/vehicle';
 import { DOOR_RANGE, BustMeter, type ArrestSituation } from '../systems/arrest';
 import { scare } from '../systems/crowd';
 import { createDamage } from '../systems/damage';
@@ -228,7 +228,7 @@ export class Heat {
   playerCrash(other: Vehicle, impact: number): void {
     const own = this.deps.player.driving;
     if (!own || !this.live || impact <= 6) return;
-    if (other.police || other.archetype === 'police') {
+    if (other.police || isPoliceArchetype(other.archetype)) {
       // In a chase, bumps happen both ways: only a clear ram counts. A cop
       // ramming, PITting or boxing you in was asking for it, and so was one
       // driving into you (cutting across, overtaking head-on). Smashing

@@ -14,7 +14,7 @@
  */
 import type { EventBus } from '../core/events';
 import { createPedState, type PedState } from '../entities/pedestrian';
-import { driverDoorPosition } from '../entities/vehicle';
+import { driverDoorPosition, isPoliceArchetype } from '../entities/vehicle';
 import { Arsenal } from '../systems/weapons';
 import type { Vehicle } from './population';
 
@@ -105,7 +105,7 @@ export class Player {
   enter(v: Vehicle): boolean {
     if (!this.canEnter || v.damage.wrecked) return false;
     this.driving = v;
-    this.bus.emit({ type: 'enterVehicle', archetype: v.archetype, police: v.archetype === 'police' || v.police === true });
+    this.bus.emit({ type: 'enterVehicle', archetype: v.archetype, police: isPoliceArchetype(v.archetype) || v.police === true });
     return true;
   }
 

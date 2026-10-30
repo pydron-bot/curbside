@@ -124,6 +124,81 @@ export const ENGINE_PROFILES: Record<VehicleArchetype, EngineProfile> = {
     drive: 2, cutoff: 230, loadOpen: 1200, rpmOpen: 800,
     noise: 0.16, lope: 0.24, lopeRate: 0.25, backfire: 0.2, gain: 0.55,
   },
+  // A big-block V8: deep, lumpy idle, loud and pops on the overrun.
+  muscle: {
+    idleRpm: 700, redlineRpm: 6200, pulses: 4,
+    waveA: 'sawtooth', waveB: 'square', ratioB: 0.5, detuneB: 0, mixB: 0.7,
+    drive: 3.4, cutoff: 260, loadOpen: 2400, rpmOpen: 1500,
+    noise: 0.2, lope: 0.42, lopeRate: 0.25, backfire: 0.8, gain: 0.6,
+  },
+  limo: {
+    idleRpm: 650, redlineRpm: 5800, pulses: 4,
+    waveA: 'sawtooth', waveB: 'triangle', ratioB: 0.5, detuneB: 0, mixB: 0.5,
+    drive: 1.3, cutoff: 220, loadOpen: 1000, rpmOpen: 700,
+    noise: 0.08, lope: 0.08, lopeRate: 0.25, backfire: 0, gain: 0.46,
+  },
+  police_suv: {
+    idleRpm: 720, redlineRpm: 6200, pulses: 4,
+    waveA: 'sawtooth', waveB: 'square', ratioB: 0.5, detuneB: 0, mixB: 0.6,
+    drive: 2.4, cutoff: 280, loadOpen: 1800, rpmOpen: 1200,
+    noise: 0.16, lope: 0.22, lopeRate: 0.25, backfire: 0.35, gain: 0.54,
+  },
+  swat: {
+    idleRpm: 620, redlineRpm: 4200, pulses: 3,
+    waveA: 'square', waveB: 'sawtooth', ratioB: 0.5, detuneB: 0, mixB: 0.75,
+    drive: 1.8, cutoff: 180, loadOpen: 800, rpmOpen: 450,
+    noise: 0.24, lope: 0.36, lopeRate: 1 / 3, backfire: 0, gain: 0.6,
+  },
+  ambulance: {
+    idleRpm: 650, redlineRpm: 4400, pulses: 3,
+    waveA: 'square', waveB: 'sawtooth', ratioB: 0.5, detuneB: 0, mixB: 0.7,
+    drive: 1.4, cutoff: 200, loadOpen: 760, rpmOpen: 500,
+    noise: 0.2, lope: 0.3, lopeRate: 1 / 3, backfire: 0, gain: 0.56,
+  },
+  // Diesels: low, chuggy, slow to rev.
+  firetruck: {
+    idleRpm: 550, redlineRpm: 3200, pulses: 3,
+    waveA: 'square', waveB: 'sawtooth', ratioB: 0.5, detuneB: -6, mixB: 0.8,
+    drive: 1.9, cutoff: 160, loadOpen: 650, rpmOpen: 380,
+    noise: 0.3, lope: 0.45, lopeRate: 1 / 3, backfire: 0, gain: 0.64,
+  },
+  garbage_truck: {
+    idleRpm: 520, redlineRpm: 3000, pulses: 3,
+    waveA: 'square', waveB: 'sawtooth', ratioB: 0.5, detuneB: -8, mixB: 0.8,
+    drive: 2, cutoff: 150, loadOpen: 600, rpmOpen: 350,
+    noise: 0.32, lope: 0.5, lopeRate: 1 / 3, backfire: 0, gain: 0.64,
+  },
+  tow_truck: {
+    idleRpm: 600, redlineRpm: 4000, pulses: 3,
+    waveA: 'square', waveB: 'sawtooth', ratioB: 0.5, detuneB: 0, mixB: 0.75,
+    drive: 1.7, cutoff: 180, loadOpen: 700, rpmOpen: 450,
+    noise: 0.26, lope: 0.4, lopeRate: 1 / 3, backfire: 0, gain: 0.6,
+  },
+  ice_cream_van: {
+    idleRpm: 700, redlineRpm: 4600, pulses: 2.5,
+    waveA: 'square', waveB: 'triangle', ratioB: 1, detuneB: 12, mixB: 0.5,
+    drive: 1.3, cutoff: 220, loadOpen: 800, rpmOpen: 600,
+    noise: 0.14, lope: 0.18, lopeRate: 0.5, backfire: 0, gain: 0.5,
+  },
+  bus: {
+    idleRpm: 500, redlineRpm: 2800, pulses: 3,
+    waveA: 'square', waveB: 'sawtooth', ratioB: 0.5, detuneB: -10, mixB: 0.85,
+    drive: 1.8, cutoff: 140, loadOpen: 560, rpmOpen: 320,
+    noise: 0.34, lope: 0.48, lopeRate: 1 / 3, backfire: 0, gain: 0.66,
+  },
+  // Two-strokes and a sport bike: buzzy, high-revving, thin.
+  scooter: {
+    idleRpm: 1600, redlineRpm: 9500, pulses: 1,
+    waveA: 'square', waveB: 'sawtooth', ratioB: 2, detuneB: 20, mixB: 0.45,
+    drive: 2.8, cutoff: 700, loadOpen: 2200, rpmOpen: 2400,
+    noise: 0.26, lope: 0.08, lopeRate: 1, backfire: 0.1, gain: 0.38,
+  },
+  cop_bike: {
+    idleRpm: 1100, redlineRpm: 11000, pulses: 2,
+    waveA: 'sawtooth', waveB: 'square', ratioB: 1, detuneB: 10, mixB: 0.5,
+    drive: 3.2, cutoff: 650, loadOpen: 3000, rpmOpen: 3000,
+    noise: 0.2, lope: 0.06, lopeRate: 0.5, backfire: 0.5, gain: 0.46,
+  },
 };
 
 export const GEARS = 5;

@@ -7,6 +7,7 @@ import { UpdateGate } from './core/updateGate';
 import { PLAYER_ON_FOOT, copyPedState, stepPedestrian } from './entities/pedestrian';
 import {
   GRAVITY,
+  VEHICLE_BODIES,
   VEHICLE_HEALTH,
   VEHICLE_SPECS,
   copyVehicleState,
@@ -56,6 +57,7 @@ import { StuntTracker } from './systems/stunts';
 import { RAMP_HEIGHT, enteringRamp, placeRamps, rampSolids, rideRamps } from './world/ramps';
 import { RampMesh } from './render/rampMesh';
 import {
+  bodyDistance,
   collidePedStatic,
   collidePedVehicle,
   collideVehicleStatic,
@@ -93,6 +95,8 @@ const app = document.getElementById('app')!;
 const ENTER_RANGE = 4;
 /** Cars moving faster than this can't be boarded. */
 const ENTER_MAX_SPEED = 6;
+/** Beside a long body, the reach counts from its side (a sedan's door is ~0.6 m from its body, 1.6 m from its centre). */
+const ENTER_BODY_SLACK = 1;
 /**
  * On foot: tuned for a landscape phone; a 16:9 desktop sees less across at
  * the same height, so it sits higher (~42 × 23 m on screen) to keep NPC
@@ -138,6 +142,7 @@ const vehicles: Vehicle[] = [];
 
 function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation): Vehicle {
   const sim = createVehicleState(0, 0, 0);
+  sim.body = VEHICLE_BODIES[archetype];
   const mesh = look.cars.create(archetype, paint);
   scene.add(mesh.root);
   return {
@@ -170,6 +175,7 @@ const PARKED: ParkingSpot[] = [
 /** Ready a recycled car for traffic: full health, and its proper look if it was a wreck or restyled. */
 function resetVehicle(v: Vehicle, restyled: boolean) {
   v.damage = createDamage(VEHICLE_HEALTH[v.archetype]);
+  v.sim.body = v.prev.body = VEHICLE_BODIES[v.archetype];
   v.wreckAge = 0;
   if (v.charred || restyled) restoreVehicleLook(v, look.cars);
 }
@@ -393,7 +399,8 @@ function nearestEnterable(): Vehicle | null {
   for (const v of vehicles) {
     const dx = v.sim.x - player.ped.x;
     const dz = v.sim.z - player.ped.z;
-    const d2 = dx * dx + dz * dz;
+    // Long vehicles: anywhere along the body counts (the bus's door is 4 m from its middle).
+    const d2 = Math.min(dx * dx + dz * dz, (bodyDistance(v.sim, player.ped.x, player.ped.z) + ENTER_BODY_SLACK) ** 2);
     if (d2 < bestD2 && speed(v.sim) < ENTER_MAX_SPEED && !v.damage.wrecked && !v.exported) {
       best = v;
       bestD2 = d2;

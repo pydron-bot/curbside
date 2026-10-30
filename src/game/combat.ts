@@ -14,7 +14,7 @@
  * pistol or SMG fires out of either side window at the best target there.
  */
 import type { EventBus } from '../core/events';
-import { VEHICLE_SPECS } from '../entities/vehicle';
+import { VEHICLE_SPECS, isPoliceArchetype } from '../entities/vehicle';
 import {
   hurtPed,
   provoke,
@@ -32,7 +32,7 @@ import {
   markPlayerHit,
   type BlastKind,
 } from '../systems/damage';
-import { CAR_CIRCLE_OFFSETS, CAR_CIRCLE_RADIUS, carCircles } from '../systems/physics';
+import { bodyDistance, bodyOf, carCircles } from '../systems/physics';
 import { FIRE_RADIUS, MIN_THROW, Projectiles, clampThrowToWalls, throwTarget, type ProjectileWorld } from '../systems/projectiles';
 import type { Award, Score } from '../systems/score';
 import {
@@ -168,11 +168,8 @@ export class Combat {
   private readonly playerLit = new Set<PedAgent>();
   private readonly candidates: Candidate[] = [];
   private candidateCount = 0;
-  private readonly circles = [
-    { x: 0, z: 0 },
-    { x: 0, z: 0 },
-    { x: 0, z: 0 },
-  ];
+  /** Reused for each car's collision circles (carCircles resizes it to the body). */
+  private readonly circles: Array<{ x: number; z: number }> = [];
   private readonly dir = { x: 0, z: 0 };
   /** Reused for autoAim (a view of the first candidateCount candidates) and ray tests. */
   private readonly aimTargets: Candidate[] = [];
@@ -534,7 +531,7 @@ export class Combat {
       distance: Math.hypot(f.x - x, f.z - z),
       byPlayer,
       ownCar,
-      police: source !== null && (source.archetype === 'police' || source.police === true),
+      police: source !== null && (isPoliceArchetype(source.archetype) || source.police === true),
       source: kind === 'car' ? 'vehicle' : kind,
     });
     const p = d.player;
@@ -724,8 +721,9 @@ export class Combat {
     const own = d.player.driving;
     for (const v of d.vehicles) {
       if (shooterIsPlayer && v === own) continue;
+      const hitRadius = bodyOf(v.sim).radius * 0.9;
       for (const q of carCircles(v.sim, this.circles)) {
-        const t = rayCircle(ox, oz, dx, dz, this.circle(q.x, q.z, CAR_CIRCLE_RADIUS * 0.9));
+        const t = rayCircle(ox, oz, dx, dz, this.circle(q.x, q.z, hitRadius));
         if (t > 0.3 && t < best) {
           best = t;
           hit.kind = 'vehicle';
@@ -752,7 +750,7 @@ export class Combat {
       fromX: ox,
       fromZ: oz,
       byPlayer: shooterIsPlayer,
-      police: hit.v !== null && (hit.v.archetype === 'police' || hit.v.police === true),
+      police: hit.v !== null && (isPoliceArchetype(hit.v.archetype) || hit.v.police === true),
     });
     return hit;
   }
@@ -788,10 +786,8 @@ export class Combat {
   /** Distance from (x, z) to the surface of the car's body (0 inside), m. */
   private nearestPart(v: Vehicle, x: number, z: number): number {
     const s = v.sim;
-    if (Math.abs(s.x - x) > 12 || Math.abs(s.z - z) > 12) return Math.hypot(s.x - x, s.z - z) - CAR_CIRCLE_OFFSETS[2] - CAR_CIRCLE_RADIUS;
-    let best = Infinity;
-    for (const q of carCircles(s, this.circles)) best = Math.min(best, Math.hypot(q.x - x, q.z - z));
-    return Math.max(0, best - CAR_CIRCLE_RADIUS);
+    if (Math.abs(s.x - x) > 12 || Math.abs(s.z - z) > 12) return Math.max(0, Math.hypot(s.x - x, s.z - z) - bodyOf(s).reach);
+    return bodyDistance(s, x, z);
   }
 
   /** Lock-on candidates: every ped on their feet (not within `near` m of the player), hostiles flagged. */
@@ -815,7 +811,7 @@ export class Combat {
     for (const v of this.d.vehicles) {
       if (v === except || v.damage.wrecked) continue;
       if (near > 0 && Math.hypot(v.sim.x - me.x, v.sim.z - me.z) < near) continue;
-      this.push(v.sim.x, v.sim.z, wanted && (v.archetype === 'police' || v.police === true), null, v);
+      this.push(v.sim.x, v.sim.z, wanted && (isPoliceArchetype(v.archetype) || v.police === true), null, v);
     }
   }
 

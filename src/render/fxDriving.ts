@@ -26,6 +26,19 @@ const WHEELS: Record<VehicleArchetype, { rear: number; track: number }> = {
   police: { rear: 1.35, track: 0.8 },
   taxi: { rear: 1.35, track: 0.78 },
   pickup: { rear: 1.6, track: 0.82 },
+  muscle: { rear: 1.42, track: 0.82 },
+  limo: { rear: 2.3, track: 0.8 },
+  police_suv: { rear: 1.45, track: 0.83 },
+  swat: { rear: 1.85, track: 0.92 },
+  ambulance: { rear: 1.75, track: 0.9 },
+  firetruck: { rear: 2.7, track: 1.05 },
+  garbage_truck: { rear: 2.7, track: 1.05 },
+  tow_truck: { rear: 1.75, track: 0.92 },
+  ice_cream_van: { rear: 1.65, track: 0.88 },
+  bus: { rear: 3.6, track: 1.08 },
+  // One track down the middle (both trails on top of each other read as one dark line).
+  scooter: { rear: 0.6, track: 0 },
+  cop_bike: { rear: 0.78, track: 0 },
 };
 const DEFAULT_WHEELS = WHEELS.sedan;
 /** Skid ribbon width, m. */
@@ -300,7 +313,8 @@ export class DrivingFx {
       const qx = rx - cos * w.track;
       const qz = rz + sin * w.track;
       rec.left.step(lx, lz, amount, decals);
-      rec.right.step(qx, qz, amount, decals);
+      // A bike has one rear wheel: one trail.
+      rec.right.step(qx, qz, w.track > 0 ? amount : 0, decals);
 
       if (amount > 0.3) {
         const tintSmoke = isPlayer ? driftPoints : 0;
