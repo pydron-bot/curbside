@@ -63,6 +63,9 @@ import { createCityMesh } from './world/cityMesh';
 import { StaticGrid } from './world/collision';
 import { createGround } from './world/ground';
 import { mulberry32 } from './world/random';
+import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audio/gameAudio';
+import { events } from './core/events';
+import { mountRadioToast } from './ui/radioToast';
 
 registerSW({ immediate: true });
 
@@ -228,6 +231,12 @@ const award = (a: Award | null) => a && scoreHud.pop(a);
 /** Sim time each vehicle last earned a near miss, so one pass scores once. */
 const nearMissAt = new Map<Vehicle, number>();
 let simTime = 0;
+
+// --- Audio (unlocks on the first tap / click / key) ---
+const audio = new GameAudio({ best: score.best });
+const audioFrame = createAudioFrame(vehicles);
+const audioCar = createCarSound();
+mountRadioToast(document.body, audio);
 
 // --- Input ---
 const input = new Input();
@@ -684,6 +693,14 @@ function frame(now: number) {
     rig.update(frameSeconds, px, pz, ped.vx, ped.vz);
   }
   speedBox.hidden = !player.driving;
+
+  audioFrame.x = focus.x;
+  audioFrame.z = focus.z;
+  audioFrame.car = player.driving ? describeCar(audioCar, player.driving.sim, input.readVehicle(), player.driving.archetype) : null;
+  audioFrame.footSpeed = player.driving ? 0 : Math.hypot(ped.vx, ped.vz);
+  audioFrame.health = player.health;
+  audio.update(frameSeconds, audioFrame);
+
   fitToScreen();
   renderer.render(scene, rig.camera);
 
@@ -700,6 +717,7 @@ function lerp(a: number, b: number, t: number) {
 function setPaused(p: boolean) {
   paused = p;
   pausedEl.hidden = !p;
+  audio.setPaused(p);
   if (!p) {
     last = performance.now();
     loop.reset();
@@ -715,3 +733,4 @@ window.addEventListener('keydown', (e) => {
 
 // Debug hook for poking at the sim from the console / automated checks.
 (window as unknown as { __ub: unknown }).__ub = { player, vehicles, input, city, population, renderer, score };
+Object.assign((window as unknown as { __ub: object }).__ub, { audio, events });

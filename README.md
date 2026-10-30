@@ -37,6 +37,7 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Gas / brake-reverse | W/S, ↑/↓ | GAS / BRAKE | RT / LT |
 | Handbrake | Space | HAND | A |
 | Pause | P / Esc | — (auto on app switch) | — |
+| Next radio station | R | tap the "now playing" card | — |
 
 ## Status
 
@@ -84,6 +85,10 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
   (shooters hit your car too). Player health; at 0 → WASTED, respawn, lose
   weapons, run score resets (best kept).
 - Traffic 24 cars incl. new **taxi** and **pickup**; crowd 22.
+- **Audio** (`src/audio/`): fully synthesised Web Audio, no sound files —
+  engine with a gearbox, tyres, guns, impacts, explosions, fire, sirens,
+  city ambience, stingers tuned to the music, and an adaptive procedural
+  soundtrack on three radio stations. See *Audio* below.
 - Next: **M6 Heat** (wanted level, police).
 
 ## Layout
@@ -93,8 +98,73 @@ src/core      loop, input
 src/entities  vehicle physics (no three.js)
 src/render    camera rig, meshes, dynamic resolution
 src/world     ground / city
-src/ui        touch controls, CSS
+src/ui        touch controls, HUD, radio card, CSS
+src/audio     synthesised sound and music (pure models + Web Audio voices)
 tests/        vitest
 tools/        icon generator
 blender/      procedural asset scripts (lib/ helpers, generators/, build_assets.py)
 ```
+
+## Audio
+
+Everything is synthesised at runtime with the Web Audio API: no audio files,
+no dependencies. `GameAudio` (`src/audio/gameAudio.ts`) owns it all; `main.ts`
+only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
+
+- **Unlock and lifecycle.** One `AudioContext`, created on the first
+  tap / click / key (iOS needs a user gesture; a one-sample silent buffer
+  completes the unlock). Interrupted or suspended contexts resume on the next
+  gesture. A hidden page suspends it; pausing silences the world and muffles
+  the music (UI sounds still play), and 45 s of pause suspends it to save
+  battery. On iOS 16.4+ `navigator.audioSession.type` is `'playback'` so the
+  silent switch doesn't mute the game (setting `ignoreSilentSwitch`, false →
+  `'ambient'`).
+- **Mix.** World sounds (muted on pause, muffled by close blasts and death,
+  with a synthetic street reverb) and UI/stingers → SFX bus; music → its own
+  bus; both → master → glue compressor → limiter. Bus gains follow
+  `settings.masterVolume / sfxVolume / musicVolume` (squared slider curve).
+- **Spatial.** One-shots are placed relative to the camera focus: inverse
+  distance falloff with a floor (far events are quiet, not silent), stereo pan
+  by screen x, air-absorption lowpass and more reverb with distance. Sirens
+  also get doppler.
+- **Budget.** One-shots are capped per category (oldest stolen) and overall,
+  rate-gated per event type (a 30-car chain reaction makes two booms), and
+  every node is disconnected when its voice ends; `audio.debug` shows live
+  node and voice counts. Continuous voices push parameters at ~45 Hz.
+- **Events.** It subscribes to every `GameEvent` on the bus (`src/core/events.ts`);
+  nothing in the simulation calls it directly.
+- **Music.** A look-ahead scheduler (25 ms timer, 0.12 s ahead on the audio
+  clock) plays original 8-bar progressions in three styles: NIGHTDRIVE FM
+  (synthwave), BREAKNECK 99.1 (breakbeat), LOW TIDE (lo-fi). Intensity 0–5
+  layers in kick, snare, arps, lead, crashes and risers, opens the filter and
+  lifts the tempo; changes land on bar lines with a fill, tempo glides. It
+  follows chaos (combos, explosions, speed) above a floor set with
+  `setIntensity`. `'menu'` mode is a drumless arrangement for a title screen.
+
+| Module | What |
+|---|---|
+| `carSound.ts` | 5-speed gearbox / RPM model, per-archetype engine profiles, squeal and road-noise amounts (pure, tested) |
+| `mix.ts`, `voices.ts`, `chaos.ts` | falloff/pan/doppler math, voice limiter and rate gate, chaos → intensity (pure, tested) |
+| `music/theory.ts`, `music/stations.ts`, `music/sequencer.ts` | chords, voice leading, lead composer, station data, step clock and arranger (pure, tested) |
+| `synth.ts` | noise buffers, node-tracking `Voice`, envelopes, reverb impulse |
+| `sfx.ts`, `loops.ts`, `music/musicPlayer.ts` | one-shot recipes, continuous voices (engine, tyres, fire, ambience, sirens), music instruments |
+
+API for other systems:
+
+```ts
+audio.update(dt, frame)              // per frame: listener x/z, player car (describeCar) or null, footSpeed, health, vehicles (fires)
+audio.siren(id, x, z, on, style?)    // call every frame while it sounds; 'twoTone' | 'wail' | 'yelp'; stale ids fade out after 1 s
+audio.horn(x, z, duration?)
+audio.ui('click' | 'confirm' | 'back' | 'countdown' | 'go' | 'success' | 'fail' | 'cash' | 'star')
+audio.setPaused(bool)
+audio.setIntensity(0..5)             // music floor, e.g. the wanted level
+audio.setMusicMode('game' | 'menu' | 'off')
+audio.nextStation()                  // also R / tapping the radio card
+audio.unlock()                       // call from a title screen's tap
+audio.debug                          // state, voices, nodes, engine, music
+```
+
+To audition sounds without playing, render them offline: every recipe takes
+a `Voice` on any `BaseAudioContext`, so an `OfflineAudioContext` in the dev
+page can render and analyse them (`window.__ub.audio` and `__ub.events` are
+exposed for emitting test events).

@@ -1,0 +1,99 @@
+/* --- Radio "now playing" card (src/ui/radioToast.ts) --- */
+#radio {
+  --radio-a: #ff4fd8;
+  --radio-b: #4fd8ff;
+  position: fixed;
+  top: max(10px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 16px 7px 13px;
+  border-radius: 999px;
+  background: linear-gradient(100deg, rgb(18 10 34 / 0.82), rgb(40 12 56 / 0.82));
+  border: 1px solid color-mix(in srgb, var(--radio-a) 55%, transparent);
+  box-shadow:
+    0 0 18px color-mix(in srgb, var(--radio-a) 35%, transparent),
+    inset 0 0 14px rgb(255 255 255 / 0.04);
+  color: #fff;
+  transform: translate(-50%, -150%);
+  opacity: 0;
+  transition:
+    transform 0.38s cubic-bezier(0.2, 1.35, 0.4, 1),
+    opacity 0.3s;
+  pointer-events: none;
+  cursor: pointer;
+  touch-action: none;
+}
+
+#radio[hidden] {
+  display: none;
+}
+
+#radio.in {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#radio[data-station='breakneck'] {
+  --radio-a: #ff8a3c;
+  --radio-b: #ffd24f;
+}
+
+#radio[data-station='lowtide'] {
+  --radio-a: #4fe0c0;
+  --radio-b: #a98bff;
+}
+
+.radio-eq {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 16px;
+}
+
+.radio-eq i {
+  display: block;
+  width: 3px;
+  height: 4px;
+  border-radius: 1px;
+  background: linear-gradient(to top, var(--radio-a), var(--radio-b));
+  animation: radio-eq 0.62s ease-in-out infinite alternate;
+}
+
+.radio-eq i:nth-child(2) { animation-delay: -0.31s; animation-duration: 0.5s; }
+.radio-eq i:nth-child(3) { animation-delay: -0.12s; animation-duration: 0.71s; }
+.radio-eq i:nth-child(4) { animation-delay: -0.45s; animation-duration: 0.56s; }
+
+@keyframes radio-eq {
+  from { height: 3px; }
+  to { height: 16px; }
+}
+
+.radio-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.05;
+}
+
+.radio-text small {
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  opacity: 0.65;
+}
+
+.radio-text b {
+  font-size: 16px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  text-shadow: 0 0 10px color-mix(in srgb, var(--radio-a) 80%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #radio { transition: opacity 0.2s; transform: translate(-50%, 0); }
+  .radio-eq i { animation: none; height: 10px; }
+}
