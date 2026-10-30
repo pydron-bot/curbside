@@ -366,6 +366,7 @@ const people = new PeoplePose({
   crowd: population.crowd,
   locked: () => combat.lock !== null,
   playing: () => !attract.active,
+  view: (out) => rig.visibleGround(out),
 });
 
 // --- Audio (unlocks on the first tap / click / key) ---
@@ -1097,6 +1098,7 @@ const progress = new ProgressDirector({
 function warmShaders() {
   try {
     precompile(renderer, scene, rig.camera);
+    look.cars.precompileDepth(scene, rig.camera);
     resolution.holdOff(1);
   } catch {
     // A lost context mid-compile: the first frames compile instead.

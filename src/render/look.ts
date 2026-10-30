@@ -180,6 +180,7 @@ export class Look {
   private warmUp(camera: Camera): void {
     this.warmedUp = true;
     precompile(this.renderer, this.scene, camera);
+    this.cars.precompileDepth(this.scene, camera);
   }
 
   /**

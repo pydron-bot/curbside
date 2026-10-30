@@ -12,7 +12,8 @@ import { STORY_BODIES } from '../game/bodies';
 import type { Player } from '../game/player';
 import type { CrowdPed, Vehicle } from '../game/population';
 import { WEAPONS } from '../systems/weapons';
-import type { CharacterModel } from './characterModel';
+import type { Rect } from '../world/city';
+import { CULL_MARGIN, type CharacterModel } from './characterModel';
 
 /** Share of the EnterCar clip spent stepping up to the door. */
 const BOARD_STEP = 0.4;
@@ -35,6 +36,12 @@ const HURT_STAGGER = 0.22;
 const CHEER_RANGE = 25;
 const PLAYER_CHEER = 3;
 const STORY_CHEER = 3.5;
+/**
+ * Crowd members this far outside the visible ground are still posed, m:
+ * wider than the draw cull, so whoever is drawn was posed this frame even
+ * after the camera moves on.
+ */
+export const POSE_MARGIN = CULL_MARGIN + 4;
 
 export interface PeoplePoseDeps {
   bus: EventBus;
@@ -46,6 +53,8 @@ export interface PeoplePoseDeps {
   locked(): boolean;
   /** In play (false behind the title). */
   playing(): boolean;
+  /** The ground the camera sees, written into `out`; without it everyone is posed. */
+  view?(out: Rect): Rect;
 }
 
 export class PeoplePose {
@@ -55,6 +64,7 @@ export class PeoplePose {
   private boardFor = 0;
   private readonly boardFrom = { x: 0, z: 0, heading: 0 };
   private sinceShot = Infinity;
+  private readonly view: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 
   constructor(private readonly d: PeoplePoseDeps) {
     const bus = d.bus;
@@ -80,7 +90,8 @@ export class PeoplePose {
    * last two sim steps, `aimHeading` the player's deliberate aim or null.
    */
   update(dt: number, alpha: number, aimHeading: number | null): void {
-    for (const c of this.d.crowd) poseCrowdPed(c, dt, alpha);
+    const view = this.d.view ? this.d.view(this.view) : null;
+    for (const c of this.d.crowd) poseCrowdPed(c, dt, alpha, view);
     this.posePlayer(dt, alpha, aimHeading);
   }
 
@@ -155,7 +166,7 @@ export class PeoplePose {
 }
 
 /** One crowd member (officers too): where they are, what they hold, what they're doing. */
-function poseCrowdPed(c: CrowdPed, dt: number, alpha: number): void {
+function poseCrowdPed(c: CrowdPed, dt: number, alpha: number, view: Rect | null): void {
   const a = c.agent;
   const s = a.s;
   const m = c.model;
@@ -167,7 +178,13 @@ function poseCrowdPed(c: CrowdPed, dt: number, alpha: number): void {
   m.cowering = a.cower > 0 && a.mode === 'flee';
   m.followStagger(a.stagger);
   const down = a.mode === 'down';
-  m.update(dt, Math.hypot(s.vx, s.vz), down, down ? a.timer : Infinity);
+  const shown = !view || nearView(view, m.root.position.x, m.root.position.z, POSE_MARGIN);
+  m.update(dt, Math.hypot(s.vx, s.vz), down, down ? a.timer : Infinity, shown);
+}
+
+/** Is (x, z) within `margin` of the `view` rectangle? */
+export function nearView(view: Rect, x: number, z: number, margin: number): boolean {
+  return x >= view.minX - margin && x <= view.maxX + margin && z >= view.minZ - margin && z <= view.maxZ + margin;
 }
 
 /** The driver's door (as driverDoorPosition, without the garbage): left of the car, a little forward. */

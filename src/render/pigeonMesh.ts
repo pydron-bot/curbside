@@ -26,6 +26,7 @@ import type { Pigeon, PigeonThreat, PigeonWorld } from '../systems/pigeons';
 import { Pigeons } from '../systems/pigeons';
 import type { City, Rect } from '../world/city';
 import type { StaticGrid } from '../world/collision';
+import { uploadRange } from './glowSprites';
 import type { Look } from './look';
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms } from './shaderLib';
 
@@ -209,12 +210,8 @@ export class PigeonLook {
     this.mesh.count = n;
     this.mesh.visible = n > 0;
     if (n === 0) return;
-    this.mesh.instanceMatrix.clearUpdateRanges();
-    this.mesh.instanceMatrix.addUpdateRange(0, n * 16);
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.flap.clearUpdateRanges();
-    this.flap.addUpdateRange(0, n * 2);
-    this.flap.needsUpdate = true;
+    uploadRange(this.mesh.instanceMatrix, n);
+    uploadRange(this.flap, n);
   }
 
   /** pigeon.glb arrived: body and wings into one geometry, the Flap clip into the shader's wing poses. */

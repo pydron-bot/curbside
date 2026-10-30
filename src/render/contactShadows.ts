@@ -6,6 +6,7 @@ import {
   PlaneGeometry,
   ShaderMaterial,
 } from 'three';
+import { uploadRange } from './glowSprites';
 
 /**
  * Soft contact shadows under every car and person: one instanced quad mesh
@@ -59,12 +60,8 @@ export class ContactShadows {
 
   end(): void {
     this.mesh.count = this.count;
-    this.mesh.instanceMatrix.clearUpdateRanges();
-    this.mesh.instanceMatrix.addUpdateRange(0, this.count * 16);
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.shape.clearUpdateRanges();
-    this.shape.addUpdateRange(0, this.count * 4);
-    this.shape.needsUpdate = true;
+    uploadRange(this.mesh.instanceMatrix, this.count);
+    uploadRange(this.shape, this.count);
   }
 }
 

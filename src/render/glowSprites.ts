@@ -111,10 +111,13 @@ export class GlowSprites {
   }
 }
 
-/** Upload only the first `count` instances of an instanced attribute. */
+/** Below this a whole-buffer upload is cheaper than three's update ranges, which allocate per upload. */
+export const WHOLE_UPLOAD_BYTES = 8192;
+
+/** Upload the first `count` instances of an instanced attribute (small buffers go up whole). */
 export function uploadRange(a: InstancedBufferAttribute, count: number): void {
   a.clearUpdateRanges();
-  a.addUpdateRange(0, count * a.itemSize);
+  if ((a.array as Float32Array).byteLength > WHOLE_UPLOAD_BYTES) a.addUpdateRange(0, count * a.itemSize);
   a.needsUpdate = true;
 }
 

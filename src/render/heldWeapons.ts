@@ -17,6 +17,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { publicUrl } from '../core/paths';
 import type { WeaponKind } from '../systems/weapons';
 import type { CharacterModel } from './characterModel';
+import { uploadRange } from './glowSprites';
 import { after } from './shaderLib';
 
 /** Every weapon that can be in a hand, and its root in weapons.glb. */
@@ -112,12 +113,8 @@ export class HeldWeapons {
     this.mesh.count = n;
     this.mesh.visible = n > 0;
     if (n === 0) return;
-    this.mesh.instanceMatrix.clearUpdateRanges();
-    this.mesh.instanceMatrix.addUpdateRange(0, n * 16);
-    this.mesh.instanceMatrix.needsUpdate = true;
-    this.sel.clearUpdateRanges();
-    this.sel.addUpdateRange(0, n);
-    this.sel.needsUpdate = true;
+    uploadRange(this.mesh.instanceMatrix, n);
+    uploadRange(this.sel, n);
   }
 
   /** Where `model`'s muzzle is (world, as drawn last frame); false if nothing's in hand. */

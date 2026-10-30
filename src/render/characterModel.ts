@@ -57,7 +57,7 @@ const START_CAPACITY = 16;
  * People this far outside the visible ground still get drawn, m: a head
  * leaning into the frame, and a long sun shadow at dusk reaching into it.
  */
-const CULL_MARGIN = 8;
+export const CULL_MARGIN = 8;
 
 /** The skeleton and clips every character of one body shares, built once from its GLB. */
 interface Template {
@@ -615,8 +615,10 @@ export class CharacterModel {
    * Advance animation for this frame at `groundSpeed` m/s. `down` while
    * knocked over, with `downLeft` seconds until they're allowed up
    * (Infinity: not known, e.g. dead), so GetUp can finish just as they rise.
+   * Not `visible` (well off screen), only the clocks and clip states advance:
+   * the bones are left as they are, and the first frame back poses in full.
    */
-  update(dt: number, groundSpeed: number, down = false, downLeft = Infinity): void {
+  update(dt: number, groundSpeed: number, down = false, downLeft = Infinity, visible = true): void {
     // Clips and crossfades only ever run forward.
     if (!(dt > 0)) dt = 0;
     this.flashTime = Math.max(0, this.flashTime - dt);
@@ -676,16 +678,18 @@ export class CharacterModel {
     const stride = walkStride + (runStride - walkStride) * runW;
     this.gait = (this.gait + (dt * groundSpeed) / Math.max(0.1, stride)) % 1;
     this.idleTime += dt;
-    pose.rest();
-    const all = bank.all;
-    const wIdle = walk ? 1 - moving : 1;
-    const wWalk = walk ? moving * (1 - runW) : 0;
-    const wRun = moving * runW;
-    let acc = 0;
-    if (idle && wIdle > 0) pose.overlay(idle, this.idleTime % idle.duration, wIdle / (acc += wIdle), all);
-    if (walk && wWalk > 0) pose.overlay(walk, this.gait * walk.duration, wWalk / (acc += wWalk), all);
-    if (run && wRun > 0) pose.overlay(run, this.gait * run.duration, wRun / (acc += wRun), all);
-    full.apply(pose, all);
+    if (visible) {
+      pose.rest();
+      const all = bank.all;
+      const wIdle = walk ? 1 - moving : 1;
+      const wWalk = walk ? moving * (1 - runW) : 0;
+      const wRun = moving * runW;
+      let acc = 0;
+      if (idle && wIdle > 0) pose.overlay(idle, this.idleTime % idle.duration, wIdle / (acc += wIdle), all);
+      if (walk && wWalk > 0) pose.overlay(walk, this.gait * walk.duration, wWalk / (acc += wWalk), all);
+      if (run && wRun > 0) pose.overlay(run, this.gait * run.duration, wRun / (acc += wRun), all);
+      full.apply(pose, all);
+    }
 
     // --- Upper body: aim, then one-shots and the hail over it ---
     const block = 1 - full.weight;
@@ -699,15 +703,19 @@ export class CharacterModel {
     } else aim.target = 0;
     aim.rate = 12;
     aim.step(dt);
-    aim.apply(pose, bank.upper, block);
+    if (visible) aim.apply(pose, bank.upper, block);
     this.stepAct(dt);
+    const fakeArmed = armed !== false && !aimClip;
+    this.fakeAim += ((fakeArmed ? 1 : 0) - this.fakeAim) * Math.min(1, dt * 12);
+    if (!visible) {
+      this.wasDown = lyingDown;
+      return;
+    }
     this.act.apply(pose, bank.upper, block);
     pose.apply(this.animBones);
 
     // --- Fakes for whatever has no clip ---
     for (const r of this.fakeRest) r.bone.quaternion.copy(r.q);
-    const fakeArmed = armed !== false && !aimClip;
-    this.fakeAim += ((fakeArmed ? 1 : 0) - this.fakeAim) * Math.min(1, dt * 12);
     if (this.fakeAim > 0.01) {
       this.swing(this.armR, -1.35 * this.fakeAim);
       if (armed === 'two' || armed === 'rocket' || (!fakeArmed && this.fakeAim > 0)) this.swing(this.armL, -1.2 * this.fakeAim);

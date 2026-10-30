@@ -1,14 +1,21 @@
 import {
+  BackSide,
   Color,
+  DoubleSide,
   DynamicDrawUsage,
+  FrontSide,
   Group,
   InstancedBufferAttribute,
   InstancedMesh,
+  MeshDepthMaterial,
   MeshStandardMaterial,
   PMREMGenerator,
+  WebGLRenderTarget,
   type BufferGeometry,
+  type Camera,
   type ColorRepresentation,
   type Object3D,
+  type Scene,
   type Texture,
   type WebGLRenderer,
 } from 'three';
@@ -23,6 +30,14 @@ import { dimsOf, type CarDims, type VehicleModels } from './vehicleModels';
 
 /** Most cars of one model drawn at once (cars off-screen aren't drawn at all). */
 const PER_ARCHETYPE = 48;
+/**
+ * One shadow-depth material for every car batch. Otherwise cars share
+ * three's default one with the city chunks (which have instanceColor), and
+ * each flip between the two rebuilds its program parameters, twice a frame.
+ */
+const CAR_DEPTH = new MeshDepthMaterial();
+/** The face three's shadow pass draws for each material side (WebGLShadowMap). */
+const SHADOW_SIDE = { [FrontSide]: BackSide, [BackSide]: FrontSide, [DoubleSide]: DoubleSide };
 /** Cars this far outside the visible ground still draw (their shadows and lights reach in), m. */
 const VIEW_MARGIN = 10;
 /** Headlights stay on this long after a car last moved (parked cars stay dark), s. */
@@ -82,6 +97,33 @@ export class CarBatch {
     this.buildEnvironment();
     // Every model's mesh up front (see uploadAll).
     for (const archetype of Object.keys(VEHICLE_SPECS) as VehicleArchetype[]) this.meshFor(archetype);
+  }
+
+  /**
+   * Compile the cars' shadow-depth program now (renderer.compile skips depth
+   * materials), in the state the shadow pass draws it: into a target, with
+   * the face and map it copies from the car material, `scene`'s lights and
+   * no fog (the pass draws outside any scene).
+   */
+  precompileDepth(scene: Scene, camera: Camera): void {
+    const am = this.meshList[0];
+    if (!am) return;
+    const m = this.material;
+    CAR_DEPTH.side = m.shadowSide ?? SHADOW_SIDE[m.side];
+    CAR_DEPTH.map = m.map;
+    const probe = new InstancedMesh(am.mesh.geometry, CAR_DEPTH, 1);
+    const target = new WebGLRenderTarget(1, 1);
+    const previous = this.renderer.getRenderTarget();
+    const fog = scene.fog;
+    scene.fog = null;
+    this.renderer.setRenderTarget(target);
+    try {
+      this.renderer.compile(probe, camera, scene);
+    } finally {
+      this.renderer.setRenderTarget(previous);
+      scene.fog = fog;
+      target.dispose();
+    }
   }
 
   /** (Re)build the reflection map, e.g. after the GL context was restored. */
@@ -182,6 +224,8 @@ export class CarBatch {
       const n = am.count;
       am.mesh.count = n;
       am.mesh.visible = n > 0 || this.uploadAll;
+      // An empty archetype's mesh is hidden, so there is nothing to upload.
+      if (n === 0 && !this.uploadAll) continue;
       uploadRange(am.mesh.instanceMatrix, n);
       uploadRange(am.paint, n);
       uploadRange(am.state, n);
@@ -264,6 +308,7 @@ export class CarBatch {
     mesh.frustumCulled = false; // culled per car in flush()
     mesh.castShadow = true;
     mesh.receiveShadow = true;
+    mesh.customDepthMaterial = CAR_DEPTH;
     mesh.count = 0;
     mesh.name = `cars_${archetype}`;
     const attr = (size: number) => new InstancedBufferAttribute(new Float32Array(PER_ARCHETYPE * size), size).setUsage(DynamicDrawUsage);

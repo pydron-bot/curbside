@@ -2,7 +2,7 @@ import { AnimationClip, Bone, Color, Group, Matrix4, Quaternion, QuaternionKeyfr
 import { describe, expect, it } from 'vitest';
 import { CharacterModel, poseFor, type CharacterBatch } from '../src/render/characterModel';
 import { ClipBank } from '../src/render/characterAnim';
-import { PeoplePose } from '../src/render/peoplePose';
+import { PeoplePose, POSE_MARGIN, nearView } from '../src/render/peoplePose';
 import { EventBus } from '../src/core/events';
 import type { Player } from '../src/game/player';
 
@@ -328,5 +328,46 @@ describe('boarding (PeoplePose)', () => {
     m.root.position.set(120, 0, 40);
     bus.emit({ type: 'enterVehicle', archetype: 'sports' });
     expect(m.root.visible).toBe(false);
+  });
+});
+
+describe('character animation: off screen', () => {
+  const BONES = ['root', 'hips', 'chest', 'head', 'armR', 'armL'];
+  /** Walk with a gun, get knocked down, lie there, get up and wave: `hidden` says which frames are off screen. */
+  function script(hidden: (frame: number) => boolean) {
+    const { m, bone } = model(ALL);
+    m.hold('pistol', true);
+    for (let i = 0; i < 240; i++) {
+      const down = i >= 60 && i < 150;
+      if (i === 30) m.punch(1);
+      if (i === 170) m.hail(1);
+      m.update(1 / 60, down ? 0 : 1.6 + (i % 7) * 0.3, down, down ? (150 - i) / 60 : Infinity, !hidden(i));
+    }
+    return { m, bone };
+  }
+
+  it('advances clips and timers while hidden, so the first frame back matches never hiding', () => {
+    const shown = script(() => false);
+    const back = script((i) => i < 239 && (i % 50 > 5 || i > 200));
+    for (const name of BONES) {
+      const a = shown.bone(name);
+      const b = back.bone(name);
+      expect(b.quaternion.angleTo(a.quaternion), name).toBeLessThan(1e-6);
+      expect(b.position.distanceTo(a.position), name).toBeLessThan(1e-6);
+      expect(b.matrixWorld.equals(a.matrixWorld), name).toBe(true);
+    }
+    expect(back.m.body.rotation.x).toBeCloseTo(shown.m.body.rotation.x, 6);
+    // Still hidden on the last frame, the bones are left behind (the skip is real).
+    const stale = script((i) => i > 200);
+    expect(BONES.some((name) => stale.bone(name).quaternion.angleTo(shown.bone(name).quaternion) > 1e-3)).toBe(true);
+  });
+
+  it('nearView takes in the visible ground plus a margin wider than the draw cull', () => {
+    const view = { minX: -10, minZ: -5, maxX: 10, maxZ: 5 };
+    expect(nearView(view, 0, 0, POSE_MARGIN)).toBe(true);
+    expect(nearView(view, 10 + POSE_MARGIN - 0.1, 0, POSE_MARGIN)).toBe(true);
+    expect(nearView(view, 10 + POSE_MARGIN + 0.1, 0, POSE_MARGIN)).toBe(false);
+    expect(nearView(view, 0, -5 - POSE_MARGIN - 0.1, POSE_MARGIN)).toBe(false);
+    expect(POSE_MARGIN).toBeGreaterThan(8);
   });
 });
