@@ -186,17 +186,17 @@ vec3 asphalt(vec2 w, float a, float b, float roadAxis, bool horizontal, float px
     float edge = max(pd.x, pd.y);
     float has = step(h, 0.7);
     float repair = (1.0 - smoothstep(-px, px, edge)) * has;
-    float seam = (1.0 - smoothstep(0.0, 0.05 + px, abs(edge))) * has;
-    c = mix(c, c * (h > 0.35 ? 0.8 : 1.16), repair);
-    c *= 1.0 - seam * 0.35;
+    float seam = (1.0 - smoothstep(0.0, 0.03 + px, abs(edge))) * has;
+    c = mix(c, c * (h > 0.35 ? 0.88 : 1.09), repair);
+    c *= 1.0 - seam * 0.16;
     // Tyre wear: polished darker bands along the wheel paths.
     float wheel = ubLine(abs(abs(b) - 4.0) - 0.82, 0.32, 0.25);
     c *= 1.0 - 0.07 * wheel;
     // Oil drips where cars wait at the stop line.
     float incoming = horizontal ? step(a * b, 0.0) : step(0.0, a * b);
-    float wait = smoothstep(26.0, 12.5, abs(a)) * ubLine(abs(b) - 4.0, 1.1, 0.6) * incoming;
-    float drip = smoothstep(0.55, 0.85, ubNoise(w * 1.3 + 7.0)) * wait;
-    c *= 1.0 - 0.45 * drip;
+    float wait = smoothstep(24.0, 13.0, abs(a)) * ubLine(abs(b) - 4.0, 0.55, 0.4) * incoming;
+    float drip = smoothstep(0.66, 0.9, ubNoise(vec2(a * 0.9, b * 2.2) + 7.0)) * wait;
+    c *= 1.0 - 0.3 * drip;
     // Manhole on one lane per segment.
     vec2 mh = vec2(abs(a) - (18.0 + ubHash(vec2(segId, 11.0)) * 10.0), b + (h > 0.5 ? 4.0 : -4.0));
     float md = length(mh);
@@ -332,8 +332,13 @@ vec3 lot(vec2 w, vec2 lp, float kind, float seed, float px, inout vec3 glow) {
   float sep = ubLine(fract((lp.x + span) / 2.6) - 0.5, 0.48, px / 2.6);
   float ends = ubLine(rowCoord - 5.0, 0.06, px) + ubLine(rowCoord - 11.0, 0.06, px);
   float paint = clamp((1.0 - sep) * inBays + ends, 0.0, 1.0) * inside * (0.75 + 0.25 * ubNoise(w * 3.0));
-  float oil = smoothstep(0.62, 0.9, ubNoise(w * 0.9 + seed * 50.0)) * inBays * inside;
-  c *= 1.0 - 0.4 * oil;
+  // Cars park nose-in: the engine (and its drip) sits 1.3 m in from the aisle end of the bay.
+  float bayU = (fract((lp.x + span) / 2.6) - 0.5) * 2.6;
+  float bayV = rowCoord < 8.0 ? rowCoord - 3.7 : rowCoord - 12.3;
+  vec2 bay = vec2(floor((lp.x + span) / 2.6), floor((lp.y + span) / 8.0));
+  float stain = 1.0 - smoothstep(0.3, 1.0, length(vec2(bayU / 0.55, bayV / 0.8)) + 0.2 * ubNoise(w * 3.0));
+  stain *= step(ubHash(bay + seed * 61.0), 0.55) * inBays * inside;
+  c *= 1.0 - 0.2 * stain;
   return mix(c, srgb(0.86, 0.85, 0.8), paint);
 }
 

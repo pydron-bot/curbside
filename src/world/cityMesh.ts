@@ -36,7 +36,7 @@ const ROOF_COLOURS: Readonly<Record<RoofType, readonly string[]>> = {
   garden: ['#5b7f3c', '#4e7535', '#668a42'],
   membrane: ['#cfd1cd', '#c7ccd0', '#d8d3c8'],
   terracotta: ['#b4552f', '#a6472b', '#bf6a3a', '#9c4a30'],
-  helipad: ['#3a3d41'],
+  helipad: ['#8c8f92', '#979a9b'],
 };
 
 const PROP_COLOURS: Readonly<Record<RoofProp['kind'], readonly string[]>> = {
@@ -659,17 +659,22 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     c *= (0.8 + 0.28 * fract(row) * fine + 0.14 * (1.0 - fine)) * (0.9 + 0.16 * ubHash(floor(vec2(row, tileAlong)) + seed * 50.0));
     c = mix(c, c * 1.35, ubLine(eD.x - eD.y, 0.07, px) * step(0.2, e)); // hip ridges
   } else {
-    // Helipad: dark pad, yellow circle, white H, blinking edge lights.
+    // Helipad: pale concrete deck, a dark landing circle with a yellow ring
+    // and a white H (floodlit at night), blinking lights round the edge.
     c *= 0.9 + 0.12 * ubNoise(sp * 0.6);
     float rr = length(rp);
     float R = min(hs.x, hs.y) * 0.72;
-    c = mix(c, bSrgb(0.95, 0.74, 0.12), ubLine(rr - R, 0.22, px));
+    float pad = 1.0 - smoothstep(R + 0.45 - px, R + 0.45 + px, rr);
+    c = mix(c, bSrgb(0.19, 0.21, 0.23) * (0.9 + 0.12 * ubNoise(sp * 1.3)), pad);
+    float ring = ubLine(rr - R, 0.22, px);
+    c = mix(c, bSrgb(0.95, 0.74, 0.12), ring);
     vec2 hp = rp / (R * 0.5);
     float hpx = px / (R * 0.5);
     float hbar = max(ubBand(abs(hp.x), 0.42, 0.66, hpx) * step(abs(hp.y), 0.85), ubLine(hp.y, 0.11, hpx) * step(abs(hp.x), 0.6));
     c = mix(c, bSrgb(0.93, 0.93, 0.9), hbar);
+    glow += (ring * vec3(1.0, 0.72, 0.12) + hbar * vec3(0.9) + pad * vec3(0.02, 0.025, 0.035)) * 0.16 * uNight;
     float k = floor(atan(rp.y, rp.x) / 0.7854 + 0.5) * 0.7854;
-    float spot = 1.0 - smoothstep(0.12, 0.22, length(rp - (R + 0.6) * vec2(cos(k), sin(k))));
+    float spot = 1.0 - smoothstep(0.12, 0.22, length(rp - (R + 0.95) * vec2(cos(k), sin(k))));
     float blink = 0.35 + 0.65 * step(0.5, fract(uTime * 0.7 + k * 0.1));
     glow += spot * vec3(1.0, 0.3, 0.15) * blink * (0.4 + 2.0 * uNight);
   }
