@@ -38,7 +38,7 @@ function car(x: number, z: number, archetype: VehicleArchetype = 'sedan'): Vehic
   };
 }
 
-function setup(opts: { stars?: number } = {}) {
+function setup(opts: { stars?: number; walls?: Array<{ minX: number; minZ: number; maxX: number; maxZ: number }> } = {}) {
   const bus = new EventBus();
   const log: GameEvent[] = [];
   bus.onAny((e) => log.push(e));
@@ -52,7 +52,7 @@ function setup(opts: { stars?: number } = {}) {
     player,
     vehicles,
     crowd,
-    grid: new StaticGrid([]),
+    grid: new StaticGrid(opts.walls ?? []),
     rand: random(7),
     score,
     award: (a) => a && bus.emit({ type: 'award', award: a }),
@@ -258,6 +258,24 @@ describe('throws', () => {
     const { x, z } = w.combat.marker;
     expect(w.combat.fire(noAim)).toBe(true);
     expect(w.log.find((e) => e.type === 'throw')).toMatchObject({ toX: x, toZ: z, weapon: 'grenade' });
+  });
+
+  it('the marker stops short of a wall in the way (and says it is blocked), and the throw goes there', () => {
+    const w = setup({ walls: [{ minX: -10, minZ: 6, maxX: 10, maxZ: 20 }] });
+    w.player.arsenal.pickUp('grenade');
+    w.player.arsenal.current = 'grenade';
+    // Full push of the stick straight at the building (facing +Z).
+    const aim: AimInput = { heading: 0, reach: 1, ground: null };
+    w.combat.updateAim(false, aim);
+    expect(w.combat.marker.blocked).toBe(true);
+    expect(w.combat.marker.z).toBeLessThan(6);
+    expect(w.combat.fire(aim)).toBe(true);
+    expect(w.log.find((e) => e.type === 'throw')).toMatchObject({ toZ: w.combat.marker.z });
+    // Turned away from it, the throw is clear.
+    aim.heading = Math.PI;
+    w.combat.updateAim(false, aim);
+    expect(w.combat.marker.blocked).toBe(false);
+    expect(w.combat.marker.z).toBeCloseTo(-WEAPONS.grenade.range);
   });
 });
 

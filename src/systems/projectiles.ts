@@ -8,6 +8,7 @@
  * the renderer reads the pools.
  */
 import type { StaticGrid } from '../world/collision';
+import { rayRect } from './weapons';
 
 export type ProjectileKind = 'grenade' | 'molotov' | 'rocket';
 
@@ -120,6 +121,35 @@ export function throwTarget(x: number, z: number, aimX: number, aimZ: number, ra
   const k = d < 1e-6 ? 0 : Math.min(range, Math.max(MIN_THROW, d)) / d;
   out.x = x + (d < 1e-6 ? 0 : dx * k);
   out.z = z + (d < 1e-6 ? MIN_THROW : dz * k);
+}
+
+/** A throw lands at least this far short of a wall in its way, m (it'd bounce back off it). */
+export const WALL_CLEARANCE = 1;
+
+/**
+ * Pull a throw's landing point `out` back to WALL_CLEARANCE short of the
+ * first obstacle on the line from (x, z): thrown things hit walls at any
+ * height, and a grenade bounced off one comes back at the thrower. Returns
+ * true if a wall cut the throw short (the marker shows it).
+ */
+export function clampThrowToWalls(x: number, z: number, out: { x: number; z: number }, grid: StaticGrid): boolean {
+  const dx = out.x - x;
+  const dz = out.z - z;
+  const d = Math.hypot(dx, dz);
+  if (d < 1e-6) return false;
+  const ux = dx / d;
+  const uz = dz / d;
+  // Walls just past the landing point matter too: a bounce would reach them.
+  let wall = Infinity;
+  for (const r of grid.near(x + dx / 2, z + dz / 2, d / 2 + WALL_CLEARANCE + 1)) {
+    const t = rayRect(x, z, ux, uz, r);
+    if (t < wall) wall = t;
+  }
+  if (wall >= d + WALL_CLEARANCE) return false;
+  const land = Math.max(0, Math.min(d, wall - WALL_CLEARANCE));
+  out.x = x + ux * land;
+  out.z = z + uz * land;
+  return wall < d;
 }
 
 const scratchPos = { x: 0, z: 0 };

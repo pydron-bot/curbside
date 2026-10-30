@@ -251,7 +251,8 @@ alight (22 HP/s) and cooks cars (12 HP/s); rockets fly at 26 m/s, arm
 after 3 m and blow up on the first thing they touch (75 m max); their
 lock-on and aim assist ignore anything within 8 m (inside their own blast). While a
 grenade or molotov is in hand, a landing ring and a dotted arc show
-where it will land (a touch tap on FIRE throws right there). On touch
+where it will land, 1 m short of any wall on the way (`clampThrowToWalls`:
+it would bounce back off it; the ring turns red when a wall cuts it short) (a touch tap on FIRE throws right there). On touch
 the aim stick only aims a throwable (it never auto-fires one): let go to
 throw where the ring is, or slide back to the centre first to cancel.
 
@@ -293,7 +294,7 @@ combat.collect(kind)                        // apply a pickup (false = can't use
 combat.blast('grenade' | 'rocket' | 'car', x, z, byPlayer)   // an explosion through the normal blast path
 combat.projectiles.throw('grenade' | 'molotov', x, z, toX, toZ, byPlayer) / .fireRocket(x, z, dx, dz, byPlayer)
 combat.projectiles.addFire(x, z, byPlayer)  // a fire patch
-combat.lock / combat.marker                 // the lock-on target, the throw marker
+combat.lock / combat.marker                 // the lock-on target, the throw marker (.blocked: a wall cut it short)
 nitro.charge / nitro.add(amount)            // 0..1 tank
 hurtPed(agent, damage, fromX, fromZ, knock?) // systems/crowd.ts: 'none' | 'hit' | 'down' | 'ko'
 ramps (world/ramps.ts: placeRamps, rampAt, rideRamps) · StuntTracker (systems/stunts.ts)
