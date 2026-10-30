@@ -364,6 +364,30 @@ kbd.pad.b {
   }
 }
 
+/* 852x340 (Safari toolbar showing): trim padding and gaps so the sheet still fits unscrolled. */
+@media (max-height: 380px) {
+  .srow {
+    padding-block: 0;
+  }
+
+  .sheet-head {
+    padding: 0 4px 0 18px;
+  }
+
+  .sheet-body {
+    padding: 2px 14px 6px;
+  }
+
+  .settings-grid h3 {
+    margin: 4px 6px 2px;
+  }
+
+  .settings-grid section,
+  .settings-col {
+    gap: 0;
+  }
+}
+
 .srow:hover {
   background: rgb(255 255 255 / 0.04);
 }

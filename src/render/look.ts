@@ -17,6 +17,7 @@ import { PostEffects, mountVignette, precompile } from './post';
 import { getQuality, onQualityChange } from './quality';
 import { SceneLighting } from './sceneLighting';
 import { worldUniforms } from './shaderLib';
+import { driveMarker, type DriveMarker } from './playerMarker';
 import { SunShadow } from './sunShadow';
 import { TimeOfDay } from './timeOfDay';
 import { CarBatch } from './vehicleBatch';
@@ -32,6 +33,8 @@ export interface PlayerView {
   /** Ground speed, m/s. */
   speed: number;
   alive: boolean;
+  /** Driving: how far the vehicle's body reaches (CarBody.reach), sizing the ring. */
+  reach: number;
 }
 
 /** Marker colour (linear): a warm gold that reads on asphalt, paving and grass. */
@@ -64,6 +67,7 @@ export class Look {
   private readonly view: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
   private dt = 0;
   private player: PlayerView | null = null;
+  private readonly markerSize: DriveMarker = { ring: 0, ahead: 0, chevron: 0 };
   private warmedUp = false;
   /** Every city chunk's buffers are on the GPU (see uploadCity). */
   private uploaded = false;
@@ -224,11 +228,12 @@ export class Look {
       // just ahead of the bumper takes over (both in the glow batch: free).
       const fast = Math.min(1, Math.max(0, (p.speed - 4) / 10));
       const k = (0.35 + 0.2 * pulse) * Math.max(0.3, 1 - fast);
-      this.glows.addFlat(p.x, 0.05, p.z, p.heading, 6.4, 6.4, r * k, g * k, b * k, GLOW.ring);
+      const m = driveMarker(p.reach, this.markerSize);
+      this.glows.addFlat(p.x, 0.05, p.z, p.heading, m.ring, m.ring, r * k, g * k, b * k, GLOW.ring);
       if (fast > 0.05) {
         const kc = 0.8 * fast;
-        const ahead = 3.4;
-        this.glows.addFlat(p.x + Math.sin(p.heading) * ahead, 0.06, p.z + Math.cos(p.heading) * ahead, p.heading, 1.5, 1.1, r * kc, g * kc, b * kc, GLOW.chevron);
+        const ahead = m.ahead;
+        this.glows.addFlat(p.x + Math.sin(p.heading) * ahead, 0.06, p.z + Math.cos(p.heading) * ahead, p.heading, 1.5 * m.chevron, 1.1 * m.chevron, r * kc, g * kc, b * kc, GLOW.chevron);
       }
     }
   }

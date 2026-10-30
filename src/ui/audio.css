@@ -10,6 +10,8 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  /* The score feed is bounded to clear half of this (hud.css .score-feed). */
+  max-width: 240px;
   padding: 7px 16px 7px 13px;
   border-radius: 999px;
   background: linear-gradient(100deg, rgb(18 10 34 / 0.82), rgb(40 12 56 / 0.82));

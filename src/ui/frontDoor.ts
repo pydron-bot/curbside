@@ -117,7 +117,11 @@ export class FrontDoor {
     this.pause.show(reason, this.input.lastDevice);
     const i = this.stack.indexOf(this.pause);
     if (reason === 'paused' && i < 0) this.stack.push(this.pause);
-    else if (reason !== 'paused') this.closeFrom(i);
+    else if (reason === 'contextLost') {
+      // Keep the card on the stack so keys / pad reach its RELOAD button.
+      this.closeFrom(i);
+      this.stack.push(this.pause);
+    } else if (reason !== 'paused') this.closeFrom(i);
   }
 
   /** Called from main's setPaused(false): the pause menu and anything opened from it close. */
