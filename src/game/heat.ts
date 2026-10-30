@@ -114,7 +114,7 @@ export class Heat {
       {
         takeVehicle: (a, p) => deps.population.takeVehicle(a, p),
         retireVehicle: (v) => deps.population.retireVehicle(v),
-        addPed: (agent, outfit) => deps.population.addPed(agent, outfit),
+        addPed: (agent, outfit, body) => deps.population.addPed(agent, outfit, body),
         removePed: (ped) => deps.population.removePed(ped),
       },
       deps.npcShoot,

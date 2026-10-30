@@ -54,7 +54,7 @@ function world(seed = 3, x = 9.5, z = 9.5, held?: () => boolean, bustFine?: () =
         v.damage = createDamage(VEHICLE_HEALTH[v.archetype]);
         v.charred = false;
       },
-      createPedModel: () => ({ root: { visible: true }, dispose: vi.fn(), setOutfit: vi.fn() }) as unknown as CharacterModel,
+      createPedModel: (_o, body) => ({ root: { visible: true }, dispose: vi.fn(), setOutfit: vi.fn(), reset: vi.fn(), bodyKind: body }) as unknown as CharacterModel,
     },
     rand,
   );

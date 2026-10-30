@@ -4,7 +4,7 @@ import { createCityMesh, type CityMesh } from '../world/cityMesh';
 import { createGround } from '../world/ground';
 import type { Pickup } from '../world/pickups';
 import type { CameraRig } from './cameraRig';
-import { CharacterBatch } from './characterModel';
+import { CharacterBodies } from './characterBodies';
 import { ContactShadows } from './contactShadows';
 import { GLOW, GlowSprites } from './glowSprites';
 
@@ -41,13 +41,14 @@ const MARKER = [1.0, 0.62, 0.08] as const;
  * calls update() each frame and render() to draw.
  *
  * Per-frame draw calls stay low because everything repeated is instanced:
- * all people 1, all cars ~1 per model, all glows 1, all contact shadows 1,
+ * all people 1 per body on screen (+1 for the weapons in hand), all cars ~1 per model, all glows 1, all contact shadows 1,
  * the city ~4–5 per visible 256 m chunk.
  */
 export class Look {
   readonly time = new TimeOfDay();
   readonly lighting: SceneLighting;
-  readonly characters: CharacterBatch;
+  /** Everyone, by body (one batch each), and what they hold. */
+  readonly characters: CharacterBodies;
   readonly cars: CarBatch;
   readonly glows = new GlowSprites();
   readonly contactShadows = new ContactShadows();
@@ -82,10 +83,10 @@ export class Look {
     scene.add(createGround(city));
     this.city = createCityMesh(city);
     scene.add(this.city.root);
-    this.characters = new CharacterBatch('/assets/player.glb');
+    this.characters = new CharacterBodies();
     this.cars = new CarBatch(renderer);
     this.pickups = new PickupMesh(pickups);
-    scene.add(this.characters.mesh, this.cars.root, this.pickups.mesh, this.contactShadows.mesh, this.glows.mesh);
+    scene.add(...this.characters.meshes, this.cars.root, this.pickups.mesh, this.contactShadows.mesh, this.glows.mesh);
     this.post = new PostEffects(renderer);
     renderer.info.autoReset = false; // reset once per frame in render()
     mountVignette(overlayParent);

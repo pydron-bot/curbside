@@ -70,6 +70,8 @@ export interface PedAgent {
   ko: boolean;
   /** Seconds left on fire (a molotov): running about in a panic. */
   burning: number;
+  /** Seconds left crouched with their arms over their head (scared stiff), then they run. */
+  cower: number;
 }
 
 /** Hit points everyone starts with. */
@@ -154,6 +156,7 @@ export function spawnPed(bx: number, bz: number, edge: number, t: number, rand: 
     stagger: 0,
     ko: false,
     burning: 0,
+    cower: 0,
   };
 }
 
@@ -169,6 +172,7 @@ export type HurtResult = 'none' | 'hit' | 'down' | 'ko';
 export function hurtPed(p: PedAgent, damage: number, fromX: number, fromZ: number, knock = 0): HurtResult {
   if (p.mode === 'down' || damage <= 0) return 'none';
   p.hp = Math.max(0, p.hp - damage);
+  p.cower = 0;
   if (p.hp <= 0) {
     knockDown(p, fromX, fromZ, Math.max(3, knock), KO_SECONDS);
     p.ko = true;
@@ -195,6 +199,7 @@ export function hurtPed(p: PedAgent, damage: number, fromX: number, fromZ: numbe
 /** Set a ped alight for `seconds` (a molotov's fire): they run about in a panic. */
 export function setAlight(p: PedAgent, seconds: number): void {
   p.burning = Math.max(p.burning, seconds);
+  p.cower = 0;
 }
 
 export function rollTemper(rand: () => number): Temper {
@@ -213,6 +218,7 @@ export function provoke(p: PedAgent, fromX: number, fromZ: number): void {
     p.provoked = true;
     return;
   }
+  p.cower = 0;
   if (p.temper === 'fighter') {
     p.mode = 'fight';
     p.timer = HOSTILE_SECONDS;
@@ -232,6 +238,9 @@ export function knockDown(p: PedAgent, fromX: number, fromZ: number, push = 3, s
   const d = Math.hypot(dx, dz) || 1;
   p.mode = 'down';
   p.timer = seconds;
+  p.cower = 0;
+  // Bowled over backwards: facing whatever hit them.
+  p.s.heading = Math.atan2(-dx, -dz);
   p.s.vx = (dx / d) * push;
   p.s.vz = (dz / d) * push;
 }
@@ -246,6 +255,16 @@ export function scare(p: PedAgent, fromX: number, fromZ: number, seconds = 4): v
   p.timer = seconds;
   p.fleeX = dx / d;
   p.fleeZ = dz / d;
+}
+
+/**
+ * Scared stiff (gunfire right beside them): crouch with arms over the head
+ * for `seconds`, then run from (fromX, fromZ). Only calm civilians freeze.
+ */
+export function cower(p: PedAgent, fromX: number, fromZ: number, seconds: number): void {
+  if (p.mode === 'down' || p.mode === 'fight' || p.mode === 'shoot' || p.role === 'cop' || p.burning > 0) return;
+  scare(p, fromX, fromZ, seconds + 3);
+  p.cower = Math.max(p.cower, seconds);
 }
 
 export function stepCrowdPed(
@@ -269,6 +288,9 @@ export function stepCrowdPed(
     if (hit && sp > 4) {
       p.mode = 'down';
       p.timer = 3;
+      p.cower = 0;
+      // Thrown back along the car's path, facing it.
+      p.s.heading = Math.atan2(-v.vx, -v.vz);
       p.s.vx = v.vx * 0.6;
       p.s.vz = v.vz * 0.6;
       p.stagger = 0;
@@ -347,6 +369,13 @@ export function stepCrowdPed(
   if (p.mode === 'fight' || p.mode === 'shoot') return stepHostile(p, target, dt);
   if (p.mode === 'arrest') {
     stepArrest(p, target, dt);
+    return null;
+  }
+
+  if (p.mode === 'flee' && p.cower > 0) {
+    // Crouched where they stand until it passes (then the flee below takes over).
+    p.cower = Math.max(0, p.cower - dt);
+    stepPedestrian(p.s, move(0, 0, false), NPC_SPEC, dt);
     return null;
   }
 
@@ -465,8 +494,9 @@ function dodge(p: PedAgent, v: VehicleState, sp: number) {
   if (along < 0 || along > 16) return;
   const lateral = rx * fz - rz * fx; // signed: which side of the car's path
   if (Math.abs(lateral) > 3) return;
-  // Leap sideways, away from the car's path.
+  // Leap sideways, away from the car's path (even out of a crouch).
   const side = lateral >= 0 ? 1 : -1;
+  p.cower = 0;
   p.mode = 'flee';
   p.timer = 1.5;
   p.fleeX = fz * side;
@@ -491,6 +521,7 @@ export function resumeWalking(p: PedAgent) {
   }
   p.corner = best;
   p.mode = 'walk';
+  p.cower = 0;
 }
 
 /** At a corner: maybe cross to the neighbouring block, else carry on round. */

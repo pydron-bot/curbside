@@ -16,6 +16,7 @@
 import type { EventBus } from '../core/events';
 import { VEHICLE_SPECS } from '../entities/vehicle';
 import {
+  cower,
   hurtPed,
   provoke,
   scare,
@@ -105,6 +106,13 @@ const BOOM_SCORE_RANGE = 60;
 /** Gunfire scares people within this, m; armed ones within ARMED_JOIN may join in. */
 const SCARE_RANGE = 25;
 const ARMED_JOIN = 18;
+/**
+ * Calm people this close to gunfire may freeze (crouch, arms over the head)
+ * for COWER_SECONDS before they run: the timid ones (a slow walking pace).
+ */
+const COWER_RANGE = 8;
+const COWER_PACE = 0.56;
+const COWER_SECONDS = 2.2;
 
 export interface CombatDeps {
   bus: EventBus;
@@ -125,8 +133,8 @@ export interface CombatDeps {
   focus(): { x: number; z: number };
   /** Wanted stars: with any, the police count as hostile for lock-on. */
   stars(): number;
-  /** The player's body, for punch and recoil poses (optional: tests leave it out). */
-  pose?: { punch(step: number): void; shoot(): void };
+  /** The player's body, for punch, recoil and throw poses (optional: tests leave it out). */
+  pose?: { punch(step: number): void; shoot(): void; throw?(): void };
 }
 
 /** How the player is aiming this frame (see main.ts). */
@@ -329,7 +337,8 @@ export class Combat {
     if (!p.arsenal.tryFire()) return false;
     this.sinceShot = 0;
     p.ped.heading = Math.atan2(this.target.x - x, this.target.z - z);
-    this.d.pose?.punch(1);
+    if (this.d.pose?.throw) this.d.pose.throw();
+    else this.d.pose?.punch(1);
     this.projectiles.throw(kind, x, z, this.target.x, this.target.z, true);
     this.d.bus.emit({ type: 'throw', x, z, toX: this.target.x, toZ: this.target.z, weapon: kind, byPlayer: true });
     return true;
@@ -689,6 +698,7 @@ export class Combat {
       const dist = Math.hypot(a.s.x - x, a.s.z - z);
       if (dist > SCARE_RANGE) continue;
       if (a.temper === 'armed' && dist < ARMED_JOIN && d.rand() < 0.5) provoke(a, x, z);
+      else if (a.temper === 'calm' && dist < COWER_RANGE && a.pace < COWER_PACE && a.mode !== 'flee') cower(a, x, z, COWER_SECONDS);
       else scare(a, x, z, 4);
     }
   }

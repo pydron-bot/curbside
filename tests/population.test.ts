@@ -15,7 +15,9 @@ import {
   type Vehicle,
 } from '../src/game/population';
 import type { CarMesh } from '../src/render/carMesh';
-import type { CharacterModel } from '../src/render/characterModel';
+import type { CharacterModel, Outfit } from '../src/render/characterModel';
+import { CROWD_BODIES } from '../src/game/bodies';
+import { spawnPed } from '../src/systems/crowd';
 import { spawnAi } from '../src/systems/traffic';
 import { createDamage } from '../src/systems/damage';
 import { WORLD_LIMIT, type Rect } from '../src/world/city';
@@ -24,7 +26,7 @@ import { random } from './helpers';
 /** Population with fake meshes/models, counting what it builds. */
 function setup(seed = 1) {
   const vehicles: Vehicle[] = [];
-  const created = { vehicles: 0, models: 0, resets: 0 };
+  const created = { vehicles: 0, models: 0, resets: 0, outfits: [] as Outfit[] };
   const makeVehicle = (archetype: VehicleArchetype, paint: ColorRepresentation, x = 0, z = 0): Vehicle => {
     created.vehicles++;
     const sim = createVehicleState(x, z);
@@ -49,9 +51,10 @@ function setup(seed = 1) {
         v.damage = createDamage(VEHICLE_HEALTH[v.archetype]);
         v.charred = false;
       },
-      createPedModel: () => {
+      createPedModel: (outfit, body) => {
         created.models++;
-        return { root: { visible: true }, dispose: vi.fn() } as unknown as CharacterModel;
+        created.outfits.push(outfit);
+        return { root: { visible: true }, dispose: vi.fn(), reset: vi.fn(), setOutfit: vi.fn(), bodyKind: body } as unknown as CharacterModel;
       },
     },
     random(seed),
@@ -179,6 +182,25 @@ describe('population: recycling', () => {
     expect(vehicles).toContain(stuck);
     pop.maintain(ctx(0, 0)); // off screen: recycled
     expect(stuck.ai === null || stuck.ai.stalled === 0).toBe(true);
+  });
+
+  it('dresses the crowd in a mix of bodies, and only reuses a pooled model for the same body', () => {
+    const { pop, created } = setup(21);
+    for (let i = 0; i < 20; i++) pop.maintain(ctx(i % 2 ? 400 : -400, 0, { seed: true }));
+    const seen = new Set(pop.crowd.map((c) => c.model.bodyKind));
+    for (const [kind] of CROWD_BODIES) expect(seen.has(kind), kind).toBe(true);
+    expect(seen.has('cop')).toBe(false);
+    const before = created.models;
+    // A story character: their own body, their own colours (no random outfit), never a pooled crowd model.
+    const tuna = pop.addPed(spawnPed(5, 5, 0, 0.5, random(3)), undefined, 'tuna');
+    expect(tuna.model.bodyKind).toBe('tuna');
+    expect(created.models).toBe(before + 1);
+    expect(created.outfits[created.outfits.length - 1]).toEqual({});
+    pop.removePed(tuna);
+    const again = pop.addPed(spawnPed(5, 5, 0, 0.5, random(4)), undefined, 'tuna');
+    expect(again.model).toBe(tuna.model); // the pooled one, reset
+    expect(again.model.reset).toHaveBeenCalled();
+    expect(created.models).toBe(before + 1);
   });
 
   it('reuses ped models instead of building new ones', () => {

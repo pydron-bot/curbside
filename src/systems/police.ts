@@ -14,6 +14,7 @@
  * No three.js: presentation (sirens, light bars, radar, helicopter) reads
  * the state each frame.
  */
+import type { BodyKind } from '../game/bodies';
 import type { Outfit } from '../render/characterModel';
 import { VEHICLE_HEALTH, speed, type VehicleArchetype, type VehicleControls, type VehicleState } from '../entities/vehicle';
 import type { CrowdPed, Vehicle } from '../game/population';
@@ -121,7 +122,7 @@ export interface PoliceUnit {
 export interface PoliceDepot {
   takeVehicle(archetype: VehicleArchetype, paint: string): Vehicle;
   retireVehicle(v: Vehicle): void;
-  addPed(agent: CrowdPed['agent'], outfit?: Outfit): CrowdPed;
+  addPed(agent: CrowdPed['agent'], outfit?: Outfit, body?: BodyKind): CrowdPed;
   removePed(ped: CrowdPed): void;
 }
 
@@ -564,7 +565,10 @@ export class PoliceForce {
       agent.goalZ = agent.s.z;
       const base = u.kind === 'swat' ? SWAT_OUTFIT : COP_OUTFIT;
       const outfit: Outfit = { ...base, skin: SKIN[Math.floor(rand() * SKIN.length)] };
-      u.officers.push(this.depot.addPed(agent, outfit));
+      const officer = this.depot.addPed(agent, outfit, 'cop');
+      // SWAT come out with SMGs; patrol officers draw pistols.
+      officer.gun = u.kind === 'swat' ? 'smg' : 'pistol';
+      u.officers.push(officer);
       u.aboard--;
     }
   }

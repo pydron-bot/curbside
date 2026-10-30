@@ -34,6 +34,7 @@ import { DynamicResolution } from './render/dynamicResolution';
 import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
 import { CombatLook } from './render/combatLook';
+import { PeoplePose } from './render/peoplePose';
 import { createRenderer, precompile } from './render/post';
 import { getQuality } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
@@ -179,8 +180,8 @@ const population = new Population(
   {
     createVehicle,
     resetVehicle,
-    createPedModel: (outfit) => {
-      const model = look.characters.create(outfit);
+    createPedModel: (outfit, body) => {
+      const model = look.characters.create(outfit, body);
       scene.add(model.root);
       return model;
     },
@@ -313,6 +314,15 @@ const combat = new Combat({
   pose: playerModel,
 });
 const combatLook = new CombatLook(scene, look, effects, combat, population.crowd, player);
+// Everyone's place, pose and clip each frame (and the player ducking into cars, cheering wins).
+const people = new PeoplePose({
+  bus: events,
+  player,
+  model: playerModel,
+  crowd: population.crowd,
+  locked: () => combat.lock !== null,
+  playing: () => !attract.active,
+});
 
 // --- Audio (unlocks on the first tap / click / key) ---
 const audio = new GameAudio({ best: score.best });
@@ -353,9 +363,11 @@ const fx = new FxDirector({
   city,
   overlayParent: app,
   audio,
+  // Muzzle flashes at the end of the barrel in the shooter's hand.
+  muzzle: (e, out) => look.characters.placeShot(e, out),
 });
 events.on('enterVehicle', () => {
-  playerModel.root.visible = false;
+  // PeoplePose hides the body once it has ducked into the car.
   rig.setHeights(...CAMERA_CAR);
   input.setDriving(true);
   input.resetActions();
@@ -791,25 +803,12 @@ function frame(now: number) {
     v.mesh.root.rotation.y = lerpAngle(v.prev.heading, v.sim.heading, alpha);
     for (const w of v.mesh.frontWheels) w.rotation.y = v === player.driving ? -steer * 0.5 : 0;
   }
-  for (const c of population.crowd) {
-    const s = c.agent.s;
-    c.model.root.position.set(lerp(c.prev.x, s.x, alpha), 0, lerp(c.prev.z, s.z, alpha));
-    c.model.root.rotation.y = lerpAngle(c.prev.heading, s.heading, alpha);
-    // Shooters hold their gun up; a hit makes them reel.
-    c.model.armed = c.agent.mode === 'shoot' ? 'one' : false;
-    if (c.agent.stagger > 0) c.model.stagger(c.agent.stagger);
-    c.model.update(frameSeconds, Math.hypot(s.vx, s.vz), c.agent.mode === 'down');
-  }
-
+  // People: placed, holding what they hold, playing the clip for what they're doing (hit-stop freezes them too).
+  people.update(frameSeconds * fx.hitStop.scale, alpha, aimHeadingNow);
   const ped = player.ped;
   const prev = player.prev;
   const px = lerp(prev.x, ped.x, alpha);
   const pz = lerp(prev.z, ped.z, alpha);
-  playerModel.root.position.set(px, 0, pz);
-  playerModel.root.rotation.y = lerpAngle(prev.heading, ped.heading, alpha);
-  const held = player.arsenal.current;
-  playerModel.armed = held === null || WEAPONS[held].mode === 'throw' ? false : held === 'pistol' ? 'one' : 'two';
-  playerModel.update(frameSeconds, Math.hypot(ped.vx, ped.vz), player.down);
 
   // Body motion, tyre marks, damaged-car smoke and fire, weather, particles.
   const focus = attract.active ? attract : player.position;

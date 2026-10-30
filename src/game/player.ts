@@ -164,6 +164,8 @@ export class Player {
     const d = Math.hypot(dx, dz) || 1;
     this.ped.vx = (dx / d) * push;
     this.ped.vz = (dz / d) * push;
+    // Bowled over backwards, facing whatever did it (the fall clip lands them on their back).
+    if (push > 0) this.ped.heading = Math.atan2(-dx, -dz);
     this.bus.emit({ type: 'pedDown', x: this.ped.x, z: this.ped.z, cause, byPlayer, isPlayer: true });
   }
 
@@ -177,6 +179,9 @@ export class Player {
     // Out first, so dying from the damage below doesn't try to get out again.
     const side = v.sim.heading + Math.PI / 2;
     this.exit(Math.sin(side) * OWN_CAR_THROW_SPEED, Math.cos(side) * OWN_CAR_THROW_SPEED);
+    // Thrown clear on their back, facing the car.
+    this.ped.heading = side + Math.PI;
+    this.prev.heading = this.ped.heading;
     this.stunned = Math.max(this.stunned, OWN_CAR_STUN);
     this.bus.emit({ type: 'pedDown', x: this.ped.x, z: this.ped.z, cause: 'blast', byPlayer: true, isPlayer: true });
     this.hurt(OWN_CAR_BLAST_DAMAGE);

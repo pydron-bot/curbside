@@ -504,6 +504,8 @@ export class GameAudio {
         return this.horn(e.x, e.z, e.duration);
       case 'respray':
         return this.oneShot('door', e, FALLOFF.near, 0.8, 0.2, sfx.spray);
+      case 'celebrate':
+        return; // the mission / Chaos Run card plays its own sting
       default: {
         const unhandled: never = e;
         return unhandled;

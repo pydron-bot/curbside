@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createVehicleState } from '../src/entities/vehicle';
-import { blockAt, cornerPoint, scare, spawnPed, stepCrowdPed } from '../src/systems/crowd';
+import { blockAt, cornerPoint, cower, hurtPed, knockDown, scare, spawnPed, stepCrowdPed } from '../src/systems/crowd';
 import { collidePedStatic } from '../src/systems/physics';
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, generateCity } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
@@ -154,5 +154,42 @@ describe('sidewalk corners', () => {
       expect(cornerPoint(3, 5, c, out)).toBe(out);
       expect([out.x, out.z]).toEqual(want[c & 3]);
     }
+  });
+
+  it('cowers in place when scared stiff, then runs; a car coming or a hit snaps them out of it', () => {
+    const rand = random(2);
+    const p = spawnPed(8, 8, 0, 0.5, rand);
+    const at = { x: p.s.x, z: p.s.z };
+    cower(p, at.x + 3, at.z, 2);
+    expect(p.cower).toBe(2);
+    for (let i = 0; i < 60; i++) stepCrowdPed(p, [], rand, DT);
+    expect(Math.hypot(p.s.x - at.x, p.s.z - at.z)).toBeLessThan(0.05);
+    for (let i = 0; i < 120; i++) stepCrowdPed(p, [], rand, DT);
+    expect(p.cower).toBe(0);
+    expect(p.mode).toBe('flee');
+    expect(p.s.x).toBeLessThan(at.x - 1); // ran away from the shot
+
+    const q = spawnPed(8, 8, 0, 0.5, rand);
+    cower(q, q.s.x + 3, q.s.z, 2);
+    const car = createVehicleState(q.s.x, q.s.z + 12);
+    car.vz = -15;
+    stepCrowdPed(q, [car], rand, DT);
+    expect(q.cower).toBe(0);
+
+    const r = spawnPed(8, 8, 0, 0.5, rand);
+    cower(r, r.s.x + 3, r.s.z, 2);
+    hurtPed(r, 10, r.s.x + 1, r.s.z);
+    expect(r.cower).toBe(0);
+    const cop = spawnPed(8, 8, 0, 0.5, rand);
+    cop.role = 'cop';
+    cower(cop, cop.s.x + 3, cop.s.z, 2);
+    expect(cop.cower).toBe(0);
+  });
+
+  it('knocked down, they face what hit them (so they fall on their back away from it)', () => {
+    const p = spawnPed(8, 8, 0, 0.5, random(3));
+    knockDown(p, p.s.x + 2, p.s.z, 3);
+    expect(Math.sin(p.s.heading)).toBeCloseTo(1, 5); // facing +X, toward the hit
+    expect(p.s.vx).toBeLessThan(0); // sliding away from it
   });
 });

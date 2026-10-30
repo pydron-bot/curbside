@@ -116,7 +116,13 @@ export type GameEvent =
   /** The player's nitro lit (on) or went out (off), at (x, z). */
   | { type: 'boost'; on: boolean; x: number; z: number }
   /** The game was paused or resumed (menu, app switch, lost graphics context). */
-  | { type: 'pause'; paused: boolean };
+  | { type: 'pause'; paused: boolean }
+  /**
+   * Something worth a cheer was won at (x, z): a story mission passed, a
+   * Chaos Run with a medal. Whoever is on foot there (the player, the story
+   * characters) cheers.
+   */
+  | { type: 'celebrate'; x: number; z: number };
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;

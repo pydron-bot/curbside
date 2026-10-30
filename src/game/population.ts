@@ -14,9 +14,11 @@ import type { PedState } from '../entities/pedestrian';
 import { createVehicleState, type VehicleArchetype, type VehicleState } from '../entities/vehicle';
 import type { CarMesh } from '../render/carMesh';
 import type { CharacterModel, Outfit } from '../render/characterModel';
+import { CAP_COLOURS, STORY_BODIES, pickCrowdBody, type BodyKind } from './bodies';
 import { cornerPoint, spawnPed, type PedAgent } from '../systems/crowd';
 import type { DamageState } from '../systems/damage';
 import type { PursuitDriver } from '../systems/pursuit';
+import type { WeaponKind } from '../systems/weapons';
 import { isHopeless, spawnAi, type AiDriver } from '../systems/traffic';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type Rect } from '../world/city';
 import { DIRS, MAX_NODE } from '../world/roads';
@@ -49,6 +51,8 @@ export interface CrowdPed {
   agent: PedAgent;
   prev: PedState;
   model: CharacterModel;
+  /** The gun this person draws when they shoot (a pistol if unset; SWAT carry SMGs). */
+  gun?: WeaponKind;
 }
 
 // --- Tunables -------------------------------------------------------------
@@ -135,8 +139,8 @@ export interface PopulationHooks {
    * charred or `restyled` (archetype/paint changed).
    */
   resetVehicle(v: Vehicle, restyled: boolean): void;
-  /** Build a ped model (added to the scene). */
-  createPedModel(outfit: Outfit): CharacterModel;
+  /** Build a ped model wearing `body` (added to the scene). */
+  createPedModel(outfit: Outfit, body: BodyKind): CharacterModel;
 }
 
 /** A kerbside spot that should have a particular parked car (e.g. at the spawn point). */
@@ -217,16 +221,24 @@ export class Population {
 
   /**
    * Put an NPC on the pavement, e.g. a driver thrown out of their car, or
-   * (with an outfit) a police officer.
+   * (with an outfit) a police officer. `body` picks the GLB they're drawn
+   * with (a random crowd body if left out); a pooled model of that body is
+   * reused when one is waiting.
    */
-  addPed(agent: PedAgent, outfit?: Outfit): CrowdPed {
-    let model = this.spareModels.pop();
-    if (model) {
+  addPed(agent: PedAgent, outfit?: Outfit, body: BodyKind = pickCrowdBody(this.rand)): CrowdPed {
+    const spares = this.spareModels;
+    let i = spares.length - 1;
+    while (i >= 0 && spares[i].bodyKind !== body) i--;
+    let model: CharacterModel;
+    if (i >= 0) {
+      model = spares.splice(i, 1)[0];
+      model.reset();
       model.root.visible = true;
       if (outfit) model.setOutfit(outfit);
       // Out of uniform: shoes back to the model's own colour.
-      else if (this.uniformed.has(model)) model.setOutfit({ ...this.randomOutfit(), shoes: undefined });
-    } else model = this.hooks.createPedModel(outfit ?? this.randomOutfit());
+      else if (this.uniformed.has(model)) model.setOutfit({ ...this.randomOutfit(body), shoes: undefined });
+      else model.setOutfit(this.randomOutfit(body));
+    } else model = this.hooks.createPedModel(outfit ?? this.randomOutfit(body), body);
     if (outfit) this.uniformed.add(model);
     else this.uniformed.delete(model);
     const ped = { agent, prev: { ...agent.s }, model };
@@ -519,9 +531,14 @@ export class Population {
     }
   }
 
-  private randomOutfit(): Outfit {
+  /**
+   * Street clothes; the stocky body's ball cap (its `hair` slot) gets a cap
+   * colour. Story characters keep the colours they were built with.
+   */
+  private randomOutfit(body: BodyKind): Outfit {
+    if (STORY_BODIES.includes(body)) return {};
     const r = this.rand;
-    return { shirt: pick(SHIRTS, r), pants: pick(PANTS, r), skin: pick(SKIN, r), hair: pick(HAIR, r) };
+    return { shirt: pick(SHIRTS, r), pants: pick(PANTS, r), skin: pick(SKIN, r), hair: pick(body === 'ped_stocky' ? CAP_COLOURS : HAIR, r) };
   }
 }
 

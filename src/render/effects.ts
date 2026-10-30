@@ -401,12 +401,12 @@ export class Effects {
   /**
    * A muzzle flash at (x, z) aimed along (dirX, dirZ): a flare turned to the
    * aim, a star pop at the barrel, a wisp of smoke and a warm splash of light
-   * on the ground. `power` 0.6 (NPC) .. 1.6 (shotgun).
+   * on the ground. `power` 0.6 (NPC) .. 1.6 (shotgun); `y` the barrel's height.
    */
-  muzzleFlash(x: number, z: number, dirX: number, dirZ: number, power = 1): void {
+  muzzleFlash(x: number, z: number, dirX: number, dirZ: number, power = 1, y = GUN_Y): void {
     const len = 0.9 + 0.7 * power;
     const w = 0.42 + 0.3 * power;
-    let i = this.hot.spawn(x + dirX * (len * 0.5 - 0.1), GUN_Y, z + dirZ * (len * 0.5 - 0.1), 0, 0, 0, 0.06, w, w * 0.8, RAMP.flash, FRAME.muzzle);
+    let i = this.hot.spawn(x + dirX * (len * 0.5 - 0.1), y, z + dirZ * (len * 0.5 - 0.1), 0, 0, 0, 0.06, w, w * 0.8, RAMP.flash, FRAME.muzzle);
     if (i >= 0) {
       // A stretched quad's axis is its velocity times stretch: point it along the aim.
       this.hot.flags[i] = FLAG.stretch | FLAG.still;
@@ -418,14 +418,14 @@ export class Effects {
       this.hot.g[i] = 2.3;
       this.hot.b[i] = 1.2;
     }
-    i = this.hot.spawn(x, GUN_Y, z, 0, 0, 0, 0.05, 0.55 * power + 0.3, 0.35, RAMP.flash, FRAME.star);
+    i = this.hot.spawn(x, y, z, 0, 0, 0, 0.05, 0.55 * power + 0.3, 0.35, RAMP.flash, FRAME.star);
     if (i >= 0) {
       this.hot.add[i] = 1;
       this.hot.r[i] = 3;
       this.hot.g[i] = 2.6;
       this.hot.b[i] = 1.9;
     }
-    const s = this.soft.spawn(x + dirX * 0.4, GUN_Y, z + dirZ * 0.4, dirX * 2.2 + this.windX * 0.3, 0.6, dirZ * 2.2, 0.5 + Math.random() * 0.3, 0.3, 1 + 0.4 * power, RAMP.smoke, FRAME.puffC);
+    const s = this.soft.spawn(x + dirX * 0.4, y, z + dirZ * 0.4, dirX * 2.2 + this.windX * 0.3, 0.6, dirZ * 2.2, 0.5 + Math.random() * 0.3, 0.3, 1 + 0.4 * power, RAMP.smoke, FRAME.puffC);
     if (s >= 0) this.smokeLook(s, 0.6, 0.28);
     // Big enough to read as light on the street, not so bright that a shotgun at night blooms into a white ball.
     this.light(x + dirX * 0.8, 0.1, z + dirZ * 0.8, 2.4 + power * 0.8, 3 + power * 0.8, 1.2 * power, 0.75 * power, 0.35 * power, 0.07, GLOW.disc);

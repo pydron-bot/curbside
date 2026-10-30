@@ -63,6 +63,11 @@ export interface FxDeps {
   city: City;
   overlayParent: HTMLElement;
   audio?: { setRain(amount: number): void };
+  /**
+   * Where a shot's muzzle really is (the end of the barrel in the shooter's
+   * hand, `out` in world space), or false to keep the shot's own point.
+   */
+  muzzle?: (e: EventOf<'shot'>, out: { x: number; y: number; z: number }) => boolean;
 }
 
 const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
@@ -90,6 +95,9 @@ export class FxDirector {
   private lastCombat = -Infinity;
   private lastBoomKick = -Infinity;
   private lastShot: TracerKind = 'pistol';
+  /** The last shot's muzzle, moved to the barrel in hand: its tracers start there too. */
+  private readonly muzzleAt = { x: 0, y: 0, z: 0 };
+  private readonly shotFrom = { x: NaN, z: NaN };
   /** Real seconds until a big jump's slow motion starts (near the top of the arc). */
   private slowMoIn = 0;
   private slowMoFor = 0;
@@ -275,7 +283,15 @@ export class FxDirector {
     const rocket = e.weapon === 'rocket';
     const power = rocket ? 1.9 : e.weapon === 'shotgun' ? 1.6 : e.weapon === 'smg' ? 0.85 : e.weapon ? 1 : 0.65;
     const fx = this.d.effects;
-    fx.muzzleFlash(e.x, e.z, e.dirX, e.dirZ, power);
+    const m = this.muzzleAt;
+    if (this.d.muzzle?.(e, m)) {
+      this.shotFrom.x = e.x;
+      this.shotFrom.z = e.z;
+      fx.muzzleFlash(m.x, m.z, e.dirX, e.dirZ, power, m.y);
+    } else {
+      this.shotFrom.x = this.shotFrom.z = NaN;
+      fx.muzzleFlash(e.x, e.z, e.dirX, e.dirZ, power);
+    }
     this.lastShot = e.weapon === 'pistol' || e.weapon === 'smg' || e.weapon === 'shotgun' ? e.weapon : 'npc';
     const p = this.d.player;
     if (rocket) {
@@ -329,7 +345,9 @@ export class FxDirector {
     const fx = this.d.effects;
     const fromX = e.fromX ?? e.x;
     const fromZ = e.fromZ ?? e.z;
-    fx.tracer(fromX, fromZ, e.x, e.z, e.byPlayer ? this.lastShot : 'npc');
+    // From the barrel in hand when this is the shot just fired (each shotgun pellet too).
+    const fromHand = fromX === this.shotFrom.x && fromZ === this.shotFrom.z;
+    fx.tracer(fromHand ? this.muzzleAt.x : fromX, fromHand ? this.muzzleAt.z : fromZ, e.x, e.z, e.byPlayer ? this.lastShot : 'npc');
     fx.impact(e.x, e.z, e.target, fromX, fromZ);
     if (e.target === 'ped') this.pedAt(e.x, e.z, 1.2)?.model.flash(0.12);
     else if (e.target === 'player') {
