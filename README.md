@@ -214,8 +214,10 @@ Everything visual outside the HUD hangs off one `Look` object
 (`src/render/look.ts`): `main.ts` creates it, calls `look.update(dt, player)`
 and `look.render(camera)` each frame. No real-time light is ever added or
 removed (that would recompile every lit material), every program is compiled
-on the first frame (night-only meshes included), and quality-tier changes
-only resize or idle things.
+on the first frame and again after a restored GL context (night-only meshes
+included; on desktop against the HDR target the scene really draws into),
+and quality-tier changes only resize or idle things. Every car model's
+geometry is uploaded at load, not when that model first drives into view.
 
 - **Draw calls.** All people are one GPU-skinned `InstancedMesh`
   (`characterModel.ts`: the GLB's 13 rigid parts merged at load, bones and
@@ -228,11 +230,14 @@ only resize or idle things.
   chunk. Measured in Chromium (whole frame, incl. shadow pass), iPhone
   15 Pro profile ('medium'): 40 draw calls on foot at spawn, 42–48 driving
   a busy street, 42–48 at night; desktop ('high') is 54–59 including ~14
-  for bloom; 'low' (no shadow map) 23–27. About 160–250k triangles, most of
+  for bloom; 'low' (no shadow map) 22–27. Programs: 15 on phones, 24 on
+  desktop, none compiled after start-up over a full day. About 160–250k triangles, most of
   it the instanced city in both passes.
 - **Light.** `timeOfDay.ts` (pure, tested) keyframes sun/moon direction,
   colour and strength, sky and ground fill, fog, exposure, reflection
-  strength and a shared `uNight`; `sceneLighting.ts` applies it to one
+  strength and a shared `uNight` (night keeps a strong blue moon and sky
+  fill so streets stay readable on phones, which have no bloom to lift
+  them); `sceneLighting.ts` applies it to one
   `DirectionalLight`, one `HemisphereLight` and a faint ambient.
   `sunShadow.ts` fits an orthographic PCF shadow box to the visible ground
   every frame, snapped to whole texels (no shimmer); map size comes from the
