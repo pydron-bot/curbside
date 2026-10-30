@@ -257,8 +257,8 @@ export class ProgressDirector implements ModeCtx {
   }
 
   /** Pay 'n' Spray (HeatDeps.pay): the respray costs cash; broke means no respray. */
-  payRespray(_baseCost: number): boolean {
-    const price = sprayPrice(this.progress.has('spraycard'));
+  payRespray(baseCost: number): boolean {
+    const price = this.progress.has('spraycard') ? sprayPrice(true) : baseCost;
     if (this.progress.spend(price, 'respray')) {
       this.notice(`PAY 'N' SPRAY −$${fmt(price)}`, 'police');
       return true;

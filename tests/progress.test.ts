@@ -146,3 +146,31 @@ describe('progress: cash', () => {
     expect(s.wasted).toBe(1);
   });
 });
+
+describe('progress: completion', () => {
+  const totals = { missions: 8, frenzies: 8, packages: 40, races: ['a', 'b'], exportOrders: 8 };
+
+  it('a fresh save is 0%, everything done is 100%', async () => {
+    const { completion } = await import('../src/game/progressStats');
+    const s = defaultSave();
+    expect(completion(s, totals)).toBe(0);
+    s.missions = Array.from({ length: 8 }, (_, i) => `m${i}`);
+    s.frenzies = Array.from({ length: 8 }, (_, i) => `f${i}`);
+    s.packages = Array.from({ length: 40 }, (_, i) => i);
+    s.medals = { a: 'gold', b: 'gold', chaosRun: 'gold' };
+    s.exports.lists = 1;
+    s.stats.fares = 12;
+    expect(completion(s, totals)).toBeCloseTo(1, 6);
+  });
+
+  it('weights the story most and counts medals by worth', async () => {
+    const { completion, completionParts, COMPLETION_WEIGHTS } = await import('../src/game/progressStats');
+    const s = defaultSave();
+    s.missions = ['m1', 'm2', 'm3', 'm4'];
+    expect(completion(s, totals)).toBeCloseTo(COMPLETION_WEIGHTS.missions / 2, 6);
+    s.medals = { a: 'bronze' };
+    expect(completionParts(s, totals).races).toBeCloseTo(1 / 6, 6);
+    s.exports.done = ['x', 'y'];
+    expect(completionParts(s, totals).exports).toBeCloseTo(0.25, 6);
+  });
+});

@@ -155,7 +155,7 @@ export class ChaosRunMode implements Mode {
     const run = this.run;
     if (!run || this.phase === 'off' || this.phase === 'results') return false;
     ui.activity('CHAOS RUN');
-    ui.timer(this.phase === 'countdown' ? CHAOS_RUN_SECONDS : run.timeLeft, run.timeLeft <= FINAL_COUNT && this.phase === 'live', 0);
+    ui.timer(this.phase === 'countdown' ? CHAOS_RUN_SECONDS : run.timeLeft, run.timeLeft <= FINAL_COUNT && this.phase === 'live');
     const next = nextMedal(this.ctx.deps.score.total);
     ui.goal(next ? `${MEDAL_WORD[next.medal]} AT ${fmt(next.at)}` : 'GOLD! KEEP GOING');
     return true;

@@ -143,10 +143,12 @@ export class ProgressHud {
     }
     const s = Math.max(0, seconds);
     const tenths = s < tenthsBelow;
-    const key = tenths ? Math.floor(s * 10) : Math.ceil(s) * 10;
+    // Odd keys for tenths, even for whole seconds: a switch always rewrites.
+    const key = tenths ? Math.floor(s * 10) * 2 + 1 : Math.ceil(s) * 2;
     if (key !== this.shownTimer) {
       this.shownTimer = key;
-      this.setTimerText(tenths ? `${Math.floor(s)}.${Math.floor(s * 10) % 10}` : clock(Math.ceil(s)));
+      const t = Math.floor(s * 10);
+      this.setTimerText(tenths ? `${s >= 60 ? clock(s) : Math.floor(s)}.${t % 10}` : clock(Math.ceil(s)));
     }
     this.setUrgent(urgent);
   }

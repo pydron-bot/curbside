@@ -5,6 +5,7 @@
  * fares) affords a couple of things. Pure data and rules, unit-tested.
  */
 import type { WeaponKind } from '../../systems/weapons';
+import { SPRAY_COST } from '../heat';
 
 export type ShopItemKind = 'upgrade' | 'ammo';
 
@@ -18,8 +19,8 @@ export interface ShopItem {
   weapon?: WeaponKind;
 }
 
-/** Pay 'n' Spray's usual price, and with the spray card. */
-export const SPRAY_PRICE = 400;
+/** Pay 'n' Spray's usual price (heat.ts), and with the spray card. */
+export const SPRAY_PRICE = SPRAY_COST;
 export const SPRAY_PRICE_CARD = 100;
 /** Extra max health from the TOUGH SKIN upgrade (the stand-in for body armour). */
 export const TOUGH_SKIN_HEALTH = 50;

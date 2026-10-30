@@ -31,10 +31,10 @@ export const BUST_FINE = 0.25;
 /** Seconds stopped in a spray bay before the car comes out new. */
 export const SPRAY_SECONDS = 2;
 /**
- * What a respray costs. Free until cash arrives: then charge it through
- * HeatDeps.pay (which can refuse) and show the price on the bay.
+ * What a respray costs. Charged through HeatDeps.pay, which can refuse (no
+ * cash, no spray); the progress director applies the shop's spray card.
  */
-export const SPRAY_COST = 0;
+export const SPRAY_COST = 400;
 /** Slower than this in the bay counts as stopped, m/s. */
 const SPRAY_SPEED = 4;
 const RESPRAY_PAINTS = ['#c8342b', '#2f6fc0', '#e8b923', '#3d7a4a', '#7a2f5a', '#c86a2b', '#e5e5e5', '#1f2328', '#2fb5a8', '#d94f8a'];
