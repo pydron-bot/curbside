@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SAVE_KEY, SAVE_VERSION, defaultSave, loadSave, migrateSave, storeSave, type SaveStorage } from '../src/game/progressSave';
+import { SAVE_KEY, SAVE_VERSION, defaultSave, loadSave, migrateSave, pruneSave, storeSave, type SaveStorage } from '../src/game/progressSave';
 
 /** An in-memory Storage; `broken` makes every call throw (blocked storage). */
 function memory(init: Record<string, string> = {}, broken = false): SaveStorage & { data: Record<string, string> } {
@@ -77,11 +77,33 @@ describe('save: defaults and migration', () => {
     expect(migrateSave({ cash: Infinity }).cash).toBe(0);
   });
 
-  it('a save from a newer build keeps what this one understands', () => {
-    const s = migrateSave({ v: 99, cash: 50, hoverboards: 3 });
-    expect(s.v).toBe(SAVE_VERSION);
+  it("a save from a newer build keeps what this one understands and carries the rest through a write", () => {
+    const s = migrateSave({ v: 99, cash: 50, hoverboards: 3, garage: { slots: ['a'] }, unlocks: 'junk' });
+    expect(s.v).toBe(99); // never downgraded: the older build doesn't own it
     expect(s.cash).toBe(50);
-    expect('hoverboards' in s).toBe(false);
+    expect(s.unlocks).toEqual([]); // a known field is still sanitised
+    const store = memory();
+    storeSave(s, store);
+    const back = JSON.parse(store.getItem(SAVE_KEY)!);
+    expect(back).toMatchObject({ v: 99, hoverboards: 3, garage: { slots: ['a'] } });
+    expect(migrateSave({ v: 0 }).v).toBe(SAVE_VERSION);
+  });
+
+  it("ids this build doesn't have don't count (packages out of range, unknown frenzies, missions, orders)", () => {
+    const s = migrateSave({
+      packages: [0, 1, 2, 999, -1, 3.5],
+      frenzies: ['fz-brawl', 'fz-unknown'],
+      missions: ['m1-audition', 'm9-future'],
+      exports: { done: ['sedan-any', 'hovercraft-any'], lists: 2 },
+    });
+    expect(s.packages).toEqual([0, 1, 2, 999]);
+    pruneSave(s, { packages: 40, frenzies: ['fz-brawl'], exportOrders: ['sedan-any', 'van-any'] });
+    expect(s.packages).toEqual([0, 1, 2]);
+    expect(s.frenzies).toEqual(['fz-brawl']);
+    expect(s.missions).toEqual(['m1-audition', 'm9-future']); // not given: left alone
+    expect(s.exports).toEqual({ done: ['sedan-any'], lists: 2 });
+    pruneSave(s, { missions: ['m1-audition'] });
+    expect(s.missions).toEqual(['m1-audition']);
   });
 
   it('carries the old free-roam best score over', () => {

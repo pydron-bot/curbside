@@ -28,7 +28,7 @@ import { ChaosRunMode } from './modes/chaosRunMode';
 import { CHAOS_RUN_ID } from './modes/chaosRun';
 import type { Mode, ModeCtx, ProgressDeps } from './modes/context';
 import { ExportMode } from './modes/exportMode';
-import { ORDERS_PER_LIST } from './modes/exports';
+import { ORDERS_PER_LIST, exportList } from './modes/exports';
 import { FRENZIES } from './modes/frenzies';
 import { FrenzyMode } from './modes/frenzyMode';
 import { MissionMode } from './modes/missionMode';
@@ -44,6 +44,7 @@ import { MAX_ARMOUR, MAX_HEALTH } from './player';
 import type { Vehicle } from './population';
 import { Progress, bustFine, hospitalBill } from './progress';
 import { ChainBank, chainLive } from './progressBank';
+import { pruneSave } from './progressSave';
 import { TAXI_GOAL, completion } from './progressStats';
 import { TUTORIAL_DONE, advanceTutorial, tutorialText, type TutorialEvent } from './tutorial';
 
@@ -97,6 +98,12 @@ export class ProgressDirector implements ModeCtx {
     this.deps = d;
     this.pinned = d.pinned;
     this.progress = new Progress();
+    // Ids this build doesn't have can't count (missions' ids once the jobs are built, below).
+    pruneSave(this.progress.data, {
+      packages: PACKAGE_COUNT,
+      frenzies: FRENZIES.map((f) => f.id),
+      exportOrders: exportList(this.progress.data.exports.lists).map((o) => o.id),
+    });
     this.progress.track(d.bus, () => this.live, () => d.playing());
     // The free-roam best is the save's (a Chaos Run swaps in its own).
     d.hud.setBest(this.progress.best('free'));
@@ -116,6 +123,7 @@ export class ProgressDirector implements ModeCtx {
     this.exports = new ExportMode(this, d.city);
     this.taxi = new TaxiMode(this);
     this.missions = new MissionMode(this, this.exports.docks, this.dialogue);
+    pruneSave(this.progress.data, { missions: this.missions.missions.map((m) => m.id) });
     // Card owners first: a running mode claims the activity card before a passive one.
     this.modes = [this.chaos, this.frenzies, this.races, this.missions, this.taxi, this.exports, this.packages];
 
