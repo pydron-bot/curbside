@@ -51,6 +51,9 @@ TRUCKS = {
                       cab_len=1.9, cab_h=1.3, kind="box", lightbar=True, stripe="amb_red"),
     "firetruck": dict(length=9.2, width=2.5, height=3.0, clearance=0.45, wheel_r=0.52, axles=(-3.0, 2.0, 3.35),
                       cab_len=2.6, cab_h=1.4, kind="fire", lightbar=True),
+    # Armoured van: short cab, slab-sided body with slit windows, push bar, roof bar. Paint it dark at spawn.
+    "swat": dict(length=6.0, width=2.2, height=2.65, clearance=0.42, wheel_r=0.44, axles=(-2.0, 1.85),
+                 cab_len=1.7, cab_h=1.25, kind="swat", lightbar=True),
     "garbage_truck": dict(length=8.6, width=2.5, height=3.2, clearance=0.45, wheel_r=0.52,
                           axles=(-2.85, 2.0, 3.35), cab_len=2.3, cab_h=1.35, kind="garbage"),
 }
@@ -273,6 +276,29 @@ def build_truck(arch, p, mats):
                 parts.append(box(f"{arch}_ladder_rung{i}", (0.9, 0.05, 0.05),
                                  (0, 0.4 - ladder_len / 2 + (i + 0.5) * ladder_len / 9, deck_z + 0.5), mats["chrome"]))
             parts.append(box(f"{arch}_ladder_base", (1.0, 1.2, 0.4), (0, L / 2 - 1.2, deck_z + 0.2), mats["trim"]))
+        elif kind == "swat":
+            parts.append(hull(f"{arch}_body", [(x * W / 2, y, z) for x in (-1, 1)
+                                                for (y, z) in ((body_front, z0), (L / 2, z0), (body_front, H - 0.05),
+                                                               (L / 2, H - 0.05))]
+                              + [(x * (W / 2 - 0.12), y, H) for x in (-1, 1) for y in (body_front + 0.1, L / 2 - 0.1)],
+                              mats["paint"]))
+            for x in (-1, 1):
+                side = "L" if x > 0 else "R"
+                for i in range(2):  # slit windows
+                    parts.append(box(f"{arch}_slit_{side}{i}", (0.03, 0.9, 0.16),
+                                     (x * (W / 2 + 0.005), body_front + 0.7 + i * 1.5, z0 + body_h * 0.72), mats["glass"]))
+                parts.append(box(f"{arch}_step_{side}", (0.18, body_len - 0.4, 0.06),
+                                 (x * (W / 2 + 0.06), body_mid, z0 + 0.05), mats["trim"]))
+            parts.append(box(f"{arch}_rack", (W - 0.5, body_len - 0.6, 0.06), (0, body_mid, H + 0.12), mats["trim"]))
+            for y in (body_front + 0.4, L / 2 - 0.4):
+                parts.append(box(f"{arch}_rackleg{y:+.1f}", (W - 0.5, 0.06, 0.12), (0, y, H + 0.04), mats["trim"]))
+            parts.append(box(f"{arch}_reardoors", (W - 0.3, 0.04, body_h * 0.8), (0, L / 2 + 0.01, z0 + body_h * 0.45),
+                             mats["trim"]))
+            # Push bar on the nose.
+            parts.append(box(f"{arch}_pushbar", (W * 0.75, 0.1, 0.55), (0, -L / 2 - 0.2, z0 + 0.45), mats["trim"]))
+            for x in (-0.55, 0.55):
+                parts.append(box(f"{arch}_pushpost{x:+.1f}", (0.08, 0.25, 0.08), (x, -L / 2 - 0.08, z0 + 0.45),
+                                 mats["trim"]))
         elif kind == "garbage":
             parts.append(hull(f"{arch}_body", [(-W / 2, body_front, z0 + 0.2), (W / 2, body_front, z0 + 0.2),
                                                 (-W / 2, body_front, H), (W / 2, body_front, H),

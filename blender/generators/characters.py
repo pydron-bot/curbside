@@ -15,7 +15,7 @@ one person, so each body is one more batch / draw call):
 All share the same bone names and clips (glTF animation names):
   Idle 2 s loop, Walk 1 s loop, Run 0.625 s loop, Punch 0.333 s, Aim 0.292 s
   hold, AimBoth (two-handed), Shoot 0.125 s, ShootBoth, Fall 0.5 s, Down 1 s
-  loop, GetUp 0.917 s, EnterCar 0.5 s.
+  loop, GetUp 0.917 s, EnterCar 0.5 s, Arrested 1 s loop (kneeling, hands on head).
 Every clip keys every bone, so any clip can be played or crossfaded alone.
 The game scales Walk/Run playback with speed; `walkSpeed` / `runSpeed` (the
 ground speeds the cycles are authored for) are exported as custom properties.
@@ -361,6 +361,16 @@ def animate(rig):
     key_pose(rig, 12, {"hips": (25, 0, 0), "chest": (30, 10, 0), "head": (15, 0, 0),
                        "arm.R": (-50, 0, -5), "arm.L": (-40, 0, 0), "leg.L": (-25, 0, 0), "leg.R": (-50, 0, 0)},
              (0, -0.15, 0.3))
+
+    # --- Arrested: 1 s loop kneeling, hands behind the head (BUSTED). No knees, so the
+    # hips drop and the straight legs sweep back to lie along the ground behind. ---
+    new_action(rig, "Arrested")
+    kneel = {"hips": (-6, 0, 0), "chest": (4, 0, 0), "head": (12, 0, 0),
+             "leg.L": (72, 0, -4), "leg.R": (72, 0, 4), "arm.L": (-198, 0, -48), "arm.R": (-198, 0, 48)}
+    sag = {**kneel, "chest": (8, 0, 0), "head": (16, 0, 0), "arm.L": (-194, 0, -50), "arm.R": (-194, 0, 50)}
+    key_pose(rig, 0, kneel, (0, -0.56, 0))
+    key_pose(rig, 12, sag, (0, -0.57, 0))
+    key_pose(rig, 24, kneel, (0, -0.56, 0))
 
     rig.animation_data.action = None
     for pb in rig.pose.bones:

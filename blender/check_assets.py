@@ -19,12 +19,12 @@ CHAR_CLIPS = {
     # name: (seconds, tolerance)
     "Idle": (2.0, 0.05), "Walk": (1.0, 0.05), "Run": (0.6, 0.05), "Punch": (0.35, 0.05),
     "Aim": (0.3, 0.05), "Shoot": (0.12, 0.02), "Fall": (0.5, 0.05), "Down": (1.0, 0.05),
-    "GetUp": (0.9, 0.05), "EnterCar": (0.5, 0.05),
+    "GetUp": (0.9, 0.05), "EnterCar": (0.5, 0.05), "Arrested": (1.0, 0.05),
 }
 CHARACTER_FILES = re.compile(r"^(player|ped_\w+|cop)\.glb$")
-BUDGET = {"character": 600, "vehicle": 1500, "prop": 300, "debris": 80}
+BUDGET = {"character": 600, "vehicle": 1500, "vehicle_heli": 1500, "prop": 300, "debris": 80}
 # Large props that are allowed more than the small-prop budget.
-PROP_BUDGET_OVERRIDE = {"streetlamp": 300, "traffic_light": 300, "water_tank": 300, "palm": 300, "ramp": 300}
+PROP_BUDGET_OVERRIDE = {"spray_booth": 300, "streetlamp": 300, "traffic_light": 300, "water_tank": 300, "palm": 300, "ramp": 300}
 
 problems = []
 
@@ -147,6 +147,14 @@ def main():
             check_character(path, gltf)
         elif path.name == "vehicles.glb":
             check_multi_root(path, gltf, "vehicle", CAR_KINDS)
+        elif path.name == "heli.glb":
+            check_multi_root(path, gltf, "vehicle_heli")
+            names = {n.get("name") for n in gltf["nodes"]}
+            for rotor in ("heli_rotor_main", "heli_rotor_tail"):
+                if rotor not in names:
+                    problem(f"heli.glb: no {rotor} node")
+                elif "rotation" in next(n for n in gltf["nodes"] if n.get("name") == rotor):
+                    problem(f"heli.glb: {rotor} is rotated; its local axes must match the root's")
         elif path.name == "debris.glb":
             check_multi_root(path, gltf, "debris", {"paint", "trim", "tyre"})
         else:
