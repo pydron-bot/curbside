@@ -4,6 +4,7 @@
  * costs one draw call per body on screen, not per person. Pure data: the
  * crowd, the police and the missions pick bodies here; render/ loads them.
  */
+import { publicUrl } from '../core/paths';
 
 export type BodyKind = 'player' | 'ped_slim' | 'ped_stocky' | 'ped_coat' | 'cop' | 'vex' | 'tuna' | 'pike';
 
@@ -33,7 +34,7 @@ export function pickCrowdBody(rand: () => number): BodyKind {
 
 /** Where a body's GLB is served from. */
 export function bodyUrl(kind: BodyKind): string {
-  return `/assets/${kind}.glb`;
+  return publicUrl(`assets/${kind}.glb`);
 }
 
 /**

@@ -1,4 +1,5 @@
 import type { Object3D, Vector3 } from 'three';
+import { publicUrl } from '../core/paths';
 import { BODY_KINDS, bodyUrl, type BodyKind } from '../game/bodies';
 import type { Rect } from '../world/city';
 import { CharacterBatch, type CharacterModel, type Outfit } from './characterModel';
@@ -33,7 +34,7 @@ export class CharacterBodies {
     for (const kind of BODY_KINDS) byKind[kind] = new CharacterBatch(load ? bodyUrl(kind) : '', kind, START_ROWS[kind]);
     this.byKind = byKind;
     this.batches = BODY_KINDS.map((k) => byKind[k]);
-    this.weapons = new HeldWeapons(load ? '/assets/weapons.glb' : '');
+    this.weapons = new HeldWeapons(load ? publicUrl('assets/weapons.glb') : '');
   }
 
   /** Everything to add to the scene. */

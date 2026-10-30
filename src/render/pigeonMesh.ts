@@ -21,6 +21,7 @@ import {
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { EventBus } from '../core/events';
+import { publicUrl } from '../core/paths';
 import type { Pigeon, PigeonThreat, PigeonWorld } from '../systems/pigeons';
 import { Pigeons } from '../systems/pigeons';
 import type { City, Rect } from '../world/city';
@@ -89,7 +90,7 @@ export class PigeonLook {
     grid: StaticGrid,
     bus: EventBus,
     rand: () => number,
-    url = '/assets/pigeon.glb',
+    url = publicUrl('assets/pigeon.glb'),
   ) {
     const kinds = new Map(city.blocks.map((b) => [b.bx * 1000 + b.bz, b.kind]));
     this.flocks = new Pigeons(

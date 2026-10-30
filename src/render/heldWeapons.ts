@@ -14,6 +14,7 @@ import {
 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { publicUrl } from '../core/paths';
 import type { WeaponKind } from '../systems/weapons';
 import type { CharacterModel } from './characterModel';
 import { after } from './shaderLib';
@@ -58,7 +59,7 @@ export class HeldWeapons {
   private warned = false;
 
   constructor(
-    url = '/assets/weapons.glb',
+    url = publicUrl('assets/weapons.glb'),
     private readonly capacity = 48,
   ) {
     const material = new MeshLambertMaterial({ vertexColors: true });
