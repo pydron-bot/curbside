@@ -5,23 +5,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#111214" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Curbside" />
+    <meta name="format-detection" content="telephone=no" />
     <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
     <title>Curbside</title>
     <link rel="stylesheet" href="/src/ui/style.css" />
   </head>
-  <body>
+  <body data-scene="title">
     <div id="app"></div>
-    <div id="hud">
-      <div id="pstatus"><div id="phealth"><div></div></div><div id="weapon"></div></div>
-      <div id="speed"><span id="speed-value">0</span><small>km/h</small><div id="vhealth"><div></div></div></div>
-      <div id="debug"></div>
-    </div>
-    <div id="hint" hidden></div>
-    <div id="hurt"></div>
-    <div id="wasted" hidden>WASTED</div>
-    <div id="paused" hidden>Paused — tap to resume</div>
+    <!-- HUD, touch controls, radar and menus are built by src/ui/*. -->
+    <div id="paused" hidden></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

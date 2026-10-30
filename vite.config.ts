@@ -11,7 +11,12 @@ export default defineConfig({
   },
   preview: { host: true, port: 4173 },
   // three.js alone is ~540 kB minified (~137 kB gzip); well within budget.
-  build: { chunkSizeWarningLimit: 800 },
+  // It gets a chunk of its own: game updates then don't re-download it, and
+  // neither chunk trips the size warning.
+  build: {
+    chunkSizeWarningLimit: 800,
+    rolldownOptions: { output: { codeSplitting: { groups: [{ name: 'three', test: /node_modules[\\/]three[\\/]/ }] } } },
+  },
   plugins: [
     VitePWA({
       // 'prompt': a new version waits until main.ts finds a safe moment to

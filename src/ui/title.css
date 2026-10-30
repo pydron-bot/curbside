@@ -1,0 +1,390 @@
+/* --- Title screen (src/ui/titleScreen.ts) over the live attract city --- */
+#title {
+  z-index: 45;
+  display: block;
+  place-items: initial;
+  overflow: hidden;
+  animation: title-in 0.7s ease-out both;
+}
+
+#title[hidden] {
+  display: none;
+}
+
+@keyframes title-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.title-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 12% 28%, rgb(255 46 136 / 0.24), transparent 55%),
+    radial-gradient(ellipse at 6% 92%, rgb(46 230 255 / 0.14), transparent 50%),
+    linear-gradient(90deg, rgb(8 5 18 / 0.93) 0%, rgb(8 5 18 / 0.78) 34%, rgb(8 5 18 / 0.25) 64%, rgb(8 5 18 / 0) 82%);
+}
+
+/* Faint scanlines for a bit of arcade-cabinet grit. */
+.title-scrim::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgb(255 255 255 / 0.025) 0 1px, transparent 1px 3px);
+}
+
+.title-main {
+  position: relative;
+  height: 100%;
+  width: min(440px, 58vw);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 2.6vmin, 16px);
+  padding-left: clamp(0px, 2.5vw, 36px);
+}
+
+/* Centred by two spacers rather than justify-content: if the column is
+   ever taller than the screen it starts at the top instead of cutting the
+   wordmark off. */
+.title-main::before,
+.title-main::after {
+  content: '';
+  flex: 1 0 0;
+}
+
+/* --- The wordmark: heavy, slanted, hot gradient, neon outline offset behind --- */
+.wordmark {
+  position: relative;
+  width: fit-content;
+  margin: 0 0 clamp(4px, 1.6vmin, 12px);
+  font: italic 900 clamp(46px, 15vmin, 124px)/0.86 var(--display-font);
+  letter-spacing: -0.015em;
+  transform: rotate(-4deg) skewX(-6deg);
+  transform-origin: left center;
+  white-space: nowrap;
+  animation: wm-slam 0.7s 0.1s cubic-bezier(0.2, 1.4, 0.35, 1) both;
+}
+
+@keyframes wm-slam {
+  from {
+    transform: rotate(-4deg) skewX(-6deg) scale(1.6) translateX(-8%);
+    opacity: 0;
+    filter: blur(6px);
+  }
+}
+
+.wm {
+  position: relative;
+  display: inline-block;
+  color: transparent;
+  background: linear-gradient(180deg, #fffbea 0%, #fff0a0 28%, #ffd23f 50%, #ff8a3c 74%, #ff2e88 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0.05em 0 #2b0a26) drop-shadow(0 0 0.18em rgb(255 46 136 / 0.55));
+}
+
+/* Neon tube outline, offset behind the fill, flickering now and then. */
+.wm::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: -1;
+  color: transparent;
+  -webkit-text-stroke: 0.035em var(--neon-cyan);
+  transform: translate(0.06em, 0.055em);
+  filter: drop-shadow(0 0 0.08em var(--neon-cyan));
+  animation: neon-flicker 6s infinite;
+}
+
+/* A magenta ghost for a chromatic-aberration edge. */
+.wm::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: -2;
+  color: rgb(255 46 136 / 0.55);
+  transform: translate(-0.035em, -0.02em);
+  filter: blur(0.5px);
+}
+
+@keyframes neon-flicker {
+  0%,
+  41%,
+  43%,
+  45%,
+  100% {
+    opacity: 1;
+  }
+  42%,
+  44% {
+    opacity: 0.25;
+  }
+}
+
+/* A sprayed stripe under the word, with drips. */
+.wm-drip {
+  position: absolute;
+  left: 0.04em;
+  right: 0.12em;
+  bottom: -0.1em;
+  height: 0.085em;
+  border-radius: 0.05em 0.3em 0.05em 0.2em;
+  background: linear-gradient(90deg, var(--neon-pink), #ff6a3d 70%, rgb(255 106 61 / 0));
+  box-shadow: 0 0 0.12em rgb(255 46 136 / 0.7);
+  transform: rotate(-0.6deg);
+}
+
+.wm-drip::before,
+.wm-drip::after {
+  content: '';
+  position: absolute;
+  top: 60%;
+  width: 0.035em;
+  border-radius: 0 0 0.03em 0.03em;
+  background: var(--neon-pink);
+}
+
+.wm-drip::before {
+  left: 22%;
+  height: 0.22em;
+}
+
+.wm-drip::after {
+  left: 47%;
+  height: 0.14em;
+  background: #ff5a5a;
+}
+
+.tagline {
+  display: flex;
+  align-items: center;
+  gap: 0.7em;
+  margin-top: clamp(2px, 1vmin, 8px);
+  font: 800 clamp(10px, 2.7vmin, 13px)/1 var(--hud-font);
+  letter-spacing: 0.42em;
+  color: var(--neon-cyan);
+  text-shadow: 0 0 10px rgb(46 230 255 / 0.5);
+  white-space: nowrap;
+  animation: fade-up 0.5s 0.45s ease-out both;
+}
+
+.tagline i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--neon-pink);
+  box-shadow: 0 0 6px var(--neon-pink);
+}
+
+.title-modes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  width: min(330px, 100%);
+  animation: fade-up 0.5s 0.55s ease-out both;
+}
+
+/* Modes added under PLAY (addMode) pair up two to a row, so CHAOS RUN and
+   friends fit a short phone screen; an odd one out takes the full width. */
+.title-play,
+.title-mode:last-child:nth-child(even) {
+  grid-column: 1 / -1;
+}
+
+.title-play {
+  min-height: clamp(50px, 13.5vmin, 64px);
+  padding-left: 22px;
+  font-size: clamp(20px, 6vmin, 28px);
+  letter-spacing: 0.1em;
+}
+
+.title-play .mbtn-icon {
+  width: 0.8em;
+  height: 0.8em;
+}
+
+.title-play small {
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  opacity: 0.9;
+}
+
+.title-mode {
+  min-width: 0;
+  min-height: 46px;
+  padding: 7px 14px;
+  font-size: 14px;
+  box-shadow: inset 0 0 0 1.5px rgb(46 230 255 / 0.55);
+}
+
+.title-mode .mbtn-text {
+  min-width: 0;
+}
+
+.title-mode small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.title-row {
+  display: flex;
+  gap: 8px;
+  width: min(330px, 100%);
+  animation: fade-up 0.5s 0.65s ease-out both;
+}
+
+.title-row .mbtn {
+  flex: 1;
+  justify-content: center;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.title-best {
+  font: 800 11px/1 var(--hud-font);
+  letter-spacing: 0.28em;
+  color: var(--ink-dim);
+  animation: fade-up 0.5s 0.75s ease-out both;
+}
+
+.title-best[hidden] {
+  display: none;
+}
+
+.title-best b {
+  margin-left: 0.4em;
+  font: italic 900 18px/1 var(--display-font);
+  letter-spacing: 0.04em;
+  color: var(--neon-yellow);
+  text-shadow: 0 0 12px rgb(255 210 63 / 0.4);
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.title-hints {
+  position: absolute;
+  right: var(--edge-r);
+  bottom: var(--edge-b);
+  font: 800 10px/1 var(--hud-font);
+  letter-spacing: 0.18em;
+  color: var(--ink-dim);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.9);
+}
+
+.title-hints kbd {
+  margin-right: 4px;
+}
+
+.title-hints kbd + kbd {
+  margin-left: -2px;
+}
+
+.title-hints kbd.pad {
+  margin-left: 10px;
+}
+
+/* --- iOS: add to home screen for real full screen --- */
+.a2hs {
+  position: absolute;
+  right: var(--edge-r);
+  bottom: var(--edge-b);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(340px, 46vw);
+  padding: 6px 4px 6px 12px;
+  border-radius: 14px;
+  background: rgb(18 16 30 / 0.92);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.5);
+  animation: fade-up 0.5s 1.2s ease-out both;
+}
+
+.a2hs[hidden] {
+  display: none;
+}
+
+.a2hs-icon {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  color: var(--neon-cyan);
+}
+
+.a2hs-icon svg,
+.a2hs .inline-icon svg,
+.a2hs-close svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.a2hs-text {
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink-dim);
+}
+
+.a2hs-text b {
+  display: block;
+  font-size: 13px;
+  color: #fff;
+}
+
+.a2hs-text em {
+  font-style: normal;
+  font-weight: 800;
+  color: var(--neon-yellow);
+}
+
+.a2hs .inline-icon {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  vertical-align: -2px;
+  color: var(--neon-cyan);
+}
+
+.a2hs-close {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 14px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+/* Narrow or short screens: tighter. */
+@media (max-height: 360px) {
+  .title-main {
+    gap: 7px;
+  }
+
+  .title-play {
+    min-height: 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wordmark,
+  .tagline,
+  .title-modes,
+  .title-row,
+  .title-best,
+  .wm::before {
+    animation: none;
+  }
+}

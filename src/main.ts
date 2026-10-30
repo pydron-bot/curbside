@@ -3,7 +3,6 @@ import { registerSW } from 'virtual:pwa-register';
 import { events } from './core/events';
 import { Input } from './core/input';
 import { FixedStep } from './core/loop';
-import { onSettingsChange, settings } from './core/settings';
 import { UpdateGate } from './core/updateGate';
 import { PLAYER_ON_FOOT, stepPedestrian } from './entities/pedestrian';
 import {
@@ -25,12 +24,12 @@ import { Effects } from './render/effects';
 import { CameraRig } from './render/cameraRig';
 import { DynamicResolution } from './render/dynamicResolution';
 import { Look, type PlayerView } from './render/look';
-import { createRenderer } from './render/post';
+import { createRenderer, precompile } from './render/post';
 import { getQuality } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
 import { charVehicle, restoreVehicleLook } from './render/vehicleLooks';
 import { PUNCH_REACH, knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
-import { VEHICLE_SHARE, WEAPONS, autoAim, rayCircle, rayRect, type WeaponKind } from './systems/weapons';
+import { VEHICLE_SHARE, WEAPONS, WEAPON_ORDER, autoAim, rayCircle, rayRect, type WeaponKind } from './systems/weapons';
 import { HEALTH_PICKUP, PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
   applyDamage,
@@ -52,10 +51,20 @@ import {
 } from './systems/physics';
 import { Score, type Award } from './systems/score';
 import { driveAi, type Obstacle } from './systems/traffic';
-import { hiddenSetter, styleSetter, textSetter } from './ui/domWrite';
-import { PauseOverlay, type PauseReason } from './ui/pauseOverlay';
-import { ScoreHud, loadBest } from './ui/scoreHud';
+import type { PauseReason } from './ui/pauseOverlay';
+import { loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
+import { AIM_SNAP, AIM_TURN_RATE, aimHeading, approachAngle } from './core/aim';
+import { getDevice } from './render/quality';
+import { AttractCamera } from './ui/attract';
+import { FrontDoor } from './ui/frontDoor';
+import { blockBrowserGestures } from './ui/gestures';
+import { Haptics } from './ui/haptics';
+import { Hud, createHudFrame, gaugeTopSpeed, type CarHud } from './ui/hud';
+import { updateMouseAim } from './ui/mouseAim';
+import { Radar } from './ui/radar';
+import { ThreatIndicators } from './ui/threats';
+import { enterGameMode } from './ui/titleScreen';
 import { generateCity, type Rect } from './world/city';
 import { StaticGrid } from './world/collision';
 import { mulberry32 } from './world/random';
@@ -63,27 +72,6 @@ import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audi
 import { mountRadioToast } from './ui/radioToast';
 
 const app = document.getElementById('app')!;
-const debugEl = document.getElementById('debug')!;
-const hurtEl = document.getElementById('hurt')!;
-const wastedEl = document.getElementById('wasted')!;
-// Per-frame HUD values, written only when they change.
-const setSpeedHidden = hiddenSetter(document.getElementById('speed')!);
-const setSpeed = textSetter(document.getElementById('speed-value')!);
-const setHintHidden = hiddenSetter(document.getElementById('hint')!);
-const setHint = textSetter(document.getElementById('hint')!);
-const setWeaponLabel = textSetter(document.getElementById('weapon')!);
-const setPlayerHealth = styleSetter(document.querySelector<HTMLElement>('#phealth > div')!, 'width');
-const vehicleHealthBar = document.querySelector<HTMLElement>('#vhealth > div')!;
-const setVehicleHealth = styleSetter(vehicleHealthBar, 'width');
-const setVehicleHealthColour = styleSetter(vehicleHealthBar, 'background');
-const setDebug = textSetter(debugEl);
-/** The fps / draw-call line is for developers: ?debug in the URL or the Show FPS setting. */
-const debugFromUrl = new URLSearchParams(location.search).has('debug');
-const showDebug = () => {
-  debugEl.hidden = !(debugFromUrl || settings.showFps);
-};
-showDebug();
-onSettingsChange(showDebug);
 
 /** How close (m, centre to centre) you must be to get into a car. */
 const ENTER_RANGE = 4;
@@ -91,6 +79,8 @@ const ENTER_RANGE = 4;
 const ENTER_MAX_SPEED = 6;
 const CAMERA_FOOT = [20, 24] as const;
 const CAMERA_CAR = [26, 58] as const;
+/** The title screen's slow cruise over traffic. */
+const CAMERA_ATTRACT = [34, 46] as const;
 const BLAST_RADIUS = 9;
 const PUNCH_RANGE = 1.5;
 const PUNCH_COOLDOWN = 0.4;
@@ -179,6 +169,8 @@ VehicleModels.load('/assets/vehicles.glb').then(
   (models) => {
     look.cars.setModels(models);
     resolution.holdOff(2); // new geometry uploads
+    // Behind the title: compile the new car materials before anyone plays.
+    requestAnimationFrame(() => warmShaders());
   },
   (err) => console.error('Failed to load vehicles.glb', err),
 );
@@ -212,13 +204,17 @@ rig.setHeights(...CAMERA_FOOT);
 rig.snapTo(player.ped.x, player.ped.z);
 
 const viewRect: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
+/** Attract mode: the sim runs behind the title with the camera cruising over traffic. */
+const attract = new AttractCamera(rand);
+attract.start(SPAWN_POINT.x, SPAWN_POINT.z);
 const keepVehicles: Array<Vehicle | null> = [null, null];
 /**
  * Recycle and top up traffic and crowd; `seed` fills the streets from scratch
  * and puts the spawn point's parked cars back.
  */
 function maintainPopulation(seed = false) {
-  const at = player.position;
+  // Behind the title the streets follow the attract camera instead.
+  const at = attract.active ? attract : player.position;
   keepVehicles[0] = player.driving;
   keepVehicles[1] = player.lastDriven;
   population.maintain({
@@ -238,7 +234,6 @@ maintainPopulation(true);
 
 // --- Score ---
 const score = new Score(loadBest());
-const scoreHud = new ScoreHud(document.body, score);
 /** Every score award goes out as an event; the HUD (and audio, etc.) listen. */
 const award = (a: Award | null) => {
   if (a) events.emit({ type: 'award', award: a });
@@ -255,17 +250,17 @@ mountRadioToast(document.body, audio);
 
 // --- Input ---
 const input = new Input();
-const touch = mountTouchControls(document.body, input.touch);
+input.attachMouse(renderer.domElement);
+const haptics = new Haptics(input, events);
+const touch = mountTouchControls(document.body, input.touch, haptics);
 input.addResetHook(() => touch.reset());
-const touchLayer = document.querySelector<HTMLElement>('.touch-layer');
+blockBrowserGestures([renderer.domElement, touch.layer]);
+/** World heading the player is aiming this frame (stick, mouse or pad), or null. */
+let aimHeadingNow: number | null = null;
 const NO_CONTROLS: VehicleControls = { throttle: 0, steer: 0, handbrake: false };
 const NO_MOVE = { x: 0, y: 0, sprint: false };
 
 // --- Presentation: react to what the simulation reports ---
-events.on('award', (e) => scoreHud.pop(e.award));
-events.on('pickup', (e) =>
-  e.kind === 'health' ? scoreHud.notice('+ HEALTH', 'health') : scoreHud.notice(`+ ${WEAPONS[e.kind].label}`, 'weapon'),
-);
 events.on('shot', (e) => effects.emitFire(e.x, e.z, 1.2));
 events.on('bulletHit', (e) => effects.tracer(e.fromX ?? e.x, e.fromZ ?? e.z, e.x, e.z));
 events.on('explosion', (e) => {
@@ -282,20 +277,17 @@ events.on('exitVehicle', () => {
   rig.setHeights(...CAMERA_FOOT);
   input.resetActions();
 });
-events.on('playerHurt', () => {
-  hurtEl.classList.add('on');
-  requestAnimationFrame(() => requestAnimationFrame(() => hurtEl.classList.remove('on')));
-  rig.shake(0.4);
-});
-events.on('playerDied', () => {
-  wastedEl.hidden = false;
-  // Nobody keeps fighting a dead man.
-  for (const c of population.crowd) if (c.agent.mode === 'fight' || c.agent.mode === 'shoot') resumeWalking(c.agent);
-});
-events.on('respawn', () => {
-  wastedEl.hidden = true;
-  scoreHud.newRun();
-});
+events.on('playerHurt', () => rig.shake(0.4));
+// Nobody keeps fighting a dead man.
+events.on('playerDied', () => calmHostiles());
+
+/** Everyone fighting or shooting the player goes back to walking (death, a fresh run, the title). */
+function calmHostiles() {
+  for (const c of population.crowd) {
+    c.agent.provoked = false;
+    if (c.agent.mode === 'fight' || c.agent.mode === 'shoot') resumeWalking(c.agent);
+  }
+}
 
 /** Announce weapon changes from any cause (switch, pickup, running dry, death). */
 let shownWeapon: WeaponKind | null = null;
@@ -353,6 +345,8 @@ function leaveVehicle() {
 
 function respawnPlayer() {
   score.resetRun();
+  // A new run (or the title) starts with nobody after you.
+  calmHostiles();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true);
@@ -376,12 +370,12 @@ const contact = { x: 0, z: 0 };
 
 function simulate(dt: number) {
   const driving = player.driving;
-  const playerControls = input.readVehicle();
+  const playerControls = driving ? input.readVehicle(driving.sim, dt) : NO_CONTROLS;
 
   // What AI drivers need to avoid this step.
   obstacles.length = 0;
   for (const v of vehicles) addObstacle(v.sim.x, v.sim.z, 1);
-  if (!driving) addObstacle(player.ped.x, player.ped.z, 0.4);
+  if (!driving && !attract.active) addObstacle(player.ped.x, player.ped.z, 0.4);
   for (const c of population.crowd) addObstacle(c.agent.s.x, c.agent.s.z, 0.4);
 
   for (const v of vehicles) {
@@ -395,7 +389,13 @@ function simulate(dt: number) {
   }
 
   Object.assign(player.prev, player.ped);
-  if (!driving) stepPedestrian(player.ped, player.down ? NO_MOVE : input.readMove(), PLAYER_ON_FOOT, dt);
+  if (!driving) {
+    stepPedestrian(player.ped, player.down || attract.active ? NO_MOVE : input.readMove(), PLAYER_ON_FOOT, dt);
+    // Twin-stick: face the aim while walking (strafe), not the way you walk.
+    if (aimHeadingNow !== null && !player.down) {
+      player.ped.heading = approachAngle(player.ped.heading, aimHeadingNow, AIM_TURN_RATE * dt);
+    }
+  }
 
   vehicleStates.length = 0;
   for (const v of vehicles) vehicleStates.push(v.sim);
@@ -405,7 +405,7 @@ function simulate(dt: number) {
     const wasDown = c.agent.mode === 'down';
     const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, target);
     if (!wasDown && c.agent.mode === 'down') pedHitByCar(c, driving);
-    if (event?.kind === 'punch' && !driving && player.alive) {
+    if (event?.kind === 'punch' && !driving && player.alive && !attract.active) {
       const hit = Math.hypot(player.ped.x - c.agent.s.x, player.ped.z - c.agent.s.z) < PUNCH_REACH + 0.4;
       events.emit({ type: 'punch', x: c.agent.s.x, z: c.agent.s.z, hit, byPlayer: false });
       if (hit) {
@@ -475,7 +475,7 @@ function simulate(dt: number) {
 
   // --- Pickups ---
   respawnPickups(pickups, simTime);
-  if (!driving && player.alive) {
+  if (!driving && player.alive && !attract.active) {
     const pk = pickupAt(pickups, player.ped.x, player.ped.z);
     if (pk && (pk.kind !== 'health' || player.health < 100)) {
       pk.respawnAt = simTime + PICKUP_RESPAWN;
@@ -528,13 +528,13 @@ function explode(source: Vehicle) {
   const distance = Math.hypot(rig.focusX - x, rig.focusZ - z);
   events.emit({ type: 'explosion', x, z, distance, byPlayer, ownCar });
   const at = player.position;
-  if (Math.hypot(at.x - x, at.z - z) < BOOM_SCORE_RANGE) award(score.award('boom'));
+  if (!attract.active && Math.hypot(at.x - x, at.z - z) < BOOM_SCORE_RANGE) award(score.award('boom'));
 
   if (ownCar) {
     // The slide (if any) dies with the car; you're thrown clear and hurt once.
     score.endDrift(false);
     player.ownCarExploded();
-  } else if (!player.driving) {
+  } else if (!player.driving && !attract.active) {
     const d = Math.hypot(player.ped.x - x, player.ped.z - z);
     if (d < BLAST_RADIUS) {
       player.hurt(blastDamage(d, BLAST_RADIUS, 60));
@@ -564,7 +564,8 @@ function explode(source: Vehicle) {
 
 function playerTarget(): Target {
   const at = player.position;
-  return { x: at.x, z: at.z, inCar: player.driving !== null, alive: player.alive };
+  // Behind the title the player is hidden and out of play: nobody comes for them.
+  return { x: at.x, z: at.z, inCar: player.driving !== null, alive: player.alive && !attract.active };
 }
 
 type BulletHit = { kind: 'ped'; ped: CrowdPed } | { kind: 'vehicle'; v: Vehicle } | { kind: 'player' } | null;
@@ -607,7 +608,7 @@ function traceBullet(ox: number, oz: number, dx: number, dz: number, range: numb
       }
     }
   }
-  if (!shooterIsPlayer && !player.driving && player.alive) {
+  if (!shooterIsPlayer && !player.driving && player.alive && !attract.active) {
     const t = rayCircle(ox, oz, dx, dz, { x: player.ped.x, z: player.ped.z, r: 0.45 });
     if (t > 0.3 && t < best) {
       best = t;
@@ -635,7 +636,9 @@ function fireWeapon() {
     ...population.crowd.filter((c) => c.agent.mode !== 'down').map((c) => c.agent.s),
     ...vehicles.filter((v) => !v.damage.wrecked).map((v) => v.sim),
   ];
-  const aim = autoAim(x, z, heading, targets, w.range);
+  // A deliberate aim (stick, mouse, right stick) snaps within ~15°; otherwise assist around the facing.
+  const aim =
+    aimHeadingNow !== null ? autoAim(x, z, aimHeadingNow, targets, w.range, AIM_SNAP) : autoAim(x, z, heading, targets, w.range);
   player.ped.heading = Math.atan2(aim.x, aim.z);
   const ox = x + aim.x * 0.6;
   const oz = z + aim.z * 0.6;
@@ -681,6 +684,7 @@ function tryPunch() {
   if (player.driving || !player.ready || player.punchCooldown > 0) return;
   player.punchCooldown = PUNCH_COOLDOWN;
   playerModel.punch();
+  if (aimHeadingNow !== null) player.ped.heading = aimHeadingNow;
   const { x, z, heading } = player.ped;
   const fx = Math.sin(heading);
   const fz = Math.cos(heading);
@@ -716,7 +720,8 @@ function frame(now: number) {
   const frameSeconds = Math.min(0.25, elapsed);
   last = now;
   input.pollGamepad();
-  if (input.consumePause() % 2 === 1 || (paused && input.consumeConfirm())) setPaused(!paused);
+  // Menus first: they take keyboard / pad navigation and pause toggles.
+  frontDoor.update();
   if (paused) {
     // Resizing clears the canvas (rotating the phone while paused): redraw the
     // frozen scene behind the pause card.
@@ -724,20 +729,28 @@ function frame(now: number) {
     return;
   }
 
+  // Aim: the mouse needs the camera to find the ground under the cursor.
+  updateMouseAim(input, rig.camera, player.ped.x, player.ped.z, viewW, viewH);
+  const aim = input.readAim();
+  const playing = !attract.active;
+  aimHeadingNow = playing && !player.driving && player.ready && aim.active ? aimHeading(aim.x, aim.y) : null;
   const pressed = input.consumePunch();
   const cycle = input.consumeCycle();
-  if (cycle !== 0 && !player.driving) player.arsenal.cycle(cycle);
-  if (!player.driving && player.ready) {
-    const gun = player.arsenal.current;
-    if (gun) {
-      if (pressed || (WEAPONS[gun].automatic && input.fireHeld)) fireWeapon();
-    } else if (pressed) tryPunch();
-  }
-  if (input.consumeAction() && player.ready) {
-    if (player.driving) leaveVehicle();
-    else {
-      const v = nearestEnterable();
-      if (v) boardVehicle(v);
+  const acted = input.consumeAction();
+  if (playing) {
+    if (cycle !== 0 && !player.driving) player.arsenal.cycle(cycle);
+    if (!player.driving && player.ready) {
+      const gun = player.arsenal.current;
+      if (gun) {
+        if (pressed || aim.fire || (WEAPONS[gun].automatic && input.fireHeld)) fireWeapon();
+      } else if (pressed || aim.fire) tryPunch();
+    }
+    if (acted && player.ready) {
+      if (player.driving) leaveVehicle();
+      else {
+        const v = nearestEnterable();
+        if (v) boardVehicle(v);
+      }
     }
   }
   syncWeapon();
@@ -751,7 +764,7 @@ function frame(now: number) {
 
   // Interpolate render state between the last two sim steps.
   // Read once per frame: the wheel steer and the engine sound share it.
-  const controls = player.driving ? input.readVehicle() : null;
+  const controls = player.driving ? input.readVehicle(player.driving.sim) : null;
   const steer = controls ? controls.steer : 0;
   for (const v of vehicles) {
     v.mesh.root.position.set(lerp(v.prev.x, v.sim.x, alpha), 0, lerp(v.prev.z, v.sim.z, alpha));
@@ -774,7 +787,7 @@ function frame(now: number) {
   playerModel.update(frameSeconds, Math.hypot(ped.vx, ped.vz), player.down);
 
   // Smoke and fire from damaged cars near the action.
-  const focus = player.position;
+  const focus = attract.active ? attract : player.position;
   for (const v of vehicles) {
     if (Math.abs(v.sim.x - focus.x) > 120 || Math.abs(v.sim.z - focus.z) > 120) continue;
     const stage = damageStage(v.damage);
@@ -793,7 +806,10 @@ function frame(now: number) {
   effects.update(frameSeconds);
   updateHud(frameSeconds);
 
-  if (player.driving) {
+  if (attract.active) {
+    attract.update(frameSeconds, vehicles);
+    rig.update(frameSeconds, attract.x, attract.z, attract.vx, attract.vz);
+  } else if (player.driving) {
     const v = player.driving;
     rig.update(frameSeconds, v.mesh.root.position.x, v.mesh.root.position.z, v.sim.vx, v.sim.vz);
   } else {
@@ -802,9 +818,13 @@ function frame(now: number) {
   audioFrame.x = focus.x;
   audioFrame.z = focus.z;
   audioFrame.car = player.driving && controls ? describeCar(audioCar, player.driving.sim, controls, player.driving.archetype) : null;
-  audioFrame.footSpeed = player.driving ? 0 : Math.hypot(ped.vx, ped.vz);
+  audioFrame.footSpeed = player.driving || attract.active ? 0 : Math.hypot(ped.vx, ped.vz);
   audioFrame.health = player.health;
   audio.update(frameSeconds, audioFrame);
+
+  const at = player.position;
+  radar.update(frameSeconds, at.x, at.z, player.driving ? player.driving.sim.heading : ped.heading, Math.hypot(at.vx, at.vz), player.driving);
+  threats.update(rig.camera, population.crowd, at.x, at.z, viewW, viewH, playing && player.alive);
 
   look.update(frameSeconds, viewOfPlayer());
   look.render(rig.camera);
@@ -821,63 +841,117 @@ function viewOfPlayer(): PlayerView {
   playerView.heading = o.rotation.y;
   playerView.driving = v !== null;
   playerView.speed = v ? speed(v.sim) : Math.hypot(player.ped.vx, player.ped.vz);
-  playerView.alive = player.alive;
+  playerView.alive = player.alive && !attract.active; // no marker over the title
   return playerView;
 }
 
-let hudGun: WeaponKind | null | undefined;
-let hudAmmo = -1;
-let hudSpeed = -1;
-let hudVehicleHealth = -1;
-let debugTimer = 0;
-/** HUD text and bars; each write is skipped when its value hasn't changed. */
+const hudFrame = createHudFrame();
+const hudCar: CarHud = { kmh: 0, maxKmh: 100, health: 1, burning: false };
+/** Fill this frame's HUD snapshot; the HUD writes to the DOM only what changed. */
 function updateHud(frameSeconds: number) {
-  scoreHud.update();
-  setPlayerHealth(`${Math.ceil(player.health)}%`);
   const gun = player.arsenal.current;
-  const ammo = gun ? (player.arsenal.ammo.get(gun) ?? 0) : 0;
-  if (gun !== hudGun || ammo !== hudAmmo) {
-    hudGun = gun;
-    hudAmmo = ammo;
-    setWeaponLabel(gun ? `${WEAPONS[gun].label} · ${ammo}` : 'FISTS');
-  }
-  touch.setWeapon(gun ? WEAPONS[gun].label : null);
-
-  const nearCar = player.driving ? null : nearestEnterable();
-  touch.setMode(player.driving ? 'car' : 'foot', nearCar !== null);
-  setHintHidden(!nearCar || !touchLayer?.hidden);
-  if (nearCar) setHint(nearCar.ai ? 'Press E to take this car' : 'Press E to get in');
-
   const v = player.driving;
-  setSpeedHidden(!v);
+  hudFrame.health = player.health;
+  hudFrame.weapon = gun;
+  hudFrame.ammo = gun ? (player.arsenal.ammo.get(gun) ?? 0) : 0;
+  hudFrame.device = input.lastDevice;
   if (v) {
-    const kmh = Math.round(Math.abs(forwardSpeed(v.sim)) * 3.6);
-    if (kmh !== hudSpeed) setSpeed(String((hudSpeed = kmh)));
-    const pct = Math.round((v.damage.health / v.damage.maxHealth) * 100);
-    if (pct !== hudVehicleHealth) {
-      hudVehicleHealth = pct;
-      setVehicleHealth(`${pct}%`);
-      setVehicleHealthColour(pct > 60 ? '#6cc46c' : pct > 25 ? '#e0b040' : '#e05040');
-    }
+    hudCar.kmh = Math.abs(forwardSpeed(v.sim)) * 3.6;
+    hudCar.maxKmh = gaugeTopSpeed(VEHICLE_SPECS[v.archetype]) * 3.6;
+    hudCar.health = v.damage.health / v.damage.maxHealth;
+    hudCar.burning = damageStage(v.damage) === 'burning';
   }
-
-  if (!debugEl.hidden && (debugTimer -= frameSeconds) <= 0) {
-    debugTimer = 0.25;
-    setDebug(`${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`);
-  }
+  hudFrame.car = v ? hudCar : null;
+  const nearCar = v || attract.active ? null : nearestEnterable();
+  hudFrame.nearCar = nearCar ? (nearCar.ai ? 'jack' : 'enter') : null;
+  hudFrame.mouseAim = !v && !attract.active && input.mouseAimLive();
+  hud.update(frameSeconds, hudFrame);
+  touch.setWeapon(gun, gun !== null || ownsGun());
+  touch.setMode(v ? 'car' : 'foot', nearCar !== null);
 }
 requestAnimationFrame(frame);
+
+/** Any gun with ammo left, i.e. something for the swap button to switch to. */
+function ownsGun(): boolean {
+  for (const k of WEAPON_ORDER) if ((player.arsenal.ammo.get(k) ?? 0) > 0) return true;
+  return false;
+}
 
 function lerp(a: number, b: number, t: number) {
   return a + (b - a) * t;
 }
 
+// --- Front door: HUD, radar, menus, title / attract ---
+const hud = new Hud(document.body, score, events, {
+  onPause: () => frontDoor.openPause(),
+  debugText: () => `${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`,
+});
+const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
+const threats = new ThreatIndicators(document.body);
+const frontDoor = new FrontDoor(document.body, document.getElementById('paused')!, input, audio, {
+  startGame,
+  enterTitle,
+  restart: () => respawnPlayer(),
+  setPaused: (p, reason) => setPaused(p, reason),
+  isPaused: () => paused,
+  pauseReason: () => pauseReason,
+  applyUpdate: () => updates.atSafePoint(),
+});
+
+/**
+ * Compile every material in the scene now (behind the title) rather than on
+ * first draw mid-play. precompile targets the pass actually used (the HDR
+ * target on desktop), which renderer.compile on the canvas would miss.
+ */
+function warmShaders() {
+  try {
+    precompile(renderer, scene, rig.camera);
+    resolution.holdOff(1);
+  } catch {
+    // A lost context mid-compile: the first frames compile instead.
+  }
+}
+
+/** PLAY: from the attract city to a fresh run at the spawn corner. */
+function startGame() {
+  attract.stop();
+  hud.setScene('play');
+  radar.visible = true;
+  haptics.enabled = true;
+  playerModel.root.visible = true;
+  rig.setHeights(...CAMERA_FOOT);
+  respawnPlayer();
+  input.resetAll();
+  audio.setMusicMode('game');
+  resolution.holdOff();
+  enterGameMode(getDevice().handheld);
+}
+
+/** Quit to title: drop the run, hide the player, cruise over traffic. */
+function enterTitle() {
+  respawnPlayer();
+  playerModel.root.visible = false;
+  attract.start(rig.focusX, rig.focusZ);
+  rig.setHeights(...CAMERA_ATTRACT);
+  hud.setScene('title');
+  radar.visible = false;
+  haptics.enabled = false;
+  audio.setMusicMode('menu');
+  frontDoor.showTitle(score.best);
+}
+
+// Boot into the title over attract mode.
+playerModel.root.visible = false;
+rig.setHeights(...CAMERA_ATTRACT);
+hud.setScene('title');
+radar.visible = false;
+haptics.enabled = false;
+audio.setMusicMode('menu');
+frontDoor.showTitle(score.best);
+frontDoor.rotate.check();
+requestAnimationFrame(() => warmShaders());
+
 // --- Lifecycle ---
-const pauseOverlay = new PauseOverlay(
-  document.getElementById('paused')!,
-  () => setPaused(false),
-  () => updates.atSafePoint(),
-);
 // App updates wait for a moment when reloading costs nothing (see UpdateGate).
 let applyUpdate: ((reload?: boolean) => Promise<void>) | null = null;
 const updates = new UpdateGate(
@@ -886,7 +960,7 @@ const updates = new UpdateGate(
     // If the new worker never takes control, reload anyway.
     setTimeout(() => location.reload(), 4000);
   },
-  () => pauseOverlay.setUpdateReady(true),
+  () => frontDoor.pause.setUpdateReady(true),
 );
 applyUpdate = registerSW({ immediate: true, onNeedRefresh: () => updates.markReady() });
 
@@ -894,11 +968,15 @@ applyUpdate = registerSW({ immediate: true, onNeedRefresh: () => updates.markRea
 let contextLost = false;
 /** Paused only because the context was lost (so resume when it's restored). */
 let pausedForContext = false;
+/** Why the game is paused, while it is. */
+let pauseReason: PauseReason = 'paused';
 
 function setPaused(p: boolean, reason: PauseReason = 'paused') {
   if (!p && contextLost) return;
-  if (p) pauseOverlay.show(reason, input.lastDevice);
-  else pauseOverlay.hide();
+  if (p) {
+    pauseReason = reason;
+    frontDoor.showPause(reason);
+  } else frontDoor.hidePause();
   if (p === paused) return;
   paused = p;
   // Nothing held or queued while paused may leak into play on resume.
@@ -913,6 +991,11 @@ function setPaused(p: boolean, reason: PauseReason = 'paused') {
 }
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) return;
+  // Behind the title there's nothing to lose: just take any waiting update.
+  if (frontDoor.inTitle) {
+    updates.atSafePoint();
+    return;
+  }
   pausedForContext = false;
   setPaused(true);
   // Backgrounded: nobody is watching, so a waiting update can go in now.
@@ -931,7 +1014,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   contextLost = false;
   resolution.holdOff();
   if (pausedForContext) setPaused(false);
-  else if (paused) pauseOverlay.show('paused', input.lastDevice);
+  else if (paused) setPaused(true, 'paused');
   pausedForContext = false;
 });
 
@@ -952,6 +1035,15 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   audio,
   explode,
   updates,
+  hud,
+  radar,
+  frontDoor,
+  attract,
+  touch,
+  haptics,
+  /** The PLAY button: closes the title and starts a fresh run. */
+  startGame: () => frontDoor.play(),
+  enterTitle,
   get paused() {
     return paused;
   },

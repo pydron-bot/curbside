@@ -1,0 +1,66 @@
+/* Shared UI tokens (ui stream): safe areas, edges, palette, type. Imported by
+   every UI module that needs them; Vite includes it once. */
+:root {
+  /* Safe-area insets; a test can override these to emulate a notched phone. */
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  /* Where HUD and controls start: the safe area or a small margin. */
+  --edge-t: max(8px, var(--safe-t));
+  --edge-r: max(12px, var(--safe-r));
+  --edge-b: max(10px, var(--safe-b));
+  --edge-l: max(12px, var(--safe-l));
+
+  --ink: #f6f1e4;
+  --ink-dim: rgb(246 241 228 / 0.66);
+  --panel: rgb(12 12 18 / 0.78);
+  --panel-solid: #14141c;
+  --line: rgb(255 255 255 / 0.16);
+  --neon-pink: #ff2e88;
+  --neon-cyan: #2ee6ff;
+  --neon-yellow: #ffd23f;
+  --neon-green: #3ddc84;
+  --danger: #ff3b4f;
+  --amber: #ffb02e;
+  --hud-font: 'Avenir Next', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  --display-font: 'Arial Black', 'Avenir Next Condensed', 'Helvetica Neue', Impact, system-ui, sans-serif;
+  --hud-shadow: 0 1px 2px rgb(0 0 0 / 0.9), 0 0 10px rgb(0 0 0 / 0.45);
+}
+
+/* Measures the safe-area insets for JS (src/ui/safeArea.ts). */
+.safe-probe {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+  visibility: hidden;
+  pointer-events: none;
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) var(--safe-l);
+}
+
+/* The iOS haptic switch must be rendered (not display:none) to toggle. */
+.haptic-switch {
+  position: fixed;
+  left: -40px;
+  top: -40px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0.01;
+  pointer-events: none;
+}
+
+.icon {
+  display: inline-grid;
+  place-items: center;
+}
+
+.icon svg,
+.tbtn svg,
+.pedal svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

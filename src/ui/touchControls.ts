@@ -1,185 +1,483 @@
+import './tokens.css';
+import './touch.css';
+import { AIM_FIRE_AT } from '../core/aim';
 import type { InputSource } from '../core/input';
+import { onSettingsChange, settings } from '../core/settings';
+import { clampToRect, followThumb, footScale, shapeAxis, shapeStick, type Vec2 } from '../core/stick';
+import { PLAYER_ON_FOOT } from '../entities/pedestrian';
+import type { WeaponKind } from '../systems/weapons';
+import type { Haptics } from './haptics';
+import { ICONS } from './icons';
+import { chordBetween, pedalsAt, type PedalCircle, type PedalLayout, type PedalState } from './pedalZones';
+import { safeInsets } from './safeArea';
 
 export type ControlMode = 'foot' | 'car';
 
 export interface TouchControls {
-  /** Switch button layout; `canAct` shows the ENTER button on foot. */
+  readonly layer: HTMLElement;
+  /** Switch button layout; `canAct` shows (and pulses) the ENTER button on foot. */
   setMode(mode: ControlMode, canAct: boolean): void;
-  /** Label the attack button for the current weapon (null = fists). */
-  setWeapon(label: string | null): void;
-  /** Release every on-screen control (pause, blur, lost touches). */
+  /**
+   * Show the current weapon on the fire button (null = fists); `canSwap`
+   * (a gun is owned) shows the swap button, which is no use with fists alone.
+   */
+  setWeapon(weapon: WeaponKind | null, canSwap: boolean): void;
+  /**
+   * Release every on-screen control (pause, resume, blur). A thumb that
+   * stays on a stick or the pedals takes it back when it next moves; the
+   * buttons need a fresh press.
+   */
   reset(): void;
 }
 
+/** Joystick radius, CSS px (the base is twice this). */
+const STICK_R = 58;
+/** Gap from the safe area to a resting stick, px. */
+const STICK_REST_GAP = 22;
+/** Stick shaping: deadzone (fraction) and expo per use. */
+const STEER_DZ = 0.08;
+const STEER_EXPO = 1.5;
+const DRIVE_DZ = 0.1;
+const DRIVE_EXPO = 1.15;
+const WALK_DZ = 0.08;
+const AIM_DZ = 0.14;
+const AIM_R = 52;
+/** A quick touch on the aim side that hardly moves is a tap-to-fire. */
+const TAP_MS = 230;
+const TAP_PX = 12;
+
+const WEAPON_ICON: Record<WeaponKind | 'fists', string> = {
+  fists: ICONS.fist,
+  pistol: ICONS.pistol,
+  smg: ICONS.smg,
+  shotgun: ICONS.shotgun,
+};
+
 /**
- * On-screen controls. Left half: a floating joystick (steers in a car, walks
- * on foot; pushing it to the rim sprints). Right side: GAS / BRAKE / HAND in a
- * car, PUNCH on foot, plus an ENTER / EXIT button. Plain DOM over the canvas, shown on the
- * first touch so desktop players never see it.
+ * On-screen controls, plain DOM over the canvas:
+ *  - Left half: a floating joystick. On foot it walks (pushing further runs,
+ *    continuously); in a car it steers — "directional" (default: point where
+ *    to go) or "classic" (left/right) per settings.steering. The base appears
+ *    under the thumb, stays inside the safe area and follows a thumb dragged
+ *    past its rim.
+ *  - Right half on foot: a twin-stick aim pad anywhere outside the buttons
+ *    (aim; push past AIM_FIRE_AT to fire; tap to fire), FIRE, weapon swap and
+ *    ENTER (pulses when a car is in reach).
+ *  - Right side in a car: one pedal pad tracking every finger (slide between
+ *    GAS and BRAKE; the band between GAS and HAND presses both, to drift with
+ *    one thumb) and EXIT, well away from HAND.
+ * settings.leftHanded mirrors it all. Shown only while the player is on touch
+ * (body[data-device], see touch.css).
  */
-export function mountTouchControls(root: HTMLElement, out: InputSource): TouchControls {
+export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?: Haptics): TouchControls {
   const layer = el('div', 'touch-layer');
-  layer.hidden = true;
   layer.dataset.mode = 'foot';
+
+  // --- Move / steer stick ---
   const stickZone = el('div', 'stick-zone');
   const stickBase = el('div', 'stick-base');
   const stickKnob = el('div', 'stick-knob');
-  stickBase.append(stickKnob);
+  stickBase.append(el('div', 'stick-arrow'), stickKnob);
   stickZone.append(stickBase);
 
-  const buttons = el('div', 'touch-buttons');
-  const action = button('ENTER', 'btn-action');
-  const hand = button('HAND', 'btn-hand car-only');
-  const brake = button('BRAKE', 'btn-brake car-only');
-  const gas = button('GAS', 'btn-gas car-only');
-  const punch = button('PUNCH', 'btn-punch foot-only');
-  const swap = button('⇄', 'btn-swap foot-only');
-  buttons.append(action, hand, brake, gas, punch, swap);
-  layer.append(stickZone, buttons);
+  // --- Aim pad (foot) ---
+  const aimZone = el('div', 'aim-zone foot-only');
+  const aimBase = el('div', 'aim-base');
+  const aimKnob = el('div', 'aim-knob');
+  aimKnob.innerHTML = ICONS.crosshair;
+  aimBase.append(aimKnob);
+  aimZone.append(aimBase);
+
+  // --- Pedal pad (car) ---
+  const pad = el('div', 'pedal-pad car-only');
+  const gasEl = pedal('gas', 'GAS', ICONS.gas);
+  const brakeEl = pedal('brake', 'BRAKE', ICONS.brake);
+  const handEl = pedal('hand', 'HAND', ICONS.hand);
+  const chordEl = el('div', 'pedal-chord');
+  chordEl.innerHTML = '<span>DRIFT</span>';
+  pad.append(handEl, chordEl, brakeEl, gasEl);
+
+  // --- Buttons ---
+  const door = el('div', 'tbtn btn-door');
+  door.innerHTML = `${ICONS.door}<b>ENTER</b>`;
+  const doorLabel = door.querySelector('b')!;
+  const fire = el('div', 'tbtn btn-fire foot-only');
+  fire.innerHTML = `<span class="fire-icon">${ICONS.fist}</span>`;
+  const fireIcon = fire.firstElementChild as HTMLElement;
+  const swap = el('div', 'tbtn btn-swap foot-only');
+  swap.innerHTML = ICONS.swap;
+
+  layer.append(stickZone, aimZone, pad, door, swap, fire);
   root.append(layer);
 
-  const showOnTouch = (e: PointerEvent) => {
-    if (e.pointerType === 'touch') layer.hidden = false;
+  const applySettings = () => {
+    const hand = settings.leftHanded ? 'left' : 'right';
+    layer.dataset.hand = hand;
+    // The HUD mirrors too, so the radar stays clear of the buttons (hud.css).
+    document.body.dataset.hand = hand;
+    layer.dataset.steer = settings.steering;
+    restStick();
   };
-  window.addEventListener('pointerdown', showOnTouch, { capture: true });
+  onSettingsChange(applySettings);
+  window.addEventListener('resize', () => restStick());
+  // Deliver any iOS haptic tick queued by a crash or shot on the next touch.
+  for (const type of ['pointerdown', 'pointerup'] as const) layer.addEventListener(type, () => haptics?.touch(), { capture: true });
 
-  // --- Joystick ---
-  const RADIUS = 56;
+  let mode: ControlMode = 'foot';
+
+  // ---------------------------------------------------------------- stick
+  const origin: Vec2 = { x: 0, y: 0 };
+  const thumb: Vec2 = { x: 0, y: 0 };
+  const shaped: Vec2 = { x: 0, y: 0 };
   let stickPointer: number | null = null;
-  let originX = 0;
-  let originY = 0;
+  /**
+   * A reset (pause, resume) let go of the stick while the thumb stayed down.
+   * That thumb takes it back when it next moves, so thumbs placed during the
+   * 3-2-1 after turning the phone back are live at GO; a new touch takes
+   * the stick at once (a parked pointer may never report its release).
+   */
+  let stickParked = false;
+
+  /** Where the stick waits when nobody's touching it. */
+  function restStick() {
+    const s = safeInsets();
+    const left = !settings.leftHanded;
+    const x = left ? s.left + STICK_REST_GAP + STICK_R : window.innerWidth - s.right - STICK_REST_GAP - STICK_R;
+    const y = window.innerHeight - Math.max(s.bottom, 8) - STICK_REST_GAP - STICK_R;
+    if (stickPointer === null || stickParked) placeBase(stickBase, x, y);
+  }
+
+  /** Keep a stick origin inside its half of the screen and the safe area. */
+  function clampOrigin(p: Vec2, ownHalfIsLeft: boolean, r: number) {
+    const s = safeInsets();
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const m = r * 0.6;
+    const minX = ownHalfIsLeft ? s.left + m : w / 2 + m;
+    const maxX = ownHalfIsLeft ? w / 2 - m : w - s.right - m;
+    clampToRect(p, minX, maxX, s.top + m, h - s.bottom - m);
+  }
 
   stickZone.addEventListener('pointerdown', (e) => {
-    if (stickPointer !== null) return;
+    if (stickPointer !== null && !stickParked) return;
+    // Swipes from the bottom edge belong to the home indicator.
+    const s = safeInsets();
+    if (s.bottom > 0 && e.clientY > window.innerHeight - s.bottom) return;
     stickPointer = e.pointerId;
+    stickParked = false;
     stickZone.setPointerCapture(e.pointerId);
-    originX = e.clientX;
-    originY = e.clientY;
-    stickBase.style.left = `${originX}px`;
-    stickBase.style.top = `${originY}px`;
+    origin.x = thumb.x = e.clientX;
+    origin.y = thumb.y = e.clientY;
+    clampOrigin(origin, !settings.leftHanded, STICK_R);
     stickBase.classList.add('active');
-    moveKnob(0, 0);
+    updateStick();
   });
   stickZone.addEventListener('pointermove', (e) => {
     if (e.pointerId !== stickPointer) return;
-    let dx = e.clientX - originX;
-    let dy = e.clientY - originY;
-    const len = Math.hypot(dx, dy);
-    if (len > RADIUS) {
-      dx = (dx / len) * RADIUS;
-      dy = (dy / len) * RADIUS;
+    if (stickParked) {
+      stickParked = false;
+      stickBase.classList.add('active');
     }
-    moveKnob(dx, dy);
-    const nx = dx / RADIUS;
-    const ny = dy / RADIUS;
-    out.steer = Math.abs(nx) < 0.08 ? 0 : nx;
-    out.moveX = nx;
-    out.moveY = -ny; // screen-up is positive
-    out.sprint = len >= RADIUS * 0.9;
+    thumb.x = e.clientX;
+    thumb.y = e.clientY;
+    updateStick();
   });
-  const releaseStick = (e: PointerEvent) => {
+  const releaseStick = (e: { pointerId: number }) => {
     if (e.pointerId !== stickPointer) return;
     stickPointer = null;
+    stickParked = false;
+    idleStick();
+  };
+  /** Let go of the stick but remember the thumb (see stickParked). */
+  function parkStick() {
+    if (stickPointer === null) return;
+    stickParked = true;
+    idleStick();
+  }
+  function idleStick() {
     stickBase.classList.remove('active');
-    stickBase.style.left = '';
-    stickBase.style.top = '';
     out.steer = out.moveX = out.moveY = 0;
     out.sprint = false;
-    moveKnob(0, 0);
-  };
+    moveKnob(stickKnob, 0, 0);
+    restStick();
+  }
   stickZone.addEventListener('pointerup', releaseStick);
   stickZone.addEventListener('pointercancel', releaseStick);
   stickZone.addEventListener('lostpointercapture', releaseStick);
 
-  function moveKnob(dx: number, dy: number) {
-    stickKnob.style.transform = `translate(${dx}px, ${dy}px)`;
+  function updateStick() {
+    followThumb(origin, thumb.x, thumb.y, STICK_R);
+    clampOrigin(origin, !settings.leftHanded, STICK_R);
+    const dx = thumb.x - origin.x;
+    const dy = thumb.y - origin.y;
+    placeBase(stickBase, origin.x, origin.y);
+    const len = Math.hypot(dx, dy);
+    const k = len > STICK_R ? STICK_R / len : 1;
+    moveKnob(stickKnob, dx * k, dy * k);
+    writeStick(dx, dy);
   }
 
-  // --- Buttons (multi-touch: each tracks its own pointers) ---
-  const held = { gas: false, brake: false, hand: false };
-  const sync = () => {
+  function writeStick(dx: number, dy: number) {
+    if (stickPointer === null || stickParked) return;
+    if (mode === 'car') {
+      out.steer = shapeAxis(dx / STICK_R, STEER_DZ, STEER_EXPO);
+      const m = shapeStick(dx, dy, STICK_R, DRIVE_DZ, DRIVE_EXPO, shaped);
+      out.moveX = shaped.x;
+      out.moveY = -shaped.y; // screen-up is positive
+      out.sprint = false;
+      // The directional arrow on the base shows where the car is being sent.
+      stickBase.style.setProperty('--dir', `${Math.atan2(dx, -dy).toFixed(3)}rad`);
+      stickBase.classList.toggle('aiming', m > 0);
+    } else {
+      const m = shapeStick(dx, dy, STICK_R, WALK_DZ, 1, shaped);
+      const scale = m > 0 ? footScale(m, PLAYER_ON_FOOT.walkSpeed, PLAYER_ON_FOOT.runSpeed) / m : 0;
+      out.moveX = shaped.x * scale;
+      out.moveY = -shaped.y * scale;
+      out.sprint = m > 0; // footScale is a fraction of run speed
+      out.steer = 0;
+      stickBase.classList.remove('aiming');
+    }
+  }
+
+  // ---------------------------------------------------------------- aim
+  const aimOrigin: Vec2 = { x: 0, y: 0 };
+  const aimThumb: Vec2 = { x: 0, y: 0 };
+  let aimPointer: number | null = null;
+  /** As stickParked, for the aim stick. */
+  let aimParked = false;
+  let aimDownAt = 0;
+  let aimTravel = 0;
+  let armed = false;
+
+  /**
+   * With a gun out, a faint aim ring waits beside the swap button so the aim
+   * pad is discoverable (it works anywhere on that half). Its resting spot is
+   * pure CSS (touch.css), so it follows the layout without measuring.
+   */
+  function restAim() {
+    aimBase.classList.toggle('resting', armed && mode === 'foot' && (aimPointer === null || aimParked));
+  }
+
+  aimZone.addEventListener('pointerdown', (e) => {
+    if ((aimPointer !== null && !aimParked) || mode !== 'foot') return;
+    aimPointer = e.pointerId;
+    aimParked = false;
+    aimZone.setPointerCapture(e.pointerId);
+    aimOrigin.x = aimThumb.x = e.clientX;
+    aimOrigin.y = aimThumb.y = e.clientY;
+    clampOrigin(aimOrigin, settings.leftHanded, AIM_R);
+    aimDownAt = performance.now();
+    aimTravel = 0;
+    aimBase.classList.remove('resting');
+    aimBase.classList.add('active');
+    updateAim();
+  });
+  aimZone.addEventListener('pointermove', (e) => {
+    if (e.pointerId !== aimPointer) return;
+    if (aimParked) {
+      aimParked = false;
+      aimBase.classList.remove('resting');
+      aimBase.classList.add('active');
+    }
+    aimTravel += Math.abs(e.clientX - aimThumb.x) + Math.abs(e.clientY - aimThumb.y);
+    aimThumb.x = e.clientX;
+    aimThumb.y = e.clientY;
+    updateAim();
+  });
+  const releaseAim = (e: { pointerId: number; type?: string }) => {
+    if (e.pointerId !== aimPointer) return;
+    aimPointer = null;
+    const tap = !aimParked && e.type === 'pointerup' && aimTravel < TAP_PX && performance.now() - aimDownAt < TAP_MS;
+    if (tap) out.punchPresses++;
+    aimParked = false;
+    idleAim();
+  };
+  /** Let go of the aim stick but remember the thumb (see stickParked). */
+  function parkAim() {
+    if (aimPointer === null) return;
+    aimParked = true;
+    idleAim();
+  }
+  function idleAim() {
+    out.aimX = out.aimY = 0;
+    out.aimFire = false;
+    aimBase.classList.remove('active', 'firing');
+    moveKnob(aimKnob, 0, 0);
+    restAim();
+  }
+  aimZone.addEventListener('pointerup', releaseAim);
+  aimZone.addEventListener('pointercancel', releaseAim);
+  aimZone.addEventListener('lostpointercapture', releaseAim);
+
+  function updateAim() {
+    followThumb(aimOrigin, aimThumb.x, aimThumb.y, AIM_R);
+    clampOrigin(aimOrigin, settings.leftHanded, AIM_R);
+    const dx = aimThumb.x - aimOrigin.x;
+    const dy = aimThumb.y - aimOrigin.y;
+    placeBase(aimBase, aimOrigin.x, aimOrigin.y);
+    const len = Math.hypot(dx, dy);
+    const k = len > AIM_R ? AIM_R / len : 1;
+    moveKnob(aimKnob, dx * k, dy * k);
+    const m = shapeStick(dx, dy, AIM_R, AIM_DZ, 1, shaped);
+    out.aimX = shaped.x;
+    out.aimY = -shaped.y;
+    const firing = m > 0 && Math.min(1, len / AIM_R) >= AIM_FIRE_AT;
+    if (firing !== out.aimFire) {
+      out.aimFire = firing;
+      aimBase.classList.toggle('firing', firing);
+    }
+  }
+
+  // ---------------------------------------------------------------- pedals
+  const fingers = new Map<number, Vec2>();
+  /** Fingers a reset let go of while they stayed down: they press again when they move (see stickParked). */
+  const parkedFingers = new Set<number>();
+  const held: PedalState = { gas: false, brake: false, hand: false };
+  const next: PedalState = { gas: false, brake: false, hand: false };
+  let layout: PedalLayout | null = null;
+  let padLeft = 0;
+  let padTop = 0;
+
+  function measurePedals(): PedalLayout {
+    const r = pad.getBoundingClientRect();
+    padLeft = r.left;
+    padTop = r.top;
+    const circle = (p: HTMLElement): PedalCircle => {
+      const b = p.getBoundingClientRect();
+      return { x: b.left + b.width / 2 - r.left, y: b.top + b.height / 2 - r.top, r: Math.max(b.width, b.height) / 2 };
+    };
+    const gas = circle(gasEl);
+    const hand = circle(handEl);
+    return { gas, brake: circle(brakeEl), hand, chord: chordBetween(hand, gas) };
+  }
+
+  function updatePedals() {
+    next.gas = next.brake = next.hand = false;
+    if (layout) for (const f of fingers.values()) pedalsAt(f.x - padLeft, f.y - padTop, layout, next);
+    if (next.gas !== held.gas) gasEl.classList.toggle('pressed', (held.gas = next.gas));
+    if (next.brake !== held.brake) brakeEl.classList.toggle('pressed', (held.brake = next.brake));
+    if (next.hand !== held.hand) handEl.classList.toggle('pressed', (held.hand = next.hand));
+    chordEl.classList.toggle('pressed', held.gas && held.hand);
     out.throttle = (held.gas ? 1 : 0) - (held.brake ? 1 : 0);
     out.handbrake = held.hand;
-  };
-  const releasePedals = [
-    bindHold(gas, (v) => ((held.gas = v), sync())),
-    bindHold(brake, (v) => ((held.brake = v), sync())),
-    bindHold(hand, (v) => ((held.hand = v), sync())),
-  ];
-  punch.addEventListener('pointerdown', (e) => {
-    punch.setPointerCapture(e.pointerId);
-    out.punchPresses++;
-    out.fireHeld = true;
-    punch.classList.add('pressed');
-  });
-  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
-    punch.addEventListener(type, () => {
-      out.fireHeld = false;
-      punch.classList.remove('pressed');
-    });
-  }
-  swap.addEventListener('pointerdown', () => out.cyclePresses++);
-  action.addEventListener('pointerdown', () => {
-    out.actionPresses++;
-    action.classList.add('pressed');
-  });
-  for (const type of ['pointerup', 'pointercancel', 'pointerleave'] as const) {
-    action.addEventListener(type, () => action.classList.remove('pressed'));
   }
 
-  let weaponLabel: string | null = null;
-  let actionLabel = '';
+  pad.addEventListener('pointerdown', (e) => {
+    pad.setPointerCapture(e.pointerId);
+    if (fingers.size === 0) layout = measurePedals();
+    fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    updatePedals();
+    haptics?.touch(true);
+  });
+  pad.addEventListener('pointermove', (e) => {
+    let f = fingers.get(e.pointerId);
+    if (!f) {
+      if (!parkedFingers.delete(e.pointerId)) return;
+      if (!layout) layout = measurePedals();
+      fingers.set(e.pointerId, (f = { x: 0, y: 0 }));
+    }
+    f.x = e.clientX;
+    f.y = e.clientY;
+    updatePedals();
+  });
+  const liftFinger = (e: PointerEvent) => {
+    parkedFingers.delete(e.pointerId);
+    if (!fingers.delete(e.pointerId)) return;
+    updatePedals();
+  };
+  pad.addEventListener('pointerup', liftFinger);
+  pad.addEventListener('pointercancel', liftFinger);
+  pad.addEventListener('lostpointercapture', liftFinger);
+
+  /** Let go of every pedal; `park` remembers the fingers still down. */
+  function releasePedals(park = false) {
+    if (park) for (const id of fingers.keys()) parkedFingers.add(id);
+    else parkedFingers.clear();
+    fingers.clear();
+    updatePedals();
+  }
+
+  // ---------------------------------------------------------------- buttons
+  pressable(
+    fire,
+    () => {
+      out.punchPresses++;
+      out.fireHeld = true;
+      haptics?.touch(true);
+    },
+    () => (out.fireHeld = false),
+  );
+  pressable(swap, () => out.cyclePresses++);
+  pressable(door, () => {
+    out.actionPresses++;
+    haptics?.touch(true);
+  });
+
+  applySettings();
+
+  let doorText = '';
+  let weapon: WeaponKind | null | undefined;
+  let swapShown: boolean | undefined;
   return {
+    layer,
     reset() {
-      if (stickPointer !== null) releaseStick({ pointerId: stickPointer } as PointerEvent);
-      for (const release of releasePedals) release();
+      // Thumbs still down take their control back when they next move.
+      parkStick();
+      parkAim();
+      releasePedals(true);
       out.fireHeld = false;
-      punch.classList.remove('pressed');
-      action.classList.remove('pressed');
+      for (const b of [fire, swap, door]) b.classList.remove('pressed');
     },
-    setWeapon(label) {
-      if (label === weaponLabel) return;
-      weaponLabel = label;
-      punch.textContent = label ? 'FIRE' : 'PUNCH';
-      punch.classList.toggle('armed', label !== null);
+    setWeapon(w, canSwap) {
+      if (canSwap !== swapShown) swap.classList.toggle('idle', !(swapShown = canSwap));
+      if (w === weapon) return;
+      weapon = w;
+      fireIcon.innerHTML = WEAPON_ICON[w ?? 'fists'];
+      armed = w !== null;
+      fire.classList.toggle('armed', armed);
+      restAim();
     },
-    setMode(mode, canAct) {
-      if (layer.dataset.mode !== mode) {
-        layer.dataset.mode = mode;
-        // Don't carry held pedals into or out of a car.
-        held.gas = held.brake = held.hand = false;
-        sync();
-        for (const b of [gas, brake, hand]) b.classList.remove('pressed');
+    setMode(m, canAct) {
+      if (m !== mode) {
+        mode = m;
+        layer.dataset.mode = m;
+        // Don't carry held pedals or aim into or out of a car.
+        releasePedals();
+        if (aimPointer !== null) releaseAim({ pointerId: aimPointer });
+        // A thumb still on the stick keeps going, re-read for the new mode.
+        if (stickPointer !== null) writeStick(thumb.x - origin.x, thumb.y - origin.y);
+        restAim();
       }
-      const label = mode === 'car' ? 'EXIT' : 'ENTER';
-      if (label !== actionLabel) action.textContent = actionLabel = label;
-      action.classList.toggle('available', mode === 'car' || canAct);
+      const text = m === 'car' ? 'EXIT' : 'ENTER';
+      if (text !== doorText) doorLabel.textContent = doorText = text;
+      door.classList.toggle('available', m === 'car' || canAct);
     },
   };
 }
 
-/** Track every pointer on a hold button; returns a function that releases it. */
-function bindHold(target: HTMLElement, set: (down: boolean) => void): () => void {
-  const active = new Set<number>();
-  const update = () => {
-    target.classList.toggle('pressed', active.size > 0);
-    set(active.size > 0);
-  };
+/** A button that tracks its own pointer: `down` on press, `up` on any kind of release. */
+function pressable(target: HTMLElement, down: () => void, up?: () => void): void {
   target.addEventListener('pointerdown', (e) => {
     target.setPointerCapture(e.pointerId);
-    active.add(e.pointerId);
-    update();
+    target.classList.add('pressed');
+    down();
   });
   for (const type of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
-    target.addEventListener(type, (e) => {
-      active.delete(e.pointerId);
-      update();
+    target.addEventListener(type, () => {
+      if (!target.classList.contains('pressed')) return;
+      target.classList.remove('pressed');
+      up?.();
     });
   }
-  return () => {
-    active.clear();
-    update();
-  };
+}
+
+/** Centre a stick base on (x, y) (client px); transforms only, no layout. */
+function placeBase(base: HTMLElement, x: number, y: number): void {
+  base.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0)`;
+}
+
+function moveKnob(knob: HTMLElement, dx: number, dy: number): void {
+  knob.style.transform = `translate3d(${dx.toFixed(1)}px, ${dy.toFixed(1)}px, 0)`;
 }
 
 function el(tag: string, className: string): HTMLElement {
@@ -188,8 +486,8 @@ function el(tag: string, className: string): HTMLElement {
   return node;
 }
 
-function button(label: string, className: string): HTMLElement {
-  const b = el('div', `touch-btn ${className}`);
-  b.textContent = label;
-  return b;
+function pedal(kind: string, label: string, svgIcon: string): HTMLElement {
+  const p = el('div', `pedal pedal-${kind}`);
+  p.innerHTML = `${svgIcon}<b>${label}</b>`;
+  return p;
 }

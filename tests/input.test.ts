@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Input, STICK_DEADZONE, radialDeadzone } from '../src/core/input';
+import { updateSettings } from '../src/core/settings';
+import { createVehicleState } from '../src/entities/vehicle';
 
 /** A window stand-in: Input only needs addEventListener. */
 function fakeWindow() {
@@ -196,5 +198,154 @@ describe('input', () => {
     input.pollGamepad();
     expect(input.readVehicle().steer).toBeGreaterThan(0);
     expect(input.readVehicle().steer).toBeLessThan(0.1);
+  });
+  it('queues menu navigation from keys (arrows repeat, confirm does not) and the pad (with hold-repeat)', () => {
+    const { win, send } = fakeWindow();
+    const input = new Input(win);
+    send('keydown', { code: 'ArrowDown' });
+    send('keydown', { code: 'ArrowDown', repeat: true });
+    send('keydown', { code: 'Enter' });
+    send('keydown', { code: 'Enter', repeat: true });
+    send('keydown', { code: 'Backspace' });
+    expect([input.consumeNav(), input.consumeNav(), input.consumeNav(), input.consumeNav(), input.consumeNav()]).toEqual([
+      'down',
+      'down',
+      'confirm',
+      'back',
+      null,
+    ]);
+    const pad = fakePad();
+    usePad(pad);
+    pad.buttons[13].pressed = true; // D-pad down
+    input.pollGamepad(0);
+    input.pollGamepad(100); // held, before the repeat delay
+    input.pollGamepad(500); // repeats
+    expect([input.consumeNav(), input.consumeNav(), input.consumeNav()]).toEqual(['down', 'down', null]);
+    pad.buttons[13].pressed = false;
+    pad.axes[0] = -0.9; // the stick navigates too
+    input.pollGamepad(600);
+    pad.buttons[1].pressed = true; // B
+    input.pollGamepad(610);
+    expect([input.consumeNav(), input.consumeNav()]).toEqual(['left', 'back']);
+    input.resetAll();
+    expect(input.consumeNav()).toBe(null);
+  });
+
+  it('a stick held through a reset (pausing mid-steer) does not navigate until it returns to centre', () => {
+    const { win } = fakeWindow();
+    const input = new Input(win);
+    const pad = fakePad();
+    usePad(pad);
+    pad.axes[0] = -1; // steering hard left...
+    input.pollGamepad(0);
+    input.resetAll(); // ...as the pause menu opens
+    input.consumeNav();
+    input.pollGamepad(100);
+    input.pollGamepad(600); // past the repeat delay: still nothing
+    expect(input.consumeNav()).toBe(null);
+    pad.axes[0] = 0;
+    input.pollGamepad(700);
+    pad.axes[0] = -1; // a fresh push navigates
+    input.pollGamepad(800);
+    expect(input.consumeNav()).toBe('left');
+  });
+
+  it('A confirms in menus while still being handbrake; Start is a pause toggle, not a nav command', () => {
+    const { win } = fakeWindow();
+    const input = new Input(win);
+    const pad = fakePad();
+    usePad(pad);
+    pad.buttons[0].pressed = true;
+    input.pollGamepad();
+    expect(input.consumeNav()).toBe('confirm');
+    expect(input.readVehicle().handbrake).toBe(true);
+    pad.buttons[9].pressed = true;
+    input.pollGamepad();
+    expect(input.consumeNav()).toBe(null);
+    expect(input.consumePause()).toBe(1);
+  });
+
+  it('the right stick aims and RT fires on foot; RT held through a car exit does not fire', () => {
+    const { win } = fakeWindow();
+    const input = new Input(win);
+    const pad = fakePad();
+    usePad(pad);
+    pad.axes[2] = 0.9;
+    pad.axes[3] = -0.1;
+    input.pollGamepad();
+    const aim = input.readAim();
+    expect(aim.active).toBe(true);
+    expect(aim.x).toBeGreaterThan(0.8);
+    expect(aim.y).toBeGreaterThan(0); // stick up is screen-up
+    expect(aim.fire).toBe(false); // the pad fires with RT, not by aiming
+    pad.buttons[7] = { pressed: true, value: 1 };
+    input.pollGamepad();
+    expect(input.consumePunch()).toBe(true);
+    expect(input.fireHeld).toBe(true);
+    input.resetActions(); // got out of the car with RT still down
+    input.pollGamepad();
+    expect(input.fireHeld).toBe(false);
+    pad.axes[2] = pad.axes[3] = 0;
+    input.pollGamepad();
+    expect(input.readAim().active).toBe(false);
+  });
+
+  it('touch aim comes from the aim stick and fires twin-stick style', () => {
+    const { win } = fakeWindow();
+    const coarse = Object.assign(win, { matchMedia: (q: string) => ({ matches: q === '(pointer: coarse)' }) });
+    const input = new Input(coarse);
+    input.touch.aimX = 0.6;
+    input.touch.aimY = 0.6;
+    input.touch.aimFire = true;
+    const aim = input.readAim();
+    expect(aim).toMatchObject({ active: true, fire: true });
+    input.resetAll();
+    expect(input.readAim().active).toBe(false);
+  });
+
+  it('mouse: left button fires (and holds), right button and wheel switch weapon, aim goes stale', () => {
+    const { win } = fakeWindow();
+    const input = new Input(win);
+    const canvas = new EventTarget() as unknown as HTMLElement;
+    let t = 1000;
+    input.attachMouse(canvas, () => t);
+    const fire = (type: string, props: Record<string, unknown>) =>
+      canvas.dispatchEvent(Object.assign(new Event(type, { cancelable: true }), { pointerType: 'mouse', clientX: 0, clientY: 0, ...props }));
+    fire('pointermove', { clientX: 300, clientY: 200 });
+    expect(input.mousePosition).toEqual({ x: 300, y: 200 });
+    expect(input.mouseAimLive(t)).toBe(true);
+    input.mouse.aimX = 1; // written each frame by mouseAim.ts
+    expect(input.readAim(t).active).toBe(true);
+    fire('pointerdown', { button: 0, clientX: 300, clientY: 200 });
+    expect(input.consumePunch()).toBe(true);
+    expect(input.fireHeld).toBe(true);
+    win.dispatchEvent(Object.assign(new Event('pointerup'), { pointerType: 'mouse', button: 0 }));
+    expect(input.fireHeld).toBe(false);
+    fire('pointerdown', { button: 2 });
+    expect(input.consumeCycle()).toBe(1);
+    fire('wheel', { deltaY: -100 });
+    expect(input.consumeCycle()).toBe(-1);
+    fire('wheel', { deltaY: -100 }); // too soon after the last notch
+    expect(input.consumeCycle()).toBe(0);
+    t += 10_000; // untouched for a while: a resting cursor stops aiming
+    expect(input.mouseAimLive(t)).toBe(false);
+    expect(input.readAim(t).active).toBe(false);
+  });
+
+  it('directional touch steering applies only with a car and in directional mode', () => {
+    const { win } = fakeWindow();
+    const input = new Input(win);
+    const car = createVehicleState(0, 0, 0); // facing down-screen
+    car.vz = 10;
+    input.touch.moveX = 1; // stick right
+    input.touch.steer = 1; // the classic reading of the same stick
+    updateSettings({ steering: 'directional' });
+    // Heading +X from +Z is a heading increase, which needs negative steer.
+    expect(input.readVehicle(car).steer).toBeLessThan(0);
+    expect(input.readVehicle(car).throttle).toBeGreaterThan(0); // auto-gas
+    updateSettings({ steering: 'classic' });
+    expect(input.readVehicle(car).steer).toBe(1);
+    updateSettings({ steering: 'directional' });
+    expect(input.readVehicle().steer).toBe(1); // no car: classic
   });
 });
