@@ -188,6 +188,20 @@ vibration, show FPS.
   glancing walls, nitro; rebalanced damage and body armour; ped hit
   points, knockouts, punch combos, lock-on; grenades, molotovs, rockets;
   drive-bys; optional character clips; stunt ramps with STUNT awards.
+- **World and vehicle models** (`src/render/propModels.ts`, `propBatch.ts`,
+  `worldProps.ts`, `heliModel.ts`; `src/world/streetProps.ts`,
+  `landmarkProps.ts`, `dressing.ts`, `signals.ts`; see *World* below):
+  props.glb, pickups.glb, debris.glb and heli.glb replace the box
+  stand-ins — street lamps, traffic lights that traffic obeys, street
+  furniture you can knock flying, rooftop kit, trees by district, booths,
+  the station, race gantries, the export bay, the safehouse door, pickups,
+  frenzy tokens, ramps and kickers, car-part debris in the car's paint and a
+  modelled police helicopter — in seven instanced families. Twelve more
+  vehicles (muscle car, limo, police SUV, SWAT truck, ambulance, fire
+  truck, garbage truck, tow truck, ice cream van, bus, scooter, police
+  bike) with their own handling, health and collision bodies; emergency
+  calls with right of way; two-wheelers that lean, carry a rider and
+  throw them off in a hard crash.
 - Next: **M8 Ship** (offline caching, install prompt, performance pass).
 
 ## Driving and combat
@@ -273,11 +287,14 @@ within 1.2 rad of square (hostiles first), with ×1.5 spread; an aim
 (mouse, right stick) picks the window. Never hits your own car; heat
 applies like any gunfire.
 
-**Stunts** (`world/ramps.ts`, `systems/stunts.ts`). Ten kicker ramps
-(7 × 3.6 m, 1.5 m lip) on road centrelines just past a junction (one a
-block east of the spawn corner); traffic in its lanes never touches them.
+**Stunts** (`world/ramps.ts`, `systems/stunts.ts`). Ten stunt ramps
+(6 × 3.2 m, 1.6 m lip, matching the `ramp` model in props.glb) on road
+centrelines just past a junction (one a block east of the spawn corner),
+and eight smaller kickers (2.5 × 2.2 m, 0.6 m lip, the `kicker` model)
+at least 120 m from any ramp; traffic in their lanes never touches them.
 A car lined up on the front climbs the slope and flies off the lip with
-vy = 0.36 × speed (a drop at a crawl): ~1 s and ~28 m at 28 m/s.
+vy = 0.36 × speed off a ramp, 0.24 × off a kicker (a drop at a crawl):
+~1 s and ~28 m at 28 m/s off a ramp.
 A ramp's sides and back are solid to cars and people alike.
 Airborne: gravity 22, no grip or steering, cars pass over people and
 other cars, the body pitches with the arc, the contact shadow stays on
@@ -344,8 +361,10 @@ of sight one star drops, and the clock restarts on the next (3★ ≈ 36 s
 unseen). Sightings and witnessed crimes reset it; the radio keeps units on
 your real position for 2 s after each sighting.
 
-**Response** (`systems/police.ts`): units by stars 2 / 3 / 4 / 6 / 7 (SWAT
-vans from 4★: dark vans, 180 HP), arriving one at a time on a lane 75–140 m
+**Response** (`systems/police.ts`): units by stars 2 / 3 / 4 / 6 / 7 (at
+1–2★ half of them may be a police bike, one officer, never more than one
+on the road; from 3★ half the cars are police SUVs; SWAT trucks from 4★,
+220 HP), arriving one at a time on a lane 75–140 m
 away from where the police believe you are (your real position only
 while they're seeing or tracking you, so breaking line of sight works),
 out of view, heading your way and already rolling (mostly ahead on a
@@ -773,6 +792,106 @@ the first time it comes into view.
   frames the view. Desktops render into a half-float buffer so the 'high'
   tier can bloom (threshold follows the time of day: only real lights bloom
   by day). Cars' paint and glass alone reflect a PMREM studio environment.
+
+## World
+
+The Blender models for the street, the landmarks and the vehicles
+(`public/assets/props.glb`, `pickups.glb`, `debris.glb`, `heli.glb` and the
+new roots in `vehicles.glb`; see `docs/BLENDER_TODO.md`). Until a GLB
+arrives the old box stand-ins draw; when it does they're dropped for good
+and every new program is compiled behind the current frame.
+
+- **Prop models** (`render/propModels.ts`): each GLB root is merged into
+  one geometry with a colour and a *surface class* per vertex, taken from
+  its material name: `lamp` glows at night, `light_red/amber/green` follow
+  the signal cycle, `police_lamp` pulses, signs and crate stripes are
+  self-lit, hazard paint catches the light, the ramp deck gets chevrons,
+  red tips blink, `searchlight`/`siren_*` flash, `frenzy` takes the
+  instance tint, `booth_roof` can be cut away.
+- **Families** (`render/propBatch.ts`, `render/worldProps.ts`): several
+  models merged into one geometry; each instance says which model it is
+  and the vertex shader drops every other model's vertices, so a family is
+  one draw call (and one in the shadow pass): `lamps`, `street` (traffic
+  lights and furniture), `roofs`, `trees`, `landmarks`, `things` (pickups,
+  frenzy tokens, packages, roadblock barriers and cones, knocked-over
+  props in flight) and `debris`. Static instances are bucketed in 32 m
+  cells and the buffers are refilled only when the view crosses a cell;
+  per-frame ones are appended. One program for all of them.
+- **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
+  `world/dressing.ts`; pure, tested, from the city seed): street lamps
+  with the arm over the road (the analytic night lighting follows the new
+  head); traffic lights on 70% of the inner junctions; furniture per block
+  side by district (hydrants, benches, bins, bollards, newspaper boxes,
+  mailboxes, payphones; busiest downtown), dumpsters at alley mouths,
+  bollards round plazas, park trees by district (round, tall, palms);
+  rooftop kit fitted to the building plans (AC units, vents, water tanks,
+  dishes, stair huts, antennas with a blinking tip); spray booths with
+  their mouth to the street (the roof opens while you're inside), the
+  export bay, the police sign and the safehouse door on their walls (both
+  lamps glow at night), race-start gantries with barriers and cones, ramp
+  and kicker models. Nothing lands on a pickup, a payphone, a race start,
+  the station or the safehouse door, or in a bay's mouth.
+- **Collision**: lamp posts, signal poles, bollards, dumpsters, payphones,
+  booth and bay walls, gantry pillars and long barriers go into the
+  `StaticGrid`. Hydrants, bins, newspaper boxes, mailboxes, benches and
+  race cones are *knockables* (`systems/knockables.ts`): a car through
+  one at over 3 m/s sends it flying (`render/knockFx.ts`: a tumbling copy,
+  dust and sparks, a 14 s geyser from a hydrant) and it's back 60 s later
+  once out of sight. Roadblock barriers and cones go flying the same way.
+- **Traffic lights** (`world/signals.ts`, pure, tested): a 24 s two-phase
+  cycle (9 s green, 2 s amber, a beat of all-red), offset per junction,
+  stepped with the simulation. The lenses are lit in the shader from one
+  uniform; the lit lens throws a glow and, at night, its colour on the
+  lanes. AI traffic stops for red, and for amber it can stop for, and
+  queues behind; panicking and urgent drivers (police, emergency calls)
+  run them.
+- **Pickups, tokens, debris**: pickups are the pickups.glb models (drawn
+  ×1.7 so they read from the camera) with their rings and bob; frenzy
+  tokens spin and bob in the frenzy's colour; an explosion throws a run of
+  car parts (door, hood, bumper, wheel, panels) in the car's paint.
+- **Vehicles** (`entities/vehicle.ts`): muscle car, limo, police SUV, SWAT
+  truck, ambulance, fire truck, garbage truck, tow truck, ice cream van,
+  bus, scooter and police bike, each with its own handling, health, engine
+  sound, skid wheels and a collision body sized to the model (a row of
+  circles: a 12 m bus is five, a bike is two narrow ones;
+  `VEHICLE_BODIES`, `physics.ts: bodyOf / carCircles / bodyDistance`).
+  Traffic mixes them in by `TRAFFIC_MIX` (buses, limos, the trucks and the
+  vans are rare), taxis, ambulances, fire trucks and the rest in their
+  livery. Half the ambulances and fire trucks are on a call: lights,
+  siren, 17 m/s, and traffic pulls over for them as for the police. The
+  ice cream van plays its jingle every 9 s within 70 m.
+- **Two-wheelers**: the scooter and the police bike get off the line and
+  turn quicker than a car, lean into turns (`bikeLean`, from the sideways
+  pull; upright in the air), and carry a rider (`CharacterModel.riding`
+  plays `Ride`, seated on the model's `<arch>_seat`). An impact over
+  8 m/s throws the rider over the bars (knocked flat, hurt if it's you)
+  and leaves the bike on its side, scraping to a stop; whoever gets on
+  stands it up. A scooter is parked at the spawn corner and a few ride
+  in traffic.
+- **Police helicopter** (`render/heliModel.ts`): heli.glb as one mesh, one
+  draw call and no shadow pass (the shadow and the searchlight pool on the
+  ground stay faked); the rotors spin in the vertex shader, the
+  searchlight glows and the belly strobes flash. It flies at a share of
+  the camera's height on the line from the camera to its ground position,
+  so it's always over its own shadow on screen.
+- **Budget** (whole frame, `?debug`): on the iPhone 15 Pro profile 41 on
+  foot by day, 42 at night, 43–49 driving (44 / 47 / 50 / 47 before); on
+  desktop 55 / 58 on foot, 51–55 driving (57 / 60 / 63 / 60 before) —
+  the families replaced more stand-in meshes than they add. Busy scenes:
+  a signalled junction at night 43 (phone) / 60 (desktop), six heavy
+  vehicles in view 53 / 69, a 5-star chase with the helicopter 59–64 on
+  desktop. Programs: 30 on desktop, none compiled after start-up (the
+  helicopter included: it is drawn speck-small for two frames on load). No
+  light is ever added; nothing allocates per frame (knock-overs and debris
+  write into preallocated buffers).
+
+`dressCity(city, pickups, ramps)` → `{ street, landmarks, solids,
+knockables }` is the one call `main.ts` makes before building the
+collision grid; `look.props` (`WorldProps`) is the renderer side:
+`setLandmarks`, `knock(id)` / `restore(id)`, `begin(view, …)` / `end()`,
+and the `things` / `debris` families other presenters add to per frame
+(`addMatrix`, `add`). `TrafficSignals` (`main.ts: signals`) is passed to
+`driveAi` and to the renderer.
 
 ## Effects and camera
 
