@@ -480,6 +480,14 @@ export class GameAudio {
       case 'boost':
         if (!e.on) return;
         return this.oneShot('engine', null, FALLOFF.near, 0.8, 0.1, sfx.boost, 0.3);
+      case 'jump':
+        return this.oneShot('crash', e, FALLOFF.crash, e.involvesPlayer ? 0.9 : 0.6, 0.15, sfx.jumpWhoosh, e.involvesPlayer ? 0.4 : 0);
+      case 'land': {
+        const impact = e.impact;
+        return this.oneShot('crash', e, FALLOFF.crash, e.involvesPlayer ? 1 : 0.7, 0.25, (v) => sfx.landThump(v, impact));
+      }
+      case 'stunt':
+        return; // the STUNT award plays its own sting
       case 'award':
         return this.onAward(e.award, newBest);
       case 'weaponSwitch': {

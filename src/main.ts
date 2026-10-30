@@ -6,6 +6,7 @@ import { FixedStep } from './core/loop';
 import { UpdateGate } from './core/updateGate';
 import { PLAYER_ON_FOOT, stepPedestrian } from './entities/pedestrian';
 import {
+  GRAVITY,
   VEHICLE_HEALTH,
   VEHICLE_SPECS,
   createVehicleState,
@@ -20,7 +21,7 @@ import {
 } from './entities/vehicle';
 import { Combat, type AimInput } from './game/combat';
 import { Heat } from './game/heat';
-import { NITRO_DRIFT, NITRO_MIN, NITRO_NEAR_MISS, Nitro } from './game/nitro';
+import { NITRO_DRIFT, NITRO_MIN, NITRO_NEAR_MISS, NITRO_STUNT, Nitro } from './game/nitro';
 import { HeatPresenter } from './game/heatPresenter';
 import { Player } from './game/player';
 import { CROWD_DESPAWN, Population, type CrowdPed, type ParkingSpot, type Vehicle } from './game/population';
@@ -44,9 +45,13 @@ import {
   crashDamage,
   damageStage,
   impactDamage,
+  landingDamage,
   markPlayerHit,
   stepDamage,
 } from './systems/damage';
+import { StuntTracker } from './systems/stunts';
+import { RAMP_HEIGHT, placeRamps, rampSolids, rideRamps } from './world/ramps';
+import { RampMesh } from './render/rampMesh';
 import {
   collidePedStatic,
   collidePedVehicle,
@@ -111,6 +116,11 @@ const rig = new CameraRig(1);
 // Lights, time of day, ground, city, and the batched people/car/glow renderers.
 const look = new Look(renderer, scene, city, rig, pickups, app);
 const effects = new Effects(scene);
+/** Stunt ramps: drawn as one instanced mesh; their sides and backs are solid. */
+const ramps = placeRamps(1337);
+const rampGrid = new StaticGrid(rampSolids(ramps));
+scene.add(new RampMesh(ramps, look).mesh);
+const stunts = new StuntTracker();
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
@@ -389,10 +399,11 @@ function boardVehicle(v: Vehicle) {
   player.enter(v);
 }
 
-/** Step out of the car; a slide in progress is banked. */
+/** Step out of the car; a slide in progress is banked. Not in mid-air. */
 function leaveVehicle() {
-  if (!player.driving) return;
+  if (!player.driving || player.driving.sim.airborne) return;
   award(score.endDrift(true));
+  stunts.cancel();
   player.exit();
 }
 
@@ -403,6 +414,7 @@ function respawnPlayer() {
   heat.reset();
   combat.reset();
   nitro.reset();
+  stunts.cancel();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true);
@@ -456,7 +468,9 @@ function simulate(dt: number) {
     else if (v === driving) controls = playerControls;
     // Traffic, police and road ragers. (A car's own entry sits at distance 0, which clearDistance ignores.)
     else if (v.ai || v.pursuit) controls = heat.drive(v, obstacles, dt);
-    stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt);
+    const landed = stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt);
+    if (landed > 0) carLanded(v, landed, v === driving);
+    if (rideRamps(v.sim, ramps) === 'launch') carJumped(v, v === driving);
   }
 
   Object.assign(player.prev, player.ped);
@@ -469,8 +483,9 @@ function simulate(dt: number) {
     }
   }
 
+  // Cars flying over people don't touch them.
   vehicleStates.length = 0;
-  for (const v of vehicles) vehicleStates.push(v.sim);
+  for (const v of vehicles) if (v.sim.y < 0.8) vehicleStates.push(v.sim);
   const target = playerTarget();
   for (const c of population.crowd) {
     Object.assign(c.prev, c.agent.s);
@@ -487,7 +502,9 @@ function simulate(dt: number) {
 
   // --- Collisions ---
   for (const v of vehicles) {
-    const impact = collideVehicleStatic(v.sim, collision, contact);
+    let impact = collideVehicleStatic(v.sim, collision, contact);
+    // A ramp's sides and back are solid to anything not riding up it.
+    if (!v.sim.airborne && v.sim.y <= 0) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact));
     if (impact <= 0) continue;
     const hit = impactDamage(impact);
     applyDamage(v.damage, hit);
@@ -530,7 +547,18 @@ function simulate(dt: number) {
   // --- Stunt scoring ---
   simTime += dt;
   score.step(dt);
-  if (driving && !driving.damage.wrecked) {
+  if (driving) {
+    const stunt = stunts.step(driving.sim, dt);
+    if (stunt && !driving.damage.wrecked) {
+      const a = score.award('stunt', stunt.points);
+      a.label = stunt.label;
+      award(a);
+      nitro.add(NITRO_STUNT);
+      const ds = driving.sim;
+      events.emit({ type: 'stunt', x: ds.x, z: ds.z, airtime: stunt.airtime, distance: stunt.distance, spin: stunt.spin, points: a.points, label: stunt.label });
+    }
+  }
+  if (driving && !driving.damage.wrecked && !driving.sim.airborne) {
     const ds = driving.sim;
     const slip = Math.abs(lateralSpeed(ds));
     award(score.drift(slip, speed(ds), dt));
@@ -584,6 +612,19 @@ function simulate(dt: number) {
     collidePedStatic(c.agent.s, collision);
   }
   syncWeapon();
+}
+
+/** A car came off a ramp: report the take-off and the flight time to expect. */
+function carJumped(v: Vehicle, isPlayer: boolean) {
+  const s = v.sim;
+  const airtime = (s.vy + Math.sqrt(s.vy * s.vy + 2 * GRAVITY * RAMP_HEIGHT)) / GRAVITY;
+  events.emit({ type: 'jump', x: s.x, z: s.z, speed: speed(s), airtime, involvesPlayer: isPlayer });
+}
+
+/** A car came down from a jump at `impact` m/s: hard landings hurt it. */
+function carLanded(v: Vehicle, impact: number, isPlayer: boolean) {
+  applyDamage(v.damage, landingDamage(impact));
+  if (impact > 3) events.emit({ type: 'land', x: v.sim.x, z: v.sim.z, impact, involvesPlayer: isPlayer });
 }
 
 /** A ped was knocked over by a car this step: if it was the player's, that's a hit and run. */
@@ -690,7 +731,7 @@ function frame(now: number) {
   const controls = player.driving ? input.readVehicle(player.driving.sim) : null;
   const steer = controls ? controls.steer : 0;
   for (const v of vehicles) {
-    v.mesh.root.position.set(lerp(v.prev.x, v.sim.x, alpha), 0, lerp(v.prev.z, v.sim.z, alpha));
+    v.mesh.root.position.set(lerp(v.prev.x, v.sim.x, alpha), lerp(v.prev.y, v.sim.y, alpha), lerp(v.prev.z, v.sim.z, alpha));
     v.mesh.root.rotation.y = lerpAngle(v.prev.heading, v.sim.heading, alpha);
     for (const w of v.mesh.frontWheels) w.rotation.y = v === player.driving ? -steer * 0.5 : 0;
   }
@@ -964,6 +1005,8 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   heat,
   combat,
   nitro,
+  ramps,
+  stunts,
   updates,
   hud,
   radar,

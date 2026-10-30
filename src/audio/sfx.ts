@@ -203,6 +203,36 @@ export function boost(v: Voice): void {
   perc(og.gain, t, 0.25, 0.05, 0.25);
 }
 
+/** Off a ramp: the engine note gone light, and air rushing past. */
+export function jumpWhoosh(v: Voice): void {
+  const t = v.t;
+  const n = v.noise(v.bank.pink, t, t + 1.2);
+  const bp = v.filter('bandpass', 600, 0.9);
+  sweep(bp.frequency, t, 500, 1800, 0.5);
+  const g = v.gain();
+  v.chain(n, bp, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.7, t + 0.15);
+  g.gain.setTargetAtTime(0, t + 0.5, 0.25);
+  // The suspension unloading: a springy clunk.
+  noiseHit(v, v.bank.white, t, 'bandpass', 700, 1.5, 0.45, 0.002, 0.03);
+}
+
+/** A car landing a jump: a heavy, springy thud and a scrape, scaled by how hard (m/s). */
+export function landThump(v: Voice, impact: number): void {
+  const t = v.t;
+  const k = clamp01((impact - 4) / 12);
+  thump(v, t, 95, 32, 0.22, 0.7 + 0.3 * k, 0.09 + 0.05 * k);
+  noiseHit(v, v.bank.brown, t, 'lowpass', 700 + 900 * k, 0.7, 0.8, 0.003, 0.07);
+  noiseHit(v, v.bank.white, t + 0.02, 'bandpass', 2400, 1, 0.25 * k, 0.002, 0.06);
+  // Springs bouncing back.
+  const o = v.osc('triangle', 180, t + 0.08, t + 0.5);
+  sweep(o.frequency, t + 0.08, 180, 120, 0.3);
+  const g = v.gain();
+  v.chain(o, g, v.input);
+  perc(g.gain, t + 0.08, 0.12 * (0.5 + k), 0.01, 0.06);
+}
+
 /** Something thrown: a short cloth-and-air whoosh. */
 export function throwWhoosh(v: Voice): void {
   const t = v.t;

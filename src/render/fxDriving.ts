@@ -13,6 +13,7 @@ import type { Vehicle } from '../game/population';
 import { damageStage } from '../systems/damage';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type City } from '../world/city';
 import type { Effects } from './effects';
+import { RAMP_HEIGHT, RAMP_LENGTH } from '../world/ramps';
 import { CarBody, applyBody } from './fxCarBody';
 import { DECAL, type GroundDecals } from './fxDecals';
 
@@ -37,6 +38,8 @@ const SEGMENT = 0.4;
 const FX_RANGE = 110;
 /** Most burning cars that get a fire glow in one frame. */
 const MAX_FIRE_GLOWS = 12;
+/** Nose-up pitch on a ramp's slope, rad. */
+const RAMP_PITCH = -Math.atan2(RAMP_HEIGHT, RAMP_LENGTH);
 
 /** What makes a skid. */
 export interface SkidInput {
@@ -250,6 +253,8 @@ export class DrivingFx {
       // Body motion (also for far cars, so they don't snap when they come into view).
       rec.body.step(s, dt);
       applyBody(root, rec.body);
+      // Up a ramp the nose lifts; in the air it follows the arc (nose up rising, down falling).
+      if (s.y > 0) root.rotation.x += s.airborne ? Math.max(-0.35, Math.min(0.3, -s.vy * 0.03)) : RAMP_PITCH;
       if (dt <= 0) continue;
       const near = Math.abs(s.x - focusX) < FX_RANGE && Math.abs(s.z - focusZ) < FX_RANGE;
       // Forward acceleration, smoothed like the body's.
@@ -263,7 +268,8 @@ export class DrivingFx {
         continue;
       }
       this.damage(v, rec, dt, scale);
-      if (v.damage.wrecked) {
+      // Wrecks and cars off the ground leave no marks.
+      if (v.damage.wrecked || s.y > 0.05) {
         rec.left.reset();
         rec.right.reset();
         continue;

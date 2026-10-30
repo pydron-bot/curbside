@@ -104,6 +104,15 @@ export type GameEvent =
   | { type: 'horn'; x: number; z: number; duration: number }
   /** A car was resprayed at a Pay 'n' Spray; `cleared`: it lost the police too. */
   | { type: 'respray'; x: number; z: number; cleared: boolean }
+  /**
+   * A car took off from a ramp at (x, z) at `speed` m/s; `airtime` is the
+   * flight time to expect (s). involvesPlayer: it's the player's car.
+   */
+  | { type: 'jump'; x: number; z: number; speed: number; airtime: number; involvesPlayer: boolean }
+  /** A car came down at (x, z) at `impact` m/s (vertical). */
+  | { type: 'land'; x: number; z: number; impact: number; involvesPlayer: boolean }
+  /** The player landed a jump worth a STUNT award (see systems/stunts.ts). */
+  | { type: 'stunt'; x: number; z: number; airtime: number; distance: number; spin: number; points: number; label: string }
   /** The player's nitro lit (on) or went out (off), at (x, z). */
   | { type: 'boost'; on: boolean; x: number; z: number }
   /** The game was paused or resumed (menu, app switch, lost graphics context). */

@@ -13,7 +13,8 @@ export type ScoreKind =
   | 'boom'
   | 'copRam'
   | 'copWreck'
-  | 'evaded';
+  | 'evaded'
+  | 'stunt';
 
 export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   nearMiss: 100,
@@ -26,6 +27,8 @@ export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   copWreck: 750,
   // All bonus: see evadeBonus().
   evaded: 0,
+  // All bonus: see systems/stunts.ts.
+  stunt: 0,
 };
 
 export const LABELS: Record<ScoreKind, string> = {
@@ -39,6 +42,7 @@ export const LABELS: Record<ScoreKind, string> = {
   copRam: 'COP RAM',
   copWreck: 'COP CAR WRECKED',
   evaded: 'EVADED',
+  stunt: 'STUNT',
 };
 
 /** Shaking off a chase of this many stars or more earns the EVADED bonus. */

@@ -129,6 +129,13 @@ export class CarBody {
     this.squash.kick(power * 1.5);
   }
 
+  /** Coming down from a jump at `impact` m/s: the body slams down and bounces on its springs. */
+  land(impact: number): void {
+    const k = Math.min(1, impact / 14);
+    this.squash.kick(-k * 3);
+    this.pitch.kick(k * 0.8 * (Math.random() < 0.5 ? 1 : -1));
+  }
+
   reset(sim?: BodySim): void {
     this.pitch.reset();
     this.roll.reset();
@@ -160,14 +167,15 @@ export interface BodyRoot {
 
 /**
  * Write a body's pose onto a car root that main.ts has already placed
- * (position x/z, rotation.y). Euler order YXZ: heading first, then pitch
+ * (position, rotation.y) this frame: call once per frame. Euler order YXZ: heading first, then pitch
  * about the car's own left axis, then roll about its own forward axis.
  */
 export function applyBody(root: BodyRoot, body: CarBody): void {
   if (root.rotation.order !== 'YXZ') root.rotation.order = 'YXZ';
   root.rotation.x = clamp(body.pitch.value, 0.6);
   root.rotation.z = clamp(body.roll.value, 0.6);
-  root.position.y = body.lift();
+  // On top of the height main.ts placed it at (a ramp, a jump).
+  root.position.y += body.lift();
   const sq = Math.max(-0.25, Math.min(0.25, body.squash.value));
   root.scale.set(1 - sq * 0.4, 1 + sq, 1 - sq * 0.4);
 }

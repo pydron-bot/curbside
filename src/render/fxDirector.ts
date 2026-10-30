@@ -90,6 +90,9 @@ export class FxDirector {
   private lastCombat = -Infinity;
   private lastBoomKick = -Infinity;
   private lastShot: TracerKind = 'pistol';
+  /** Real seconds until a big jump's slow motion starts (near the top of the arc). */
+  private slowMoIn = 0;
+  private slowMoFor = 0;
   /** The player's nitro is burning (exhaust flames each frame). */
   private boosting = false;
   private exhaustDebt = 0;
@@ -122,6 +125,9 @@ export class FxDirector {
     });
     bus.on('award', (e) => this.onAward(e));
     bus.on('ignite', (e) => this.onIgnite(e));
+    bus.on('jump', (e) => this.onJump(e));
+    bus.on('land', (e) => this.onLand(e));
+    bus.on('stunt', (e) => this.onStunt(e));
     bus.on('boost', (e) => {
       this.boosting = e.on;
       if (!e.on || !this.playing) return;
@@ -139,6 +145,7 @@ export class FxDirector {
     bus.on('playerDied', () => this.d.rig.addTrauma(0.5));
     bus.on('respawn', () => {
       this.boosting = false;
+      this.slowMoIn = 0;
       this.flash = 0;
       this.hitStop.reset();
       this.driving.reset();
@@ -165,6 +172,9 @@ export class FxDirector {
     this.playing = playing;
     this.realTime += realDt;
     const dt = realDt * this.hitStop.scale;
+
+    // A big jump: slow motion as the car nears the top of its arc.
+    if (this.slowMoIn > 0 && (this.slowMoIn -= realDt) <= 0) this.hitStop.hit(this.slowMoFor, 0.3);
 
     // Camera framing: lead for driving, a nudge on foot, lift when armed or fighting.
     // During hit-stop the follow slows with the sim, so the view freezes with the action.
@@ -357,6 +367,38 @@ export class FxDirector {
     }
   }
 
+  /** Off a ramp: dust off the lip, and for the player's big jumps a beat of slow motion. */
+  private onJump(e: EventOf<'jump'>): void {
+    this.d.effects.dustRing(e.x, e.z, Math.max(3, Math.round(6 * this.d.effects.scale)), 0.8, 2.5);
+    if (!e.involvesPlayer || !this.playing) return;
+    this.d.rig.punchFov(3);
+    if (e.airtime >= 0.9) {
+      this.slowMoIn = e.airtime * 0.3;
+      this.slowMoFor = Math.min(0.55, 0.25 + (e.airtime - 0.9) * 0.4);
+    }
+  }
+
+  /** Coming down: the body slams and bounces, dust flies, the camera thumps. */
+  private onLand(e: EventOf<'land'>): void {
+    const fx = this.d.effects;
+    const car = this.vehicleNear(e.x, e.z);
+    if (car) this.driving.body(car).land(e.impact);
+    fx.dustRing(e.x, e.z, Math.max(4, Math.round((5 + e.impact * 0.6) * fx.scale)), 1.2, 2 + e.impact * 0.25);
+    if (e.impact > 10) fx.sparks(e.x, 0.3, e.z, Math.round(8 * fx.scale), 3, 9, 0, 0);
+    if (!e.involvesPlayer || !this.playing) return;
+    this.slowMoIn = 0;
+    this.d.rig.addTrauma(Math.min(0.6, 0.1 + e.impact / 30));
+    this.d.rig.kick(0, -1, Math.min(0.8, e.impact * 0.05));
+  }
+
+  /** A STUNT award: a burst over the car, and an edge flash for a really big one. */
+  private onStunt(e: EventOf<'stunt'>): void {
+    if (!this.playing) return;
+    const big = e.points >= 3500;
+    this.d.effects.burst(e.x, e.z, 0.3, 0.9, 1, Math.round((big ? 28 : 16) * this.d.effects.scale), big ? 6 : 4);
+    if (big) this.overlay.edgeFlash('rgb(46 230 255 / 0.75)', 0.8);
+  }
+
   /** Nitro burning: blue-white flames out of the exhaust, the odd puff of smoke. */
   private exhaust(car: Vehicle, dt: number): void {
     const fx = this.d.effects;
@@ -438,6 +480,20 @@ export class FxDirector {
       glows.addFlat(x, 0.09, z, 0, 11, 11, 1.0 * k, 0.42 * k, 0.1 * k, GLOW.disc);
       glows.addFlat(x, 1.9, z, 0, 3.4, 3.4, 1.2 * k, 0.6 * k, 0.16 * k, GLOW.disc);
     }
+  }
+
+  /** The car closest to (x, z) within 3 m (who just landed there). */
+  private vehicleNear(x: number, z: number): Vehicle | null {
+    let best: Vehicle | null = null;
+    let bestD = 3;
+    for (const v of this.d.vehicles) {
+      const d = Math.hypot(v.sim.x - x, v.sim.z - z);
+      if (d < bestD) {
+        bestD = d;
+        best = v;
+      }
+    }
+    return best;
   }
 
   private vehicleAt(x: number, z: number): Vehicle | null {
