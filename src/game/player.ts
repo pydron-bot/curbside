@@ -44,6 +44,8 @@ export class Player {
   driving: Vehicle | null = null;
   /** The car last got out of: Population keeps it around rather than recycling it. */
   lastDriven: Vehicle | null = null;
+  /** lastDriven was already on fire when they got out: its blast is still their own car going up. */
+  leftBurning = false;
   /** Seconds left lying on the ground. */
   stunned = 0;
   punchCooldown = 0;
@@ -119,6 +121,7 @@ export class Player {
     Object.assign(this.prev, this.ped);
     this.driving = null;
     this.lastDriven = v;
+    this.leftBurning = v.damage.burning;
     this.bus.emit({ type: 'exitVehicle', archetype: v.archetype });
     return v;
   }

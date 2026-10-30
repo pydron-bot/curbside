@@ -11,6 +11,7 @@ describe('run stats', () => {
     bus.emit({ type: 'pedDown', x: 0, z: 0, cause: 'blast', byPlayer: true, isPlayer: true }); // the player themself
     bus.emit({ type: 'explosion', x: 0, z: 0, distance: 3, byPlayer: true });
     bus.emit({ type: 'explosion', x: 0, z: 0, distance: 3, byPlayer: false });
+    bus.emit({ type: 'explosion', x: 0, z: 0, distance: 0, byPlayer: true, ownCar: true }); // your own car isn't a wreck
     bus.emit({ type: 'carjack', x: 0, z: 0 });
     bus.emit({ type: 'award', award: { kind: 'smash', label: 'SMASH', points: 300, multiplier: 4 } });
     stats.tick(12.5);

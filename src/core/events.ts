@@ -19,7 +19,7 @@ export type GameEvent =
   /**
    * A vehicle blew up. byPlayer: the player was driving it or hurt it in the
    * last few seconds (directly or with another blast). ownCar: it was the car
-   * the player was in.
+   * the player was in (or bailed out of while it burned).
    */
   | {
       type: 'explosion';

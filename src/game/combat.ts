@@ -503,14 +503,18 @@ export class Combat {
    */
   vehicleExploded(v: Vehicle): void {
     const p = this.d.player;
-    const ownCar = p.driving === v;
+    const inside = p.driving === v;
+    // Bailing out of your own burning car doesn't turn its blast into a wreck
+    // you caused (no Chaos Run time, heat or frenzy credit to farm).
+    const ownCar = inside || (p.lastDriven === v && p.leftBurning);
     const byPlayer = ownCar || blamesPlayer(v.damage, this.d.now());
     this.blast('car', v.sim.x, v.sim.z, byPlayer, v, ownCar);
-    if (this.d.playing()) {
+    // Losing your own ride isn't a KABOOM.
+    if (this.d.playing() && !ownCar) {
       const at = p.position;
       if (Math.hypot(at.x - v.sim.x, at.z - v.sim.z) < BOOM_SCORE_RANGE) this.d.award(this.d.score.award('boom'));
     }
-    if (ownCar) {
+    if (inside) {
       // The slide (if any) dies with the car; you're thrown clear and hurt once.
       this.d.score.endDrift(false);
       p.ownCarExploded();
@@ -533,7 +537,8 @@ export class Combat {
       source: kind === 'car' ? 'vehicle' : kind,
     });
     const p = d.player;
-    if (!p.driving && !ownCar && d.playing()) {
+    // On foot (the car you're in throws you clear itself: ownCarExploded).
+    if (!p.driving && d.playing()) {
       const dist = Math.hypot(p.ped.x - x, p.ped.z - z);
       if (dist < b.radius) {
         p.hurt(blastDamage(dist, b.radius, b.playerDamage));
