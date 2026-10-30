@@ -23,6 +23,7 @@ import { fmt } from '../../ui/scoreHud';
 import { BLOCK_SIZE, type Rect } from '../../world/city';
 import type { CrowdPed, Vehicle } from '../population';
 import { KeyedText, type Mode, type ModeCtx } from './context';
+import { CAR_NAMES } from './exports';
 import { SAFEHOUSE, placePayphones, type Spot } from './places';
 
 /** Answering: on foot this close, or stopped in a car this close, m. */
@@ -36,6 +37,9 @@ const PROMPT_RANGE = 16;
 const MATERIALISE = 60;
 /** Radar ids for a collect step's points. */
 const COLLECT_IDS = Array.from({ length: 16 }, (_, i) => `m-c${i}`);
+/** "STEAL A SEDAN" with no particular car: the nearest few that would do are ringed and on the radar. */
+const MATCH_IDS = ['m-match0', 'm-match1', 'm-match2'];
+const MATCH_RANGE = 140;
 /** Hostile targets turn on you this close, m. */
 const HOSTILE_RANGE = 18;
 
@@ -77,6 +81,9 @@ export class MissionMode implements Mode {
   private readonly goal = new KeyedText();
   /** A one-tag list for marking an 'enter' step's car (reused). */
   private readonly oneTag: string[] = [''];
+  /** The cars an archetype-only enter / deliver step would take, nearest first (refreshed every step). */
+  private readonly matches: Vehicle[] = [];
+  private readonly matchD2: number[] = [];
   /** Radar blips this mission put up (removed when it ends or moves on). */
   private readonly blips = new Set<string>();
   private readonly blipOpts: BlipOptions = { x: 0, z: 0, kind: 'objective', size: 6, pulse: true, edgeArrow: true, icon: '' };
@@ -135,6 +142,11 @@ export class MissionMode implements Mode {
       },
     };
     const bus = ctx.deps.bus;
+    // Wrong car for "STEAL A SEDAN": say so (from above a sedan and a taxi look alike).
+    bus.on('enterVehicle', (e) => {
+      const want = this.wantedArchetype();
+      if (want && e.archetype !== want) ctx.notice(`NOT A ${CAR_NAMES[want]}`, 'lost');
+    });
     bus.on('playerDied', () => this.run && this.signal(this.run.fail('WASTED')));
     bus.on('busted', () => this.run && this.signal(this.run.fail('BUSTED')));
   }
@@ -279,6 +291,7 @@ export class MissionMode implements Mode {
     this.calling = false;
     if (ctx.busy === 'mission') ctx.busy = null;
     this.clearBlips();
+    this.matches.length = 0;
     for (const c of this.carList) ctx.unpin(c.v);
     this.cars.clear();
     this.carList.length = 0;
@@ -429,6 +442,7 @@ export class MissionMode implements Mode {
     const run = this.run;
     const s = run?.step;
     if (!run || !s) return;
+    this.matchBlips();
     switch (s.kind) {
       case 'goto':
       case 'deliver':
@@ -473,6 +487,48 @@ export class MissionMode implements Mode {
       }
       default:
         break;
+    }
+  }
+
+  /** The archetype the current step wants you in, when any car of it will do and you're not in one. */
+  private wantedArchetype(): VehicleArchetype | null {
+    const s = this.run?.step;
+    if (!s || (s.kind !== 'enter' && s.kind !== 'deliver') || s.tag || !s.archetype) return null;
+    const car = this.ctx.deps.player.driving;
+    return car && car.archetype === s.archetype ? null : s.archetype;
+  }
+
+  /** Radar blips on the nearest cars that would do (see matches). */
+  private matchBlips(): void {
+    const m = this.matches;
+    m.length = 0;
+    this.matchD2.length = 0;
+    const want = this.wantedArchetype();
+    if (want) {
+      const at = this.ctx.deps.player.position;
+      for (const v of this.ctx.deps.vehicles) {
+        if (v.archetype !== want || v.damage.wrecked || v.exported || v.police) continue;
+        const dx = v.sim.x - at.x;
+        const dz = v.sim.z - at.z;
+        const d2 = dx * dx + dz * dz;
+        if (d2 > MATCH_RANGE * MATCH_RANGE) continue;
+        // Insert in order, keeping the nearest few (no allocation: this runs every step).
+        const near = this.matchD2;
+        let i = m.length;
+        while (i > 0 && near[i - 1] > d2) i--;
+        if (i >= MATCH_IDS.length) continue;
+        for (let j = Math.min(m.length, MATCH_IDS.length - 1); j > i; j--) {
+          m[j] = m[j - 1];
+          near[j] = near[j - 1];
+        }
+        m[i] = v;
+        near[i] = d2;
+      }
+    }
+    for (let i = 0; i < MATCH_IDS.length; i++) {
+      const v = m[i];
+      if (v) this.point(MATCH_IDS[i], v.sim.x, v.sim.z, 'objective', '');
+      else this.drop(MATCH_IDS[i]);
     }
   }
 
@@ -576,6 +632,8 @@ export class MissionMode implements Mode {
     if (!run || !s) return;
     const c = MARK.objective;
     const pulse = 0.75 + 0.25 * Math.sin(t * 5);
+    // Any car of the archetype will do: the nearest few are ringed.
+    for (const v of this.matches) if (nearView(v.sim.x, v.sim.z, view)) groundRing(g, v.sim.x, v.sim.z, 7, c, pulse, t);
     switch (s.kind) {
       case 'goto':
       case 'deliver':

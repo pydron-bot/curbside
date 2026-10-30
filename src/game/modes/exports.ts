@@ -50,7 +50,8 @@ export const COLOURS: ReadonlyArray<readonly [string, number, number, number]> =
   ['PINK', 217, 79, 138],
 ];
 
-const NAMES: Readonly<Record<VehicleArchetype, string>> = {
+/** Each archetype as the HUD names it ('SEDAN', 'POLICE CAR'). */
+export const CAR_NAMES: Readonly<Record<VehicleArchetype, string>> = {
   compact: 'COMPACT',
   sedan: 'SEDAN',
   van: 'VAN',
@@ -114,7 +115,7 @@ function order(archetype: VehicleArchetype, colour: string | null): ExportOrder 
     id: `${archetype}-${colour ? colour.toLowerCase() : 'any'}`,
     archetype,
     colour,
-    label: colour ? `${colour} ${NAMES[archetype]}` : archetype === 'police' || archetype === 'taxi' ? `A ${NAMES[archetype]}` : `ANY ${NAMES[archetype]}`,
+    label: colour ? `${colour} ${CAR_NAMES[archetype]}` : archetype === 'police' || archetype === 'taxi' ? `A ${CAR_NAMES[archetype]}` : `ANY ${CAR_NAMES[archetype]}`,
   };
 }
 
