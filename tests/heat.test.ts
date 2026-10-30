@@ -26,7 +26,7 @@ const DT = 1 / 60;
 const city = generateCity(1337);
 const grid = new StaticGrid(city.obstacles);
 
-function world(seed = 3, x = 9.5, z = 9.5) {
+function world(seed = 3, x = 9.5, z = 9.5, held?: () => boolean) {
   const bus = new EventBus();
   const log: GameEvent[] = [];
   bus.onAny((e) => log.push(e));
@@ -85,6 +85,7 @@ function world(seed = 3, x = 9.5, z = 9.5) {
     ejectDriver: (v) => (v.ai = null),
     npcShoot: () => shots.push(1),
     repaint: () => {},
+    held,
   });
   population.maintain({ x, z, vx: 0, vz: 0, view: updateView(), keep: [], seed: true });
 
@@ -165,6 +166,23 @@ describe('heat: police response', () => {
     w.runUntil(() => w.heat.police.units.length === 0, 60);
     expect(w.heat.police.units.length).toBe(0);
     expect(w.vehicles.filter((v) => v.police)).toHaveLength(0);
+  });
+
+  it('nobody is busted while the game holds them still (a 3-2-1); the meter picks up after', () => {
+    let held = true;
+    const w = world(3, 9.5, 9.5, () => held);
+    w.heat.wanted.force(1);
+    let gripped = 0;
+    w.runUntil(() => {
+      gripped = Math.max(gripped, w.heat.bust.progress);
+      return false;
+    }, 40);
+    expect(w.player.arrested).toBe(false);
+    expect(gripped).toBe(0);
+    // An officer is right there, waiting for the GO.
+    expect(w.heat.police.nearestOfficer(w.player.ped.x, w.player.ped.z)).toBeLessThan(2);
+    held = false;
+    expect(w.runUntil(() => w.player.arrested, 3)).toBeLessThan(3);
   });
 
   it('a busted player is fined, loses their guns and the police clear off', () => {

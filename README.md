@@ -362,7 +362,8 @@ over your speed every 2.6 s and PIT the rear quarter; box in a stopped car
 **Busted** (`systems/arrest.ts`): on foot, an officer within 1.3 m for 1 s
 while you're slower than 2.8 m/s (0.5 s if you're knocked down); in a car,
 under 1 m/s for 2 s with a police car touching or an officer at your door.
-A meter under the stars shows the grip. Busted: 25% of the run score
+A meter under the stars shows the grip; it waits while a 3-2-1 holds the
+car (`HeatDeps.held`). Busted: 25% of the run score
 fined, weapons taken, held 3.5 s (BUSTED screen, blue), then released on
 the steps of the police station (blue marker, ★ on the radar). Dying also
 clears the heat.
@@ -495,7 +496,8 @@ are `src/game/modes/*Mode.ts`.
 - **Checkpoint races** (`modes/races.ts`, `raceMode.ts`): six courses of 8–12
   crossings authored as data (DOWNTOWN DASH, HARBOUR LOOP, OLD TOWN
   SCRAMBLE, NEON NIGHTS, CUL-DE-SAC CRAWL, RING ROAD RUN), 'R' on the radar.
-  Drive onto the chequered line: the car lines up, 3-2-1, then gates of
+  Drive onto the chequered line with no stars ("LOSE THE HEAT FIRST"
+  otherwise): the car lines up, 3-2-1, then gates of
   light (the next-but-one small), a radar route to the next checkpoint and
   the time against gold on the card. Medals against a developer time from
   the course (straights at 36 m/s, 1.2 s a corner, 2 s to launch): gold

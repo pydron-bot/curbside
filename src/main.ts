@@ -274,6 +274,8 @@ const heat = new Heat({
   repaint: (v) => look.cars.restyle(v.mesh, v.archetype, v.paint),
   // Resprays cost cash (the progress director sets the price and can refuse).
   pay: (cost) => progress.payRespray(cost),
+  // A race or Chaos Run 3-2-1 holds the car: no bust while it can't move.
+  held: () => progress.holdControls,
 });
 addHeatLook(look, heat);
 

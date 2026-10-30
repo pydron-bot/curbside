@@ -72,6 +72,8 @@ export interface HeatDeps {
   repaint(v: Vehicle): void;
   /** Take payment (see SPRAY_COST); false refuses. Defaults to free. */
   pay?(cost: number): boolean;
+  /** The game is holding the player's car still (a 3-2-1): no bust meanwhile. */
+  held?(): boolean;
 }
 
 export class Heat {
@@ -329,6 +331,8 @@ export class Heat {
       this.bust.reset();
       return;
     }
+    // A held car can't get away, so nobody gets to cuff it: the meter waits.
+    if (this.deps.held?.()) return;
     const car = p.driving;
     const sit = this.situation;
     sit.stars = this.wanted.level;
