@@ -4,7 +4,7 @@ import type { EventBus } from '../core/events';
 import type { InputDevice } from '../core/input';
 import type { VehicleSpec } from '../entities/vehicle';
 import { onSettingsChange, settings } from '../core/settings';
-import { RESPAWN_SECONDS } from '../game/player';
+import { BUSTED_SECONDS, RESPAWN_SECONDS } from '../game/player';
 import { RunStats } from '../game/runStats';
 import type { Score } from '../systems/score';
 import { WEAPONS, type WeaponKind } from '../systems/weapons';
@@ -197,6 +197,17 @@ export class Hud {
         newBest: scoreModel.total > this.bestAtStart && scoreModel.total >= scoreModel.best,
         stats: this.stats,
         respawnIn: RESPAWN_SECONDS,
+      }),
+    );
+    bus.on('busted', (e) =>
+      this.wasted.show({
+        variant: 'busted',
+        fine: e.fine,
+        score: scoreModel.total,
+        best: scoreModel.best,
+        newBest: false,
+        stats: this.stats,
+        respawnIn: BUSTED_SECONDS,
       }),
     );
     bus.on('respawn', () => {

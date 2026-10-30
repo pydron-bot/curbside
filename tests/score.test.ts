@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BASE_POINTS, COMBO_WINDOW, MAX_COMBO, Score } from '../src/systems/score';
+import { BASE_POINTS, COMBO_WINDOW, EVADE_BONUS_FROM, MAX_COMBO, Score, evadeBonus } from '../src/systems/score';
 
 describe('chaos score', () => {
   it('chains events into a growing multiplier', () => {
@@ -65,5 +65,29 @@ describe('chaos score', () => {
     s.award('boom');
     s.award('boom');
     expect(s.best).toBe(s.total);
+  });
+});
+
+describe('police scoring', () => {
+  it('a bust fines a share of the run (and drops the combo); the best stays', () => {
+    const s = new Score();
+    s.award('boom');
+    s.award('boom');
+    const total = s.total;
+    expect(s.combo).toBeGreaterThan(1);
+    const fine = s.fine(0.25);
+    expect(fine).toBe(Math.round(total * 0.25));
+    expect(s.total).toBe(total - fine);
+    expect(s.best).toBe(total);
+    expect(s.combo).toBe(1);
+  });
+
+  it('only a chase of 3 stars or more pays an EVADED bonus, more for more stars', () => {
+    expect(evadeBonus(EVADE_BONUS_FROM - 1)).toBe(0);
+    expect(evadeBonus(3)).toBeGreaterThan(0);
+    expect(evadeBonus(5)).toBeGreaterThan(evadeBonus(3));
+    const s = new Score();
+    expect(s.award('evaded', evadeBonus(4)).points).toBe(evadeBonus(4));
+    expect(s.award('copRam').label).toBe('COP RAM');
   });
 });

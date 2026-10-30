@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SEDAN, speed, stepVehicle, type VehicleState } from '../src/entities/vehicle';
 import { collideVehicleStatic, collideVehicles } from '../src/systems/physics';
-import { clearDistance, driveAi, isHopeless, rerouteAi, spawnAi } from '../src/systems/traffic';
+import { clearDistance, driveAi, isHopeless, reactToHit, rerouteAi, scareDriver, shouldYield, spawnAi } from '../src/systems/traffic';
 import { BLOCK_SIZE, generateCity } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
 import { random } from './helpers';
@@ -203,5 +203,78 @@ describe('AI getting unstuck', () => {
       collideVehicleStatic(queued, grid);
     }
     expect(isHopeless(q.driver)).toBe(false);
+  });
+});
+
+describe('traffic reactions', () => {
+  function onRoad(seed = 1) {
+    const rand = random(seed);
+    const s = spawnAi(0, -2, 0, 0.3, rand)!;
+    const car: VehicleState = { x: s.x, z: s.z, heading: s.heading, vx: 0, vz: 0, yawRate: 0 };
+    return { car, ai: s.driver, rand };
+  }
+
+  it('honks at the player blocking its lane, but not at a car queueing ahead', () => {
+    for (const player of [true, false]) {
+      const { car, ai, rand } = onRoad(3);
+      const fx = Math.sin(car.heading);
+      const fz = Math.cos(car.heading);
+      const blocker = { x: car.x + fx * 6, z: car.z + fz * 6, halfWidth: 0.4, player };
+      let honks = 0;
+      for (let i = 0; i < 60 * 5; i++) {
+        stepVehicle(car, driveAi(ai, car, [blocker], rand, DT), SEDAN, DT);
+        if (ai.honk > 0) {
+          honks++;
+          ai.honk = 0;
+        }
+      }
+      expect(honks > 0).toBe(player);
+    }
+  });
+
+  it('panicking drivers go much faster than cruising ones', () => {
+    const calm = onRoad(4);
+    const scared = onRoad(4);
+    scareDriver(scared.ai, 10);
+    let top = [0, 0];
+    for (let i = 0; i < 60 * 5; i++) {
+      stepVehicle(calm.car, driveAi(calm.ai, calm.car, [], calm.rand, DT), SEDAN, DT);
+      stepVehicle(scared.car, driveAi(scared.ai, scared.car, [], scared.rand, DT), SEDAN, DT);
+      top = [Math.max(top[0], speed(calm.car)), Math.max(top[1], speed(scared.car))];
+    }
+    expect(top[1]).toBeGreaterThan(top[0] * 1.4);
+    expect(scared.ai.mood).toBe('panic');
+  });
+
+  it('pulls over to the kerb and slows for a siren coming up behind', () => {
+    const { car, ai, rand } = onRoad(5);
+    for (let i = 0; i < 60 * 1.5; i++) stepVehicle(car, driveAi(ai, car, [], rand, DT), SEDAN, DT);
+    const fx = Math.sin(car.heading);
+    const fz = Math.cos(car.heading);
+    const siren = { x: car.x - fx * 20, z: car.z - fz * 20, heading: car.heading, vx: 0, vz: 0, yawRate: 0 };
+    expect(shouldYield(car, siren)).toBe(true);
+    // Head-on, close: yes. Behind but on a crossing road: no.
+    expect(shouldYield(car, { ...siren, x: car.x + fx * 20, z: car.z + fz * 20, heading: car.heading + Math.PI })).toBe(true);
+    expect(shouldYield(car, { ...siren, heading: car.heading + Math.PI / 2 })).toBe(false);
+    const laneX = car.x;
+    for (let i = 0; i < 60 * 1.5; i++) {
+      ai.yielding = 1;
+      stepVehicle(car, driveAi(ai, car, [], rand, DT), SEDAN, DT);
+    }
+    expect(speed(car)).toBeLessThan(4);
+    // Heading north (-Z), the kerb side is +X.
+    expect(car.x - laneX).toBeGreaterThan(0.8);
+  });
+
+  it('reacts to a hard hit: panic, rage or bail, about 55/25/20', () => {
+    const rand = random(8);
+    const tally = { panic: 0, rage: 0, bail: 0 };
+    for (let i = 0; i < 1000; i++) tally[reactToHit(onRoad(1).ai, rand)]++;
+    expect(tally.panic).toBeGreaterThan(500);
+    expect(tally.panic).toBeLessThan(600);
+    expect(tally.rage).toBeGreaterThan(200);
+    expect(tally.rage).toBeLessThan(300);
+    expect(tally.bail).toBeGreaterThan(150);
+    expect(tally.bail).toBeLessThan(250);
   });
 });

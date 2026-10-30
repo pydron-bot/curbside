@@ -1,5 +1,5 @@
 /**
- * Per-life statistics for the WASTED screen: how long you lasted, how many
+ * Per-life statistics for the WASTED (and BUSTED) screen: how long you lasted, how many
  * people you knocked down and cars you wrecked, carjacks and the best combo.
  * Fed by game events; `tick` counts time actually played (the caller skips
  * pauses and the title screen). Pure logic.
@@ -36,6 +36,7 @@ export class RunStats implements RunStatsSnapshot {
       if (this.alive) this.bestCombo = Math.max(this.bestCombo, e.award.multiplier);
     });
     bus.on('playerDied', () => (this.alive = false));
+    bus.on('busted', () => (this.alive = false));
     bus.on('respawn', () => this.reset());
   }
 

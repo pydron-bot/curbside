@@ -556,6 +556,64 @@ export function wasted(v: Voice, key: number): void {
   }
 }
 
+/**
+ * BUSTED: handcuffs ratcheting shut and a cell door's clang, under a falling
+ * minor stab, like WASTED but colder.
+ */
+export function busted(v: Voice, key: number): void {
+  const t = v.t;
+  // Cuffs: a quick run of metallic ticks.
+  for (let i = 0; i < 6; i++) {
+    noiseHit(v, v.bank.white, t + i * 0.035, 'bandpass', 5200 + i * 300, 9, 0.35, 0.0005, 0.012);
+  }
+  // The door: an inharmonic clang that rings.
+  const clang = t + 0.28;
+  thump(v, clang, 120, 60, 0.25, 0.7, 0.2);
+  for (const [hz, peak, tau] of [
+    [220, 0.16, 0.5],
+    [601, 0.1, 0.35],
+    [1187, 0.06, 0.25],
+    [1712, 0.04, 0.2],
+  ] as const) {
+    const o = v.osc('square', hz, clang, clang + 2.4);
+    const lp = v.filter('lowpass', hz * 3, 1);
+    const g = v.gain();
+    v.chain(o, lp, g, v.input);
+    perc(g.gain, clang, peak, 0.002, tau);
+  }
+  noiseHit(v, v.bank.white, clang, 'highpass', 3000, 0.8, 0.3, 0.001, 0.08);
+  // A cold minor chord, filtered down.
+  const lp = v.filter('lowpass', 2000, 1.2);
+  sweep(lp.frequency, clang, 2000, 260, 2.2);
+  const cg = v.gain();
+  v.chain(lp, cg, v.input);
+  const root = fold(key, 57);
+  for (const s of [0, 3, 10]) {
+    const o = v.osc('sawtooth', midiToHz(root + s), clang, clang + 3);
+    o.detune.value = rnd(-8, 8);
+    o.connect(lp);
+  }
+  cg.gain.setValueAtTime(0, clang);
+  cg.gain.linearRampToValueAtTime(0.2, clang + 0.03);
+  cg.gain.setTargetAtTime(0, clang + 1.2, 0.4);
+}
+
+/** A Pay 'n' Spray at work: a long hiss of paint with a rattle-can shake at the start. */
+export function spray(v: Voice): void {
+  const t = v.t;
+  for (let i = 0; i < 4; i++) noiseHit(v, v.bank.white, t + i * 0.09, 'bandpass', 2600, 4, 0.25, 0.001, 0.02);
+  const n = v.noise(v.bank.white, t + 0.35, t + 2.1);
+  const hp = v.filter('highpass', 3500, 0.7);
+  const bp = v.filter('peaking', 7000, 1.5);
+  bp.gain.value = 6;
+  const g = v.gain();
+  v.chain(n, hp, bp, g, v.input);
+  g.gain.setValueAtTime(0, t + 0.35);
+  g.gain.linearRampToValueAtTime(0.22, t + 0.45);
+  g.gain.setValueAtTime(0.22, t + 1.9);
+  g.gain.linearRampToValueAtTime(0, t + 2.1);
+}
+
 /** Back on your feet: a breathy riser into a soft chord. */
 export function respawn(v: Voice, key: number): void {
   const t = v.t;

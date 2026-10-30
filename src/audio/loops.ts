@@ -397,3 +397,51 @@ export class SirenVoice {
     return this.v.release(now, 0.25);
   }
 }
+
+/**
+ * A police helicopter overhead: low rumble chopped at the blade rate (~17 Hz
+ * amplitude modulation from one oscillator) with a faint turbine whine,
+ * placed like a siren (level, pan, air absorption). Six nodes, one loop.
+ */
+export class RotorVoice {
+  readonly v: Voice;
+  x = 0;
+  z = 0;
+  /** Game seconds since the last rotor() call; a stale one is released. */
+  age = 0;
+  private readonly air: BiquadFilterNode;
+  private readonly pan: StereoPannerNode | null;
+
+  constructor(ctx: BaseAudioContext, bank: NoiseBank, dest: AudioNode, now: number) {
+    const v = (this.v = new Voice(ctx, bank, now, 0));
+    this.pan = typeof ctx.createStereoPanner === 'function' ? v.track(ctx.createStereoPanner()) : null;
+    if (this.pan) v.chain(v.out, this.pan, dest);
+    else v.out.connect(dest);
+    // Chop: the gain swings 0.1..1.0 at the blade-pass rate.
+    const chop = v.gain(0.55);
+    const lfo = v.osc('sawtooth', 17, now);
+    const depth = v.gain(0.45);
+    v.chain(lfo, depth);
+    depth.connect(chop.gain);
+    const body = v.noise(bank.brown, now, undefined, 1, true);
+    const lp = v.filter('lowpass', 480, 0.9);
+    v.chain(body, lp, chop);
+    const whine = v.osc('triangle', 1180, now);
+    const wg = v.gain(0.02);
+    this.air = v.filter('lowpass', 12000, 0.5);
+    const level = v.gain(1.1);
+    chop.connect(level);
+    v.chain(whine, wg, level);
+    v.chain(level, this.air, v.out);
+  }
+
+  place(gain: number, pan: number, cutoff: number, now: number): void {
+    to(this.v.out.gain, gain, now, 0.08);
+    if (this.pan) to(this.pan.pan, pan, now, 0.08);
+    to(this.air.frequency, cutoff, now, 0.1);
+  }
+
+  release(now: number): number {
+    return this.v.release(now, 0.8);
+  }
+}

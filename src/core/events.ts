@@ -6,6 +6,7 @@
  */
 import type { VehicleArchetype } from '../entities/vehicle';
 import type { Award } from '../systems/score';
+import type { WantedReason } from '../systems/wanted';
 import type { WeaponKind } from '../systems/weapons';
 import type { PickupKind } from '../world/pickups';
 
@@ -28,6 +29,8 @@ export type GameEvent =
       distance: number;
       byPlayer: boolean;
       ownCar?: boolean;
+      /** It was a police car (a unit's, or the police model). */
+      police?: boolean;
     }
   /** A gun went off at (x, z) (the muzzle). weapon is null for NPC guns. */
   | { type: 'shot'; x: number; z: number; dirX: number; dirZ: number; weapon: WeaponKind | null; byPlayer: boolean }
@@ -43,6 +46,8 @@ export type GameEvent =
       fromX?: number;
       fromZ?: number;
       byPlayer?: boolean;
+      /** The vehicle hit was a police car. */
+      police?: boolean;
     }
   /** A punch was thrown from (x, z); hit = it connected. */
   | { type: 'punch'; x: number; z: number; hit: boolean; byPlayer: boolean }
@@ -54,9 +59,12 @@ export type GameEvent =
       cause: 'vehicle' | 'punch' | 'shot' | 'blast';
       byPlayer: boolean;
       isPlayer?: boolean;
+      /** The one knocked over was a police officer. */
+      cop?: boolean;
     }
   | { type: 'carjack'; x: number; z: number }
-  | { type: 'enterVehicle'; archetype: VehicleArchetype }
+  /** police: the car belongs to the police (a unit's, or the police model). */
+  | { type: 'enterVehicle'; archetype: VehicleArchetype; police?: boolean }
   | { type: 'exitVehicle'; archetype: VehicleArchetype }
   | { type: 'pickup'; kind: PickupKind; x: number; z: number }
   /** Points scored (every award, including banked drifts). */
@@ -66,6 +74,18 @@ export type GameEvent =
   | { type: 'playerHurt'; amount: number; health: number }
   | { type: 'playerDied' }
   | { type: 'respawn' }
+  /**
+   * The wanted level (stars, 0..5) changed: up for a witnessed crime, down one
+   * star at a time while evading, or straight to 0 (evaded, resprayed,
+   * busted, died, a fresh run).
+   */
+  | { type: 'wanted'; level: number; prev: number; reason: WantedReason }
+  /** The police arrested the player; `fine` points came off the run score. */
+  | { type: 'busted'; fine: number }
+  /** A driver leant on the horn at (x, z) (blocked by the player, panicking). */
+  | { type: 'horn'; x: number; z: number; duration: number }
+  /** A car was resprayed at a Pay 'n' Spray; `cleared`: it lost the police too. */
+  | { type: 'respray'; x: number; z: number; cleared: boolean }
   /** The game was paused or resumed (menu, app switch, lost graphics context). */
   | { type: 'pause'; paused: boolean };
 

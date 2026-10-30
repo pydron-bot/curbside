@@ -208,10 +208,10 @@ export class Radar {
       dot(ctx, R + (p.x - px) * k, R + (p.z - pz) * k, 2.8 * d, p.kind === 'health' ? '#5fe08a' : '#ffb02e', d);
     }
 
-    // People who are after the player.
+    // People who are after the player (police officers get blips of their own).
     for (const c of this.sources.crowd) {
       const m = c.agent.mode;
-      if (m !== 'fight' && m !== 'shoot') continue;
+      if ((m !== 'fight' && m !== 'shoot') || c.agent.role === 'cop') continue;
       const s = c.agent.s;
       if (Math.abs(s.x - px) > reach || Math.abs(s.z - pz) > reach) continue;
       dot(ctx, R + (s.x - px) * k, R + (s.z - pz) * k, 2.6 * d, m === 'shoot' ? '#ff3b4f' : '#ff8a3c', d);

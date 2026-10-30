@@ -16,6 +16,7 @@ import type { CarMesh } from '../render/carMesh';
 import type { CharacterModel, Outfit } from '../render/characterModel';
 import { cornerPoint, spawnPed, type PedAgent } from '../systems/crowd';
 import type { DamageState } from '../systems/damage';
+import type { PursuitDriver } from '../systems/pursuit';
 import { isHopeless, spawnAi, type AiDriver } from '../systems/traffic';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type Rect } from '../world/city';
 import { DIRS, MAX_NODE } from '../world/roads';
@@ -33,6 +34,13 @@ export interface Vehicle {
   wreckAge: number;
   /** Showing the burnt-out look; must be restored before the car is reused. */
   charred: boolean;
+  /**
+   * A police unit's car: the police system spawns, drives and retires it,
+   * and Population neither recycles it nor counts it as traffic.
+   */
+  police?: boolean;
+  /** Chasing the player (a police unit, or a driver in a road rage): drives with this instead of `ai`. */
+  pursuit?: PursuitDriver | null;
 }
 
 export interface CrowdPed {
@@ -168,6 +176,8 @@ export class Population {
   private readonly spareVehicles: Vehicle[] = [];
   private readonly spareModels: CharacterModel[] = [];
   private readonly idle: Vehicle[] = [];
+  /** Pooled models last dressed in a uniform: re-dressed before a civilian wears them. */
+  private readonly uniformed = new WeakSet<CharacterModel>();
   private created = 0;
 
   constructor(
@@ -203,14 +213,60 @@ export class Population {
     this.maintainCrowd(ctx);
   }
 
-  /** Put an NPC on the pavement, e.g. a driver thrown out of their car. */
-  addPed(agent: PedAgent): CrowdPed {
+  /**
+   * Put an NPC on the pavement, e.g. a driver thrown out of their car, or
+   * (with an outfit) a police officer.
+   */
+  addPed(agent: PedAgent, outfit?: Outfit): CrowdPed {
     let model = this.spareModels.pop();
-    if (model) model.root.visible = true;
-    else model = this.hooks.createPedModel(this.randomOutfit());
+    if (model) {
+      model.root.visible = true;
+      if (outfit) model.setOutfit(outfit);
+      // Out of uniform: shoes back to the model's own colour.
+      else if (this.uniformed.has(model)) model.setOutfit({ ...this.randomOutfit(), shoes: undefined });
+    } else model = this.hooks.createPedModel(outfit ?? this.randomOutfit());
+    if (outfit) this.uniformed.add(model);
+    else this.uniformed.delete(model);
     const ped = { agent, prev: { ...agent.s }, model };
     this.crowd.push(ped);
     return ped;
+  }
+
+  /** Take a ped out of the street now (e.g. an officer getting back in their car). */
+  removePed(ped: CrowdPed): void {
+    const i = this.crowd.indexOf(ped);
+    if (i >= 0) this.removePedAt(i);
+  }
+
+  /**
+   * A car for another system (a police unit): a retired one restyled if any
+   * are waiting, else a new one. It joins `vehicles`, shown, flagged `police`
+   * so traffic upkeep leaves it alone; place it before the next render.
+   */
+  takeVehicle(archetype: VehicleArchetype, paint: ColorRepresentation): Vehicle {
+    const reused = this.spareVehicles.pop();
+    let v: Vehicle;
+    if (reused) {
+      v = reused;
+      const restyle = v.archetype !== archetype || v.paint !== paint || v.charred;
+      v.archetype = archetype;
+      v.paint = paint;
+      this.hooks.resetVehicle(v, restyle);
+    } else {
+      v = this.newVehicle(archetype, paint);
+    }
+    v.ai = null;
+    v.pursuit = null;
+    v.police = true;
+    v.mesh.root.visible = true;
+    this.vehicles.push(v);
+    return v;
+  }
+
+  /** Hide a car and put it back in the spare pool (police units leaving, off-screen). */
+  retireVehicle(v: Vehicle): void {
+    const i = this.vehicles.indexOf(v);
+    if (i >= 0) this.retire(i);
   }
 
   // --- Traffic ------------------------------------------------------------
@@ -221,8 +277,13 @@ export class Population {
     const idle = this.idle;
     idle.length = 0;
     let aiCount = 0;
+    let policeCount = 0;
     for (let i = vehicles.length - 1; i >= 0; i--) {
       const v = vehicles[i];
+      if (v.police) {
+        policeCount++;
+        continue;
+      }
       if (ctx.keep.includes(v)) continue;
       const visible = inRect(v.sim.x, v.sim.z, ctx.view, 2);
       const far = Math.hypot(v.sim.x - ctx.x, v.sim.z - ctx.z) > TRAFFIC_DESPAWN;
@@ -249,7 +310,8 @@ export class Population {
     }
 
     // Top up traffic, reusing retired cars before building new ones.
-    const max = Population.maxVehicles(target);
+    // (Police cars come on top of the traffic budget.)
+    const max = Population.maxVehicles(target) + policeCount;
     let budget = ctx.seed ? Infinity : TRAFFIC_SPAWNS_PER_CALL;
     let failures = 0;
     while (aiCount < target && vehicles.length < max && budget > 0 && failures < 3) {
@@ -313,6 +375,9 @@ export class Population {
     const v = this.vehicles[index];
     this.vehicles.splice(index, 1);
     v.ai = null;
+    v.pursuit = null;
+    v.police = false;
+    v.mesh.siren = false;
     v.mesh.root.visible = false;
     v.sim.vx = v.sim.vz = v.sim.yawRate = 0;
     this.spareVehicles.push(v);
@@ -363,16 +428,22 @@ export class Population {
   // --- Crowd --------------------------------------------------------------
 
   private maintainCrowd(ctx: MaintainContext): void {
+    // Officers belong to the police system, which takes them off the street itself.
+    let cops = 0;
     for (let i = this.crowd.length - 1; i >= 0; i--) {
-      const s = this.crowd[i].agent.s;
-      if (Math.hypot(s.x - ctx.x, s.z - ctx.z) > CROWD_DESPAWN && !inRect(s.x, s.z, ctx.view, 2)) this.removePed(i);
+      const a = this.crowd[i].agent;
+      if (a.role === 'cop') {
+        cops++;
+        continue;
+      }
+      if (Math.hypot(a.s.x - ctx.x, a.s.z - ctx.z) > CROWD_DESPAWN && !inRect(a.s.x, a.s.z, ctx.view, 2)) this.removePedAt(i);
     }
-    const target = Math.round(CROWD_COUNT * (ctx.crowdScale ?? 1));
+    const target = Math.round(CROWD_COUNT * (ctx.crowdScale ?? 1)) + cops;
     const tries = ctx.seed ? 200 : CROWD_TRIES_PER_CALL;
     for (let t = 0; this.crowd.length < target && t < tries; t++) this.trySpawnCluster(ctx, target);
   }
 
-  private removePed(index: number): void {
+  private removePedAt(index: number): void {
     const { model } = this.crowd[index];
     this.crowd.splice(index, 1);
     if (this.spareModels.length < MAX_SPARE_MODELS) {

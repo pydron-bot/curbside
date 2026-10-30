@@ -137,6 +137,33 @@ or three twisted panels), ≤ 80 tris each, using the `paint` / `trim` / `tyre`
 materials so they pick up the exploding car's colour. The effects code will
 throw them out of explosions as instanced debris.
 
+## 7. Police (requested by the heat stream)
+
+The wanted level and police are in (`src/systems/police.ts`, README
+*Heat*). Today they make do with stand-ins; these would lift them most:
+
+- **`heli`** (police helicopter, new root in `vehicles.glb` or its own
+  `heli.glb`): ~12 m long, dark blue/white, seen from directly above, so
+  the silhouette and the rotor disc matter most. Put the main rotor and
+  tail rotor on separate nodes named `heli_rotor_main` / `heli_rotor_tail`
+  (origin at the hub, spinning about local Y / X) so the game can spin
+  them; a `searchlight` material on the nose lamp. ≤ 1,500 tris. The game
+  currently draws only its shadow and searchlight pool (`render/heatLook.ts`).
+- **`swat`** van archetype (same contract as the other vehicles): a boxy
+  armoured van, dark paint, push bar, roof light bar using `siren_red` /
+  `siren_blue`. Today SWAT units are the `van` model painted dark, with
+  the light-bar glow faked on the roof.
+- **`cop`** character (already in §2): officers are the player model in
+  navy through the palette; a peaked cap (`*_hair`) and a holster would
+  sell it. Clips that would help: `Aim` (pistol raised, from §1),
+  `Arrested` (kneeling, hands behind the head, ~1 s loop) for the BUSTED
+  moment.
+- Props in `props.glb`: `barrier` (police sawhorse with stripes, for
+  roadblocks beside the cars), `spray_booth` (an open-fronted garage shell
+  ~6 × 9 m, its mouth facing local −Z, for the Pay 'n' Spray bays, which
+  are only glowing floor markings now) and `police_sign` (a blue lamp or
+  sign over the station door).
+
 ---
 
 ### Notes back to the code side

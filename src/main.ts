@@ -18,6 +18,8 @@ import {
   type VehicleArchetype,
   type VehicleControls,
 } from './entities/vehicle';
+import { Heat } from './game/heat';
+import { HeatPresenter } from './game/heatPresenter';
 import { Player } from './game/player';
 import { CROWD_DESPAWN, Population, type CrowdPed, type ParkingSpot, type Vehicle } from './game/population';
 import { Effects } from './render/effects';
@@ -25,6 +27,7 @@ import { FxDirector } from './render/fxDirector';
 import { CameraRig } from './render/cameraRig';
 import { DynamicResolution } from './render/dynamicResolution';
 import { Look, type PlayerView } from './render/look';
+import { addHeatLook } from './render/heatLook';
 import { createRenderer, precompile } from './render/post';
 import { getQuality } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
@@ -51,7 +54,7 @@ import {
   collideVehicles,
 } from './systems/physics';
 import { Score, type Award } from './systems/score';
-import { driveAi, type Obstacle } from './systems/traffic';
+import type { Obstacle } from './systems/traffic';
 import type { PauseReason } from './ui/pauseOverlay';
 import { loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
@@ -66,6 +69,7 @@ import { updateMouseAim } from './ui/mouseAim';
 import { Radar } from './ui/radar';
 import { ThreatIndicators } from './ui/threats';
 import { enterGameMode } from './ui/titleScreen';
+import { WantedHud } from './ui/wantedHud';
 import { generateCity, type Rect } from './world/city';
 import { StaticGrid } from './world/collision';
 import { mulberry32 } from './world/random';
@@ -213,7 +217,7 @@ const keepVehicles: Array<Vehicle | null> = [null, null];
  * Recycle and top up traffic and crowd; `seed` fills the streets from scratch
  * and puts the spawn point's parked cars back.
  */
-function maintainPopulation(seed = false) {
+function maintainPopulation(seed = false, parked = seed) {
   // Behind the title the streets follow the attract camera instead.
   const at = attract.active ? attract : player.position;
   keepVehicles[0] = player.driving;
@@ -228,7 +232,7 @@ function maintainPopulation(seed = false) {
     trafficScale: getQuality().trafficScale,
     crowdScale: getQuality().crowdScale,
     seed,
-    parked: seed ? PARKED : undefined,
+    parked: parked ? PARKED : undefined,
   });
 }
 maintainPopulation(true);
@@ -242,6 +246,26 @@ const award = (a: Award | null) => {
 /** Sim time each vehicle last earned a near miss, so one pass scores once. */
 const nearMissAt = new Map<Vehicle, number>();
 let simTime = 0;
+
+// --- Heat: wanted level, police, arrests, Pay 'n' Spray, traffic reactions ---
+const heatView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
+const heat = new Heat({
+  bus: events,
+  city,
+  grid: collision,
+  vehicles,
+  population,
+  player,
+  score,
+  rand,
+  view: () => rig.visibleGround(heatView),
+  playing: () => !attract.active,
+  award,
+  ejectDriver,
+  npcShoot,
+  repaint: (v) => look.cars.restyle(v.mesh, v.archetype, v.paint),
+});
+addHeatLook(look, heat);
 
 // --- Audio (unlocks on the first tap / click / key) ---
 const audio = new GameAudio({ best: score.best });
@@ -358,6 +382,7 @@ function respawnPlayer() {
   score.resetRun();
   // A new run (or the title) starts with nobody after you.
   calmHostiles();
+  heat.reset();
   player.respawn(SPAWN_POINT.x, SPAWN_POINT.z);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true);
@@ -365,15 +390,27 @@ function respawnPlayer() {
   updates.atSafePoint();
 }
 
+/** Out of custody after a bust: on the police station's steps, score (minus the fine) kept. */
+function releasePlayer() {
+  calmHostiles();
+  heat.police.reset();
+  const st = heat.station;
+  player.respawn(st.x, st.z, st.heading);
+  rig.snapTo(player.ped.x, player.ped.z);
+  maintainPopulation(true, false);
+  updates.atSafePoint();
+}
+
 // --- Simulation ---
 const obstacles: Obstacle[] = [];
 /** Obstacle records reused every step (one per car and ped). */
 const obstaclePool: Obstacle[] = [];
-function addObstacle(x: number, z: number, halfWidth: number) {
-  const o = obstaclePool[obstacles.length] ?? (obstaclePool[obstacles.length] = { x: 0, z: 0, halfWidth: 0 });
+function addObstacle(x: number, z: number, halfWidth: number, isPlayer = false) {
+  const o = obstaclePool[obstacles.length] ?? (obstaclePool[obstacles.length] = { x: 0, z: 0, halfWidth: 0, player: false });
   o.x = x;
   o.z = z;
   o.halfWidth = halfWidth;
+  o.player = isPlayer;
   obstacles.push(o);
 }
 const vehicleStates: Array<Vehicle['sim']> = [];
@@ -385,8 +422,8 @@ function simulate(dt: number) {
 
   // What AI drivers need to avoid this step.
   obstacles.length = 0;
-  for (const v of vehicles) addObstacle(v.sim.x, v.sim.z, 1);
-  if (!driving && !attract.active) addObstacle(player.ped.x, player.ped.z, 0.4);
+  for (const v of vehicles) addObstacle(v.sim.x, v.sim.z, 1, v === driving);
+  if (!driving && !attract.active) addObstacle(player.ped.x, player.ped.z, 0.4, true);
   for (const c of population.crowd) addObstacle(c.agent.s.x, c.agent.s.z, 0.4);
 
   for (const v of vehicles) {
@@ -394,8 +431,8 @@ function simulate(dt: number) {
     let controls = NO_CONTROLS;
     if (v.damage.wrecked) controls = NO_CONTROLS;
     else if (v === driving) controls = playerControls;
-    // A car's own entry sits at distance 0, which clearDistance ignores.
-    else if (v.ai) controls = driveAi(v.ai, v.sim, obstacles, rand, dt);
+    // Traffic, police and road ragers. (A car's own entry sits at distance 0, which clearDistance ignores.)
+    else if (v.ai || v.pursuit) controls = heat.drive(v, obstacles, dt);
     stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt);
   }
 
@@ -459,6 +496,8 @@ function simulate(dt: number) {
       }
       if (involvesPlayer && impact > 6) {
         award(score.award('smash', Math.round(impact * 4)));
+        // Ramming a cop is a crime; an ordinary driver may panic, rage or bail.
+        heat.playerCrash(a === driving ? b : a, impact);
         // A hit isn't a near miss.
         nearMissAt.set(a === driving ? b : a, simTime);
       }
@@ -499,7 +538,13 @@ function simulate(dt: number) {
       events.emit({ type: 'pickup', kind: pk.kind, x: pk.x, z: pk.z });
     }
   }
-  if (player.step(dt)) respawnPlayer();
+  heat.step(dt);
+  // Back on your feet: after dying a fresh run; after a bust, released at the station.
+  const held = player.arrested;
+  if (player.step(dt)) {
+    if (held) releasePlayer();
+    else respawnPlayer();
+  }
 
   // --- Fire and explosions ---
   for (const v of vehicles) {
@@ -523,7 +568,7 @@ function simulate(dt: number) {
 function pedHitByCar(c: CrowdPed, driving: Vehicle | null) {
   const s = c.agent.s;
   const byPlayer = driving !== null && Math.hypot(driving.sim.x - s.x, driving.sim.z - s.z) < 5;
-  events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'vehicle', byPlayer });
+  events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'vehicle', byPlayer, cop: c.agent.role === 'cop' });
   if (driving && byPlayer) {
     award(score.award('hitAndRun'));
     provoke(c.agent, driving.sim.x, driving.sim.z);
@@ -537,7 +582,7 @@ function explode(source: Vehicle) {
   charVehicle(source);
   source.wreckAge = 0;
   const distance = Math.hypot(rig.focusX - x, rig.focusZ - z);
-  events.emit({ type: 'explosion', x, z, distance, byPlayer, ownCar });
+  events.emit({ type: 'explosion', x, z, distance, byPlayer, ownCar, police: source.archetype === 'police' || source.police === true });
   const at = player.position;
   if (!attract.active && Math.hypot(at.x - x, at.z - z) < BOOM_SCORE_RANGE) award(score.award('boom'));
 
@@ -567,7 +612,7 @@ function explode(source: Vehicle) {
   for (const c of population.crowd) {
     const d = Math.hypot(c.agent.s.x - x, c.agent.s.z - z);
     if (d < BLAST_RADIUS) {
-      if (c.agent.mode !== 'down') events.emit({ type: 'pedDown', x: c.agent.s.x, z: c.agent.s.z, cause: 'blast', byPlayer });
+      if (c.agent.mode !== 'down') events.emit({ type: 'pedDown', x: c.agent.s.x, z: c.agent.s.z, cause: 'blast', byPlayer, cop: c.agent.role === 'cop' });
       knockDown(c.agent, x, z, 6, 3);
     } else if (d < 30) scare(c.agent, x, z, 4);
   }
@@ -576,7 +621,7 @@ function explode(source: Vehicle) {
 function playerTarget(): Target {
   const at = player.position;
   // Behind the title the player is hidden and out of play: nobody comes for them.
-  return { x: at.x, z: at.z, inCar: player.driving !== null, alive: player.alive && !attract.active };
+  return { x: at.x, z: at.z, inCar: player.driving !== null, alive: player.alive && !player.arrested && !attract.active };
 }
 
 type BulletHit = { kind: 'ped'; ped: CrowdPed } | { kind: 'vehicle'; v: Vehicle } | { kind: 'player' } | null;
@@ -634,6 +679,7 @@ function traceBullet(ox: number, oz: number, dx: number, dz: number, range: numb
     fromX: ox,
     fromZ: oz,
     byPlayer: shooterIsPlayer,
+    police: hit?.kind === 'vehicle' && (hit.v.archetype === 'police' || hit.v.police === true),
   });
   return hit;
 }
@@ -660,7 +706,7 @@ function fireWeapon() {
     const hit = traceBullet(ox, oz, Math.sin(a), Math.cos(a), w.range, true);
     if (hit?.kind === 'ped') {
       const s = hit.ped.agent.s;
-      if (hit.ped.agent.mode !== 'down') events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'shot', byPlayer: true });
+      if (hit.ped.agent.mode !== 'down') events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'shot', byPlayer: true, cop: hit.ped.agent.role === 'cop' });
       knockDown(hit.ped.agent, x, z, 4, 5);
       provoke(hit.ped.agent, x, z);
       award(score.award('knockout'));
@@ -706,7 +752,7 @@ function tryPunch() {
     const d = Math.hypot(dx, dz);
     if (d < PUNCH_RANGE && (dx * fx + dz * fz) / (d || 1) > 0.4 && c.agent.mode !== 'down') {
       landed = true;
-      events.emit({ type: 'pedDown', x: c.agent.s.x, z: c.agent.s.z, cause: 'punch', byPlayer: true });
+      events.emit({ type: 'pedDown', x: c.agent.s.x, z: c.agent.s.z, cause: 'punch', byPlayer: true, cop: c.agent.role === 'cop' });
       knockDown(c.agent, x, z);
       provoke(c.agent, x, z);
       award(score.award('knockout'));
@@ -802,6 +848,7 @@ function frame(now: number) {
   const focus = attract.active ? attract : player.position;
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
   updateHud(frameSeconds);
+  heatPresenter.update(frameSeconds, focus.x, focus.z, playing);
 
   if (attract.active) {
     attract.update(frameSeconds, vehicles);
@@ -884,6 +931,8 @@ const hud = new Hud(document.body, score, events, {
   debugText: () => `${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`,
 });
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
+const wantedHud = new WantedHud(document.body, events);
+const heatPresenter = new HeatPresenter(heat, audio, radar, wantedHud, hud.score, events);
 const threats = new ThreatIndicators(document.body);
 const frontDoor = new FrontDoor(document.body, document.getElementById('paused')!, input, audio, {
   startGame,
@@ -1033,6 +1082,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   events,
   audio,
   explode,
+  heat,
   updates,
   hud,
   radar,
@@ -1049,5 +1099,18 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   setPaused,
   get simTime() {
     return simTime;
+  },
+  /**
+   * Run the simulation `seconds` ahead in fixed steps without rendering, for
+   * automated checks on slow (software) GPUs where frames take seconds.
+   */
+  fastForward(seconds: number) {
+    for (let t = 0; t < seconds; t += 1 / 60) {
+      simulate(1 / 60);
+      if ((maintainTimer -= 1 / 60) <= 0) {
+        maintainTimer = 0.25;
+        maintainPopulation();
+      }
+    }
   },
 };
