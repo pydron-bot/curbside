@@ -89,8 +89,12 @@ export class Look {
     mountVignette(overlayParent);
     onQualityChange(() => this.applyTier());
     this.applyTier();
-    // Lost GPU state is rebuilt by three.js, except what was rendered into a target.
-    renderer.domElement.addEventListener('webglcontextrestored', () => this.cars.buildEnvironment());
+    // Lost GPU state is rebuilt by three.js, except what was rendered into a
+    // target; programs come back lazily, so warm them all up again too.
+    renderer.domElement.addEventListener('webglcontextrestored', () => {
+      this.cars.buildEnvironment();
+      this.warmedUp = false;
+    });
     this.update(0, null);
   }
 
