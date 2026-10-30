@@ -633,7 +633,9 @@ function frame(now: number) {
   const alpha = loop.advance(frameSeconds, simulate);
 
   // Interpolate render state between the last two sim steps.
-  const steer = player.driving ? input.readVehicle().steer : 0;
+  // Read once per frame: the wheel steer and the engine sound share it.
+  const controls = player.driving ? input.readVehicle() : null;
+  const steer = controls ? controls.steer : 0;
   for (const v of vehicles) {
     v.mesh.root.position.set(lerp(v.prev.x, v.sim.x, alpha), 0, lerp(v.prev.z, v.sim.z, alpha));
     v.mesh.root.rotation.y = lerpAngle(v.prev.heading, v.sim.heading, alpha);
@@ -696,7 +698,7 @@ function frame(now: number) {
 
   audioFrame.x = focus.x;
   audioFrame.z = focus.z;
-  audioFrame.car = player.driving ? describeCar(audioCar, player.driving.sim, input.readVehicle(), player.driving.archetype) : null;
+  audioFrame.car = player.driving && controls ? describeCar(audioCar, player.driving.sim, controls, player.driving.archetype) : null;
   audioFrame.footSpeed = player.driving ? 0 : Math.hypot(ped.vx, ped.vz);
   audioFrame.health = player.health;
   audio.update(frameSeconds, audioFrame);
