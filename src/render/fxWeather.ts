@@ -82,7 +82,7 @@ export class WeatherCycle {
 /** Most drops (streaks and splashes) drawn at full rain. */
 const DROPS = 900;
 /** Share of the instances that are splash rings on the ground. */
-const SPLASH_SHARE = 0.2;
+const SPLASH_SHARE = 0.1;
 const FALL_SPEED = 26;
 
 /**
@@ -154,7 +154,8 @@ export class Rain {
             float sx = h(cycle * 12.9898 + iSeed.y * 78.233);
             float sz = h(cycle * 39.3468 + iSeed.x * 11.135);
             vec3 c = vec3(uBox.x + sx * uBox.z, 0.06, uBox.y + sz * uBox.w);
-            float r = 0.12 + k * 0.42;
+            // Small and faint: big white rings read as bubbles (or snow) at night.
+            float r = 0.06 + k * 0.21;
             vec3 p = c + vec3(position.x * 2.0 * r, 0.0, -position.y * 2.0 * r);
             vSplash = 1.0;
             vFade = 1.0 - k;
@@ -197,10 +198,10 @@ export class Rain {
           float a;
           if (vSplash > 0.5) {
             float r = length(vUv * 2.0 - 1.0);
-            a = exp(-pow((r - 0.75) * 9.0, 2.0)) * vFade * 0.55;
+            a = exp(-pow((r - 0.75) * 9.0, 2.0)) * vFade * 0.33;
           } else {
             float across = abs(vUv.x * 2.0 - 1.0);
-            a = (1.0 - across) * vUv.y * vFade * 0.5;
+            a = (1.0 - across) * vUv.y * vFade * 0.75;
           }
           if (a < 0.004) discard;
           gl_FragColor = vec4(uRainColor * a, a * 0.7);
