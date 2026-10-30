@@ -240,7 +240,8 @@ stick's reach, or a target near the aim line; unaimed, a lob of half the
 range or onto someone in front within it), bounce and go off after
 2 s; molotovs burst into a 3.2 m fire for 6 s that sets people running
 alight (22 HP/s) and cooks cars (12 HP/s); rockets fly at 26 m/s, arm
-after 3 m and blow up on the first thing they touch (75 m max). While a
+after 3 m and blow up on the first thing they touch (75 m max); their
+lock-on and aim assist ignore anything within 8 m (inside their own blast). While a
 grenade or molotov is in hand, a landing ring and a dotted arc show
 where it will land (a touch tap on FIRE throws right there).
 

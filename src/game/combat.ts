@@ -44,6 +44,7 @@ import {
   lockTarget,
   rayCircle,
   rayRect,
+  type FireMode,
   type LockCandidate,
   type WeaponKind,
 } from '../systems/weapons';
@@ -89,6 +90,12 @@ const FIRE_PLAYER_DPS = 14;
 const FIRE_PLAYER_TICK = 0.3;
 /** People who walk into fire burn this long, s. */
 const BURN_SECONDS = 3.5;
+/**
+ * Rockets don't lock on or snap to anything nearer than this, m: inside
+ * their own blast it would be the player who got hurt (a deliberate aim
+ * can still fire point-blank).
+ */
+const LAUNCHER_MIN_AIM = 8;
 /** An unaimed throw goes this share of the weapon's range (or onto someone in front within it). */
 const THROW_LOB = 0.5;
 /** A blast that sets the player's own car alight leaves at least this long to get out, s. */
@@ -220,7 +227,8 @@ export class Combat {
     }
     // Lock-on: guns and launchers, while firing (and a moment after).
     if (spec.mode !== 'throw' && (firing || this.sinceShot < LOCK_LINGER)) {
-      if (!this.lockValid(spec.range * 1.2, aim.heading)) this.lock = firing ? this.acquireLock(spec.range, aim.heading) : null;
+      const near = minAim(spec.mode);
+      if (!this.lockValid(spec.range * 1.2, aim.heading, near)) this.lock = firing ? this.acquireLock(spec.range, aim.heading, near) : null;
     } else this.lock = null;
     // Throwables always show where they'd land, aimed or not (a tap on FIRE
     // throws to the same spot, so touch players see it first too).
@@ -240,22 +248,22 @@ export class Combat {
     return Math.atan2(l.agent.s.x - p.x, l.agent.s.z - p.z);
   }
 
-  private lockValid(range: number, aimHeading: number | null): boolean {
+  private lockValid(range: number, aimHeading: number | null, near: number): boolean {
     const l = this.lock;
     if (!l || l.agent.mode === 'down' || !this.d.crowd.includes(l)) return false;
     const p = this.d.player.ped;
     const dx = l.agent.s.x - p.x;
     const dz = l.agent.s.z - p.z;
     const dist = Math.hypot(dx, dz);
-    if (dist > range) return false;
+    if (dist > range || dist < near) return false;
     if (aimHeading === null || dist < 0.5) return true;
     const cos = (dx * Math.sin(aimHeading) + dz * Math.cos(aimHeading)) / dist;
     return cos > Math.cos(LOCK_AIM_CONE * 1.6);
   }
 
-  private acquireLock(range: number, aimHeading: number | null): CrowdPed | null {
+  private acquireLock(range: number, aimHeading: number | null, near: number): CrowdPed | null {
     const p = this.d.player.ped;
-    this.gatherPeds();
+    this.gatherPeds(near);
     const i = lockTarget(p.x, p.z, aimHeading ?? p.heading, this.candidates, this.candidateCount, range, aimHeading === null ? 0 : LOCK_AIM_CONE);
     return i >= 0 ? this.candidates[i].ped : null;
   }
@@ -275,7 +283,7 @@ export class Combat {
     if (!p.arsenal.tryFire()) return false;
     this.sinceShot = 0;
     const { x, z } = p.ped;
-    this.aimDirection(spec.range, aim.heading, this.dir);
+    this.aimDirection(spec.range, aim.heading, this.dir, minAim(spec.mode));
     p.ped.heading = Math.atan2(this.dir.x, this.dir.z);
     const ox = x + this.dir.x * 0.6;
     const oz = z + this.dir.z * 0.6;
@@ -293,7 +301,7 @@ export class Combat {
   }
 
   /** Where a shot goes: the lock, else the aim (snapping to a target near it), else assisted facing. */
-  private aimDirection(range: number, aimHeading: number | null, out: { x: number; z: number }): void {
+  private aimDirection(range: number, aimHeading: number | null, out: { x: number; z: number }, near: number): void {
     const p = this.d.player.ped;
     const l = this.lock;
     if (l) {
@@ -304,7 +312,7 @@ export class Combat {
       out.z = dz / d;
       return;
     }
-    this.gatherAll();
+    this.gatherAll(null, near);
     const targets = this.aimTargets;
     targets.length = 0;
     for (let i = 0; i < this.candidateCount; i++) targets.push(this.candidates[i]);
@@ -767,24 +775,27 @@ export class Combat {
     return Math.max(0, best - CAR_CIRCLE_RADIUS);
   }
 
-  /** Lock-on candidates: every ped on their feet, hostiles flagged. */
-  private gatherPeds(): void {
+  /** Lock-on candidates: every ped on their feet (not within `near` m of the player), hostiles flagged. */
+  private gatherPeds(near = 0): void {
     this.candidateCount = 0;
     const wanted = this.d.stars() > 0;
+    const me = this.d.player.ped;
     for (const c of this.d.crowd) {
       const a = c.agent;
-      if (a.mode === 'down') continue;
+      if (a.mode === 'down' || (near > 0 && Math.hypot(a.s.x - me.x, a.s.z - me.z) < near)) continue;
       const hostile = a.mode === 'fight' || a.mode === 'shoot' || (a.role === 'cop' && wanted);
       this.push(a.s.x, a.s.z, hostile, c, null);
     }
   }
 
   /** Peds plus cars (not `except`, not wrecks): police cars are hostile while wanted. */
-  private gatherAll(except: Vehicle | null = null): void {
-    this.gatherPeds();
+  private gatherAll(except: Vehicle | null = null, near = 0): void {
+    this.gatherPeds(near);
     const wanted = this.d.stars() > 0;
+    const me = this.d.player.ped;
     for (const v of this.d.vehicles) {
       if (v === except || v.damage.wrecked) continue;
+      if (near > 0 && Math.hypot(v.sim.x - me.x, v.sim.z - me.z) < near) continue;
       this.push(v.sim.x, v.sim.z, wanted && (v.archetype === 'police' || v.police === true), null, v);
     }
   }
@@ -800,4 +811,9 @@ export class Combat {
     c.car = car;
     this.candidateCount++;
   }
+}
+
+/** How close a weapon's lock-on and aim assist may pick targets, m. */
+function minAim(mode: FireMode): number {
+  return mode === 'launcher' ? LAUNCHER_MIN_AIM : 0;
 }

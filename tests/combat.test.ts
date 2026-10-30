@@ -261,6 +261,28 @@ describe('throws', () => {
   });
 });
 
+describe('rockets', () => {
+  it("don't lock on or snap to anyone inside their own blast; further out they do", () => {
+    const w = setup();
+    w.player.arsenal.pickUp('rocket');
+    w.player.arsenal.current = 'rocket';
+    // A fighter 4 m away, off to the side of the facing (+Z).
+    const close = ped(1.5, 3.7);
+    close.agent.mode = 'fight';
+    w.crowd.push(close);
+    w.combat.updateAim(true, noAim);
+    expect(w.combat.lock).toBeNull();
+    expect(w.combat.fire(noAim)).toBe(true);
+    const r = w.combat.projectiles.list.find((p) => p.alive && p.kind === 'rocket')!;
+    expect(Math.abs(Math.atan2(r.vx, r.vz))).toBeLessThan(0.05); // straight on, not at them
+    // The same fighter 15 m away is fair game.
+    w.combat.reset();
+    Object.assign(close.agent.s, { x: 5, z: 14 });
+    w.combat.updateAim(true, noAim);
+    expect(w.combat.lock).toBe(close);
+  });
+});
+
 describe('drive-bys', () => {
   it('fires out of the side window at the target there, not straight ahead', () => {
     const w = setup();
