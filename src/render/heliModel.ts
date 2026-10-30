@@ -56,6 +56,12 @@ export class HeliModel {
   private bank = 0;
   private pitch = 0;
   private altitude = MAX_ALTITUDE;
+  /**
+   * Frames left to draw it, specks-small under the street, after it loads:
+   * the start-up shader warm-up skips hidden things, so this compiles its
+   * program and uploads it now rather than at the first 5-star chase.
+   */
+  private warm = 0;
 
   constructor(url = '/assets/heli.glb') {
     this.root.name = 'heli';
@@ -71,7 +77,15 @@ export class HeliModel {
   update(h: HeliState, dt: number, cx: number, cy: number, cz: number): void {
     const show = h.active && this.mesh !== null;
     this.root.visible = show;
-    if (!show) return;
+    if (!show) {
+      if (this.warm > 0 && this.mesh) {
+        this.warm--;
+        this.root.visible = true;
+        this.root.position.set(cx, -20, cz);
+        this.root.scale.setScalar(1e-4);
+      }
+      return;
+    }
     this.uniforms.uMainAngle.value = (this.uniforms.uMainAngle.value + MAIN_SPIN * dt) % (Math.PI * 2);
     this.uniforms.uTailAngle.value = (this.uniforms.uTailAngle.value + TAIL_SPIN * dt) % (Math.PI * 2);
     const want = Math.max(MIN_ALTITUDE, Math.min(MAX_ALTITUDE, cy * ALTITUDE_SHARE));
@@ -124,6 +138,7 @@ export class HeliModel {
     mesh.name = 'heli-model';
     this.mesh = mesh;
     this.root.add(mesh);
+    this.warm = 2;
   }
 
   private material(): MeshLambertMaterial {
