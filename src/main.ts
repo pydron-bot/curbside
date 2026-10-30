@@ -711,7 +711,10 @@ function frame(now: number) {
   if (paused) {
     // Resizing clears the canvas (rotating the phone while paused): redraw the
     // frozen scene behind the pause card.
-    if (resized && !contextLost) look.render(rig.camera);
+    if ((resized || redrawPaused) && !contextLost) {
+      redrawPaused = false;
+      look.render(rig.camera);
+    }
     return;
   }
 
@@ -1008,6 +1011,11 @@ applyUpdate = registerSW({ immediate: true, onNeedRefresh: () => updates.markRea
 
 /** True while the WebGL context is gone: nothing can resume until it's back. */
 let contextLost = false;
+/** Draw one frame behind the pause card (the GL context came back while paused). */
+let redrawPaused = false;
+/** No restore this long after a lost context: offer a reload, ms. */
+const RELOAD_OFFER_MS = 6000;
+let reloadOfferTimer = 0;
 /** Paused only because the context was lost (so resume when it's restored). */
 let pausedForContext = false;
 /** Why the game is paused, while it is. */
@@ -1051,12 +1059,28 @@ renderer.domElement.addEventListener('webglcontextlost', (e) => {
   contextLost = true;
   pausedForContext = !paused;
   setPaused(true, 'contextLost');
+  // A restore that never comes would leave the card up for good: offer a reload (the save is flushed first).
+  window.clearTimeout(reloadOfferTimer);
+  reloadOfferTimer = window.setTimeout(() => {
+    if (!contextLost) return;
+    frontDoor.pause.offerReload(() => {
+      progress.progress.flush();
+      location.reload();
+    });
+  }, RELOAD_OFFER_MS);
 });
 renderer.domElement.addEventListener('webglcontextrestored', () => {
   contextLost = false;
+  window.clearTimeout(reloadOfferTimer);
+  frontDoor.pause.offerReload(null);
   resolution.holdOff();
   if (pausedForContext) setPaused(false);
-  else if (paused) setPaused(true, 'paused');
+  else if (paused) {
+    // Back to the pause menu: draw the city behind it again now (and compile
+    // every program while still paused, not on the RESUME frame).
+    setPaused(true, 'paused');
+    redrawPaused = true;
+  }
   pausedForContext = false;
 });
 

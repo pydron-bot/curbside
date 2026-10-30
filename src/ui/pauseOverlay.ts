@@ -37,6 +37,8 @@ export class PauseOverlay implements Panel {
   private readonly hint: HTMLElement;
   private readonly menu: HTMLElement;
   private readonly update: HTMLButtonElement;
+  private readonly reload: HTMLButtonElement;
+  private onReload: (() => void) | null = null;
   private readonly resumeBtn: HTMLButtonElement;
   private readonly grid: HTMLElement;
   private reason: PauseReason = 'paused';
@@ -72,7 +74,10 @@ export class PauseOverlay implements Panel {
 
     this.update = menuButton('UPDATE READY — RESTART NOW', { className: 'pause-update' });
     this.update.hidden = true;
-    card.append(this.title, this.hint, this.menu, this.update);
+    this.reload = menuButton('RELOAD THE GAME', { icon: 'restart', className: 'pause-update' });
+    this.reload.hidden = true;
+    this.reload.addEventListener('click', () => this.onReload?.());
+    card.append(this.title, this.hint, this.menu, this.update, this.reload);
     el.append(card);
 
     this.nav.add({ el: this.resumeBtn, activate: () => actions.resume() });
@@ -127,6 +132,17 @@ export class PauseOverlay implements Panel {
     this.grid.insertBefore(b, this.grid.querySelector('.risky'));
     this.nav.add({ el: b, activate });
     return b;
+  }
+
+  /**
+   * The graphics never came back: offer a way out on the "Reloading
+   * graphics…" card (a home-screen app has no browser reload button).
+   * null takes the offer away again.
+   */
+  offerReload(onReload: (() => void) | null): void {
+    this.onReload = onReload;
+    this.reload.hidden = onReload === null;
+    if (onReload) this.hint.textContent = 'Still waiting for the graphics — your progress is saved';
   }
 
   /** Offer the waiting update on the pause screen. */
