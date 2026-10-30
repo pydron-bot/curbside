@@ -275,8 +275,10 @@ export class Effects {
     this.sparks(x, 1.4, z, n(28), 12, 26, 0, 0);
     this.embers(x, z, n(22), 2.5, 7);
 
-    // Panels in the car's colour, dark chunks, glass.
-    const pieces = n(12);
+    // Panels in the car's colour, dark chunks, glass. Debris is one instanced
+    // draw whatever the count, so it isn't cut on phones: 12 for a lone blast,
+    // fewer per car in a chain.
+    const pieces = Math.max(4, Math.round(12 / Math.max(1, this.recentBooms * 0.6)));
     for (let k = 0; k < pieces; k++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 3 + Math.random() * 8;
@@ -519,7 +521,9 @@ export class Effects {
       this.hot.b[i] = b * 1.8;
     }
     this.light(x, 0.1, z, 0.5, radius, r * 1.2, g * 1.2, b * 1.2, 0.45, GLOW.ring);
-    this.light(x, 0.1, z, radius * 0.6, radius * 0.9, r * 0.5, g * 0.5, b * 0.5, 0.3, GLOW.disc);
+    // The fill under it dims as it grows, or a big burst floods the street.
+    const fill = 0.5 * Math.min(1, 3 / radius);
+    this.light(x, 0.1, z, radius * 0.5, radius * 0.8, r * fill, g * fill, b * fill, 0.3, GLOW.disc);
   }
 
   /** A short bright billboard pop (star) at (x, y, z) of `size` m, lasting `life` s. */

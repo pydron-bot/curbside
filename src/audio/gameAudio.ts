@@ -337,12 +337,12 @@ export class GameAudio {
     s.age = 0;
   }
 
-  /** A car horn at (x, z). */
   /** How hard it's raining, 0..1 (a weather loop; 0 fades it out). Call whenever it changes. */
   setRain(amount: number): void {
     this.rainAmount = clamp01(amount);
   }
 
+  /** A car horn at (x, z). */
   horn(x: number, z: number, duration = 0.4): void {
     const v = this.voice({ x, z }, FALLOFF.horn, 0.55, 0.25);
     if (!v) return;

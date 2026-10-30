@@ -332,7 +332,7 @@ export class FxDirector {
     if (reached !== a.multiplier && (reached === 5 || reached === MAX_COMBO)) {
       const top = reached === MAX_COMBO;
       this.overlay.edgeFlash(top ? 'rgb(255 70 170 / 0.8)' : 'rgb(255 196 64 / 0.75)', top ? 1 : 0.6);
-      if (top) this.d.effects.burst(at.x, at.z, 1, 0.3, 0.75, Math.round(26 * this.d.effects.scale), 6);
+      if (top) this.d.effects.burst(at.x, at.z, 1, 0.3, 0.75, Math.round(26 * this.d.effects.scale), 5);
       else this.d.effects.burst(at.x, at.z, 1, 0.75, 0.25, Math.round(18 * this.d.effects.scale), 4.5);
       this.d.rig.addTrauma(top ? 0.25 : 0.12);
     }

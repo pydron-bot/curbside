@@ -197,9 +197,11 @@ export class CameraRig {
     const { x: px, y: py, z: pz } = cam.position;
     out.minX = out.minZ = Infinity;
     out.maxX = out.maxZ = -Infinity;
-    for (const [nx, ny] of SCREEN_CORNERS) {
+    // Indexed, not destructured: this runs several times a frame and must not allocate.
+    for (let i = 0; i < SCREEN_CORNERS.length; i++) {
+      const c = SCREEN_CORNERS[i];
       // Unit ray from the camera through this corner of the screen.
-      const dir = this.corner.set(nx, ny, 0.5).unproject(cam).sub(cam.position).normalize();
+      const dir = this.corner.set(c[0], c[1], 0.5).unproject(cam).sub(cam.position).normalize();
       // Distance along it to the ground; a ray that never gets there stops at the far plane.
       const t = dir.y < -1e-6 ? Math.min(-py / dir.y, cam.far) : cam.far;
       const gx = px + dir.x * t;
