@@ -131,6 +131,8 @@ export interface Suspect {
   inCar: boolean;
   /** On foot with a gun out. */
   armed: boolean;
+  /** Lying knocked down: officers go in to cuff them rather than shoot. */
+  down: boolean;
   /** Their car, if driving. */
   car: VehicleState | null;
   /** In play (alive, free, not behind the title): otherwise nobody chases. */
@@ -272,6 +274,12 @@ export class PoliceForce {
     t.vz = s.vz;
     t.heading = s.heading;
     t.inCar = s.inCar;
+  }
+
+  /** Call `fn` with each officer's current mode (tests, debugging). */
+  forEachOfficerMode(fn: (mode: CrowdPed['agent']['mode']) => void): void {
+    for (const u of this.units) for (const p of u.officers) fn(p.agent.mode);
+    for (const p of this.strays) fn(p.agent.mode);
   }
 
   /** Everyone stands down at once (busted, died, a fresh run): units go back to patrol. */
@@ -609,9 +617,9 @@ export class PoliceForce {
       return;
     }
     // On foot: from 3 stars they shoot on sight; at 2 only at someone armed or running.
-    // Someone who stops and gives up just gets cuffed.
+    // Someone who stops and gives up (or is lying on the ground) just gets cuffed.
     const running = Math.hypot(s.vx, s.vz) > 3.5;
-    const shoot = d > SHOOT_FROM && (this.stars >= 3 || (this.stars >= 2 && (s.armed || running)));
+    const shoot = !s.down && d > SHOOT_FROM && (this.stars >= 3 || (this.stars >= 2 && (s.armed || running)));
     a.mode = shoot ? 'shoot' : 'arrest';
     a.goalX = s.x;
     a.goalZ = s.z;

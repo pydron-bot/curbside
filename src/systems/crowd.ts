@@ -251,16 +251,20 @@ export function stepCrowdPed(
   return null;
 }
 
+/** Reused stick input for officers (they step every frame; no garbage). */
+const copMove = { x: 0, y: 0, sprint: false };
+
 /** An officer running to their goal (the player, or a car door), then standing ready. */
 function stepArrest(p: PedAgent, target: Target | undefined, dt: number): void {
   const dx = p.goalX - p.s.x;
   const dz = p.goalZ - p.s.z;
   const d = Math.hypot(dx, dz);
-  if (d > ARREST_STOP) {
-    stepPedestrian(p.s, { x: dx / d, y: -dz / d, sprint: d > 2.5 }, COP_SPEC, dt);
-    return;
-  }
-  stepPedestrian(p.s, { x: 0, y: 0, sprint: false }, COP_SPEC, dt);
+  const run = d > ARREST_STOP;
+  copMove.x = run ? dx / d : 0;
+  copMove.y = run ? -dz / d : 0;
+  copMove.sprint = d > 2.5;
+  stepPedestrian(p.s, copMove, COP_SPEC, dt);
+  if (run) return;
   if (target) p.s.heading = Math.atan2(target.x - p.s.x, target.z - p.s.z);
 }
 
@@ -294,7 +298,12 @@ function stepHostile(p: PedAgent, target: Target | undefined, dt: number): Crowd
 
   // Shooter: hold a middle distance, face the target, fire on a cadence.
   // Officers keep advancing instead (they want the arrest), at a run when far.
-  if (cop) stepPedestrian(p.s, d > 3 ? { x: ux * 0.8, y: -uz * 0.8, sprint: d > 16 } : still, COP_SPEC, dt);
+  if (cop) {
+    copMove.x = d > 3 ? ux * 0.8 : 0;
+    copMove.y = d > 3 ? -uz * 0.8 : 0;
+    copMove.sprint = d > 16;
+    stepPedestrian(p.s, copMove, COP_SPEC, dt);
+  }
   else if (d > 12) stepPedestrian(p.s, { x: ux * 0.8, y: -uz * 0.8, sprint: false }, NPC_SPEC, dt);
   else if (d < 6) stepPedestrian(p.s, { x: -ux * 0.6, y: uz * 0.6, sprint: false }, NPC_SPEC, dt);
   else stepPedestrian(p.s, still, NPC_SPEC, dt);

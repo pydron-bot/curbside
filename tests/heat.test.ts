@@ -181,6 +181,22 @@ describe('heat: police response', () => {
     expect(w.heat.police.units.every((u) => u.dismissed)).toBe(true);
   });
 
+  it('officers cuff someone lying on the ground rather than shoot them, even at 3 stars', () => {
+    const w = world(29);
+    w.heat.wanted.force(3);
+    let shooting = 0;
+    const t = w.runUntil(() => {
+      // Keep the player knocked down.
+      w.player.stunned = Math.max(w.player.stunned, 1);
+      w.heat.police.forEachOfficerMode((mode) => {
+        if (mode === 'shoot') shooting++;
+      });
+      return w.player.arrested;
+    }, 90);
+    expect(t).toBeLessThan(90);
+    expect(shooting).toBe(0);
+  });
+
   it('five stars put the helicopter up', () => {
     const w = world(9);
     w.heat.wanted.force(5);

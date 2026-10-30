@@ -86,7 +86,7 @@ export class Heat {
   sprayProgress = 0;
   /** The police saw the car drive into the bay: a respray won't lose them. */
   sprayWatched = false;
-  private readonly suspect: Suspect = { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: false, armed: false, car: null, active: false };
+  private readonly suspect: Suspect = { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: false, armed: false, down: false, car: null, active: false };
   private readonly ctx: PoliceContext;
   private readonly situation: ArrestSituation = {
     stars: 0,
@@ -278,6 +278,7 @@ export class Heat {
     s.heading = car ? car.sim.heading : player.ped.heading;
     s.inCar = car !== null;
     s.armed = !car && player.arsenal.current !== null;
+    s.down = !car && player.stunned > 0;
     s.car = car ? car.sim : null;
     s.active = this.live;
     return s;
