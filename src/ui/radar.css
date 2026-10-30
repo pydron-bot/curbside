@@ -1,0 +1,55 @@
+/* --- Radar (src/ui/radar.ts): top left, clear of both thumbs --- */
+#radar {
+  position: fixed;
+  top: var(--edge-t);
+  left: var(--edge-l);
+  z-index: 19;
+  width: var(--radar);
+  height: var(--radar);
+  border-radius: 50%;
+  pointer-events: none;
+  background: #090b10;
+  box-shadow:
+    0 0 0 2px rgb(255 255 255 / 0.75),
+    0 0 0 4px rgb(0 0 0 / 0.55),
+    0 4px 14px rgb(0 0 0 / 0.55),
+    inset 0 0 18px rgb(0 0 0 / 0.65);
+}
+
+body:not([data-scene='play']) #radar {
+  display: none;
+}
+
+#radar canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+}
+
+/* A soft inner shade so the rim reads over bright map areas. */
+#radar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: inset 0 0 12px rgb(0 0 0 / 0.7);
+  background: radial-gradient(circle, transparent 62%, rgb(46 230 255 / 0.08) 100%);
+}
+
+.radar-n {
+  position: absolute;
+  left: 50%;
+  top: -7px;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  margin-left: -8px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #f6f1e4;
+  color: #15151b;
+  font: 900 9px/1 var(--hud-font);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.6);
+}

@@ -3,7 +3,8 @@
   --radio-a: #ff4fd8;
   --radio-b: #4fd8ff;
   position: fixed;
-  top: max(10px, env(safe-area-inset-top));
+  /* Just under the pause button at top centre. */
+  top: calc(max(4px, env(safe-area-inset-top)) + 52px);
   left: 50%;
   z-index: 20;
   display: flex;
@@ -27,7 +28,8 @@
   touch-action: none;
 }
 
-#radio[hidden] {
+#radio[hidden],
+body:not([data-scene='play']) #radio {
   display: none;
 }
 

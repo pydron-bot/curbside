@@ -1,0 +1,844 @@
+/* --- In-game HUD (src/ui/hud.ts, scoreHud.ts, wastedScreen.ts) --- */
+
+:root {
+  /* The radar's diameter; the status column sits beside it. */
+  --radar: clamp(84px, 25vmin, 148px);
+  --status-w: clamp(112px, 27vmin, 168px);
+}
+
+#hud {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  pointer-events: none;
+  color: var(--ink);
+  font-family: var(--hud-font);
+  text-shadow: var(--hud-shadow);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+body:not([data-scene='play']) #hud,
+body:not([data-scene='play']) #hurt,
+body:not([data-scene='play']) #wasted {
+  display: none;
+}
+
+/* --- Status column: health, weapon / speedometer --- */
+.hud-status {
+  position: absolute;
+  top: calc(var(--edge-t) + 4px);
+  left: calc(var(--edge-l) + var(--radar) + 10px);
+  width: var(--status-w);
+  display: grid;
+  gap: 7px;
+  justify-items: start;
+}
+
+.hp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
+.hp-icon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: #ff4d6a;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.8));
+}
+
+.hp-bar {
+  position: relative;
+  flex: 1;
+  height: 11px;
+  transform: skewX(-14deg);
+  background: rgb(0 0 0 / 0.5);
+  border: 1px solid rgb(255 255 255 / 0.35);
+  border-radius: 2px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
+}
+
+.hp-bar > i {
+  position: absolute;
+  inset: 0;
+  transform-origin: left center;
+}
+
+.hp-ghost {
+  background: rgb(255 240 220 / 0.75);
+  transition: transform 0.45s 0.3s ease-in;
+}
+
+.hp-fill {
+  background: linear-gradient(180deg, #ff7b8b, #ff2346 55%, #c80f2e);
+  transition: transform 0.12s ease-out;
+}
+
+.hp-gaps {
+  background: repeating-linear-gradient(90deg, transparent 0 calc(10% - 2px), rgb(0 0 0 / 0.75) calc(10% - 2px) 10%);
+}
+
+.hud-status.critical .hp-fill {
+  animation: hp-critical 0.8s ease-in-out infinite alternate;
+}
+
+.hud-status.critical .hp-icon {
+  animation: hp-beat 0.8s ease-in-out infinite;
+}
+
+@keyframes hp-critical {
+  to {
+    filter: brightness(1.7);
+  }
+}
+
+@keyframes hp-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  15% {
+    transform: scale(1.35);
+  }
+  30% {
+    transform: scale(1);
+  }
+}
+
+.weapon {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 3px 10px 3px 7px;
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.42);
+  border: 1px solid rgb(255 255 255 / 0.18);
+  transform: skewX(-10deg);
+}
+
+.weapon > * {
+  transform: skewX(10deg);
+}
+
+.weapon-icon {
+  width: 34px;
+  height: 24px;
+  color: #fff;
+}
+
+.weapon-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.weapon-ammo {
+  font: italic 900 17px/1 var(--display-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--neon-yellow);
+}
+
+.hud-status:not(.armed) .weapon-icon {
+  width: 22px;
+}
+
+.hud-status.in-car .weapon {
+  display: none;
+}
+
+/* --- Speedometer (in a car) --- */
+.speedo {
+  --car-col: var(--neon-green);
+  position: absolute;
+  top: calc(var(--edge-t) + 22px);
+  left: calc(var(--edge-l) + var(--radar) + 6px);
+  width: clamp(80px, 24vmin, 124px);
+  aspect-ratio: 1;
+}
+
+.speedo[hidden] {
+  display: none;
+}
+
+.speedo svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.7));
+}
+
+.speedo path {
+  fill: none;
+  stroke-linecap: round;
+}
+
+.sp-track {
+  stroke: rgb(0 0 0 / 0.45);
+  stroke-width: 8;
+}
+
+.sp-fill {
+  stroke: url(#sp-grad);
+  stroke-width: 6.5;
+  stroke-dasharray: 0 200;
+  transition: stroke-dasharray 0.1s linear;
+}
+
+.sp-ticks line {
+  stroke: rgb(255 255 255 / 0.4);
+  stroke-width: 1;
+}
+
+.sp-ticks line.major {
+  stroke: rgb(255 255 255 / 0.75);
+  stroke-width: 1.8;
+}
+
+.sp-car-track {
+  stroke: rgb(0 0 0 / 0.4);
+  stroke-width: 4.5;
+}
+
+.sp-car {
+  stroke: var(--car-col);
+  stroke-width: 3.5;
+  stroke-dasharray: 100 200;
+  transition: stroke-dasharray 0.25s ease-out, stroke 0.25s;
+}
+
+.speedo[data-state='hurt'] {
+  --car-col: var(--amber);
+}
+
+.speedo[data-state='bad'],
+.speedo[data-state='burning'] {
+  --car-col: var(--danger);
+}
+
+.sp-num {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  line-height: 1;
+}
+
+.sp-num b {
+  font: italic 900 clamp(20px, 7vmin, 33px)/1 var(--display-font);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.sp-num small {
+  margin-top: 2px;
+  font: 800 8px/1 var(--hud-font);
+  letter-spacing: 0.2em;
+  opacity: 0.7;
+}
+
+.sp-icon {
+  position: absolute;
+  left: 50%;
+  bottom: 3%;
+  width: 13px;
+  height: 13px;
+  margin-left: -6.5px;
+  color: var(--car-col);
+}
+
+.sp-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.sp-warn {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  margin-top: 2px;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: var(--danger);
+  color: #fff;
+  font: italic 900 12px/1 var(--display-font);
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  text-shadow: none;
+  display: none;
+}
+
+.speedo[data-state='burning'] .sp-warn {
+  display: block;
+  animation: blink 0.4s steps(2, jump-none) infinite;
+}
+
+.speedo[data-state='burning'] .sp-car {
+  animation: blink 0.4s steps(2, jump-none) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+/* --- Pause button: top centre, a full 44pt target --- */
+.hud-pause {
+  position: absolute;
+  top: max(4px, var(--safe-t));
+  left: 50%;
+  width: 44px;
+  height: 44px;
+  margin-left: -22px;
+  padding: 12px;
+  border-radius: 50%;
+  border: 2px solid rgb(255 255 255 / 0.55);
+  background: rgb(0 0 0 / 0.38);
+  color: #fff;
+  pointer-events: auto;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.08s;
+}
+
+.hud-pause svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hud-pause:active {
+  transform: scale(0.9);
+}
+
+body:not([data-device='touch']) .hud-pause {
+  opacity: 0.6;
+}
+
+/* --- Device-aware prompt: "E  GET IN" --- */
+.hud-prompt {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--edge-b) + 18px);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 15px 5px 5px;
+  border-radius: 999px;
+  background: rgb(10 10 14 / 0.7);
+  border: 1px solid rgb(255 255 255 / 0.2);
+  font: 800 14px/1 var(--hud-font);
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  animation: prompt-in 0.25s cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+.hud-prompt[hidden] {
+  display: none;
+}
+
+@keyframes prompt-in {
+  from {
+    transform: translateX(-50%) scale(0.6);
+    opacity: 0;
+  }
+}
+
+.hud-prompt .key {
+  display: grid;
+  place-items: center;
+  min-width: 28px;
+  height: 28px;
+  padding: 0 6px;
+  font: 900 15px/1 var(--hud-font);
+  letter-spacing: 0;
+  text-shadow: none;
+  color: #15151b;
+}
+
+.key-keyboard {
+  border-radius: 6px;
+  background: linear-gradient(#fffdf6, #e2ddcf);
+  box-shadow: 0 3px 0 #8d887b, 0 4px 6px rgb(0 0 0 / 0.5);
+  transform: translateY(-1px);
+}
+
+.key-gamepad {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffe27a, #f2b705);
+  box-shadow: 0 2px 5px rgb(0 0 0 / 0.5);
+}
+
+.hud-debug {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--edge-b) + 2px);
+  transform: translateX(-50%);
+  font: 600 11px/1 var(--hud-font);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  white-space: nowrap;
+}
+
+.hud-debug[hidden] {
+  display: none;
+}
+
+/* --- Score, combo and feed (top right) --- */
+#score {
+  position: absolute;
+  top: var(--edge-t);
+  right: var(--edge-r);
+  display: grid;
+  justify-items: end;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.score-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.score-total {
+  font: italic 900 clamp(26px, 8vmin, 46px)/1 var(--display-font);
+  letter-spacing: 0.01em;
+  color: #fff;
+  text-shadow: 0 2px 0 rgb(0 0 0 / 0.55), 0 0 16px rgb(255 46 136 / 0.35);
+  transform-origin: right center;
+}
+
+.score-best {
+  margin-top: 2px;
+  font: 800 10px/1 var(--hud-font);
+  letter-spacing: 0.16em;
+  opacity: 0.72;
+}
+
+.score-best.beaten {
+  color: var(--neon-yellow);
+  opacity: 1;
+}
+
+.combo {
+  --combo: var(--neon-yellow);
+  position: relative;
+  width: 36px;
+  height: 36px;
+  display: none;
+  place-items: center;
+}
+
+.combo.live {
+  display: grid;
+}
+
+.combo svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+  overflow: visible;
+}
+
+.combo circle {
+  fill: rgb(0 0 0 / 0.45);
+  stroke-width: 3.5;
+}
+
+.combo-track {
+  stroke: rgb(255 255 255 / 0.18);
+}
+
+.combo-ring {
+  fill: none !important;
+  stroke: var(--combo);
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 3px var(--combo));
+}
+
+.combo b {
+  position: relative;
+  font: italic 900 14px/1 var(--display-font);
+  color: var(--combo);
+}
+
+.combo[data-tier='1'] {
+  --combo: #ff9a3c;
+}
+
+.combo[data-tier='2'] {
+  --combo: var(--neon-pink);
+}
+
+.combo[data-tier='3'] {
+  --combo: var(--neon-cyan);
+}
+
+.score-feed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  margin-top: 5px;
+}
+
+.feed-line {
+  --c: #fff;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font: italic 900 clamp(13px, 4.3vmin, 19px)/1.1 var(--display-font);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  color: var(--c);
+  transform-origin: right center;
+  animation: feed-in 0.28s cubic-bezier(0.2, 1.4, 0.4, 1);
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.feed-line b {
+  font-weight: 900;
+  color: var(--neon-yellow);
+}
+
+.feed-line.out {
+  opacity: 0;
+  transform: translateX(14px);
+}
+
+@keyframes feed-in {
+  from {
+    transform: translateX(26px) scale(0.85);
+    opacity: 0;
+  }
+}
+
+.feed-drift {
+  --c: var(--neon-cyan);
+}
+
+.feed-drift.live b {
+  color: var(--neon-cyan);
+}
+
+.feed-nearMiss {
+  --c: #b6ff7a;
+}
+
+.feed-smash {
+  --c: #ffb36b;
+}
+
+.feed-hitAndRun {
+  --c: #ff6b7d;
+}
+
+.feed-knockout {
+  --c: #ff7ad1;
+}
+
+.feed-carjack {
+  --c: #b99bff;
+}
+
+.feed-boom {
+  --c: #ff9a3c;
+  font-size: clamp(15px, 5vmin, 22px);
+}
+
+.feed-best {
+  --c: var(--neon-yellow);
+  font-size: clamp(15px, 5vmin, 22px);
+}
+
+.feed-health {
+  --c: #6dffa4;
+}
+
+.feed-weapon {
+  --c: #ffd27a;
+}
+
+/* --- Damage vignette: sized to the screen, strength set per hit --- */
+#hurt {
+  position: fixed;
+  inset: 0;
+  z-index: 15;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent 46%, rgb(200 0 24 / 0.38) 74%, rgb(150 0 12 / 0.85) 100%);
+  box-shadow: inset 0 0 14vmin 3vmin rgb(210 0 24 / 0.55);
+}
+
+#hurt.critical {
+  animation: hurt-critical 1.1s ease-in-out infinite;
+}
+
+@keyframes hurt-critical {
+  0%,
+  100% {
+    opacity: 0.18;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* --- WASTED --- */
+#wasted {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 2.5vmin;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, rgb(60 0 8 / 0.35), rgb(0 0 0 / 0.78));
+  -webkit-backdrop-filter: grayscale(0.85) brightness(0.8);
+  backdrop-filter: grayscale(0.85) brightness(0.8);
+  animation: wasted-fade 0.6s ease-out both;
+  overflow: hidden;
+}
+
+#wasted[hidden] {
+  display: none;
+}
+
+@keyframes wasted-fade {
+  0% {
+    background-color: rgb(255 30 40 / 0.55);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+}
+
+.wasted-slash {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  top: 50%;
+  height: 27vmin;
+  margin-top: -21vmin;
+  background: linear-gradient(90deg, transparent, rgb(110 0 12 / 0.85) 18%, rgb(110 0 12 / 0.85) 82%, transparent);
+  transform: rotate(-4deg);
+  animation: slash-in 0.45s 0.08s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+
+@keyframes slash-in {
+  from {
+    transform: rotate(-4deg) scaleX(0);
+  }
+}
+
+.wasted-title {
+  position: relative;
+  margin-top: -6vmin;
+  font: italic 900 clamp(58px, 20vmin, 128px)/0.9 var(--display-font);
+  letter-spacing: 0.05em;
+  color: #ff2a3d;
+  -webkit-text-stroke: 2px #2a0006;
+  text-shadow: 0 0.06em 0 #3a000a, 0 0 0.5em rgb(255 0 40 / 0.45);
+  transform: skewX(-8deg);
+  animation: wasted-slam 0.6s cubic-bezier(0.2, 1.5, 0.35, 1) both;
+}
+
+@keyframes wasted-slam {
+  0% {
+    transform: skewX(-8deg) scale(2.8);
+    opacity: 0;
+    filter: blur(10px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+.wasted-stats {
+  position: relative;
+  display: grid;
+  gap: 1px;
+  min-width: min(300px, 70vw);
+  padding: 8px 14px;
+  border-radius: 10px;
+  background: rgb(0 0 0 / 0.5);
+  border: 1px solid rgb(255 255 255 / 0.12);
+}
+
+.ws-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  font: 800 clamp(11px, 3.4vmin, 14px)/1.45 var(--hud-font);
+  letter-spacing: 0.14em;
+  animation: ws-in 0.35s ease-out both;
+}
+
+.ws-row span {
+  opacity: 0.7;
+}
+
+.ws-row b {
+  font: italic 900 clamp(13px, 4.2vmin, 18px)/1.2 var(--display-font);
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ws-score b {
+  color: var(--neon-yellow);
+  font-size: clamp(16px, 5.4vmin, 24px);
+}
+
+.ws-badge {
+  position: absolute;
+  right: 12px;
+  top: -12px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  background: var(--neon-yellow);
+  color: #1a1400;
+  font: italic 900 10px/1 var(--display-font);
+  letter-spacing: 0.1em;
+  text-shadow: none;
+  transform: rotate(6deg);
+  animation: badge-stamp 0.4s 1.1s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+
+.ws-badge[hidden] {
+  display: none;
+}
+
+@keyframes badge-stamp {
+  from {
+    transform: rotate(6deg) scale(2.5);
+    opacity: 0;
+  }
+}
+
+.ws-row:nth-child(1) {
+  animation-delay: 0.45s;
+}
+.ws-row:nth-child(2) {
+  animation-delay: 0.55s;
+}
+.ws-row:nth-child(3) {
+  animation-delay: 0.65s;
+}
+.ws-row:nth-child(4) {
+  animation-delay: 0.75s;
+}
+.ws-row:nth-child(5) {
+  animation-delay: 0.85s;
+}
+
+@keyframes ws-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.wasted-timer {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--edge-b) + 10px);
+  width: 150px;
+  height: 4px;
+  margin-left: -75px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.18);
+  overflow: hidden;
+}
+
+.wasted-timer > i {
+  display: block;
+  height: 100%;
+  background: #ff2a3d;
+  transform-origin: left center;
+  animation: wasted-timer 3s linear both;
+}
+
+@keyframes wasted-timer {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wasted-title,
+  .wasted-slash,
+  .ws-row,
+  .feed-line {
+    animation: none;
+  }
+}
+
+/* --- Off-screen threat chevrons (src/ui/threats.ts) --- */
+#threats {
+  position: fixed;
+  inset: 0;
+  z-index: 18;
+  pointer-events: none;
+}
+
+body:not([data-scene='play']) #threats {
+  display: none;
+}
+
+.threat {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  will-change: transform;
+}
+
+.threat[hidden] {
+  display: none;
+}
+
+.threat i {
+  position: absolute;
+  inset: 0;
+  background: #ff8a3c;
+  clip-path: polygon(50% 0, 100% 72%, 50% 54%, 0 72%);
+  filter: drop-shadow(0 0 4px rgb(0 0 0 / 0.9));
+  animation: threat-bob 0.7s ease-in-out infinite alternate;
+}
+
+.threat.shooter i {
+  background: #ff2a3d;
+  animation-duration: 0.35s;
+}
+
+@keyframes threat-bob {
+  from {
+    transform: translateY(2px) scale(0.92);
+    opacity: 0.75;
+  }
+  to {
+    transform: translateY(-3px) scale(1.08);
+    opacity: 1;
+  }
+}

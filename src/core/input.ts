@@ -1,9 +1,12 @@
 import type { MoveInput } from '../entities/pedestrian';
-import type { VehicleControls } from '../entities/vehicle';
+import type { VehicleControls, VehicleState } from '../entities/vehicle';
+import type { AimState } from './aim';
+import { settings } from './settings';
+import { createDirectionalState, directionalControls, type DirectionalInput } from './steering';
 
 /**
- * One input abstraction over keyboard, touch and gamepad. Every source writes
- * into its own slot; reads merge them so whichever device is in use wins.
+ * One input abstraction over keyboard, mouse, touch and gamepad. Every source
+ * writes into its own slot; reads merge them so whichever device is in use wins.
  */
 export interface InputSource {
   /** Driving: analog steer -1..1 */
@@ -11,10 +14,15 @@ export interface InputSource {
   /** Driving: analog throttle -1..1 (negative = brake/reverse) */
   throttle: number;
   handbrake: boolean;
-  /** On foot: screen-relative movement, -1..1 each (y = screen-up). */
+  /** On foot: screen-relative movement, -1..1 each (y = screen-up). In a car, touch's directional stick. */
   moveX: number;
   moveY: number;
   sprint: boolean;
+  /** On foot: screen-relative aim (y = screen-up), length 0..1; (0, 0) = not aiming. */
+  aimX: number;
+  aimY: number;
+  /** Twin-stick fire: the aim stick is pushed far enough to shoot. */
+  aimFire: boolean;
   /** Enter/exit presses not yet consumed by the game. */
   actionPresses: number;
   /** Punch/fire presses (on foot) not yet consumed. */
@@ -27,11 +35,12 @@ export interface InputSource {
   cyclePrevPresses: number;
   /** Pause toggles (P / Esc / gamepad Start) not yet consumed. */
   pausePresses: number;
-  /** "Confirm" presses (gamepad A), used to resume from the pause screen. */
-  confirmPresses: number;
 }
 
 export type InputDevice = 'keyboard' | 'touch' | 'gamepad';
+
+/** Menu navigation, from the keyboard or a gamepad (pointer input goes to the DOM directly). */
+export type NavCommand = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back';
 
 export const emptySource = (): InputSource => ({
   steer: 0,
@@ -40,24 +49,28 @@ export const emptySource = (): InputSource => ({
   moveX: 0,
   moveY: 0,
   sprint: false,
+  aimX: 0,
+  aimY: 0,
+  aimFire: false,
   actionPresses: 0,
   punchPresses: 0,
   fireHeld: false,
   cyclePresses: 0,
   cyclePrevPresses: 0,
   pausePresses: 0,
-  confirmPresses: 0,
 });
 
 /** Clear a source back to "nothing held, nothing pending". */
 export function clearSource(s: InputSource): void {
-  s.steer = s.throttle = s.moveX = s.moveY = 0;
-  s.handbrake = s.sprint = s.fireHeld = false;
-  s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.pausePresses = s.confirmPresses = 0;
+  s.steer = s.throttle = s.moveX = s.moveY = s.aimX = s.aimY = 0;
+  s.handbrake = s.sprint = s.fireHeld = s.aimFire = false;
+  s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.pausePresses = 0;
 }
 
 /** Stick deadzone, as a fraction of full deflection (radial, then rescaled). */
 export const STICK_DEADZONE = 0.15;
+/** The right (aim) stick rests less precisely: a larger deadzone. */
+export const AIM_DEADZONE = 0.2;
 
 /**
  * Radial deadzone with rescale: inside `dz` reads 0, and the output ramps from
@@ -77,6 +90,7 @@ export function radialDeadzone(x: number, y: number, dz: number, out: { x: numbe
 
 // Standard gamepad mapping.
 const PAD_A = 0;
+const PAD_B = 1;
 const PAD_X = 2;
 const PAD_Y = 3;
 const PAD_LB = 4;
@@ -84,6 +98,10 @@ const PAD_RB = 5;
 const PAD_LT = 6;
 const PAD_RT = 7;
 const PAD_START = 9;
+const PAD_UP = 12;
+const PAD_DOWN = 13;
+const PAD_LEFT = 14;
+const PAD_RIGHT = 15;
 const PAD_BUTTONS = 17;
 /**
  * How far the sticks/triggers must move (summed) to count as using the pad.
@@ -91,17 +109,43 @@ const PAD_BUTTONS = 17;
  * centre doesn't keep claiming the player is on the pad.
  */
 const PAD_ACTIVITY = 0.25;
+/** Menu navigation with the stick: how far to push, and the hold-to-repeat timing (ms). */
+const NAV_STICK = 0.6;
+const NAV_REPEAT_DELAY = 380;
+const NAV_REPEAT_EVERY = 110;
+const NAV_QUEUE_MAX = 8;
+/** Mouse aim stays live this long after the mouse last moved or clicked, ms. */
+const MOUSE_AIM_MS = 6000;
+/** The mouse must travel this far (px) to take the prompts back from a pad or touch. */
+const MOUSE_CLAIM_PX = 24;
+const WHEEL_EVERY_MS = 140;
 
 /** Keys that are "held actions" rather than movement: cleared on a foot/car switch. */
 const ACTION_KEYS = ['Space', 'KeyJ'];
 
-type PressKey = 'punchPresses' | 'cyclePresses' | 'cyclePrevPresses' | 'actionPresses' | 'pausePresses' | 'confirmPresses';
+const NAV_KEYS: Readonly<Record<string, NavCommand>> = {
+  ArrowUp: 'up',
+  KeyW: 'up',
+  ArrowDown: 'down',
+  KeyS: 'down',
+  ArrowLeft: 'left',
+  KeyA: 'left',
+  ArrowRight: 'right',
+  KeyD: 'right',
+  Enter: 'confirm',
+  NumpadEnter: 'confirm',
+  Space: 'confirm',
+  Backspace: 'back',
+};
+
+type PressKey = 'punchPresses' | 'cyclePresses' | 'cyclePrevPresses' | 'actionPresses' | 'pausePresses';
 
 export class Input {
   readonly keyboard = emptySource();
+  readonly mouse = emptySource();
   readonly touch = emptySource();
   readonly gamepad = emptySource();
-  private readonly sources: InputSource[] = [this.keyboard, this.touch, this.gamepad];
+  private readonly sources: InputSource[] = [this.keyboard, this.mouse, this.touch, this.gamepad];
   private keys = new Set<string>();
   /**
    * Keys held through a reset. Auto-repeat keydowns for them are ignored, so a
@@ -113,11 +157,24 @@ export class Input {
   private padLatched: boolean[] = new Array<boolean>(PAD_BUTTONS).fill(false);
   private readonly resetHooks: Array<() => void> = [];
   private readonly stick = { x: 0, y: 0 };
+  private readonly aimStick = { x: 0, y: 0 };
   private readonly vehicleOut: VehicleControls = { steer: 0, throttle: 0, handbrake: false };
+  private readonly directionalOut: VehicleControls = { steer: 0, throttle: 0, handbrake: false };
+  private readonly directionalIn: DirectionalInput = { x: 0, y: 0, gas: false, brake: false, handbrake: false };
+  private readonly directional = createDirectionalState();
   private readonly moveOut: MoveInput = { x: 0, y: 0, sprint: false };
+  private readonly aimOut: AimState = { x: 0, y: 0, active: false, fire: false };
   /** Stick and trigger readings when the pad last counted as in use. */
-  private readonly padAnchor = { x: 0, y: 0, throttle: 0 };
+  private readonly padAnchor = { x: 0, y: 0, ax: 0, ay: 0, throttle: 0 };
+  private readonly navQueue: NavCommand[] = [];
+  private padNav: NavCommand | null = null;
+  private padNavRepeatAt = 0;
   private device: InputDevice;
+  private readonly mousePos = { x: 0, y: 0 };
+  private mouseOver = false;
+  private mouseUsedAt = -Infinity;
+  private mouseTravel = 0;
+  private wheelAt = -Infinity;
 
   constructor(target: Window = window) {
     this.device = initialDevice(target);
@@ -127,6 +184,9 @@ export class Input {
       if (e.code === 'KeyQ' || e.code === 'Tab') e.preventDefault();
       if (e.repeat && this.suppressedKeys.has(e.code)) return;
       this.suppressedKeys.delete(e.code);
+      const nav = NAV_KEYS[e.code];
+      // Held arrows auto-repeat through menus; confirm/back only on a fresh press.
+      if (nav && (!e.repeat || (nav !== 'confirm' && nav !== 'back'))) this.pushNav(nav);
       if (!e.repeat) {
         const kb = this.keyboard;
         if (e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'Enter') kb.actionPresses++;
@@ -156,14 +216,19 @@ export class Input {
       },
       { capture: true },
     );
+    // A mouse button released anywhere (even off the canvas) stops the firing.
+    target.addEventListener('pointerup', (e) => {
+      if (e.pointerType === 'mouse' && e.button === 0) this.mouse.fireHeld = false;
+    });
     target.addEventListener('gamepaddisconnected', () => {
       clearSource(this.gamepad);
       this.padWasDown.fill(false);
       this.padLatched.fill(false);
+      this.padNav = null;
     });
   }
 
-  /** The device the player used last, for prompts ("tap" vs "press P"). */
+  /** The device the player used last, for prompts ("tap" vs "press P"). Mouse counts as keyboard. */
   get lastDevice(): InputDevice {
     return this.device;
   }
@@ -171,6 +236,68 @@ export class Input {
   /** Run `fn` on every resetAll(), e.g. to release on-screen buttons. */
   addResetHook(fn: () => void): void {
     this.resetHooks.push(fn);
+  }
+
+  /**
+   * Mouse play on `el` (the game canvas): the cursor aims on foot, the left
+   * button fires (hold for automatics), right-click and the wheel switch weapon.
+   */
+  attachMouse(el: HTMLElement, now: () => number = () => performance.now()): void {
+    el.addEventListener('pointermove', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      this.mouseTravel += Math.abs(e.clientX - this.mousePos.x) + Math.abs(e.clientY - this.mousePos.y);
+      this.mousePos.x = e.clientX;
+      this.mousePos.y = e.clientY;
+      this.mouseOver = true;
+      this.mouseUsedAt = now();
+      if (this.mouseTravel > MOUSE_CLAIM_PX) {
+        this.mouseTravel = 0;
+        this.device = 'keyboard';
+      }
+    });
+    el.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse') this.mouseOver = false;
+    });
+    el.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      this.device = 'keyboard';
+      this.mouseOver = true;
+      this.mousePos.x = e.clientX;
+      this.mousePos.y = e.clientY;
+      this.mouseUsedAt = now();
+      if (e.button === 0) {
+        this.mouse.punchPresses++;
+        this.mouse.fireHeld = true;
+      } else if (e.button === 2) this.mouse.cyclePresses++;
+    });
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    el.addEventListener(
+      'wheel',
+      (e) => {
+        e.preventDefault();
+        const t = now();
+        if (t - this.wheelAt < WHEEL_EVERY_MS || e.deltaY === 0) return;
+        this.wheelAt = t;
+        this.device = 'keyboard';
+        if (e.deltaY > 0) this.mouse.cyclePresses++;
+        else this.mouse.cyclePrevPresses++;
+      },
+      { passive: false },
+    );
+  }
+
+  /** Cursor position (client px), for mouse aim. */
+  get mousePosition(): Readonly<{ x: number; y: number }> {
+    return this.mousePos;
+  }
+
+  /**
+   * The mouse is aiming: it's the device in use, over the game, and was moved
+   * or clicked lately (a keyboard-only player's resting cursor doesn't steer
+   * their aim).
+   */
+  mouseAimLive(now = performance.now()): boolean {
+    return this.device === 'keyboard' && this.mouseOver && (this.mouse.fireHeld || now - this.mouseUsedAt < MOUSE_AIM_MS);
   }
 
   /**
@@ -184,6 +311,8 @@ export class Input {
     for (const s of this.sources) clearSource(s);
     this.padLatched.fill(true);
     this.padWasDown.fill(false);
+    this.navQueue.length = 0;
+    this.directional.reversing = false;
     for (const fn of this.resetHooks) fn();
   }
 
@@ -200,10 +329,11 @@ export class Input {
     this.updateKeyboard();
     for (const s of this.sources) {
       s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = 0;
-      s.fireHeld = false;
+      s.fireHeld = s.aimFire = false;
     }
-    this.padLatched[PAD_A] = this.padLatched[PAD_X] = true;
+    this.padLatched[PAD_A] = this.padLatched[PAD_X] = this.padLatched[PAD_RT] = true;
     this.gamepad.handbrake = this.gamepad.sprint = false;
+    this.directional.reversing = false;
   }
 
   private updateKeyboard(): void {
@@ -220,10 +350,10 @@ export class Input {
     kb.fireHeld = k.has('Space') || k.has('KeyJ');
   }
 
-  /** Call once per frame before reading (also while paused, to catch Start). */
-  pollGamepad(): void {
+  /** Call once per frame before reading (also while paused, to catch Start and menu navigation). */
+  pollGamepad(now = performance.now()): void {
     const g = this.gamepad;
-    g.steer = g.throttle = g.moveX = g.moveY = 0;
+    g.steer = g.throttle = g.moveX = g.moveY = g.aimX = g.aimY = 0;
     g.handbrake = g.sprint = g.fireHeld = false;
     const pad = firstPad();
     if (!pad) {
@@ -231,21 +361,31 @@ export class Input {
       // later starts fresh (it's often woken by the very press that counts).
       this.padWasDown.fill(false);
       this.padLatched.fill(false);
+      this.padNav = null;
       return;
     }
     radialDeadzone(pad.axes[0] ?? 0, pad.axes[1] ?? 0, STICK_DEADZONE, this.stick);
     g.steer = g.moveX = this.stick.x;
     g.moveY = -this.stick.y;
+    radialDeadzone(pad.axes[2] ?? 0, pad.axes[3] ?? 0, AIM_DEADZONE, this.aimStick);
+    g.aimX = this.aimStick.x;
+    g.aimY = -this.aimStick.y;
     g.throttle = (pad.buttons[PAD_RT]?.value ?? 0) - (pad.buttons[PAD_LT]?.value ?? 0);
     if (Math.abs(g.throttle) < 0.05) g.throttle = 0;
 
     const anchor = this.padAnchor;
     let active =
-      Math.abs(this.stick.x - anchor.x) + Math.abs(this.stick.y - anchor.y) + Math.abs(g.throttle - anchor.throttle) >
+      Math.abs(this.stick.x - anchor.x) +
+        Math.abs(this.stick.y - anchor.y) +
+        Math.abs(this.aimStick.x - anchor.ax) +
+        Math.abs(this.aimStick.y - anchor.ay) +
+        Math.abs(g.throttle - anchor.throttle) >
       PAD_ACTIVITY;
     if (active) {
       anchor.x = this.stick.x;
       anchor.y = this.stick.y;
+      anchor.ax = this.aimStick.x;
+      anchor.ay = this.aimStick.y;
       anchor.throttle = g.throttle;
     }
     const n = Math.min(PAD_BUTTONS, pad.buttons.length);
@@ -258,27 +398,80 @@ export class Input {
       if (!down) continue;
       if (edge) active = true;
       if (i === PAD_A) g.handbrake = g.sprint = true;
-      else if (i === PAD_X) g.fireHeld = true;
+      else if (i === PAD_X || i === PAD_RT) g.fireHeld = true;
       if (!edge) continue;
       if (i === PAD_Y) g.actionPresses++;
-      else if (i === PAD_X) g.punchPresses++;
+      else if (i === PAD_X || i === PAD_RT) g.punchPresses++;
       else if (i === PAD_RB) g.cyclePresses++;
       else if (i === PAD_LB) g.cyclePrevPresses++;
       else if (i === PAD_START) g.pausePresses++;
-      else if (i === PAD_A) g.confirmPresses++;
+      else if (i === PAD_A) this.pushNav('confirm');
+      else if (i === PAD_B) this.pushNav('back');
     }
+    this.pollPadNav(pad, now);
     if (active) this.device = 'gamepad';
   }
 
-  /** Merged driving controls. The returned object is reused between calls. */
-  readVehicle(): VehicleControls {
+  /** D-pad or left stick → menu directions, repeating while held. */
+  private pollPadNav(pad: Gamepad, now: number): void {
+    const b = pad.buttons;
+    let dir: NavCommand | null = null;
+    if (b[PAD_UP]?.pressed) dir = 'up';
+    else if (b[PAD_DOWN]?.pressed) dir = 'down';
+    else if (b[PAD_LEFT]?.pressed) dir = 'left';
+    else if (b[PAD_RIGHT]?.pressed) dir = 'right';
+    else {
+      const x = pad.axes[0] ?? 0;
+      const y = pad.axes[1] ?? 0;
+      if (Math.max(Math.abs(x), Math.abs(y)) > NAV_STICK) {
+        dir = Math.abs(x) > Math.abs(y) ? (x > 0 ? 'right' : 'left') : y > 0 ? 'down' : 'up';
+      }
+    }
+    if (dir !== this.padNav) {
+      this.padNav = dir;
+      if (dir) {
+        this.pushNav(dir);
+        this.padNavRepeatAt = now + NAV_REPEAT_DELAY;
+      }
+    } else if (dir && now >= this.padNavRepeatAt) {
+      this.pushNav(dir);
+      this.padNavRepeatAt = now + NAV_REPEAT_EVERY;
+    }
+  }
+
+  private pushNav(cmd: NavCommand): void {
+    if (this.navQueue.length < NAV_QUEUE_MAX) this.navQueue.push(cmd);
+  }
+
+  /** The next menu command (keyboard or gamepad), or null. Drain it every frame, in menus or not. */
+  consumeNav(): NavCommand | null {
+    return this.navQueue.shift() ?? null;
+  }
+
+  /**
+   * Merged driving controls for `car`. Touch in directional mode turns the
+   * stick's direction into steering for this car (see core/steering.ts);
+   * everything else steers left/right. The returned object is reused.
+   */
+  readVehicle(car?: VehicleState): VehicleControls {
     const out = this.vehicleOut;
     out.steer = out.throttle = 0;
     out.handbrake = false;
+    const directional = car !== undefined && settings.steering === 'directional';
     for (const s of this.sources) {
-      if (Math.abs(s.steer) > Math.abs(out.steer)) out.steer = s.steer;
-      if (Math.abs(s.throttle) > Math.abs(out.throttle)) out.throttle = s.throttle;
-      if (s.handbrake) out.handbrake = true;
+      if (directional && s === this.touch) continue;
+      merge(out, s.steer, s.throttle, s.handbrake);
+    }
+    if (directional) {
+      const t = this.touch;
+      const inp = this.directionalIn;
+      inp.x = t.moveX;
+      inp.y = t.moveY;
+      inp.gas = t.throttle > 0;
+      inp.brake = t.throttle < 0;
+      inp.handbrake = t.handbrake;
+      const d = directionalControls(inp, car, this.directional, this.directionalOut);
+      merge(out, d.steer, d.throttle, d.handbrake);
     }
     return out;
   }
@@ -299,13 +492,33 @@ export class Input {
     return out;
   }
 
+  /**
+   * Where the player is aiming on foot, from the device in use: touch's aim
+   * stick, the gamepad's right stick, or the mouse cursor (mouse aim is
+   * written into `mouse.aimX/aimY` by the caller, who has the camera). The
+   * returned object is reused.
+   */
+  readAim(now = performance.now()): AimState {
+    const out = this.aimOut;
+    out.active = out.fire = false;
+    const src =
+      this.device === 'touch' ? this.touch : this.device === 'gamepad' ? this.gamepad : this.mouseAimLive(now) ? this.mouse : null;
+    if (src && (src.aimX !== 0 || src.aimY !== 0)) {
+      out.x = src.aimX;
+      out.y = src.aimY;
+      out.active = true;
+      out.fire = src.aimFire;
+    }
+    return out;
+  }
+
   /** True once per punch press from any device. */
   consumePunch(): boolean {
     return this.drain('punchPresses') > 0;
   }
 
   get fireHeld(): boolean {
-    return this.keyboard.fireHeld || this.touch.fireHeld || this.gamepad.fireHeld;
+    return this.keyboard.fireHeld || this.mouse.fireHeld || this.touch.fireHeld || this.gamepad.fireHeld;
   }
 
   /** Weapon switch asked for since the last call: 1 = next, -1 = previous, 0 = none. */
@@ -325,9 +538,9 @@ export class Input {
     return this.drain('pausePresses');
   }
 
-  /** True once per confirm press (gamepad A). */
-  consumeConfirm(): boolean {
-    return this.drain('confirmPresses') > 0;
+  /** The connected gamepad, if any (for rumble). */
+  get pad(): Gamepad | null {
+    return firstPad();
   }
 
   private drain(key: PressKey): number {
@@ -338,6 +551,13 @@ export class Input {
     }
     return n;
   }
+}
+
+/** Keep the strongest steer and throttle; any handbrake counts. */
+function merge(out: VehicleControls, steer: number, throttle: number, handbrake: boolean): void {
+  if (Math.abs(steer) > Math.abs(out.steer)) out.steer = steer;
+  if (Math.abs(throttle) > Math.abs(out.throttle)) out.throttle = throttle;
+  if (handbrake) out.handbrake = true;
 }
 
 /**

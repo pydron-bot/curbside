@@ -1,38 +1,8 @@
-/* Core stream: pause / context-lost overlay, layering fixes, debug line. */
+/* Core stream: the "reloading graphics" state of the pause overlay. The pause
+   menu itself is styled in menu.css. */
 
-/* Overlays must sit above the touch layer (appended to <body> later, so it
-   otherwise wins taps on the left half) and above the score HUD. */
 #paused {
-  z-index: 50;
   touch-action: none;
-}
-
-#wasted {
-  z-index: 40;
-}
-
-.pause-card {
-  display: grid;
-  gap: 10px;
-  justify-items: center;
-  padding: 22px 30px;
-  border-radius: 14px;
-  background: rgb(10 11 14 / 0.72);
-  box-shadow: 0 8px 30px rgb(0 0 0 / 0.45);
-  text-align: center;
-}
-
-.pause-title {
-  font-size: 30px;
-  font-weight: 900;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.pause-hint {
-  font-size: 15px;
-  font-weight: 500;
-  opacity: 0.8;
 }
 
 #paused.busy .pause-title::after {
@@ -48,29 +18,13 @@
   animation: pause-spin 0.8s linear infinite;
 }
 
+#paused.busy .pause-title {
+  font-size: 24px;
+  letter-spacing: 0.04em;
+}
+
 @keyframes pause-spin {
   to {
     transform: rotate(360deg);
   }
-}
-
-.pause-update {
-  margin-top: 6px;
-  padding: 10px 16px;
-  border: 2px solid rgb(255 211 77 / 0.8);
-  border-radius: 999px;
-  background: rgb(255 211 77 / 0.16);
-  color: #ffd34d;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.pause-update[hidden] {
-  display: none;
-}
-
-#debug[hidden] {
-  display: none;
 }
