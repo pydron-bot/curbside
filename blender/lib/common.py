@@ -66,6 +66,65 @@ def ico(name, radius, location, mat, subdiv=1, scale=(1, 1, 1)):
     return obj
 
 
+def cylinder(name, radius, depth, location, mat, verts=8, radius2=None, rotation=(0, 0, 0)):
+    """Upright cylinder (or a cone/frustum when radius2 is given), centred on location."""
+    if radius2 is None:
+        bpy.ops.mesh.primitive_cylinder_add(vertices=verts, radius=radius, depth=depth, location=location)
+    else:
+        bpy.ops.mesh.primitive_cone_add(vertices=verts, radius1=radius, radius2=radius2, depth=depth,
+                                        location=location)
+    obj = bpy.context.active_object
+    obj.name = name
+    obj.rotation_euler = tuple(math.radians(a) for a in rotation)
+    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+    obj.data.materials.append(mat)
+    shade_flat(obj)
+    return obj
+
+
+def hull(name, points, mat):
+    """Convex hull of `points` as a flat-shaded mesh (wedges, ramps, odd panels)."""
+    import bmesh
+
+    mesh = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    for p in points:
+        bm.verts.new(p)
+    bmesh.ops.convex_hull(bm, input=bm.verts)
+    bmesh.ops.dissolve_limit(bm, angle_limit=0.01, verts=bm.verts, edges=bm.edges)
+    bm.normal_update()
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.materials.append(mat)
+    shade_flat(obj)
+    return obj
+
+
+def rotate(obj, rotation, pivot=None):
+    """Rotate obj by Euler degrees about `pivot` (default its origin) and apply it to the mesh."""
+    from mathutils import Euler, Matrix
+
+    rot = Euler(tuple(math.radians(a) for a in rotation)).to_matrix().to_4x4()
+    p = Vector(pivot) if pivot is not None else obj.location.copy()
+    bpy.context.view_layer.update()
+    obj.data.transform(obj.matrix_world)
+    obj.matrix_world = Matrix.Identity(4)
+    obj.data.transform(Matrix.Translation(p) @ rot @ Matrix.Translation(-p))
+    return obj
+
+
+def group(name, parts, location=(0, 0, 0)):
+    """Parent parts under a new empty called `name` (one root per model in the GLB)."""
+    root = bpy.data.objects.new(name, None)
+    bpy.context.scene.collection.objects.link(root)
+    for obj in parts:
+        obj.parent = root
+    root.location = location
+    return root
+
+
 def shade_flat(obj):
     for poly in obj.data.polygons:
         poly.use_smooth = False
