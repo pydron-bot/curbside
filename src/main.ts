@@ -931,6 +931,7 @@ const progress = new ProgressDirector({
   audio,
   frontDoor,
   input,
+  haptics,
   scene,
   pinned: activityCars,
   playing: () => !attract.active,

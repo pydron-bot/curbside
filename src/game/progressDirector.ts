@@ -112,7 +112,7 @@ export class ProgressDirector implements ModeCtx {
     this.progress.onCash((c) => this.ui.setCash(c.total, c.amount));
     this.results = new ResultsCard(document.body);
     this.dialogue = new DialogueCard(document.body, d.audio);
-    this.shop = new ShopSheet(document.body, d.audio, SHOP_ITEMS);
+    this.shop = new ShopSheet(document.body, d.audio, SHOP_ITEMS, d.haptics ?? null);
     this.stats = new StatsSheet(document.body, d.audio);
     for (const o of this.props.objects) d.scene.add(o);
 
@@ -144,7 +144,12 @@ export class ProgressDirector implements ModeCtx {
     });
     d.bus.on('playerDied', () => this.lifeLost(false));
     d.bus.on('busted', () => this.lifeLost(true));
-    d.bus.on('respawn', () => this.applyUpgrades());
+    // Banners raised by a death or arrest (MISSION FAILED, RACE OVER) wait for the respawn.
+    this.ui.holdBanners = () => d.playing() && !this.live;
+    d.bus.on('respawn', () => {
+      this.applyUpgrades();
+      this.ui.releaseBanner();
+    });
     d.bus.on('pause', (e) => {
       if (e.paused) this.progress.flush();
       // Resuming over a card: keep the world quiet.
@@ -506,7 +511,7 @@ export class ProgressDirector implements ModeCtx {
             { label: 'Taxi fares', value: `${st.fares}`, bar: st.fares / TAXI_GOAL },
             { label: 'Cars exported', value: `${st.exportsDelivered}`, bar: s.exports.lists > 0 ? 1 : s.exports.done.length / ORDERS_PER_LIST },
           ],
-          chips: this.exports.orders.map((o) => ({ text: o.label, done: o.done })),
+          chips: { label: 'EXPORT ORDERS', items: this.exports.orders.map((o) => ({ text: o.label, done: o.done })) },
         },
         {
           title: 'BEST',

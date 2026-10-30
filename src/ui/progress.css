@@ -414,6 +414,11 @@ body:not([data-scene='play']) #act-prompt {
   display: none;
 }
 
+/* Keyboard / pad: the phone's width cap isn't needed; one line for the usual prompts. */
+body:not([data-device='touch']) #act-prompt {
+  max-width: min(70vw, 560px);
+}
+
 /* In a car on touch the bottom centre belongs to NOS and the pedals: the
    pill sits between the resting steer stick and NOS (pad 204 + NOS 74 px
    in from the edge), mirrored for left-handed. */
@@ -546,8 +551,9 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
   background: radial-gradient(circle at 35% 30%, #fff 0 8%, var(--m) 40%, color-mix(in srgb, var(--m) 55%, #000) 100%);
   box-shadow: 0 0 0 3px rgb(0 0 0 / 0.45), 0 0 22px color-mix(in srgb, var(--m) 60%, transparent);
   color: rgb(0 0 0 / 0.7);
-  font: italic 900 10px/1 var(--display-font);
+  font: italic 900 10px/1.1 var(--display-font);
   letter-spacing: 0.06em;
+  text-align: center;
   text-shadow: 0 1px 0 rgb(255 255 255 / 0.4);
   animation: medal-in 0.6s 0.3s cubic-bezier(0.2, 1.6, 0.4, 1) both;
 }
@@ -576,7 +582,9 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
 }
 
 .res-why {
-  text-align: center;
+  /* Under the title it explains, clear of the title's glow. */
+  margin: 6px 0 4px;
+  text-align: left;
   font: 800 11px/1 var(--hud-font);
   letter-spacing: 0.2em;
   color: #ff7a88;
@@ -689,6 +697,7 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
 }
 
 .dlg-reward {
+  padding-top: 8px;
   text-align: center;
   font: italic 900 clamp(18px, 6vmin, 26px)/1 var(--display-font);
   color: var(--cash);
@@ -701,6 +710,7 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
 
 /* --- Sheets: shop and progress (over the pause menu too) --- */
 .sheet-cash {
+  display: inline-block;
   margin-right: 6px;
   font: italic 900 18px/1 var(--display-font);
   color: var(--cash);
@@ -771,6 +781,52 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
   animation: shop-bought 0.45s ease-out;
 }
 
+/* Can't afford it: a shake and a red flash, on the card and the cash. */
+.shop-item.denied {
+  animation: shop-denied 0.4s ease-out;
+}
+
+.sheet-cash.denied {
+  animation: cash-denied 0.5s ease-out;
+}
+
+@keyframes shop-denied {
+  0% {
+    box-shadow: inset 0 0 0 2px #ff4d5e, 0 0 18px rgb(255 77 94 / 0.5);
+  }
+  15%,
+  45%,
+  75% {
+    transform: translateX(-5px);
+  }
+  30%,
+  60% {
+    transform: translateX(5px);
+  }
+}
+
+@keyframes cash-denied {
+  0%,
+  60% {
+    color: #ff4d5e;
+  }
+  20% {
+    transform: scale(1.18);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shop-item.denied {
+    animation-name: shop-denied-still;
+  }
+}
+
+@keyframes shop-denied-still {
+  0% {
+    box-shadow: inset 0 0 0 2px #ff4d5e;
+  }
+}
+
 @keyframes shop-bought {
   0% {
     box-shadow: inset 0 0 0 2px var(--cash), 0 0 24px rgb(93 255 154 / 0.6);
@@ -819,6 +875,16 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
   display: grid;
   place-items: center;
   font: italic 900 18px/1 var(--display-font);
+}
+
+/* The ring with its label under it. */
+.stats-done {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  font: 800 9.5px/1 var(--hud-font);
+  letter-spacing: 0.16em;
+  color: var(--ink-dim);
 }
 
 .stats-headline {
@@ -907,6 +973,15 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
   flex-wrap: wrap;
   gap: 5px;
   padding: 2px 4px;
+}
+
+.export-list em {
+  flex-basis: 100%;
+  margin: 2px 0 1px;
+  font: 800 9.5px/1 var(--hud-font);
+  font-style: normal;
+  letter-spacing: 0.16em;
+  color: var(--ink-dim);
 }
 
 .export-list span {
