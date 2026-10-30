@@ -15,7 +15,10 @@ one person, so each body is one more batch / draw call):
 All share the same bone names and clips (glTF animation names):
   Idle 2 s loop, Walk 1 s loop, Run 0.625 s loop, Punch 0.333 s, Aim 0.292 s
   hold, AimBoth (two-handed), Shoot 0.125 s, ShootBoth, Fall 0.5 s, Down 1 s
-  loop, GetUp 0.917 s, EnterCar 0.5 s, Arrested 1 s loop (kneeling, hands on head).
+  loop, GetUp 0.917 s, EnterCar 0.5 s, Arrested 1 s loop (kneeling, hands on head),
+  Throw 0.417 s, AimRocket 0.292 s hold, ShootRocket 0.208 s, Punch2 0.333 s (left hook),
+  Uppercut 0.417 s, Stagger 0.292 s, Hail / Cower / Cheer 1 s loops.
+Story bodies for the payphone missions: vex.glb, tuna.glb, pike.glb.
 Every clip keys every bone, so any clip can be played or crossfaded alone.
 The game scales Walk/Run playback with speed; `walkSpeed` / `runSpeed` (the
 ground speeds the cycles are authored for) are exported as custom properties.
@@ -35,6 +38,7 @@ from lib.common import (
     new_action,
     parent_to_bone,
     render_thumbnail,
+    cylinder,
     reset_scene,
     shade_flat,
 )
@@ -78,6 +82,26 @@ BODIES = {
         rig="cop", height=1.02, shoulders=1.05, depth=1.05, limbs=1.05, police=True,
         palette={"skin": (205, 150, 115), "hair": (28, 36, 70), "shirt": (60, 80, 130),
                  "pants": (28, 36, 70), "shoes": (18, 18, 20)},
+    ),
+    # Story characters (payphone missions). Built to read as different silhouettes from above.
+    # Vex: overalls (bib and straps in the pants slot) over a tee, tool belt with side pouches (shoes).
+    "vex": dict(
+        rig="vex", height=0.98, shoulders=1.0, depth=1.0, limbs=1.0, short_hair=True, overalls=True, toolbelt=True,
+        palette={"skin": (176, 120, 88), "hair": (230, 120, 40), "shirt": (220, 220, 210),
+                 "pants": (60, 90, 140), "shoes": (70, 50, 34)},
+    ),
+    # Lil' Tuna: short and wide, hoodie with the hood down (shirt), big headphones (shoes slot).
+    "tuna": dict(
+        rig="tuna", height=0.86, shoulders=1.25, depth=1.2, limbs=1.2, belly=True, short_hair=True, hood=True,
+        headphones=True,
+        palette={"skin": (120, 84, 60), "hair": (20, 18, 16), "shirt": (240, 120, 160),
+                 "pants": (50, 56, 70), "shoes": (30, 200, 190)},
+    ),
+    # Deacon Pike: tall, ankle-length coat over a suit (coat = shirt, suit = pants), raised collar, slicked hair.
+    "pike": dict(
+        rig="pike", height=1.06, shoulders=1.05, depth=1.0, limbs=0.95, slick_hair=True, long_coat=True,
+        palette={"skin": (226, 196, 176), "hair": (30, 30, 34), "shirt": (34, 34, 40),
+                 "pants": (70, 26, 34), "shoes": (16, 16, 18)},
     ),
 }
 
@@ -186,6 +210,11 @@ def build_body(rig, spec, name, d):
                "head")
         attach(box(f"{name}_brim", (0.22, 0.12, 0.025), (0, -0.14, d.neck_z + 0.205), shoes), "head")
         attach(box(f"{name}_capband", (0.28, 0.29, 0.035), (0, 0, d.neck_z + 0.215), shoes), "head")
+    elif spec.get("short_hair"):
+        attach(ico(f"{name}_hair", 0.145, (0, 0.02, d.neck_z + 0.2), hair, subdiv=1, scale=(1, 1.05, 0.62)), "head")
+    elif spec.get("slick_hair"):
+        attach(ico(f"{name}_hair", 0.145, (0, 0.04, d.neck_z + 0.2), hair, subdiv=1, scale=(0.98, 1.12, 0.55)),
+               "head")
     elif spec.get("cap"):
         attach(ico(f"{name}_hair", 0.14, (0, 0.02, d.neck_z + 0.18), hair, subdiv=1, scale=(1, 1.05, 0.7)), "head")
         attach(box(f"{name}_peak", (0.2, 0.14, 0.025), (0, -0.16, d.neck_z + 0.2), hair), "head")
@@ -202,6 +231,29 @@ def build_body(rig, spec, name, d):
         # Long coat / dress: an A-line skirt off the hips down to the knees.
         attach(frustum(f"{name}_coat", (0.27 * sw, 0.19 * dp), (0.22 * sw, 0.155 * dp),
                        d.hip_z - 0.5, d.hip_z + 0.11, shirt, sides=8), "hips")
+    if spec.get("overalls"):
+        attach(box(f"{name}_bib", (0.34 * sw, 0.03, 0.34), (0, -0.14 * dp - 0.015, d.hip_z + 0.24), pants), "chest")
+        for x in (-1, 1):
+            attach(box(f"{name}_strap{x:+d}", (0.06, 0.3 * dp, 0.03), (x * 0.13 * sw, 0, d.shoulder_z + 0.02), pants),
+                   "chest")
+    if spec.get("toolbelt"):
+        attach(box(f"{name}_toolbelt", (0.4 * sw, 0.27 * dp, 0.07), (0, 0, d.hip_z + 0.06), shoes), "hips")
+        for x in (-1, 1):
+            attach(box(f"{name}_pouch{x:+d}", (0.1, 0.16, 0.18), (x * (0.2 * sw + 0.05), -0.02, d.hip_z - 0.02), shoes),
+                   "hips")
+    if spec.get("hood"):
+        attach(box(f"{name}_hood", (0.3 * sw, 0.14, 0.2), (0, 0.15 * d.dp + 0.04, d.shoulder_z + 0.05), shirt, 0.03),
+               "chest")
+    if spec.get("headphones"):
+        for x in (-1, 1):
+            attach(cylinder(f"{name}_earcup{x:+d}", 0.075, 0.07, (x * 0.155, 0, d.neck_z + 0.13), shoes, verts=6,
+                            rotation=(0, 90, 0)), "head")
+        attach(box(f"{name}_headband", (0.33, 0.05, 0.04), (0, 0, d.neck_z + 0.27), shoes), "head")
+    if spec.get("long_coat"):
+        # Ankle-length coat flaring out below the hips, and a raised collar.
+        attach(frustum(f"{name}_coat", (0.32 * sw, 0.22 * dp), (0.23 * sw, 0.155 * dp),
+                       0.14, d.hip_z + 0.11, shirt, sides=8), "hips")
+        attach(box(f"{name}_collar", (0.4 * sw, 0.1, 0.16), (0, 0.11 * dp, d.shoulder_z + 0.06), shirt), "chest")
     if spec.get("police"):
         attach(box(f"{name}_belt", (0.38 * sw, 0.26 * dp, 0.07), (0, 0, d.hip_z + 0.1), shoes), "hips")
         attach(box(f"{name}_holster", (0.07, 0.12, 0.2), (-0.22 * sw, 0, d.hip_z - 0.02), shoes), "hips")
@@ -371,6 +423,78 @@ def animate(rig):
     key_pose(rig, 0, kneel, (0, -0.56, 0))
     key_pose(rig, 12, sag, (0, -0.57, 0))
     key_pose(rig, 24, kneel, (0, -0.56, 0))
+
+    # ---------------- second round (§8) ----------------
+    # --- Throw: 0.417 s overhand (grenade, molotov); release at frame 5.5 (~55%). ---
+    new_action(rig, "Throw")
+    key_pose(rig, 0, STAND)
+    key_pose(rig, 3, {"arm.R": (-200, 0, 20), "arm.L": (-60, 0, 0), "chest": (-8, -25, 0), "head": (0, 20, 0)},
+             (0, 0, -0.05))
+    key_pose(rig, 5.5, {"arm.R": (-110, 0, 0), "arm.L": (-10, 0, 0), "chest": (12, 25, 0), "head": (0, -18, 0)},
+             (0, 0, 0.05))
+    key_pose(rig, 8, {"arm.R": (-40, 0, -10), "chest": (15, 20, 0), "head": (0, -12, 0)}, (0, 0, 0.05))
+    key_pose(rig, 10, STAND)
+
+    # --- AimRocket: 0.292 s hold, launcher on the right shoulder. ShootRocket: 0.208 s heavy kick. ---
+    aim_rocket = {"arm.R": (-55, 0, -18), "arm.L": (-80, 0, 22), "chest": (0, 18, 0), "head": (8, -18, 10)}
+    new_action(rig, "AimRocket")
+    key_pose(rig, 0, aim_rocket)
+    key_pose(rig, 3.5, {**aim_rocket, "chest": (1, 18, 0)})
+    key_pose(rig, 7, aim_rocket)
+    new_action(rig, "ShootRocket")
+    key_pose(rig, 0, aim_rocket)
+    key_pose(rig, 1, {"arm.R": (-43, 0, -18), "arm.L": (-68, 0, 22), "chest": (-14, 18, 0), "head": (-5, -18, 10),
+                      "leg.L": (10, 0, 0)}, (0, 0, -0.12))
+    key_pose(rig, 5, aim_rocket)
+
+    # --- Punch2: 0.333 s left hook (second hit of the combo). ---
+    new_action(rig, "Punch2")
+    key_pose(rig, 0, STAND)
+    key_pose(rig, 2, {"arm.L": (-40, 0, -60), "arm.R": (-35, 0, 0), "chest": (0, 18, 0), "head": (0, -12, 0)})
+    key_pose(rig, 4, {"arm.L": (-88, 0, 35), "arm.R": (-35, 0, 0), "chest": (6, -26, 0), "head": (0, 16, 0),
+                      "hips": (0, -6, 0)}, (0, -0.02, 0.05))
+    key_pose(rig, 5, {"arm.L": (-86, 0, 38), "arm.R": (-35, 0, 0), "chest": (6, -24, 0), "head": (0, 15, 0),
+                      "hips": (0, -6, 0)}, (0, -0.02, 0.05))
+    key_pose(rig, 8, STAND)
+
+    # --- Uppercut: 0.417 s right uppercut (third hit): dip, drive up, recover. ---
+    new_action(rig, "Uppercut")
+    key_pose(rig, 0, STAND)
+    key_pose(rig, 3, {"arm.R": (15, 0, 0), "arm.L": (-35, 0, 0), "chest": (12, -10, 0), "head": (-8, 8, 0)},
+             (0, -0.08, 0))
+    key_pose(rig, 5, {"arm.R": (-160, 0, -10), "arm.L": (-30, 0, 0), "chest": (-12, 20, 0), "head": (-6, -14, 0)},
+             (0, 0.04, 0.06))
+    key_pose(rig, 6, {"arm.R": (-158, 0, -10), "arm.L": (-30, 0, 0), "chest": (-12, 20, 0), "head": (-6, -14, 0)},
+             (0, 0.04, 0.06))
+    key_pose(rig, 10, STAND)
+
+    # --- Stagger: 0.292 s rocked back by a hit, back to neutral. ---
+    new_action(rig, "Stagger")
+    key_pose(rig, 0, STAND)
+    key_pose(rig, 2, {"root": (-6, 0, 0), "chest": (-22, 0, 4), "head": (-15, 0, 0), "arm.L": (-30, 0, -35),
+                      "arm.R": (-30, 0, 35), "leg.R": (15, 0, 0)}, (0, 0, -0.15))
+    key_pose(rig, 7, STAND)
+
+    # --- Hail: 1 s loop, right arm up waving down a taxi. ---
+    new_action(rig, "Hail")
+    for i, wave in enumerate((15, 40, 15, 40, 15)):
+        key_pose(rig, i * 6, {"arm.R": (-165, 0, wave), "chest": (0, 0, -4), "head": (-10, 0, 0),
+                              "arm.L": (0, 0, -4)})
+
+    # --- Cower: 1 s loop crouched (kneeling, no knees), hunched, arms over the head, trembling. ---
+    new_action(rig, "Cower")
+    for i in range(9):
+        t = (1, -1)[i % 2] if 0 < i < 8 else 0
+        key_pose(rig, i * 3, {"hips": (-6, 0, 0), "chest": (45 + t * 2, t * 2, 0), "head": (22, 0, 0),
+                              "leg.L": (72, 0, -4), "leg.R": (72, 0, 4),
+                              "arm.L": (-182, 0, -6 - t * 2), "arm.R": (-182, 0, 6 + t * 2)}, (0, -0.52, 0))
+
+    # --- Cheer: 1 s loop, both arms up and pumping with a little bounce. ---
+    new_action(rig, "Cheer")
+    up = {"arm.L": (-165, 0, -30), "arm.R": (-165, 0, 30), "head": (-10, 0, 0)}
+    pump = {"arm.L": (-178, 0, -18), "arm.R": (-178, 0, 18), "head": (-14, 0, 0), "chest": (-4, 0, 0)}
+    for i, (pose, lift) in enumerate(((up, 0), (pump, 0.06), (up, 0), (pump, 0.06), (up, 0))):
+        key_pose(rig, i * 6, pose, (0, lift, 0))
 
     rig.animation_data.action = None
     for pb in rig.pose.bones:

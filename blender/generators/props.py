@@ -6,10 +6,12 @@ root, as it does for vehicles.glb). Flat colours from material base colours,
 no textures. Front is Blender -Y (game +Z). Budget: <= 300 tris per prop.
 
 Materials with a meaning for the game:
-  lamp                                 streetlamp head, glows at night
+  lamp                                 streetlamp head and safehouse door light, glow at night
   light_red / light_amber / light_green traffic light lenses (for working lights)
   police_lamp                          blue lamp on police_sign (glow it too)
   spray_sign                           Pay 'n' Spray sign and stripes
+  export_sign                          export bay '$' and lintel
+  frenzy                               frenzy token (glow it)
 Everything else is a fixed colour.
 """
 from pathlib import Path
@@ -67,6 +69,11 @@ def mats():
         "spray_sign": material("spray_sign", (230, 60, 140), 0.4),
         "police_lamp": material("police_lamp", (60, 120, 255), 0.3),
         "police_blue": material("police_blue", (24, 48, 120), 0.5),
+        "chequer_black": material("chequer_black", (20, 20, 22), 0.6),
+        "export_sign": material("export_sign", (40, 200, 90), 0.4),
+        "garage_door": material("garage_door", (120, 126, 132), 0.6),
+        "frenzy": material("frenzy", (255, 60, 60), 0.3),
+        "cone_orange": material("cone_orange", (250, 100, 20), 0.6),
     }
 
 
@@ -369,6 +376,90 @@ def police_sign(m):
     ]
 
 
+# ---------------------------------------------------------------- activities (§8)
+
+def start_gantry(m):
+    # Start/finish arch ~12.5 m wide over the road (spans X), chequered beam readable from the side and above.
+    span, h = 12.5, 5.5
+    parts = []
+    for x in (-1, 1):
+        parts.append(box(f"start_gantry_pillar{x:+d}", (0.5, 0.5, h), (x * span / 2, 0, h / 2), m["pole"]))
+        parts.append(box(f"start_gantry_foot{x:+d}", (0.9, 0.9, 0.2), (x * span / 2, 0, 0.1), m["concrete"]))
+    cols = 8
+    w = span / cols
+    for i in range(cols):
+        for j, y in enumerate((-0.25, 0.25)):
+            mat = m["chequer_black"] if (i + j) % 2 else m["white"]
+            parts.append(box(f"start_gantry_check{i}_{j}", (w, 0.5, 1.0), (-span / 2 + (i + 0.5) * w, y, h + 0.5), mat))
+    return parts
+
+
+def export_bay(m):
+    # Open garage at the docks, 7 x 10 x 5 m, mouth facing game -Z (Blender +Y), with a big '$' on the roof.
+    W, D, H, t = 7.0, 10.0, 5.0, 0.3
+    parts = [
+        box("export_bay_back", (W, t, H), (0, -D / 2 + t / 2, H / 2), m["booth_wall"]),
+        box("export_bay_roof", (W + 0.3, D + 0.3, 0.3), (0, 0, H + 0.15), m["booth_roof"]),
+        box("export_bay_lintel", (W, 0.3, 0.8), (0, D / 2 - 0.15, H - 0.4), m["export_sign"]),
+    ]
+    for x in (-1, 1):
+        parts.append(box(f"export_bay_wall{x:+d}", (t, D, H), (x * (W / 2 - t / 2), 0, H / 2), m["booth_wall"]))
+    # '$' lying flat on the roof, readable from directly above (top of the glyph toward game -Z).
+    z = H + 0.33
+    g, bar = 0.5, 2.6  # stroke width, glyph width
+    for name, (sx, sy, x, y) in {
+        "top": (bar, g, 0, 2.0), "mid": (bar, g, 0, 0), "bot": (bar, g, 0, -2.0),
+        "ul": (g, 2.0, -bar / 2 + g / 2, 1.0), "lr": (g, 2.0, bar / 2 - g / 2, -1.0),
+        "stem": (g * 0.6, 5.4, 0, 0),
+    }.items():
+        parts.append(box(f"export_bay_dollar_{name}", (sx, sy, 0.06 if name != "stem" else 0.08), (x, y, z),
+                         m["export_sign"]))
+    return parts
+
+
+def safehouse_door(m):
+    # Roller garage door set in a wall: origin on the ground at the wall face; door faces game +Z,
+    # with a lamp (material `lamp`, glows at night) over it.
+    W, H = 3.2, 2.9
+    parts = [
+        box("safehouse_door_frame", (W + 0.4, 0.12, H + 0.25), (0, -0.03, (H + 0.25) / 2), m["dark"]),
+        box("safehouse_door_door", (W, 0.08, H), (0, -0.1, H / 2), m["garage_door"]),
+        box("safehouse_door_lampbracket", (0.08, 0.4, 0.08), (0, -0.2, H + 0.55), m["dark"]),
+        box("safehouse_door_lamp", (0.5, 0.25, 0.14), (0, -0.4, H + 0.5), m["lamp"]),
+        box("safehouse_door_shade", (0.6, 0.35, 0.06), (0, -0.4, H + 0.6), m["dark"]),
+    ]
+    for i in range(4):
+        parts.append(box(f"safehouse_door_rib{i}", (W - 0.1, 0.04, 0.05), (0, -0.15, 0.5 + i * 0.65), m["pole"]))
+    return parts
+
+
+def frenzy_token(m):
+    # Chunky floating '!' gem: origin at its centre (the game spins and bobs it). <= 120 tris.
+    bar = hull("frenzy_token_bar", [(0, 0, 0.75), (0.22, 0, 0.45), (-0.22, 0, 0.45), (0, 0.22, 0.45),
+                                    (0, -0.22, 0.45), (0.12, 0, -0.1), (-0.12, 0, -0.1), (0, 0.12, -0.1),
+                                    (0, -0.12, -0.1), (0, 0, -0.22)], m["frenzy"])
+    dot = hull("frenzy_token_dot", [(0, 0, -0.38), (0.15, 0, -0.53), (-0.15, 0, -0.53), (0, 0.15, -0.53),
+                                    (0, -0.15, -0.53), (0, 0, -0.68)], m["frenzy"])
+    return [bar, dot]
+
+
+def traffic_cone(m):
+    return [
+        box("traffic_cone_base", (0.38, 0.38, 0.04), (0, 0, 0.02), m["cone_orange"]),
+        cylinder("traffic_cone_body", 0.15, 0.66, (0, 0, 0.37), m["cone_orange"], verts=8, radius2=0.03),
+        cylinder("traffic_cone_band", 0.113, 0.1, (0, 0, 0.36), m["white"], verts=8, radius2=0.093),
+    ]
+
+
+def road_barrier_long(m):
+    # 4 m concrete jersey barrier along X: wide foot, sloped faces, narrow top; hazard band along the top.
+    L = 4.0
+    prof = [(-0.3, 0.0), (0.3, 0.0), (-0.3, 0.08), (0.3, 0.08), (-0.2, 0.3), (0.2, 0.3), (-0.1, 0.81), (0.1, 0.81)]
+    parts = [hull("road_barrier_long_body", [(x, y, z) for x in (-L / 2, L / 2) for (y, z) in prof], m["concrete"])]
+    parts.append(box("road_barrier_long_band", (L - 0.4, 0.21, 0.08), (0, 0, 0.77), m["hazard"]))
+    return parts
+
+
 PROPS = {
     "streetlamp": streetlamp, "traffic_light": traffic_light, "hydrant": hydrant, "bench": bench,
     "trash_bin": trash_bin, "dumpster": dumpster, "bollard": bollard, "newspaper_box": newspaper_box,
@@ -378,6 +469,8 @@ PROPS = {
     "tree_round": tree_round, "tree_tall": tree_tall, "palm": palm,
     "ramp": ramp, "kicker": kicker,
     "barrier": barrier, "spray_booth": spray_booth, "police_sign": police_sign,
+    "start_gantry": start_gantry, "export_bay": export_bay, "safehouse_door": safehouse_door,
+    "frenzy_token": frenzy_token, "traffic_cone": traffic_cone, "road_barrier_long": road_barrier_long,
 }
 
 

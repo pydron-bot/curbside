@@ -221,8 +221,8 @@ sixth fixed-colour slot so `*_badge` works; until then leave it out.
 
 ### Notes back to the code side
 
-_Blender session 2026-10-30, branch `blender/assets`. Items 1–7 are done
-except the `cop_bike` (lowest priority, needs its own physics); §7 notes are
+_Blender session 2026-10-30, branch `blender/assets`. Items 1–8 are done
+except the `cop_bike` (lowest priority, needs its own physics); §7 and §8 notes are
 at the end. Run
 `python3 blender/check_assets.py` after `npm run assets`: it parses every GLB
 and checks budgets, material names, bones and clip lengths against this file._
@@ -340,3 +340,77 @@ only `paint` / `trim` / `tyre`.
   - `police_sign` (72 tris): origin on the ground at the wall face, with a
     blue `police_lamp` at 3.4 m and a POLICE board at 3 m, both sticking out
     toward +Z. Glow `police_lamp` at night, the way `lamp` glows.
+
+**8. Second round (same day).** All seven items are done, pigeon included.
+`check_assets.py` knows the new clips, files and budgets.
+1. **`weapons.glb`** new roots: `grenade`, `molotov`, `rocket_launcher`,
+   `rocket`.
+   - `grenade` and `molotov` have their origin in the middle of the fist and
+     `muzzle` = 0. The molotov's neck and rag point up (+Y).
+   - `rocket_launcher` has its origin at the pistol grip under the 1.1 m
+     tube and `muzzle` = 0.76.
+   - `rocket` (54 tris) has its origin at its centre with the nose toward
+     +Z.
+2. **`pickups.glb`** new roots:
+   - `crate_grenade` (green stripe), `crate_molotov` (purple) and
+     `crate_rocket` (white, and a longer 1.05 m crate so the launcher fits).
+   - `armour` (a folded vest) and `ammo_box` (olive, with a yellow stencil
+     band).
+3. **Clips** in every character GLB (22 clips now):
+   - `Throw` is 0.417 s, releasing at frame 5.5 (0.229 s, 55%).
+   - `AimRocket` is a 0.292 s hold with the right hand at the tube's grip
+     below the shoulder and the left hand forward on the tube.
+     `ShootRocket` (0.208 s) is a full pose with a heavy kick that pushes
+     the root back 0.12 m.
+   - `Punch2` (0.333 s, left hook) and `Uppercut` (0.417 s, the right hand
+     drives up at 0.21 s) both start and end at rest, so the combo
+     `Punch` → `Punch2` → `Uppercut` can cross-fade.
+   - `Stagger` is 0.292 s.
+   - `Hail`, `Cower` and `Cheer` are 1 s loops. `Cower` kneels like
+     `Arrested`, dropping the root 0.52 m, so don't tip the body while it
+     plays.
+4. **Story bodies**, one GLB each with the usual rig and clips:
+   - `vex.glb`: overalls, with the bib and straps in the `pants` slot over a
+     `shirt` tee, a tool belt with side pouches in `shoes`, and short
+     orange `hair`.
+   - `tuna.glb`: short and wide, with a hoodie (`shirt`, hood down at the
+     back) and big headphones in `shoes`.
+   - `pike.glb`: tall, with an ankle-length coat and raised collar
+     (`shirt`), the suit in `pants` and slicked-back `hair`.
+   - Default colours are set in the GLB. Override them through the
+     palette as usual.
+5. **`vehicles.glb`** new roots, both with the car contract:
+   - `tow_truck` (6.3 m): cab, a low deck with lockers, a yellow `hazard`
+     boom angled back with a cable and `chrome` hook, an underlift bar, and
+     an `amber` beacon bar on the cab.
+   - `ice_cream_van` (5.4 m): a pastel `paint` body. On the +X (left) side
+     it has a serving hatch with a pink and white striped awning, and on the
+     other side a pink sign band. A wafer cone with two scoops sits on the
+     roof. New fixed colours: `wafer`, `scoop_pink`, `scoop_cream`,
+     `awning_pink`, `awning_white`.
+6. **`props.glb`** new roots:
+   - `start_gantry`: a 12.5 m span across X, with a chequered beam at
+     5.5–6.5 m that is two blocks deep, so it reads as chequer from the side
+     and from above.
+   - `export_bay`: an open garage 7 × 10 × 5 m with its **mouth facing game
+     −Z** (like the spray booth) and a green `export_sign` lintel. The big
+     '$' lies flat on the roof, with the top of the glyph toward −Z.
+   - `safehouse_door`: wall-mounted like `police_sign`, with its origin on
+     the ground at the wall face. It's a 3.2 × 2.9 m roller door facing
+     +Z, with a `lamp` light over it.
+   - `frenzy_token` (24 tris): a red `frenzy` '!' with its origin at the
+     centre.
+   - `traffic_cone`.
+   - `road_barrier_long`: a 4 m jersey barrier along X with a hazard band
+     on top.
+7. **`pigeon.glb`** (34 tris):
+   - A rigid body under the armature object, plus bones `wing.L` / `wing.R`
+     with one wing each. The rest pose has the wings folded.
+   - `Flap` is a 0.25 s loop that spreads the wings and beats them.
+   - The origin is on the ground with the beak toward +Z, and every
+     material is fixed colour.
+- **File sizes:** the character GLBs are ~165 KB each, but only ~70 KB of
+  that is animation data. The rest is glTF JSON (an accessor per channel),
+  which gzips well over HTTP. I couldn't make the Blender exporter options
+  shrink it. If it matters, strip the constant translation/scale tracks at
+  load time or with gltf-transform.

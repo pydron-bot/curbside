@@ -9,12 +9,13 @@ Material names are a contract with the game (src/render/vehicleModels.ts):
   "glass", "tyre", "headlight", "taillight", "trim", fixed colours
 Wheel objects are named "<arch>_wheel_FL/FR/RL/RR".
 """
+import math
 from pathlib import Path
 
 import bmesh
 import bpy
 
-from lib.common import box, export_glb, hull, material, render_thumbnail, reset_scene, shade_flat
+from lib.common import box, cylinder, export_glb, hull, ico, material, render_thumbnail, reset_scene, rotate, shade_flat
 
 THUMBS = Path(__file__).resolve().parents[1] / "thumbs"
 
@@ -54,6 +55,12 @@ TRUCKS = {
     # Armoured van: short cab, slab-sided body with slit windows, push bar, roof bar. Paint it dark at spawn.
     "swat": dict(length=6.0, width=2.2, height=2.65, clearance=0.42, wheel_r=0.44, axles=(-2.0, 1.85),
                  cab_len=1.7, cab_h=1.25, kind="swat", lightbar=True),
+    # Tow crew's truck: cab, low deck, boom and hook at the back, amber beacon.
+    "tow_truck": dict(length=6.3, width=2.2, height=1.25, clearance=0.45, wheel_r=0.45, axles=(-2.05, 1.75),
+                      cab_len=2.1, cab_h=1.3, kind="tow"),
+    # Pastel paint, serving hatch with a striped awning, a giant cone on the roof.
+    "ice_cream_van": dict(length=5.4, width=2.1, height=2.55, clearance=0.38, wheel_r=0.4, axles=(-1.8, 1.65),
+                          cab_len=1.6, cab_h=1.15, kind="icecream"),
     "garbage_truck": dict(length=8.6, width=2.5, height=3.2, clearance=0.45, wheel_r=0.52,
                           axles=(-2.85, 2.0, 3.35), cab_len=2.3, cab_h=1.35, kind="garbage"),
 }
@@ -299,6 +306,47 @@ def build_truck(arch, p, mats):
             for x in (-0.55, 0.55):
                 parts.append(box(f"{arch}_pushpost{x:+.1f}", (0.08, 0.25, 0.08), (x, -L / 2 - 0.08, z0 + 0.45),
                                  mats["trim"]))
+        elif kind == "tow":
+            deck_z = z0 + 0.5
+            parts.append(box(f"{arch}_deck", (W, body_len, 0.5), (0, body_mid, z0 + 0.25), mats["paint"], bevel=0.04))
+            for x in (-1, 1):  # tool lockers along the deck sides
+                parts.append(box(f"{arch}_locker_{'L' if x > 0 else 'R'}", (0.5, body_len * 0.6, 0.45),
+                                 (x * (W / 2 - 0.25), body_mid - 0.2, deck_z + 0.22), mats["paint"]))
+            # Boom: from a post behind the cab, angled up and back past the tail.
+            parts.append(box(f"{arch}_boompost", (0.35, 0.35, 0.9), (0, body_front + 0.6, deck_z + 0.45), mats["trim"]))
+            boom = box(f"{arch}_boom", (0.22, 3.0, 0.22), (0, body_front + 0.6 + 1.5, deck_z + 0.9), mats["hazard"])
+            rotate(boom, (22, 0, 0), pivot=(0, body_front + 0.6, deck_z + 0.9))
+            parts.append(boom)
+            tip_y = body_front + 0.6 + 3.0 * math.cos(math.radians(22))
+            tip_z = deck_z + 0.9 + 3.0 * math.sin(math.radians(22))
+            parts.append(box(f"{arch}_cable", (0.03, 0.03, 0.9), (0, tip_y, tip_z - 0.45), mats["trim"]))
+            parts.append(box(f"{arch}_hook", (0.12, 0.08, 0.16), (0, tip_y, tip_z - 0.95), mats["chrome"]))
+            # Underlift bar low at the tail.
+            parts.append(box(f"{arch}_underlift", (1.4, 0.2, 0.12), (0, L / 2 + 0.25, z0 + 0.1), mats["trim"]))
+            parts.append(box(f"{arch}_beacon", (0.9, 0.22, 0.14), (0, -L / 2 + p["cab_len"] / 2, cab_top + 0.07),
+                             mats["amber"]))
+        elif kind == "icecream":
+            parts.append(box(f"{arch}_module", (W, body_len, body_h), (0, body_mid, z0 + body_h / 2), mats["paint"],
+                             bevel=0.08))
+            # Serving hatch on the kerb side (+X is the van's left) with a striped awning.
+            parts.append(box(f"{arch}_hatch", (0.04, body_len * 0.55, body_h * 0.32),
+                             (W / 2 + 0.01, body_mid - 0.1, z0 + body_h * 0.62), mats["glass"]))
+            parts.append(box(f"{arch}_counter", (0.2, body_len * 0.55, 0.06),
+                             (W / 2 + 0.1, body_mid - 0.1, z0 + body_h * 0.45), mats["chrome"]))
+            for i in range(5):
+                parts.append(rotate(box(f"{arch}_awning{i}", (0.45, body_len * 0.11, 0.03),
+                                        (W / 2 + 0.22, body_mid - 0.1 + (i - 2) * body_len * 0.11, z0 + body_h * 0.84),
+                                        mats["awning_pink" if i % 2 else "awning_white"]),
+                                    (0, 18, 0), pivot=(W / 2, 0, z0 + body_h * 0.84)))
+            # Giant cone on the roof: wafer tip-down, two scoops on top.
+            roof = H
+            parts.append(cylinder(f"{arch}_cone", 0.05, 1.1, (0, body_mid, roof + 0.55), mats["wafer"], verts=8,
+                                  radius2=0.42))
+            parts.append(ico(f"{arch}_scoop_a", 0.44, (0, body_mid, roof + 1.25), mats["scoop_pink"], subdiv=1))
+            parts.append(ico(f"{arch}_scoop_b", 0.32, (0.05, body_mid - 0.05, roof + 1.65), mats["scoop_cream"],
+                             subdiv=1))
+            parts.append(box(f"{arch}_sign", (0.05, body_len * 0.7, 0.3), (-(W / 2 + 0.01), body_mid, z0 + body_h * 0.8),
+                             mats["awning_pink"]))
         elif kind == "garbage":
             parts.append(hull(f"{arch}_body", [(-W / 2, body_front, z0 + 0.2), (W / 2, body_front, z0 + 0.2),
                                                 (-W / 2, body_front, H), (W / 2, body_front, H),
@@ -345,6 +393,11 @@ def build(out_dir: Path, thumbs: bool = False):
         "hazard": material("hazard", (240, 196, 30), 0.6),
         "amber": material("amber", (245, 150, 20), 0.3),
         "dark": material("dark", (12, 12, 14), 0.9),
+        "wafer": material("wafer", (214, 160, 90), 0.8),
+        "scoop_pink": material("scoop_pink", (250, 160, 190), 0.6),
+        "scoop_cream": material("scoop_cream", (250, 238, 210), 0.6),
+        "awning_pink": material("awning_pink", (240, 110, 160), 0.6),
+        "awning_white": material("awning_white", (245, 245, 245), 0.6),
     }
     objects = []
     for i, (arch, params) in enumerate(ARCHETYPES.items()):
