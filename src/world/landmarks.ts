@@ -66,8 +66,9 @@ export function placeSprayShops(city: City): SprayShop[] {
 /**
  * A bay in block (bx, bz) on the side facing the city centre (more traffic
  * goes past), or any side whose bay is clear of obstacles; null if none is.
+ * (Also places the docks' export garage, src/game/modes/places.ts.)
  */
-function bayFor(bx: number, bz: number, city: City): SprayShop | null {
+export function bayFor(bx: number, bz: number, city: City): SprayShop | null {
   const r = blockInterior(bx, bz);
   const cx = (r.minX + r.maxX) / 2;
   const cz = (r.minZ + r.maxZ) / 2;
