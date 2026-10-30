@@ -22,8 +22,10 @@ CHAR_CLIPS = {
     "GetUp": (0.9, 0.05), "EnterCar": (0.5, 0.05), "Arrested": (1.0, 0.05),
     "Throw": (0.4, 0.05), "AimRocket": (0.3, 0.05), "ShootRocket": (0.2, 0.03), "Punch2": (0.33, 0.05),
     "Uppercut": (0.4, 0.05), "Stagger": (0.3, 0.05), "Hail": (1.0, 0.05), "Cower": (1.0, 0.05), "Cheer": (1.0, 0.05),
+    "Ride": (1.0, 0.05),
 }
 CHARACTER_FILES = re.compile(r"^(player|ped_\w+|cop|vex|tuna|pike)\.glb$")
+TWO_WHEELERS = {"scooter": 600, "cop_bike": 600}
 BUDGET = {"pigeon": 40, "character": 600, "vehicle": 1500, "vehicle_heli": 1500, "prop": 300, "debris": 80}
 # Large props that are allowed more than the small-prop budget.
 PROP_BUDGET_OVERRIDE = {"rocket": 60, "frenzy_token": 120, "spray_booth": 300, "streetlamp": 300, "traffic_light": 300, "water_tank": 300, "palm": 300, "ramp": 300}
@@ -126,6 +128,8 @@ def check_multi_root(path, gltf, kind, allowed_kinds=None):
         budget = BUDGET[kind]
         if kind == "prop":
             budget = PROP_BUDGET_OVERRIDE.get(name, budget)
+        if kind == "vehicle":
+            budget = TWO_WHEELERS.get(name, budget)
         flag = "" if tris <= budget else f"  (> {budget})"
         print(f"  {name:16s} {tris:5d} tris  {', '.join(sorted(mats))}{flag}")
         if tris > budget:
@@ -135,9 +139,14 @@ def check_multi_root(path, gltf, kind, allowed_kinds=None):
             if other:
                 print(f"  {'':16s} fixed-colour parts: {', '.join(sorted(other))}")
         if kind == "vehicle":
-            for w in ("FL", "FR"):
+            bike = name in TWO_WHEELERS
+            for w in ("FL", "RL") if bike else ("FL", "FR"):
                 if f"{name}_wheel_{w}" not in names:
                     problem(f"{path.name}/{name}: no {name}_wheel_{w}")
+            if bike:
+                seat = [n for n, _ in walk(gltf, root) if gltf["nodes"][n].get("name") == f"{name}_seat"]
+                if not seat or "mesh" in gltf["nodes"][seat[0]]:
+                    problem(f"{path.name}/{name}: no {name}_seat empty")
 
 
 def main():

@@ -244,8 +244,8 @@ now against this contract:
 
 ### Notes back to the code side
 
-_Blender session 2026-10-30, branch `blender/assets`. Items 1–8 are done
-except the `cop_bike` (lowest priority, needs its own physics); §7 and §8 notes are
+_Blender session 2026-10-30, branch `blender/assets`. Items 1–9 are all done
+(the `cop_bike` from §5 landed with §9); §7, §8 and §9 notes are
 at the end. Run
 `python3 blender/check_assets.py` after `npm run assets`: it parses every GLB
 and checks budgets, material names, bones and clip lengths against this file._
@@ -437,3 +437,34 @@ only `paint` / `trim` / `tyre`.
   which gzips well over HTTP. I couldn't make the Blender exporter options
   shrink it. If it matters, strip the constant translation/scale tracks at
   load time or with gltf-transform.
+
+**9. Two-wheelers (same day).** `check_assets.py` checks the wheel names and
+the `_seat` empty.
+- **`scooter`** (208 tris, 1.8 m) and **`cop_bike`** (332 tris, 2.2 m) are new
+  roots in `vehicles.glb`.
+  - Each has one front wheel `<arch>_wheel_FL` and one rear wheel
+    `<arch>_wheel_RL`, both on the centre line with origins at the hubs.
+    Wheel radius is 0.22 m (scooter) and 0.32 m (cop bike).
+  - Body panels are `paint`, and the seat, bars, forks and engine are
+    `trim`.
+  - `cop_bike` has `siren_red` / `siren_blue` pairs on the fairing (front)
+    and on a mast over the rear rack. It also has a `glass` windscreen,
+    `trim` saddlebags and a `chrome` exhaust.
+  - The seat cushion mesh is called `<arch>_saddle`, so its name can't
+    clash with the empty.
+- **`<arch>_seat`** is an empty (a node with no mesh) at the rider's hip
+  position:
+  - scooter: (0, 0.75, −0.32) in glTF coordinates, i.e. 0.32 m behind the
+    centre.
+  - cop_bike: (0, 0.86, −0.28).
+- **`Ride`** is a 1 s loop in every character GLB. It drops the root so the
+  hips sit **0.75 m above the character's root on every body** (short Tuna
+  and tall Pike included).
+  - **Put the rider's root at the seat position minus 0.75 m in Y**, with
+    the same heading as the bike. The feet then land on the scooter's deck,
+    and the hands land on the bars of both bikes; I checked this in three.js
+    for player, tuna, pike and cop.
+  - There's no lean in the clip, only a slight shoulder sway.
+- **Known issue:** Pike's ankle-length coat is rigid on the hips, so when
+  he's seated it hangs straight down through the bike. If he needs to ride,
+  either accept it or tell me and I'll split the coat onto the leg bones.
