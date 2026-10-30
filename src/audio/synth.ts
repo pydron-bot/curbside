@@ -238,6 +238,23 @@ export class Voice {
     return s;
   }
 
+  /**
+   * A one-shot buffer (a burst that thins out, like `bank.glass`) from its
+   * dense start, never looped: random offsets would skip the hit and loops
+   * would replay it late. `jitter` s of random start keeps repeats apart.
+   */
+  burst(buffer: AudioBuffer, start: number, stop?: number, jitter = 0.015): AudioBufferSourceNode {
+    const s = this.track(this.ctx.createBufferSource());
+    s.buffer = buffer;
+    this.sources.push(s);
+    const offset = Math.random() * jitter;
+    const end = Math.min(stop ?? Infinity, start + buffer.duration - offset);
+    s.start(start, offset);
+    s.stop(end);
+    this.until(end);
+    return s;
+  }
+
   play(src: AudioScheduledSourceNode, start: number, stop?: number): void {
     this.sources.push(src);
     src.start(start);

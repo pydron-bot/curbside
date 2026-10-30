@@ -299,7 +299,7 @@ export function crash(v: Voice, impact: number, carOnCar: boolean): void {
 
   if (k > 0.5) {
     // Glass: a burst of tiny impulses ringing through two resonant bands.
-    const gl = v.noise(v.bank.glass, t + 0.015, t + 0.9);
+    const gl = v.burst(v.bank.glass, t + 0.015, t + 0.9);
     const glass = v.gain();
     for (const [f, q] of [
       [4200 * vary(0.1), 14],
@@ -715,7 +715,7 @@ export function ui(v: Voice, kind: UiSound, key: number): void {
         v.chain(o, g, v.input);
         perc(g.gain, bell, peak, 0.002, 0.25);
       }
-      const coins = v.noise(v.bank.glass, bell, bell + 0.8);
+      const coins = v.burst(v.bank.glass, bell, bell + 0.8);
       const bp = v.filter('bandpass', 7000, 6);
       const cg = v.gain();
       v.chain(coins, bp, cg, v.input);
