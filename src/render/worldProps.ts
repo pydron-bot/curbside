@@ -102,6 +102,8 @@ export class WorldProps {
   private readonly loadedHooks: Array<() => void> = [];
   /** The traffic lights, for their lens glows: x, z, heading, cycle offset, east-west (1/0). */
   private readonly signalData: Float32Array;
+  /** Wall lamps on landmarks (the station's blue lamp, the safehouse's light): x, y, z, kind (0 police, 1 warm). */
+  private wallLamps = new Float32Array(0);
 
   constructor(
     private readonly streetProps: StreetProps,
@@ -136,6 +138,14 @@ export class WorldProps {
   /** The landmark models (placed when the models arrive, or now if they're in). */
   setLandmarks(l: Landmarks): void {
     this.landmarkData = l;
+    const lamps: number[] = [];
+    for (const p of l.props) {
+      if (p.kind !== 'police_sign' && p.kind !== 'safehouse_door') continue;
+      // The lamp hangs out from the wall (the model's +Z) at its height.
+      const out = p.kind === 'police_sign' ? 0.7 : 0.4;
+      lamps.push(p.x + Math.sin(p.heading) * out, 3.4, p.z + Math.cos(p.heading) * out, p.kind === 'police_sign' ? 0 : 1);
+    }
+    this.wallLamps = new Float32Array(lamps);
     if (this.loaded) this.addLandmarks();
   }
 
@@ -190,6 +200,21 @@ export class WorldProps {
       if (night > 0.05) {
         const w = 0.35 * night;
         glows.addFlat(x + fx * 3.2, 0.06, z + fz * 3.2, d[o + 2], 4.5, 5.5, r * w, g * w, b * w, GLOW.disc);
+      }
+    }
+    // The station's blue lamp (a slow pulse) and the safehouse's light: a halo and a pool below, at night.
+    const w = this.wallLamps;
+    if (night > 0.05) {
+      const t = worldUniforms.uTime.value;
+      for (let o = 0; o < w.length; o += 4) {
+        const x = w[o];
+        const z = w[o + 2];
+        if (x < view.minX - 6 || x > view.maxX + 6 || z < view.minZ - 6 || z > view.maxZ + 6) continue;
+        const police = w[o + 3] < 0.5;
+        const k = night * (police ? 0.75 + 0.25 * Math.sin(t * 2.6) : 1);
+        const [r, g, b] = police ? [0.15, 0.35, 1.0] : [1.0, 0.72, 0.4];
+        glows.addFlat(x, w[o + 1], z, 0, 1.6, 1.6, r * 1.4 * k, g * 1.4 * k, b * 1.4 * k, GLOW.disc);
+        glows.addFlat(x, 0.06, z, 0, 5.5, 5.5, r * 0.4 * k, g * 0.4 * k, b * 0.4 * k, GLOW.disc);
       }
     }
   }
