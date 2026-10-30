@@ -375,6 +375,79 @@ def build_truck(arch, p, mats):
     return root, parts
 
 
+# Two-wheelers (§9): one wheel on the centre line front (_wheel_FL, steers) and back (_wheel_RL), no rider;
+# `<arch>_seat` is an empty at the rider's hip position (the Ride clip puts the hips 0.75 m above the
+# character's root, so place the rider's root 0.75 m below the seat).
+BIKES = {
+    "scooter": dict(length=1.8, wheel_r=0.22, wheel_w=0.1, axles=(-0.64, 0.6), seat=(0.32, 0.75)),
+    "cop_bike": dict(length=2.2, wheel_r=0.32, wheel_w=0.14, axles=(-0.8, 0.78), seat=(0.28, 0.86), police=True),
+}
+
+
+def build_bike(arch, p, mats):
+    root = bpy.data.objects.new(arch, None)
+    bpy.context.scene.collection.objects.link(root)
+    r, (yf, yr) = p["wheel_r"], p["axles"]
+    seat_y, hip_z = p["seat"]
+    parts = [
+        wheel(f"{arch}_wheel_FL", r, p["wheel_w"], (0, yf, r), mats["tyre"]),
+        wheel(f"{arch}_wheel_RL", r, p["wheel_w"], (0, yr, r), mats["tyre"]),
+        box(f"{arch}_fender_f", (p["wheel_w"] + 0.06, r * 1.2, 0.04), (0, yf, 2 * r + 0.04), mats["paint"]),
+    ]
+    if not p.get("police"):
+        # Scooter: low flat deck, a front shield up to the bars, a rounded tail under the seat.
+        parts += [
+            box(f"{arch}_deck", (0.36, 0.72, 0.08), (0, -0.06, 0.26), mats["paint"]),
+            box(f"{arch}_mat", (0.3, 0.6, 0.01), (0, -0.06, 0.305), mats["trim"]),
+            hull(f"{arch}_tail", [(x * w, y, z) for x in (-1, 1) for (y, w, z) in (
+                (0.18, 0.18, 0.24), (0.18, 0.18, 0.62), (0.75, 0.13, 0.3), (0.82, 0.1, 0.58), (0.55, 0.17, 0.66))],
+                mats["paint"]),
+            box(f"{arch}_saddle", (0.28, 0.6, 0.09), (0, 0.44, 0.7), mats["trim"]),
+            hull(f"{arch}_shield", [(x * w, y, z) for x in (-1, 1) for (y, w, z) in (
+                (-0.42, 0.19, 0.27), (-0.5, 0.19, 0.3), (-0.62, 0.16, 0.92), (-0.52, 0.16, 0.95))], mats["paint"]),
+            box(f"{arch}_column", (0.06, 0.06, 0.32), (0, -0.48, 0.9), mats["trim"]),
+            box(f"{arch}_bars", (0.62, 0.05, 0.05), (0, -0.42, 1.04), mats["trim"]),
+            box(f"{arch}_head", (0.16, 0.05, 0.1), (0, -0.63, 0.86), mats["headlight"]),
+            box(f"{arch}_tail_L", (0.16, 0.05, 0.07), (0, 0.84, 0.55), mats["taillight"]),
+            box(f"{arch}_fork", (0.05, 0.05, 0.75), (0, yf + 0.02, 0.62), mats["trim"]),
+        ]
+    else:
+        # Police motorbike: engine, tank, fairing with windscreen, saddlebags, front and rear strobes.
+        parts += [
+            box(f"{arch}_engine", (0.32, 0.5, 0.34), (0, -0.02, 0.44), mats["trim"]),
+            box(f"{arch}_frame", (0.12, 1.2, 0.1), (0, 0.0, 0.66), mats["trim"]),
+            hull(f"{arch}_tank", [(x * w, y, z) for x in (-1, 1) for (y, w, z) in (
+                (-0.42, 0.13, 0.7), (-0.4, 0.15, 0.96), (0.08, 0.16, 0.72), (0.06, 0.13, 0.9))], mats["paint"]),
+            box(f"{arch}_saddle", (0.32, 0.62, 0.1), (0, seat_y + 0.04, 0.8), mats["trim"]),
+            hull(f"{arch}_fairing", [(x * w, y, z) for x in (-1, 1) for (y, w, z) in (
+                (-0.55, 0.28, 0.72), (-0.78, 0.18, 0.8), (-0.78, 0.22, 1.1), (-0.55, 0.3, 1.18))], mats["paint"]),
+            rotate(box(f"{arch}_windscreen", (0.44, 0.03, 0.34), (0, -0.7, 1.32), mats["glass"]), (-25, 0, 0),
+                   pivot=(0, -0.72, 1.16)),
+            box(f"{arch}_bars", (0.76, 0.05, 0.05), (0, -0.42, 1.15), mats["trim"]),
+            box(f"{arch}_head", (0.2, 0.05, 0.14), (0, -0.8, 0.92), mats["headlight"]),
+            box(f"{arch}_siren_fr", (0.08, 0.05, 0.06), (-0.22, -0.74, 1.08), mats["siren_red"]),
+            box(f"{arch}_siren_fb", (0.08, 0.05, 0.06), (0.22, -0.74, 1.08), mats["siren_blue"]),
+            box(f"{arch}_rack", (0.3, 0.3, 0.04), (0, 0.78, 0.86), mats["trim"]),
+            box(f"{arch}_mast", (0.04, 0.04, 0.3), (0, 0.9, 1.0), mats["trim"]),
+            box(f"{arch}_siren_rr", (0.1, 0.06, 0.08), (-0.07, 0.9, 1.18), mats["siren_red"]),
+            box(f"{arch}_siren_rb", (0.1, 0.06, 0.08), (0.07, 0.9, 1.18), mats["siren_blue"]),
+            box(f"{arch}_tail_L", (0.18, 0.04, 0.06), (0, 1.0, 0.74), mats["taillight"]),
+            box(f"{arch}_fender_r", (p["wheel_w"] + 0.06, 0.5, 0.04), (0, yr + 0.05, 2 * r + 0.04), mats["paint"]),
+            cylinder(f"{arch}_exhaust", 0.05, 0.75, (-0.2, 0.5, 0.33), mats["chrome"], verts=6, rotation=(90, 0, 0)),
+            rotate(box(f"{arch}_fork", (0.06, 0.06, 0.85), (0, yf, 0.72), mats["trim"]), (-22, 0, 0),
+                   pivot=(0, yf, r)),
+        ]
+        for x in (-1, 1):  # saddlebags
+            parts.append(box(f"{arch}_bag_{'L' if x > 0 else 'R'}", (0.16, 0.42, 0.3), (x * 0.27, 0.58, 0.62),
+                             mats["trim"]))
+    seat = bpy.data.objects.new(f"{arch}_seat", None)  # an empty: no geometry, read by the game
+    bpy.context.scene.collection.objects.link(seat)
+    seat.location = (0, seat_y, hip_z)
+    for obj in parts + [seat]:
+        obj.parent = root
+    return root, parts + [seat]
+
+
 def build(out_dir: Path, thumbs: bool = False):
     reset_scene()
     mats = {
@@ -408,6 +481,10 @@ def build(out_dir: Path, thumbs: bool = False):
         root, parts = build_truck(arch, params, mats)
         objects += [root, *parts]
         root.location.x = (len(ARCHETYPES) + j * 1.2) * 3.0
+    for k, (arch, params) in enumerate(BIKES.items()):
+        root, parts = build_bike(arch, params, mats)
+        objects += [root, *parts]
+        root.location.x = -(k + 1) * 3.0
 
     export_glb(out_dir / "vehicles.glb", objects)
     if thumbs:

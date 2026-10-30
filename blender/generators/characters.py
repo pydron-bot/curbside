@@ -17,7 +17,7 @@ All share the same bone names and clips (glTF animation names):
   hold, AimBoth (two-handed), Shoot 0.125 s, ShootBoth, Fall 0.5 s, Down 1 s
   loop, GetUp 0.917 s, EnterCar 0.5 s, Arrested 1 s loop (kneeling, hands on head),
   Throw 0.417 s, AimRocket 0.292 s hold, ShootRocket 0.208 s, Punch2 0.333 s (left hook),
-  Uppercut 0.417 s, Stagger 0.292 s, Hail / Cower / Cheer 1 s loops.
+  Uppercut 0.417 s, Stagger 0.292 s, Hail / Cower / Cheer 1 s loops, Ride 1 s loop (hips at 0.75 m).
 Story bodies for the payphone missions: vex.glb, tuna.glb, pike.glb.
 Every clip keys every bone, so any clip can be played or crossfaded alone.
 The game scales Walk/Run playback with speed; `walkSpeed` / `runSpeed` (the
@@ -49,6 +49,7 @@ THUMBS = Path(__file__).resolve().parents[1] / "thumbs"
 WALK_SPEED = 1.6
 RUN_SPEED = 5.5
 FPS = 24
+RIDE_HIP_Z = 0.75  # hip height in the Ride clip, above the character's root (= the vehicles' `<arch>_seat` empties)
 BONES = ("root", "hips", "chest", "head", "arm.L", "arm.R", "leg.L", "leg.R")
 
 PLAYER = {
@@ -327,7 +328,7 @@ DOWN = {"root": (-90, 0, 0), "arm.L": (0, 0, -30), "arm.R": (0, 0, 30), "leg.L":
         "head": (8, 0, 0)}
 
 
-def animate(rig):
+def animate(rig, d):
     # --- Walk: 1 s cycle. Legs and arms swing in opposition; shoulders turn. ---
     gait(rig, "Walk", FPS,
          contact={"leg.L": (32, 0, 0), "leg.R": (-32, 0, 0), "arm.L": (-24, 0, 0), "arm.R": (24, 0, 0),
@@ -496,6 +497,16 @@ def animate(rig):
     for i, (pose, lift) in enumerate(((up, 0), (pump, 0.06), (up, 0), (pump, 0.06), (up, 0))):
         key_pose(rig, i * 6, pose, (0, lift, 0))
 
+    # --- Ride (§9): 1 s loop seated on a scooter/bike, hips at RIDE_HIP_Z on every body, legs angled
+    # down-forward to the deck, hands forward on the bars, a slight sway. The game rolls the root to lean. ---
+    new_action(rig, "Ride")
+    drop = RIDE_HIP_Z - d.hip_z
+    ride = {"hips": (-4, 0, 0), "chest": (12, 0, 0), "head": (-10, 0, 0),
+            "leg.L": (-54, 0, -6), "leg.R": (-54, 0, 6), "arm.L": (-72, 0, 8), "arm.R": (-72, 0, -8)}
+    key_pose(rig, 0, ride, (0, drop, 0))
+    key_pose(rig, 12, {**ride, "chest": (13, 2, 0), "head": (-10, -2, 0)}, (0, drop, 0))
+    key_pose(rig, 24, ride, (0, drop, 0))
+
     rig.animation_data.action = None
     for pb in rig.pose.bones:
         pb.rotation_euler = (0, 0, 0)
@@ -507,7 +518,7 @@ def build_one(out_dir, name, spec, thumbs):
     d = Dims(spec)
     rig = build_armature(spec["rig"], d)
     parts = build_body(rig, spec, name, d)
-    animate(rig)
+    animate(rig, d)
     rig["walkSpeed"] = WALK_SPEED  # exported as glTF extras
     rig["runSpeed"] = RUN_SPEED
     export_glb(out_dir / f"{name}.glb", [rig, *parts])
