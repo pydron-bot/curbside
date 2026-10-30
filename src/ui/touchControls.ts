@@ -199,7 +199,8 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     idleStick();
   }
   function idleStick() {
-    stickBase.classList.remove('active');
+    // 'aiming' too: a resting stick mustn't keep the car's direction arrow (it reads as input held).
+    stickBase.classList.remove('active', 'aiming');
     out.steer = out.moveX = out.moveY = 0;
     out.sprint = false;
     moveKnob(stickKnob, 0, 0);

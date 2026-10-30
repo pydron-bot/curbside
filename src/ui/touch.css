@@ -359,13 +359,13 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
   height: 66px;
 }
 
-/* GAS+HAND band: a pill bridging the two. */
+/* GAS+HAND band: a pill bridging the two, about the size of its hit zone (pedalZones.ts chordBetween). */
 .pedal-chord {
   position: absolute;
-  right: 26px;
-  top: 59px;
-  width: 46px;
-  height: 30px;
+  right: 24px;
+  top: 51px;
+  width: 50px;
+  height: 46px;
   display: grid;
   place-items: center;
   border-radius: 10px;
@@ -421,7 +421,7 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
 
 .touch-layer[data-hand='left'] .pedal-chord {
   right: auto;
-  left: 26px;
+  left: 24px;
 }
 
 /* Short screens (Safari's toolbar showing): a slightly smaller cluster. */
@@ -447,9 +447,10 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
   }
 
   .pedal-chord {
-    top: 52px;
+    top: 45px;
     right: 22px;
-    height: 28px;
+    width: 46px;
+    height: 44px;
   }
 
   .btn-fire {

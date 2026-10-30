@@ -40,6 +40,14 @@ describe('pedal pad', () => {
     expect(at(155, gas.y)).toEqual({ gas: true, brake: false, hand: false });
   });
 
+  it('the band is big enough for a resting thumb (44 pt), and GAS keeps most of its face', () => {
+    const c = layout.chord;
+    expect(c.maxY - c.minY).toBeGreaterThanOrEqual(44);
+    expect(c.maxX - c.minX).toBeGreaterThanOrEqual(44);
+    // A thumb on the upper part of GAS, a third of a radius above its centre, is still just GAS.
+    expect(at(155, gas.y - gas.r / 3)).toEqual({ gas: true, brake: false, hand: false });
+  });
+
   it('ignores a finger that has slid well off every pedal', () => {
     expect(at(40, -60)).toEqual({ gas: false, brake: false, hand: false });
     // Just off a pedal's rim still counts (fat thumbs).

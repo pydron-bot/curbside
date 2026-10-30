@@ -44,17 +44,26 @@ export function pedalsAt(x: number, y: number, layout: PedalLayout, out: PedalSt
   else out.hand = true;
 }
 
-/** The chord band: across the gap between HAND and GAS, as wide as the narrower of them. */
+/**
+ * How far the chord band reaches into each pedal, from its centre (× radius).
+ * The gap between the circles alone is ~26 px, too thin for a resting thumb;
+ * reaching into both makes it ~50 px (over the 44 pt minimum), cutting more
+ * into HAND (pressed on purpose) than into GAS (held all the time).
+ */
+const CHORD_INTO_HAND = 0.45;
+const CHORD_INTO_GAS = 0.6;
+
+/** The chord band: across the gap between HAND and GAS and into both, about as wide as the narrower of them. */
 export function chordBetween(hand: PedalCircle, gas: PedalCircle): PedalLayout['chord'] {
-  const upper = hand.y < gas.y ? hand : gas;
-  const lower = upper === hand ? gas : hand;
-  const half = Math.min(hand.r, gas.r) * 0.8;
+  const half = Math.min(hand.r, gas.r) * 0.9;
   const cx = (hand.x + gas.x) / 2;
+  const handEdge = hand.y < gas.y ? hand.y + hand.r * CHORD_INTO_HAND : hand.y - hand.r * CHORD_INTO_HAND;
+  const gasEdge = hand.y < gas.y ? gas.y - gas.r * CHORD_INTO_GAS : gas.y + gas.r * CHORD_INTO_GAS;
   return {
     minX: cx - half,
     maxX: cx + half,
-    minY: upper.y + upper.r * 0.85,
-    maxY: lower.y - lower.r * 0.85,
+    minY: Math.min(handEdge, gasEdge),
+    maxY: Math.max(handEdge, gasEdge),
   };
 }
 
