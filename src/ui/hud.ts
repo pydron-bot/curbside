@@ -103,6 +103,7 @@ export class Hud {
   private shownKmh = -1;
   private shownCarHealth = -1;
   private shownCarState = '';
+  private shownIdle = false;
   private shownPrompt = '';
   private shownCritical = false;
   private shownMouseAim = false;
@@ -213,6 +214,9 @@ export class Hud {
   update(dt: number, f: HudFrame): void {
     const body = document.body;
     if (body.dataset.device !== f.device) body.dataset.device = f.device;
+    // Touch layouts shift a little between foot and car (hud.css).
+    const mode = f.car ? 'car' : 'foot';
+    if (body.dataset.mode !== mode) body.dataset.mode = mode;
     if (f.mouseAim !== this.shownMouseAim) {
       this.shownMouseAim = f.mouseAim;
       body.dataset.aim = f.mouseAim ? 'mouse' : '';
@@ -265,6 +269,8 @@ export class Hud {
       const p = Math.min(100, (kmh / car.maxKmh) * 100);
       // The gap is longer than the path, so the dash pattern never repeats a dot at the end.
       this.spFill.style.strokeDasharray = `${p.toFixed(1)} 200`;
+      const idle = kmh === 0;
+      if (idle !== this.shownIdle) this.speedo.classList.toggle('idle', (this.shownIdle = idle));
     }
     const hp = Math.round(car.health * 100);
     if (hp !== this.shownCarHealth) {
@@ -294,6 +300,8 @@ export class Hud {
 
   private flashHurt(amount: number): void {
     const strength = Math.max(0.35, Math.min(1, amount / 28));
+    // Bigger hits frame the screen thicker (the vignette's size is in vmin, hud.css).
+    this.hurt.style.setProperty('--hurt', strength.toFixed(2));
     this.hurt.animate?.([{ opacity: strength }, { opacity: 0 }], { duration: 300 + strength * 400, easing: 'ease-out' });
   }
 }
