@@ -136,7 +136,8 @@ export function placeStation(city: City): Station {
   }
   const x0 = -HALF_EXTENT + best.bx * BLOCK_SIZE;
   const z0 = -HALF_EXTENT + best.bz * BLOCK_SIZE;
-  return { x: x0 + BLOCK_SIZE / 2, z: z0 + BLOCK_SIZE - WALK_INSET, heading: 0 };
+  // Between two street lamps (they stand every 16 m along the block side).
+  return { x: x0 + BLOCK_SIZE * 0.375, z: z0 + BLOCK_SIZE - WALK_INSET, heading: 0 };
 }
 
 function overlaps(a: Rect, b: Rect): boolean {

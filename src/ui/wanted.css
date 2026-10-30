@@ -12,6 +12,7 @@
   justify-items: center;
   gap: 4px;
   transform: translateX(-50%);
+  transition: transform 0.35s cubic-bezier(0.2, 1.2, 0.4, 1);
   pointer-events: none;
   font-family: var(--hud-font);
   color: var(--ink);
@@ -23,6 +24,12 @@
 #wanted[hidden],
 body:not([data-scene='play']) #wanted {
   display: none;
+}
+
+/* The radio's "now playing" card takes the same spot for a few seconds
+   after getting in a car: step down below it. */
+body:has(#radio.in) #wanted {
+  transform: translate(-50%, 46px);
 }
 
 .w-stars {

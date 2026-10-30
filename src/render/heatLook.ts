@@ -61,12 +61,14 @@ function drawHeli(glows: GlowSprites, shadows: ContactShadows, heat: Heat, view:
     shadows.add(h.x, h.z, t * 9, 5.2, 5.2, 1.4, flicker);
   }
   if (!near(h.spotX, h.spotZ, view, SPOT_RADIUS * 1.5)) return;
-  // Brighter at night, but a hot pool even by day.
-  const k = (0.32 + 0.75 * night) * (0.93 + 0.07 * Math.sin(t * 13));
+  // Brighter at night, but a pool you can see by day; never so hot that it
+  // bleaches the cars it lights (it's added to everything under it).
+  const k = (0.26 + 0.34 * night) * (0.93 + 0.07 * Math.sin(t * 13));
   const size = SPOT_RADIUS * 2.3;
-  glows.addFlat(h.spotX, 0.09, h.spotZ, 0, size, size, 0.85 * k, 0.9 * k, 1.0 * k, GLOW.disc);
-  glows.addFlat(h.spotX, 0.1, h.spotZ, 0, size * 0.55, size * 0.55, 0.6 * k, 0.65 * k, 0.7 * k, GLOW.disc);
-  glows.addFlat(h.spotX, 0.11, h.spotZ, t * 0.7, size * 0.95, size * 0.95, 0.35 * k, 0.4 * k, 0.5 * k, GLOW.ring);
+  glows.addFlat(h.spotX, 0.09, h.spotZ, 0, size, size, 0.8 * k, 0.86 * k, 1.0 * k, GLOW.disc);
+  glows.addFlat(h.spotX, 0.1, h.spotZ, 0, size * 0.5, size * 0.5, 0.3 * k, 0.32 * k, 0.36 * k, GLOW.disc);
+  // A crisp rim: the edge of the beam.
+  glows.addFlat(h.spotX, 0.11, h.spotZ, t * 0.7, size * 0.95, size * 0.95, 0.6 * k, 0.65 * k, 0.8 * k, GLOW.ring);
   if (night > 0.2) {
     // The beam itself, standing in the haze.
     const b = 0.22 * night;
@@ -112,9 +114,9 @@ function drawBay(glows: GlowSprites, s: SprayShop, t: number, night: number, wan
   if (spray > 0 && spray < 1) {
     // Paint mist: colours cycling over the car.
     const c = MIST[Math.floor(t * 8) % MIST.length];
-    const m = 0.9 + 0.4 * Math.sin(t * 31);
-    glows.addFlat(s.x, 1.4, s.z, t * 2, 6, 6, c[0] * m, c[1] * m, c[2] * m, GLOW.disc);
-    glows.addFlat(s.x + Math.sin(t * 5) * 1.2, 0.08, s.z + Math.cos(t * 4) * 1.2, 0, 8, 8, c[0] * 0.4, c[1] * 0.4, c[2] * 0.4, GLOW.disc);
+    const m = 0.35 + 0.15 * Math.sin(t * 31);
+    glows.addFlat(s.x, 1.4, s.z, t * 2, 5, 5, c[0] * m, c[1] * m, c[2] * m, GLOW.disc);
+    glows.addFlat(s.x + Math.sin(t * 5) * 1.2, 0.08, s.z + Math.cos(t * 4) * 1.2, 0, 7, 7, c[0] * 0.2, c[1] * 0.2, c[2] * 0.2, GLOW.disc);
   }
 }
 
