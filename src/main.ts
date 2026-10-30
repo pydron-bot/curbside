@@ -88,6 +88,7 @@ import { Radar } from './ui/radar';
 import { ThreatIndicators } from './ui/threats';
 import { enterGameMode } from './ui/titleScreen';
 import { WantedHud } from './ui/wantedHud';
+import { ScreenAwake } from './ui/wakeLock';
 import { generateCity, type Rect } from './world/city';
 import { StaticGrid } from './world/collision';
 import { mulberry32 } from './world/random';
@@ -389,6 +390,8 @@ const streetLife = new StreetLife({
 const input = new Input();
 input.attachMouse(renderer.domElement);
 const haptics = new Haptics(input, events);
+// Screen on while a run is played and not paused (controller-only play never touches it).
+const screenAwake = new ScreenAwake();
 const touch = mountTouchControls(document.body, input.touch, haptics);
 input.addResetHook(() => touch.reset());
 const carButtons = mountCarButtons(touch.layer, input.touch, haptics);
@@ -1110,12 +1113,14 @@ function startGame() {
   input.resetAll();
   audio.setMusicMode('game');
   resolution.holdOff();
+  screenAwake.set(true);
   enterGameMode(getDevice().handheld);
 }
 
 /** Quit to title: drop the run, hide the player, cruise over traffic. */
 function enterTitle() {
   progress.enterTitle();
+  screenAwake.set(false);
   respawnPlayer();
   playerModel.root.visible = false;
   attract.start(rig.focusX, rig.focusZ);
@@ -1171,6 +1176,7 @@ function setPaused(p: boolean, reason: PauseReason = 'paused') {
   } else frontDoor.hidePause();
   if (p === paused) return;
   paused = p;
+  screenAwake.set(!p && !frontDoor.inTitle);
   // Nothing held or queued while paused may leak into play on resume.
   input.resetAll();
   audio.setPaused(p);
