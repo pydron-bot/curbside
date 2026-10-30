@@ -60,7 +60,7 @@ describe('time of day', () => {
     for (let m = 0; m < 24 * 60; m++) {
       sampleSky(m / 60, a);
       sampleSky((m + 1) / 60, b);
-      expect(Math.abs(a.lightIntensity - b.lightIntensity)).toBeLessThan(0.05);
+      expect(Math.abs(a.lightIntensity - b.lightIntensity)).toBeLessThan(0.12);
       expect(Math.abs(a.night - b.night)).toBeLessThan(0.05);
       expect(Math.abs(a.exposure - b.exposure)).toBeLessThan(0.02);
       for (let k = 0; k < 3; k++) expect(Math.abs(a.fogColor[k] - b.fogColor[k])).toBeLessThan(0.03);

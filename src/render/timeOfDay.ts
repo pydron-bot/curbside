@@ -20,7 +20,7 @@ export const SUNSET = 19.7;
 /** The sun's highest elevation, radians (kept below overhead so shadows always read). */
 const SUN_PEAK = (62 * Math.PI) / 180;
 /** Lowest elevation used for the light direction, so dusk shadows don't swallow whole streets. */
-const MIN_LIGHT_ELEVATION = (21 * Math.PI) / 180;
+const MIN_LIGHT_ELEVATION = (24 * Math.PI) / 180;
 /** Moonlight comes from high in the south-east. */
 const MOON_DIR = normalise([0.45, 1.25, 0.55]);
 
@@ -74,19 +74,20 @@ const hex = (v: number): Rgb => [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255
  * and sun, so the swap is never seen.
  */
 const KEYS: readonly Key[] = [
-  { h: 0, light: 0.42, lightColor: hex(0x9fb4ff), sky: hex(0x31416e), ground: hex(0x15151d), hemi: 0.75, fog: hex(0x0d1424), fogNear: 46, fogFar: 150, exposure: 1.15, night: 1, env: 0.22 },
-  { h: 4.6, light: 0.38, lightColor: hex(0x9fb4ff), sky: hex(0x33406a), ground: hex(0x17161d), hemi: 0.75, fog: hex(0x111a2c), fogNear: 46, fogFar: 150, exposure: 1.15, night: 1, env: 0.22 },
-  { h: SUNRISE, light: 0, lightColor: hex(0xffb27a), sky: hex(0x6a6f96), ground: hex(0x2a2224), hemi: 0.75, fog: hex(0x3a3550), fogNear: 60, fogFar: 190, exposure: 1.12, night: 0.55, env: 0.4 },
-  { h: 6.4, light: 1.1, lightColor: hex(0xffa968), sky: hex(0xa7a6c4), ground: hex(0x4a3a30), hemi: 0.85, fog: hex(0x9a8f9e), fogNear: 80, fogFar: 260, exposure: 1.05, night: 0.1, env: 0.75 },
-  { h: 8, light: 2.3, lightColor: hex(0xffe2bd), sky: hex(0xb9cdf0), ground: hex(0x6b5a48), hemi: 0.9, fog: hex(0xa8bdd6), fogNear: 110, fogFar: 320, exposure: 1, night: 0, env: 1 },
+  { h: 0, light: 0.55, lightColor: hex(0x9fb4ff), sky: hex(0x3a4c80), ground: hex(0x1a1a24), hemi: 0.9, fog: hex(0x0d1424), fogNear: 46, fogFar: 150, exposure: 1.2, night: 1, env: 0.25 },
+  { h: 4.6, light: 0.5, lightColor: hex(0x9fb4ff), sky: hex(0x3b4a7a), ground: hex(0x1b1a22), hemi: 0.9, fog: hex(0x111a2c), fogNear: 46, fogFar: 150, exposure: 1.2, night: 1, env: 0.25 },
+  { h: SUNRISE, light: 0, lightColor: hex(0xffb27a), sky: hex(0x6a6f96), ground: hex(0x2a2224), hemi: 0.88, fog: hex(0x3a3550), fogNear: 60, fogFar: 190, exposure: 1.16, night: 0.55, env: 0.4 },
+  { h: 6.4, light: 1.6, lightColor: hex(0xffa968), sky: hex(0xa7a6c4), ground: hex(0x4a3a30), hemi: 0.9, fog: hex(0x9a8f9e), fogNear: 80, fogFar: 260, exposure: 1.08, night: 0.1, env: 0.75 },
+  { h: 8, light: 2.5, lightColor: hex(0xffe2bd), sky: hex(0xb9cdf0), ground: hex(0x6b5a48), hemi: 0.9, fog: hex(0xa8bdd6), fogNear: 110, fogFar: 320, exposure: 1, night: 0, env: 1 },
   { h: 12.5, light: 2.75, lightColor: hex(0xfff1dc), sky: hex(0xbfd3ff), ground: hex(0x6e5e4c), hemi: 0.95, fog: hex(0xaec4dd), fogNear: 120, fogFar: 340, exposure: 1, night: 0, env: 1 },
-  { h: 16.5, light: 2.6, lightColor: hex(0xffe4c0), sky: hex(0xb7c9ee), ground: hex(0x6d5a46), hemi: 0.9, fog: hex(0xb3bfd2), fogNear: 110, fogFar: 320, exposure: 1, night: 0, env: 1 },
-  // Golden hour: low, warm, long shadows.
-  { h: 18.2, light: 2.35, lightColor: hex(0xffb867), sky: hex(0xb4b3d6), ground: hex(0x6a4a36), hemi: 0.82, fog: hex(0xd9a77f), fogNear: 90, fogFar: 280, exposure: 1.04, night: 0, env: 0.95 },
-  { h: 19.1, light: 1.15, lightColor: hex(0xff7f45), sky: hex(0x8c7fae), ground: hex(0x4a3036), hemi: 0.8, fog: hex(0xb06a5c), fogNear: 75, fogFar: 240, exposure: 1.1, night: 0.25, env: 0.7 },
-  { h: SUNSET, light: 0, lightColor: hex(0xff6a45), sky: hex(0x5a5688), ground: hex(0x2c2230), hemi: 0.78, fog: hex(0x4c3a5a), fogNear: 60, fogFar: 200, exposure: 1.14, night: 0.62, env: 0.45 },
-  { h: 20.6, light: 0.3, lightColor: hex(0x9fb4ff), sky: hex(0x3a4476), ground: hex(0x1a1822), hemi: 0.76, fog: hex(0x1a2036), fogNear: 50, fogFar: 165, exposure: 1.15, night: 0.92, env: 0.28 },
-  { h: 22, light: 0.42, lightColor: hex(0x9fb4ff), sky: hex(0x31416e), ground: hex(0x15151d), hemi: 0.75, fog: hex(0x0d1424), fogNear: 46, fogFar: 150, exposure: 1.15, night: 1, env: 0.22 },
+  { h: 16.5, light: 2.75, lightColor: hex(0xffe4c0), sky: hex(0xb7c9ee), ground: hex(0x6d5a46), hemi: 0.92, fog: hex(0xb3bfd2), fogNear: 110, fogFar: 320, exposure: 1.02, night: 0, env: 1 },
+  // Golden hour: the sun is low (so it lights the flat ground weakly) but
+  // strong and warm, with long shadows and cool lavender fill in them.
+  { h: 18.2, light: 3.3, lightColor: hex(0xffcc84), sky: hex(0xb4bce6), ground: hex(0x6e5c48), hemi: 0.95, fog: hex(0xe0b088), fogNear: 90, fogFar: 280, exposure: 1.12, night: 0, env: 0.95 },
+  { h: 19.1, light: 2.5, lightColor: hex(0xffa05a), sky: hex(0x9a92c8), ground: hex(0x5a4040), hemi: 0.92, fog: hex(0xc27c62), fogNear: 75, fogFar: 240, exposure: 1.2, night: 0.25, env: 0.7 },
+  { h: SUNSET, light: 0, lightColor: hex(0xff6a45), sky: hex(0x5e5a92), ground: hex(0x2e2434), hemi: 0.9, fog: hex(0x4c3a5a), fogNear: 60, fogFar: 200, exposure: 1.22, night: 0.62, env: 0.45 },
+  { h: 20.6, light: 0.42, lightColor: hex(0x9fb4ff), sky: hex(0x3c4a82), ground: hex(0x1a1a26), hemi: 0.9, fog: hex(0x1a2036), fogNear: 50, fogFar: 165, exposure: 1.2, night: 0.92, env: 0.28 },
+  { h: 22, light: 0.55, lightColor: hex(0x9fb4ff), sky: hex(0x3a4c80), ground: hex(0x1a1a24), hemi: 0.9, fog: hex(0x0d1424), fogNear: 46, fogFar: 150, exposure: 1.2, night: 1, env: 0.25 },
 ];
 
 export function createSkyState(): SkyState {
