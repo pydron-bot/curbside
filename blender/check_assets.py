@@ -26,7 +26,7 @@ CHAR_CLIPS = {
 CHARACTER_FILES = re.compile(r"^(player|ped_\w+|cop|vex|tuna|pike)\.glb$")
 BUDGET = {"character": 600, "vehicle": 1500, "vehicle_heli": 1500, "prop": 300, "debris": 80}
 # Large props that are allowed more than the small-prop budget.
-PROP_BUDGET_OVERRIDE = {"spray_booth": 300, "streetlamp": 300, "traffic_light": 300, "water_tank": 300, "palm": 300, "ramp": 300}
+PROP_BUDGET_OVERRIDE = {"rocket": 60, "frenzy_token": 120, "spray_booth": 300, "streetlamp": 300, "traffic_light": 300, "water_tank": 300, "palm": 300, "ramp": 300}
 
 problems = []
 
