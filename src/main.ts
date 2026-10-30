@@ -366,6 +366,7 @@ const people = new PeoplePose({
   crowd: population.crowd,
   locked: () => combat.lock !== null,
   playing: () => !attract.active,
+  view: (out) => rig.visibleGround(out),
 });
 
 // --- Audio (unlocks on the first tap / click / key) ---
