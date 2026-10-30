@@ -604,12 +604,14 @@ function simulate(dt: number) {
   }
   if (!player.driving) {
     for (const s of vehicleStates) collidePedVehicle(player.ped, s);
-    // Static last so a car can't shove the player into a wall.
+    // Static last so a car can't shove the player into a wall (or a ramp).
     collidePedStatic(player.ped, collision);
+    collidePedStatic(player.ped, rampGrid);
   }
   for (const c of population.crowd) {
     if (c.agent.mode !== 'down') for (const s of vehicleStates) collidePedVehicle(c.agent.s, s);
     collidePedStatic(c.agent.s, collision);
+    collidePedStatic(c.agent.s, rampGrid);
   }
   syncWeapon();
 }

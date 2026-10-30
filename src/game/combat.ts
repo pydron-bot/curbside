@@ -89,6 +89,8 @@ const FIRE_PLAYER_DPS = 14;
 const FIRE_PLAYER_TICK = 0.3;
 /** People who walk into fire burn this long, s. */
 const BURN_SECONDS = 3.5;
+/** An unaimed throw goes this share of the weapon's range (or onto someone in front within it). */
+const THROW_LOB = 0.5;
 /** A blast that sets the player's own car alight leaves at least this long to get out, s. */
 const PLAYER_CAR_FUSE = 3;
 /** Explosions further than this from the player don't score KABOOM, m. */
@@ -331,15 +333,18 @@ export class Combat {
       return;
     }
     const heading = aim.heading ?? p.heading;
+    // Without an aim it's a lob to a sensible distance (on screen, even
+    // looking up a landscape phone), or onto someone in front within it.
+    const lob = range * THROW_LOB;
     // Someone near the aim line within reach: land on them.
     this.gatherPeds();
-    const i = lockTarget(p.x, p.z, heading, this.candidates, this.candidateCount, range, aim.heading === null ? 0.5 : LOCK_AIM_CONE);
+    const i = lockTarget(p.x, p.z, heading, this.candidates, this.candidateCount, aim.heading === null ? lob : range, aim.heading === null ? 0.5 : LOCK_AIM_CONE);
     if (i >= 0 && (aim.heading === null || aim.reach >= 0.9)) {
       const c = this.candidates[i];
       throwTarget(p.x, p.z, c.x, c.z, range, out);
       return;
     }
-    const reach = aim.heading !== null ? 4 + (range - 4) * Math.min(1, aim.reach) : range * 0.6;
+    const reach = aim.heading !== null ? 4 + (range - 4) * Math.min(1, aim.reach) : lob;
     throwTarget(p.x, p.z, p.x + Math.sin(heading) * reach, p.z + Math.cos(heading) * reach, range, out);
   }
 
