@@ -52,7 +52,7 @@ export default defineConfig({
   // calls back into end up as two module copies, and the scratch-buffer
   // getters (rbTranslation) throw. Builds are unaffected.
   optimizeDeps: { exclude: ['@dimforge/rapier3d'] },
-  // three.js alone is ~540 kB minified (~137 kB gzip); well within budget.
+  // three.js alone is ~634 kB minified (~157 kB gzip); well within budget.
   // It gets a chunk of its own: game updates then don't re-download it, and
   // neither chunk trips the size warning.
   build: {

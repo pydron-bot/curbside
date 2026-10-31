@@ -15,7 +15,7 @@ import path from 'node:path';
 
 export const URL = process.env.URL ?? 'http://localhost:5173/curbside/';
 
-async function playwright() {
+export async function playwright() {
   if (process.env.PLAYWRIGHT) return createRequire(path.join(process.env.PLAYWRIGHT, 'noop.js'))('playwright');
   try {
     return await import('playwright');
@@ -33,10 +33,15 @@ async function playwright() {
   }
 }
 
+/** Headless Chromium with WebGL on SwiftShader (no GPU needed). */
+export async function launch() {
+  const { chromium } = await playwright();
+  return chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+}
+
 /** A page on the game with a seedable Math.random (`window.__seed(n)`) and the hooks ready. */
 export async function openGame() {
-  const { chromium } = await playwright();
-  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const browser = await launch();
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on('pageerror', (e) => console.error('pageerror:', e.message));
   await page.addInitScript(() => {

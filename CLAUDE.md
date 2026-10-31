@@ -45,7 +45,10 @@ CURBSIDE_BASE=/curbside/ npx vite build   # what the Pages deploy builds
 ## Shipping
 
 Pushing to `main` deploys to https://deeek.org/curbside/ via
-`.github/workflows/pages.yml` (it runs the tests first). Verify in a browser
-before pushing: Playwright + SwiftShader, desktop 1280×720 and iPhone 15 Pro
-landscape (852×393 @3x, also 852×340); `window.__ub` exposes the game
-(`startGame()`, `fastForward(seconds)`, state).
+`.github/workflows/pages.yml` (it runs the tests first); other branches and
+pull requests run `ci.yml` (tests, types, GLB contracts, smoke test). Before
+pushing to main run the smoke test: `npx -y -p playwright@1.63.0 node
+tools/smoke.mjs` (desktop 1280×720, iPhone 15 Pro landscape 852×393 and
+852×340, offline PWA); for a closer look, `window.__ub` exposes the game
+(`startGame()`, `fastForward(seconds)`, state). Tuning harnesses are in
+`tools/tune/` (README *Tuning harnesses*).

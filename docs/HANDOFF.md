@@ -170,9 +170,11 @@ compare against. Full numbers in README *Destruction test*.
    done 2026-10-31 (README *Traffic lights*); animation sampling garbage
    [`anim-bake`], `Math.hypot` and call boxing in the sim
    [`hypot-hot-loops`, `sim-call-boxing`] (V8 only; wait for the device
-   timeline). Also: a committed browser smoke test in CI [`smoke-ci`],
-   branch/worktree cleanup [`repo-hygiene`], close out M8 in PLAN.md
-   [`m8-closeout`], a real home-screen icon [`icons-splash`].
+   timeline). Done 2026-10-31: the browser smoke test and CI
+   [`smoke-ci`: `tools/smoke.mjs`, `.github/workflows/ci.yml`], M8's
+   criteria in PLAN.md [`m8-closeout`], branch cleanup [`repo-hygiene`].
+   Still open: a real home-screen icon [`icons-splash`]; an Android/desktop
+   Install button (`beforeinstallprompt`) if wanted.
 7. **Ideas:** district names + an area card first [`districts-landmarks`
    phase A], since chatter and gang turf need them; then police radio
    chatter [`police-chatter`]; missions after the eighth (payphones never

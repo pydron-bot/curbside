@@ -1,0 +1,51 @@
+# Checks every branch and pull request before it reaches main (pages.yml
+# deploys main). Unit tests, types and the GLB contracts; then the browser
+# smoke test (tools/smoke.mjs): the Pages build played headless on desktop
+# and the iPhone profile, and offline as an installed PWA.
+name: CI
+
+on:
+  push:
+    branches-ignore: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: python3 blender/check_assets.py public/assets
+
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      # Playwright isn't a game dependency: fetched for this job only.
+      - run: npx -y -p playwright@1.63.0 sh -c 'playwright install --with-deps chromium && node tools/smoke.mjs'
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-screenshots
+          path: smoke-out
+          if-no-files-found: ignore

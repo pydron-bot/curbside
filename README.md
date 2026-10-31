@@ -17,11 +17,21 @@ Needs Node ≥ 22.12 (hive1: `~/.local/opt/node24/bin`, the system Node 20 is to
 ```sh
 npm install          # if NODE_ENV=production is set, unset it first or dev deps are skipped
 npm run dev          # vite --host, http://<host>:5173
-npm test             # vitest (physics, loop)
+npm test             # vitest: the pure logic (~800 tests)
 npm run build        # typecheck + production build with service worker
 npm run icons        # regenerate PWA icons
 npm run assets       # rebuild GLBs from blender/ (needs `blender` on PATH; add `-- --thumbs` for previews)
+npx -y -p playwright@1.63.0 node tools/smoke.mjs   # browser smoke test (see below)
 ```
+
+**Smoke test** (`tools/smoke.mjs`): builds the game as Pages does, serves it
+and plays it headless (Chromium + SwiftShader) on desktop 1280×720 and the
+iPhone 15 Pro profile at 852×393 and 852×340: boot, a run, 30 s simulated,
+no page or console errors, under 150 draw calls; then installability and an
+offline boot from the service worker. ~3 min. CI (`.github/workflows/ci.yml`)
+runs it with the unit tests, types and GLB contracts on every branch and pull
+request; Pages (`pages.yml`) runs the tests and contracts before deploying
+main.
 
 On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on boot;
 `systemctl --user status|restart|stop curbside-dev`). Open

@@ -18,7 +18,7 @@ _Plan written 2026-10-29 as "Urban Blight"; renamed **Curbside** the same day (o
 | M5 | Living city | ✅ Traffic with signals and reactions, crowds, pigeons, damage → fire → explosion chains |
 | M6 | Heat | ✅ 0–5 stars, pursuit AI, roadblocks, SWAT, helicopter, BUSTED, Pay 'n' Spray |
 | M7 | Missions & HUD | ✅ Eight payphone missions, Chaos Run, frenzies, packages, races, exports, taxi, cash, shop, save, radar, new HUD and menus |
-| M8 | Ship as PWA | 🟡 Live at https://deeek.org/curbside/ (GitHub Pages, offline-capable); real-device performance pass still to do |
+| M8 | Ship as PWA | 🟡 Live at https://deeek.org/curbside/ (GitHub Pages); deploy, offline boot and installability verified by `tools/smoke.mjs` in CI; still to do: the real-device performance pass (and a real home-screen icon, `icons-splash`) |
 
 The overhaul that took M5 to here is summarised in `docs/HANDOFF.md`, which
 also holds the prioritised to-do list.
@@ -142,7 +142,7 @@ Goal: every game asset is reproducible from a script — tweak a parameter, rebu
 | M5 | **Living city** | Lane graph, traffic AI, pedestrians, collisions/damage/explosions. |
 | M6 | **Heat** | Wanted level, police spawning and pursuit, arrest/death respawn. |
 | M7 | **Missions & HUD** | Mission system from JSON, payphone triggers, minimap/arrow, cash, pause menu, save. |
-| M8 | **Ship as PWA** | Icons, offline caching verified, install prompt, Lighthouse PWA pass, performance pass on real devices, deploy (GitHub Pages / Netlify / Cloudflare Pages). |
+| M8 | **Ship as PWA** | Icons, offline caching verified, installable (browser install UI; iOS Add to Home Screen tip), scripted PWA checks in place of the old Lighthouse PWA pass (Lighthouse 12+ dropped that category: `tools/smoke.mjs` checks installability and an offline boot), performance pass on real devices, deploy (GitHub Pages). |
 | M9+ | **Post-MVP** | More districts, gangs/respect, weapons variety, radio/audio, day-night, WebGPU path. |
 
 ---
