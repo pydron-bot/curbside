@@ -174,6 +174,8 @@ const FOLLOW_STOP = 2.6;
 const LINE_BEAT = 1.2;
 /** Margin on top of our own clearing time, s. */
 const GIVE_WAY_MARGIN = 1;
+/** Behind a car facing our way the gridlock breaker is this many times slower: a queue moves on, a wreck or a car left in the lane never does. */
+const QUEUE_PATIENCE = 8;
 
 /**
  * Place a new AI car on a random lane. Returns null if the pick was off-map.
@@ -396,8 +398,8 @@ export function driveAi(
     }
     if (gap < safe) {
       wantSpeed = 0;
-      // Waiting behind cars at a red light, or in a queue, isn't a jam.
-      if (!queued && !inQueue) ai.waited += dt;
+      // Waiting behind cars at a red light isn't a jam, nor (for a while) in a queue.
+      if (!queued) ai.waited += inQueue ? dt / QUEUE_PATIENCE : dt;
       ai.blockedByPlayer = playerAhead ? ai.blockedByPlayer + dt : 0;
       if (ai.blockedByPlayer > HONK_AFTER && ai.hornCooldown <= 0) honk(ai, 0.5 + rand() * 0.5, 2 + rand());
       if (ai.waited > 4) {

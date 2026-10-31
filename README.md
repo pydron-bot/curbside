@@ -1016,7 +1016,8 @@ and every new program is compiled behind the current frame.
   waits while anyone is already heading into its road. Once a turner pulls
   away from the line on green it is committed. Followers never go faster
   than they could stop from in the gap ahead, and waiting behind a car
-  facing the same way never trips the gridlock breaker. A busy-junction
+  facing the same way trips the gridlock breaker 8× later (32 s, not 4: a
+  queue moves on, a wreck or a car left in the lane doesn't). A busy-junction
   Monte Carlo (`tests/junctionTurns.test.ts`: 4 cars an approach, random
   turns, 40 runs with and without a long vehicle per queue) went from 49 and
   107 contacts to none, everyone through within three light cycles.
