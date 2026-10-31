@@ -52,6 +52,17 @@ the iPhone silent switch on, graphics quality, touch steering
 (point / classic), left-handed layout (mirrors the controls and the HUD),
 vibration, perf overlay (Off / FPS / Full).
 
+**Touch tuning** (for the device session): with the Perf overlay on (or
+`?debug`), pause → DIAGNOSTICS → TOUCH TUNING has −/+ steppers for stick
+radius, point-to-steer gain and deadzone, classic steer deadzone and expo,
+drive / walk / aim deadzones, aim radius, pedal reach and pedal size, and
+RESET (`core/touchTuning.ts`, `ui/tuningProbe.ts`). Changes apply at once
+(resume and drive, pause and adjust) and are saved in `curbside.tune`;
+every value is clamped to a range. Tuning applies only while the overlay is
+on: turn it off and the shipped feel is back. The report's `TUNE` line and
+`tune` JSON list the values that differ from the defaults, the numbers to
+bake in as new constants.
+
 ## Status
 
 - **M0 Setup** — done, verified on a phone over Tailscale: Vite 8 + three 0.186 + TS + vite-plugin-pwa, Vitest.

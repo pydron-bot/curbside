@@ -3,6 +3,7 @@ import './touch.css';
 import { AIM_FIRE_AT } from '../core/aim';
 import type { InputSource } from '../core/input';
 import { onSettingsChange, settings } from '../core/settings';
+import { onTuneChange, tune } from '../core/touchTuning';
 import { clampToRect, followThumb, footScale, shapeAxis, shapeStick, type Vec2 } from '../core/stick';
 import { PLAYER_ON_FOOT } from '../entities/pedestrian';
 import { WEAPONS, type WeaponKind } from '../systems/weapons';
@@ -30,18 +31,14 @@ export interface TouchControls {
   reset(): void;
 }
 
-/** Joystick radius, CSS px (the base is twice this). */
-const STICK_R = 58;
 /** Gap from the safe area to a resting stick, px. */
 const STICK_REST_GAP = 22;
-/** Stick shaping: deadzone (fraction) and expo per use. */
-const STEER_DZ = 0.08;
-const STEER_EXPO = 1.5;
-const DRIVE_DZ = 0.1;
+/**
+ * Stick radii (CSS px; a base is twice this) and deadzones, the steer expo:
+ * read from `tune` at use (core/touchTuning.ts, adjustable on the
+ * Diagnostics sheet). The drive expo isn't tuned.
+ */
 const DRIVE_EXPO = 1.15;
-const WALK_DZ = 0.08;
-const AIM_DZ = 0.14;
-const AIM_R = 52;
 /** A quick touch on the aim side that hardly moves is a tap-to-fire. */
 const TAP_MS = 230;
 const TAP_PX = 12;
@@ -146,10 +143,20 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   function restStick() {
     const s = safeInsets();
     const left = !settings.leftHanded;
-    const x = left ? s.left + STICK_REST_GAP + STICK_R : window.innerWidth - s.right - STICK_REST_GAP - STICK_R;
-    const y = window.innerHeight - Math.max(s.bottom, 8) - STICK_REST_GAP - STICK_R;
+    const x = left ? s.left + STICK_REST_GAP + tune.stickR : window.innerWidth - s.right - STICK_REST_GAP - tune.stickR;
+    const y = window.innerHeight - Math.max(s.bottom, 8) - STICK_REST_GAP - tune.stickR;
     if (stickPointer === null || stickParked) placeBase(stickBase, x, y);
   }
+
+  // Stick and pedal sizes follow the live tuning (the pedal pad is measured on each first touch, so its hit zones follow too).
+  const sizes = () => {
+    layer.style.setProperty('--stick-r', `${tune.stickR}px`);
+    layer.style.setProperty('--aim-r', `${tune.aimR}px`);
+    layer.style.setProperty('--pedal-scale', String(tune.pedalScale));
+    restStick();
+  };
+  onTuneChange(sizes);
+  sizes();
 
   /** Keep a stick origin inside its half of the screen and the safe area. */
   function clampOrigin(p: Vec2, ownHalfIsLeft: boolean, r: number) {
@@ -172,7 +179,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     stickZone.setPointerCapture(e.pointerId);
     origin.x = thumb.x = e.clientX;
     origin.y = thumb.y = e.clientY;
-    clampOrigin(origin, !settings.leftHanded, STICK_R);
+    clampOrigin(origin, !settings.leftHanded, tune.stickR);
     stickBase.classList.add('active');
     updateStick();
   });
@@ -211,13 +218,13 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   stickZone.addEventListener('lostpointercapture', releaseStick);
 
   function updateStick() {
-    followThumb(origin, thumb.x, thumb.y, STICK_R);
-    clampOrigin(origin, !settings.leftHanded, STICK_R);
+    followThumb(origin, thumb.x, thumb.y, tune.stickR);
+    clampOrigin(origin, !settings.leftHanded, tune.stickR);
     const dx = thumb.x - origin.x;
     const dy = thumb.y - origin.y;
     placeBase(stickBase, origin.x, origin.y);
     const len = Math.hypot(dx, dy);
-    const k = len > STICK_R ? STICK_R / len : 1;
+    const k = len > tune.stickR ? tune.stickR / len : 1;
     moveKnob(stickKnob, dx * k, dy * k);
     writeStick(dx, dy);
   }
@@ -225,8 +232,8 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   function writeStick(dx: number, dy: number) {
     if (stickPointer === null || stickParked) return;
     if (mode === 'car') {
-      out.steer = shapeAxis(dx / STICK_R, STEER_DZ, STEER_EXPO);
-      const m = shapeStick(dx, dy, STICK_R, DRIVE_DZ, DRIVE_EXPO, shaped);
+      out.steer = shapeAxis(dx / tune.stickR, tune.steerDz, tune.steerExpo);
+      const m = shapeStick(dx, dy, tune.stickR, tune.driveDz, DRIVE_EXPO, shaped);
       out.moveX = shaped.x;
       out.moveY = -shaped.y; // screen-up is positive
       out.sprint = false;
@@ -234,7 +241,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
       stickBase.style.setProperty('--dir', `${Math.atan2(dx, -dy).toFixed(3)}rad`);
       stickBase.classList.toggle('aiming', m > 0);
     } else {
-      const m = shapeStick(dx, dy, STICK_R, WALK_DZ, 1, shaped);
+      const m = shapeStick(dx, dy, tune.stickR, tune.walkDz, 1, shaped);
       const scale = m > 0 ? footScale(m, PLAYER_ON_FOOT.walkSpeed, PLAYER_ON_FOOT.runSpeed) / m : 0;
       out.moveX = shaped.x * scale;
       out.moveY = -shaped.y * scale;
@@ -277,7 +284,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     aimZone.setPointerCapture(e.pointerId);
     aimOrigin.x = aimThumb.x = e.clientX;
     aimOrigin.y = aimThumb.y = e.clientY;
-    clampOrigin(aimOrigin, settings.leftHanded, AIM_R);
+    clampOrigin(aimOrigin, settings.leftHanded, tune.aimR);
     aimDownAt = performance.now();
     aimTravel = 0;
     aimBase.classList.remove('resting');
@@ -327,21 +334,21 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   aimZone.addEventListener('lostpointercapture', releaseAim);
 
   function updateAim() {
-    followThumb(aimOrigin, aimThumb.x, aimThumb.y, AIM_R);
-    clampOrigin(aimOrigin, settings.leftHanded, AIM_R);
+    followThumb(aimOrigin, aimThumb.x, aimThumb.y, tune.aimR);
+    clampOrigin(aimOrigin, settings.leftHanded, tune.aimR);
     const dx = aimThumb.x - aimOrigin.x;
     const dy = aimThumb.y - aimOrigin.y;
     placeBase(aimBase, aimOrigin.x, aimOrigin.y);
     const len = Math.hypot(dx, dy);
-    const k = len > AIM_R ? AIM_R / len : 1;
+    const k = len > tune.aimR ? tune.aimR / len : 1;
     moveKnob(aimKnob, dx * k, dy * k);
-    const m = shapeStick(dx, dy, AIM_R, AIM_DZ, 1, shaped);
+    const m = shapeStick(dx, dy, tune.aimR, tune.aimDz, 1, shaped);
     out.aimX = shaped.x;
     out.aimY = -shaped.y;
     // A fresh aim replaces one released but not read yet.
     out.aimRelease = false;
     aimDeflected = m > 0;
-    const firing = !throwing && m > 0 && Math.min(1, len / AIM_R) >= AIM_FIRE_AT;
+    const firing = !throwing && m > 0 && Math.min(1, len / tune.aimR) >= AIM_FIRE_AT;
     if (firing !== out.aimFire) {
       out.aimFire = firing;
       aimBase.classList.toggle('firing', firing);

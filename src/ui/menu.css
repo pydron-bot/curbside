@@ -772,6 +772,28 @@ kbd.pad.b {
   color: var(--danger);
 }
 
+.diag-tune-grid {
+  display: grid;
+  grid-template-columns: 1fr auto 6em auto;
+  align-items: center;
+  gap: 4px 6px;
+  margin-bottom: 6px;
+  font: 800 11px/1.2 var(--hud-font);
+  letter-spacing: 0.06em;
+  color: var(--ink-dim);
+}
+
+.diag-tune-grid b {
+  white-space: nowrap;
+  text-align: center;
+  font: 12px/1 ui-monospace, Menlo, monospace;
+  color: var(--ink);
+}
+
+.diag-tune-grid .diag-pad {
+  min-width: 44px;
+}
+
 .diag-probe-out {
   margin: 4px 0 2px;
   white-space: pre-wrap;

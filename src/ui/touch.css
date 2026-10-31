@@ -67,10 +67,11 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
   will-change: transform;
 }
 
+/* Sized by the tuned radius (--stick-r, --aim-r: touchControls.ts sets them from core/touchTuning.ts). */
 .stick-base {
-  width: 116px;
-  height: 116px;
-  margin: -58px 0 0 -58px;
+  width: calc(2 * var(--stick-r, 58px));
+  height: calc(2 * var(--stick-r, 58px));
+  margin: calc(-1 * var(--stick-r, 58px)) 0 0 calc(-1 * var(--stick-r, 58px));
   border: 2px solid rgb(255 255 255 / 0.4);
   background: radial-gradient(circle, rgb(0 0 0 / 0.1) 0 40%, rgb(0 0 0 / 0.32) 72%);
   box-shadow: 0 0 0 1px rgb(0 0 0 / 0.25), inset 0 0 18px rgb(0 0 0 / 0.35);
@@ -129,9 +130,9 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
 }
 
 .aim-base {
-  width: 104px;
-  height: 104px;
-  margin: -52px 0 0 -52px;
+  width: calc(2 * var(--aim-r, 52px));
+  height: calc(2 * var(--aim-r, 52px));
+  margin: calc(-1 * var(--aim-r, 52px)) 0 0 calc(-1 * var(--aim-r, 52px));
   border: 2px dashed rgb(255 120 90 / 0.65);
   background: radial-gradient(circle, rgb(255 80 50 / 0.06), rgb(255 80 50 / 0.18) 70%, transparent 72%);
   opacity: 0;
@@ -318,6 +319,9 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
   width: var(--pad-w);
   height: var(--pad-h);
   touch-action: none;
+  /* Tuned size, anchored at the screen corner (the pedals are hit-tested from their measured rects, so it scales too). */
+  transform: scale(var(--pedal-scale, 1));
+  transform-origin: right bottom;
 }
 
 .pedal {
@@ -388,6 +392,10 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
 .touch-layer[data-hand='left'] .pedal-pad {
   right: auto;
   left: var(--edge-l);
+}
+
+.touch-layer[data-hand='left'] .pedal-pad {
+  transform-origin: left bottom;
 }
 
 .touch-layer[data-hand='left'] .btn-swap {

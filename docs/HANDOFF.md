@@ -119,8 +119,9 @@ safety valve when DynamicResolution drops a tier, which it only does with
 Settings → Graphics on Auto, the default), and PHONE stays on the switch to
 compare against. Full numbers in README *Destruction test*.
 
-1. **Optional before the device pass:** live touch tuning
-   [`touch-tuning`].
+1. ~~Live touch tuning~~ [`touch-tuning`]: done 2026-10-31 (pause →
+   DIAGNOSTICS → TOUCH TUNING; README *Controls*). Use it during the device
+   pass and send the report: its `TUNE` line is the numbers to bake in.
 2. **Real-device pass on an iPhone 15 Pro** (the user, ~1.5–2 h): turn on
    Settings → Perf overlay, follow [`device-checklist`] (the haptics /
    rumble / pad questions are answered by the probes in the Diagnostics

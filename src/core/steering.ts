@@ -11,6 +11,7 @@
  * behind and the car is slow. Pure: no DOM, no three.js.
  */
 import { forwardSpeed, wrapAngle, type VehicleControls, type VehicleState } from '../entities/vehicle';
+import { tune } from './touchTuning';
 
 export interface DirectionalInput {
   /** Stick, screen-relative, already shaped: x = screen-right, y = screen-up, length 0..1. */
@@ -33,11 +34,13 @@ export interface DirectionalState {
   unstick: number;
 }
 
+/**
+ * The point-to-steer helper's constants. Its gain (steer per radian of
+ * heading error: full lock beyond ~26° at 2.2) and deadzone (a stick shorter
+ * than this is "no direction": coast, pedals still work) are tuned live:
+ * `tune.dirGain` / `tune.dirDeadzone` (core/touchTuning.ts).
+ */
 export const DIRECTIONAL = {
-  /** Steer per radian of heading error: full lock beyond ~26°. */
-  gain: 2.2,
-  /** Stick length below this is "no direction" (coast; pedals still work). */
-  deadzone: 0.1,
   /** Heading error (rad) above which the throttle lifts... */
   liftAngle: 1.0,
   /** ...to at most this... */
@@ -108,7 +111,7 @@ export function directionalControls(
   out.handbrake = input.handbrake;
   const mag = Math.min(1, Math.hypot(input.x, input.y));
   const vF = forwardSpeed(car);
-  if (mag < d.deadzone) {
+  if (mag < tune.dirDeadzone) {
     resetDirectionalState(state);
     out.steer = 0;
     out.throttle = input.brake ? -1 : input.gas ? 1 : 0;
@@ -154,7 +157,7 @@ export function directionalControls(
   // Swing the nose toward the target. Rolling backwards flips which way the
   // wheel yaws the car (see stepVehicle), so the wheel flips too.
   const backward = vF < -0.5 || (vF <= 0.5 && throttle < 0);
-  const steer = Math.max(-1, Math.min(1, -diff * d.gain));
+  const steer = Math.max(-1, Math.min(1, -diff * tune.dirGain));
   out.steer = backward ? -steer : steer;
   out.throttle = throttle;
   return out;

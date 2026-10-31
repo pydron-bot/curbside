@@ -4,6 +4,7 @@
  * a thumb can roll from GAS onto BRAKE without lifting, and the band between
  * GAS and HAND presses both (drift with one thumb). Pure geometry, no DOM.
  */
+import { TUNE_DEFAULTS, tune } from '../core/touchTuning';
 export interface PedalCircle {
   x: number;
   y: number;
@@ -25,10 +26,10 @@ export interface PedalState {
 }
 
 /** A finger this many radii from the nearest pedal's centre still presses it (generous: thumbs are fat). */
-export const PEDAL_REACH = 1.45;
+export const PEDAL_REACH = TUNE_DEFAULTS.pedalReach;
 
-/** Which pedals a finger at (x, y) presses; ORs into `out`. */
-export function pedalsAt(x: number, y: number, layout: PedalLayout, out: PedalState): void {
+/** Which pedals a finger at (x, y) presses within `reach` radii (tuned live); ORs into `out`. */
+export function pedalsAt(x: number, y: number, layout: PedalLayout, out: PedalState, reach = tune.pedalReach): void {
   const c = layout.chord;
   if (x >= c.minX && x <= c.maxX && y >= c.minY && y <= c.maxY) {
     out.gas = out.hand = true;
@@ -38,7 +39,7 @@ export function pedalsAt(x: number, y: number, layout: PedalLayout, out: PedalSt
   const b = norm(x, y, layout.brake);
   const h = norm(x, y, layout.hand);
   const best = Math.min(g, b, h);
-  if (best > PEDAL_REACH) return;
+  if (best > reach) return;
   if (best === g) out.gas = true;
   else if (best === b) out.brake = true;
   else out.hand = true;

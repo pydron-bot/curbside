@@ -2,6 +2,7 @@ import { BUILD_ID } from '../core/build';
 import { emptySummary, type FrameSummary } from '../core/frameStats';
 import { loadPreviousLog, SAMPLE_EVERY_MS, SessionLog, type KeyValueStore, type SessionLogData } from '../core/sessionLog';
 import { onSettingsChange, settings } from '../core/settings';
+import { changedTune, loadTune, setTuneEnabled, tuneSummary } from '../core/touchTuning';
 import { getQuality } from '../render/quality';
 import type { FrontDoor } from './frontDoor';
 import type { Haptics } from './haptics';
@@ -10,6 +11,7 @@ import { DestructionProbe, destructionSummary, type DestructionProbeDeps } from 
 import { InputProbes } from './inputProbes';
 import { MenuNav, overlay, type Panel } from './menu';
 import { safeInsets } from './safeArea';
+import { TuningProbe } from './tuningProbe';
 
 /** The play-log stream's key (it owns writing it); read raw for the report. */
 const PLAYLOG_KEY = 'curbside.playlog';
@@ -77,6 +79,7 @@ export class Diagnostics implements Panel {
   private readonly firstBtn: HTMLButtonElement;
   private readonly probes: InputProbes | null = null;
   private readonly destruction: DestructionProbe | null = null;
+  private readonly tuning: TuningProbe;
   private readonly frameOut = emptySummary();
   private onClose: () => void = () => {};
   private tier = '';
@@ -88,6 +91,7 @@ export class Diagnostics implements Panel {
     private readonly deps: DiagnosticsDeps,
   ) {
     this.previous = loadPreviousLog(storage());
+    loadTune(storage());
     const { root, card } = overlay('diagnostics', 'ui-sheet');
     this.root = root;
     this.nav = new MenuNav(root);
@@ -132,6 +136,8 @@ export class Diagnostics implements Panel {
       this.probes = new InputProbes(deps.haptics, this.nav);
       this.summaryEl.before(this.probes.el);
     }
+    this.tuning = new TuningProbe(this.nav);
+    this.summaryEl.before(this.tuning.el);
     parent.append(root);
 
     this.log.addEvent(performance.now(), 'boot', BUILD_ID);
@@ -160,6 +166,7 @@ export class Diagnostics implements Panel {
     this.refresh();
     this.probes?.start();
     this.destruction?.start();
+    this.tuning.show();
     this.root.hidden = false;
     // The destruction test's mode pads first while it is on the sheet (the header's buttons are up from there).
     this.nav.focusElement(this.destruction?.current ?? this.firstBtn);
@@ -214,6 +221,7 @@ export class Diagnostics implements Panel {
       audioState: this.deps.audioState(),
       settings: { ...settings },
       frame: { ...f },
+      tune: changedTune(),
       destruction: this.deps.destruction?.stats() ?? null,
       rapierFiles: rapierFiles(),
       session: this.log.data(),
@@ -236,6 +244,7 @@ export class Diagnostics implements Panel {
       ...(this.deps.destruction ? [destructionSummary(this.deps.destruction.stats())] : []),
       `FRAMES ${f.fps.toFixed(1)} fps · p50 ${f.p50.toFixed(1)} p95 ${f.p95.toFixed(1)} p99 ${f.p99.toFixed(1)} ms · js p95 ${f.jsP95.toFixed(1)} · ${f.hitchesPerMin.toFixed(1)} hitch/min`,
       `SESSION ${this.log.seconds(performance.now()).toFixed(0)} s · ${d.samples.length} samples (every ${SAMPLE_EVERY_MS / 1000} s) · ${this.log.eventCount} events`,
+      tuneSummary(),
       `PREVIOUS ${this.previous ? `${this.previous.samples.length} samples from ${this.previous.started}` : 'none'}`,
     ].join('\n');
   }
@@ -339,7 +348,11 @@ export function addDiagnosticsButton(diag: Diagnostics, frontDoor: FrontDoor, sh
     diag.open(() => frontDoor.closePanel(diag), showFocus());
   });
   const debug = new URLSearchParams(location.search).has('debug');
-  const sync = () => (b.hidden = !debug && settings.perfOverlay === 'off');
+  // Touch tuning applies only while its sheet is reachable: turning the overlay off restores the shipped feel.
+  const sync = () => {
+    b.hidden = !debug && settings.perfOverlay === 'off';
+    setTuneEnabled(!b.hidden);
+  };
   sync();
   onSettingsChange(sync);
 }
