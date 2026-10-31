@@ -98,16 +98,55 @@ export function bodyDistance(s: VehicleState, x: number, z: number): number {
 }
 
 /**
+ * Half-width of the thinnest static obstacle (a bollard), m. A step that
+ * moves a body more than SWEEP_SHARE of this plus its radius is resolved in
+ * substeps, so a fast bike can't land past a post's middle and be pushed out
+ * of its far side. Slower moves (every car short of ~50 m/s) cost nothing extra.
+ */
+const THIN_HALF = 0.14;
+const SWEEP_SHARE = 0.75;
+/** A longer move in one step is a respawn or teleport, not travel: no sweep. */
+const SWEEP_MAX = 4;
+
+/**
  * Push a car out of walls and bounce it. If `contact` is given and the car
  * hit something, it receives the point of impact (on the wall surface).
+ * With `from` (where it was at the start of the step) a fast move is swept
+ * in substeps, so it can't skip through a thin post.
  *
  * Only the part of the velocity into the wall is stopped (and bounced); the
  * part along it is scrubbed in proportion to how hard the hit was, and a
  * glancing nose-in swings the car parallel, so a glance slides along the
  * wall instead of sticking.
  */
-export function collideVehicleStatic(s: VehicleState, grid: StaticGrid, contact?: Point): number {
-  let impact = 0;
+export function collideVehicleStatic(s: VehicleState, grid: StaticGrid, contact?: Point, from?: Point): number {
+  if (from) {
+    const dx = s.x - from.x;
+    const dz = s.z - from.z;
+    const travel = Math.hypot(dx, dz);
+    const span = SWEEP_SHARE * (THIN_HALF + bodyOf(s).radius);
+    if (travel > span && travel < SWEEP_MAX) {
+      // Re-run the move in short hops, each from where the last was pushed to:
+      // a hit stops the car at the near face, and sliding along a wall keeps its pace.
+      const n = Math.ceil(travel / span);
+      const hx = dx / n;
+      const hz = dz / n;
+      s.x = from.x;
+      s.z = from.z;
+      let impact = 0;
+      for (let i = 0; i < n; i++) {
+        s.x += hx;
+        s.z += hz;
+        impact = resolveStatic(s, grid, contact, impact);
+      }
+      return impact;
+    }
+  }
+  return resolveStatic(s, grid, contact, 0);
+}
+
+/** One end-of-move resolve; returns the larger of `impact` and this hit's. */
+function resolveStatic(s: VehicleState, grid: StaticGrid, contact: Point | undefined, impact: number): number {
   const fx = Math.sin(s.heading);
   const fz = Math.cos(s.heading);
   const pos = scratchPos;

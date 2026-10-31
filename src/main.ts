@@ -627,9 +627,9 @@ function simulate(dt: number) {
 
   // --- Collisions ---
   for (const v of vehicles) {
-    let impact = collideVehicleStatic(v.sim, collision, contact);
+    let impact = collideVehicleStatic(v.sim, collision, contact, v.prev);
     // A ramp's sides and back are solid to anything not riding up it.
-    if (!v.sim.airborne && v.sim.y <= 0 && !enteringRamp(v.sim, ramps)) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact));
+    if (!v.sim.airborne && v.sim.y <= 0 && !enteringRamp(v.sim, ramps)) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact, v.prev));
     if (impact <= 0) continue;
     const hit = impactDamage(impact) * (v === driving ? PLAYER_CRASH_SHARE : 1);
     applyDamage(v.damage, hit);
@@ -745,11 +745,13 @@ function simulate(dt: number) {
     // Static last so a car can't shove the player into a wall (or a ramp).
     collidePedStatic(player.ped, collision);
     collidePedStatic(player.ped, rampGrid);
+    if (look.props.loaded) knockables.collidePed(player.ped);
   }
   for (const c of population.crowd) {
     if (c.agent.mode !== 'down') for (const s of vehicleStates) collidePedVehicle(c.agent.s, s);
     collidePedStatic(c.agent.s, collision);
     collidePedStatic(c.agent.s, rampGrid);
+    if (look.props.loaded) knockables.collidePed(c.agent.s);
   }
   syncWeapon();
 }

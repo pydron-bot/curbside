@@ -67,6 +67,21 @@ describe('street furniture', () => {
     expect(street.solids.length).toBe(street.props.filter((p) => solidKinds.has(p.kind)).length);
     // The knockables are the small things, each a real prop.
     for (const k of street.knockables) expect(['hydrant', 'trash_bin', 'newspaper_box', 'mailbox', 'bench']).toContain(street.props[k.prop].kind);
+    // Benches block people as their box, long side along the kerb, and stay
+    // clear of the line walkers follow down the pavement.
+    const walkLine = ROAD_WIDTH / 2 + SIDEWALK / 2;
+    const benches = dressing.knockables.filter((k) => k.kind === 'bench');
+    expect(benches.length).toBeGreaterThan(0);
+    for (const k of benches) {
+      const hx = k.hx ?? 0;
+      const hz = k.hz ?? 0;
+      expect(Math.max(hx, hz)).toBeCloseTo(0.9);
+      expect(fromCentreline(k.x, k.z) - Math.min(hx, hz) - 0.35).toBeGreaterThan(walkLine + 0.1);
+      // The box's short side faces the nearer road.
+      const dx = Math.abs(k.x - Math.round(k.x / BLOCK_SIZE) * BLOCK_SIZE);
+      const dz = Math.abs(k.z - Math.round(k.z / BLOCK_SIZE) * BLOCK_SIZE);
+      expect(dx < dz ? hx < hz : hz < hx).toBe(true);
+    }
   });
 
   it('keeps clear of pickups, payphones, the safehouse and the spray bays (and their mouths)', () => {

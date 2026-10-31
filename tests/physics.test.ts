@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { createPedState } from '../src/entities/pedestrian';
-import { CAR_BODY, SEDAN, VEHICLE_BODIES, VEHICLE_SPECS, createVehicleState, speed, stepVehicle, type VehicleArchetype } from '../src/entities/vehicle';
+import { CAR_BODY, SEDAN, VEHICLE_BODIES, VEHICLE_SPECS, createVehicleState, speed, stepVehicle, terminalSpeed, type VehicleArchetype } from '../src/entities/vehicle';
 import { bodyDistance, carCircles, collidePedVehicle, collideVehicleStatic, collideVehicles, type CarContact } from '../src/systems/physics';
-import { StaticGrid } from '../src/world/collision';
+import { StaticGrid, circleVsRect } from '../src/world/collision';
 
 describe('collision contacts', () => {
   it('reports where a car hit a wall', () => {
@@ -164,6 +164,70 @@ describe('vehicle bodies', () => {
     const car = createVehicleState(0, 0, 0);
     collideVehicleStatic(car, post);
     expect(car.x).toBeLessThan(0);
+  });
+
+  /**
+   * A cop bike (two 0.45 m circles) driven at a square post of half-width
+   * `half` from every lateral offset that touches it and every step phase.
+   * Counts steps that end with a circle still overlapping the post or past
+   * its middle in its shadow (through it rather than around it).
+   */
+  const tunnels = (speedMs: number, half: number, sweep: boolean): number => {
+    const dt = 1 / 60;
+    const rect = { minX: -half, minZ: -half, maxX: half, maxZ: half };
+    const grid = new StaticGrid([rect]);
+    const r = VEHICLE_BODIES.cop_bike.radius;
+    let bad = 0;
+    for (let lateral = -(half + r) + 0.01; lateral < half + r; lateral += 0.04) {
+      for (let phase = 0; phase < 1; phase += 1 / 16) {
+        const bike = placed('cop_bike', -5 - phase * speedMs * dt, lateral, Math.PI / 2); // heading +X
+        bike.vx = speedMs;
+        for (let step = 0; step < 40; step++) {
+          const from = { x: bike.x, z: bike.z };
+          bike.x += bike.vx * dt;
+          bike.z += bike.vz * dt;
+          collideVehicleStatic(bike, grid, undefined, sweep ? from : undefined);
+          for (const c of carCircles(bike)) {
+            const through = Math.abs(c.z) < half && c.x > 0;
+            if (through || circleVsRect(c.x, c.z, r - 1e-3, rect)) bad++;
+          }
+        }
+      }
+    }
+    return bad;
+  };
+
+  it('a cop bike flat out (nitro, or 38 m/s in pursuit) stops at a post or a bollard, never through it', () => {
+    const nitro = terminalSpeed(VEHICLE_SPECS.cop_bike, true);
+    expect(nitro).toBeGreaterThan(45);
+    // Without the sweep it does tunnel (so this test can see it)...
+    expect(tunnels(nitro, 0.14, false)).toBeGreaterThan(0);
+    // ...with it, never: nitro or pursuit speed, 0.4 m post or 0.28 m bollard.
+    for (const v of [nitro, 38]) {
+      expect(tunnels(v, 0.2, true)).toBe(0);
+      expect(tunnels(v, 0.14, true)).toBe(0);
+    }
+  });
+
+  it('the sweep keeps a fast slide along a wall, and changes nothing at normal speeds', () => {
+    const wall = new StaticGrid([{ minX: -100, minZ: 1, maxX: 100, maxZ: 3 }]);
+    // A bike at 45 m/s skimming the wall at a shallow angle keeps nearly all its pace along it.
+    const bike = placed('cop_bike', 0, 0.5, Math.PI / 2);
+    bike.vx = 45;
+    bike.vz = 3;
+    const from = { x: bike.x, z: bike.z };
+    bike.x += bike.vx / 60;
+    bike.z += bike.vz / 60;
+    collideVehicleStatic(bike, wall, undefined, from);
+    expect(bike.x).toBeCloseTo(0.75, 2);
+    expect(bike.z).toBeLessThanOrEqual(1 - 0.45 + 1e-6);
+    // A car at 20 m/s into it: the swept and plain resolves agree exactly.
+    const a = createVehicleState(0, -0.6, 0);
+    a.vz = 20;
+    const b = { ...a };
+    const start = { x: 0, z: -0.6 - 20 / 60 };
+    expect(collideVehicleStatic(a, wall, undefined, start)).toBe(collideVehicleStatic(b, wall));
+    expect(a).toEqual(b);
   });
 
   it('carCircles resizes caller storage to the body, and bodyDistance measures to its surface', () => {

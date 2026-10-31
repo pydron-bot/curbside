@@ -4,10 +4,12 @@
  * every moving car's body is checked against the few within reach (a
  * bucket grid); one it touches is knocked (the car loses a little speed,
  * more for a bench) and reported, and it comes back a minute later once
- * nobody's looking. Pure logic, no three.js: the game hides the prop and
+ * nobody's looking. Standing ones are solid to people (collidePed), who
+ * only bump into them. Pure logic, no three.js: the game hides the prop and
  * throws a copy of it (render/knockFx.ts).
  */
-import { bodyOf } from './physics';
+import { PED_RADIUS, bodyOf } from './physics';
+import type { PedState } from '../entities/pedestrian';
 import type { VehicleState } from '../entities/vehicle';
 import type { Rect } from '../world/city';
 
@@ -18,6 +20,9 @@ export interface KnockableItem {
   x: number;
   z: number;
   radius: number;
+  /** Half-sizes of its box (benches): people collide with this instead of the radius, m. */
+  hx?: number;
+  hz?: number;
 }
 
 /** Slower than this (m/s) a car just nudges things (and stops against nothing: they're not solid). */
@@ -84,6 +89,68 @@ export class Knockables {
               s.vz *= keep;
               onKnock(this.items[i], s);
             }
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Keep a person out of the standing furniture around them (a bench by its
+   * box, the rest by their radius): pushed clear, with their speed into it
+   * removed. People don't knock things over. Allocates nothing.
+   */
+  collidePed(p: PedState, radius = PED_RADIUS): void {
+    const cx0 = Math.floor((p.x - radius - 1) / CELL);
+    const cz0 = Math.floor((p.z - radius - 1) / CELL);
+    const cx1 = Math.floor((p.x + radius + 1) / CELL);
+    const cz1 = Math.floor((p.z + radius + 1) / CELL);
+    for (let cx = cx0; cx <= cx1; cx++) {
+      for (let cz = cz0; cz <= cz1; cz++) {
+        const list = this.cells.get(cellKey(cx, cz));
+        if (!list) continue;
+        for (let j = 0; j < list.length; j++) {
+          const i = list[j];
+          if (this.knockedAt[i] >= 0) continue;
+          const k = this.items[i];
+          let nx: number;
+          let nz: number;
+          let depth: number;
+          if (k.hx !== undefined && k.hz !== undefined) {
+            const dx = p.x - Math.max(k.x - k.hx, Math.min(p.x, k.x + k.hx));
+            const dz = p.z - Math.max(k.z - k.hz, Math.min(p.z, k.z + k.hz));
+            const d2 = dx * dx + dz * dz;
+            if (d2 >= radius * radius) continue;
+            if (d2 > 1e-12) {
+              const d = Math.sqrt(d2);
+              nx = dx / d;
+              nz = dz / d;
+              depth = radius - d;
+            } else {
+              // Centre inside the box: out through the nearer side.
+              const ox = k.hx - Math.abs(p.x - k.x);
+              const oz = k.hz - Math.abs(p.z - k.z);
+              nx = ox < oz ? (p.x < k.x ? -1 : 1) : 0;
+              nz = ox < oz ? 0 : p.z < k.z ? -1 : 1;
+              depth = Math.min(ox, oz) + radius;
+            }
+          } else {
+            const dx = p.x - k.x;
+            const dz = p.z - k.z;
+            const reach = radius + k.radius;
+            const d2 = dx * dx + dz * dz;
+            if (d2 >= reach * reach) continue;
+            const d = Math.sqrt(d2);
+            nx = d > 1e-6 ? dx / d : 1;
+            nz = d > 1e-6 ? dz / d : 0;
+            depth = reach - d;
+          }
+          p.x += nx * depth;
+          p.z += nz * depth;
+          const vn = p.vx * nx + p.vz * nz;
+          if (vn < 0) {
+            p.vx -= vn * nx;
+            p.vz -= vn * nz;
           }
         }
       }
