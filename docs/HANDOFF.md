@@ -149,9 +149,12 @@ compare against. Full numbers in README *Destruction test*.
    program or draw call). Needs a look on the phone in daylight and at night
    during the soak.
    (c) Then decide whether the test goes on by default.
-3. **Races and tuning** (cloud): the bot-vs-dev-time test [`tune-race-dev-times`]; commit
-   the `__ub` bot harnesses [`tune-chaos-medals`, `tune-five-star-escape`].
-   Re-tune medals and 5-star escape only from logged real play.
+3. **Races and tuning**: the bot-vs-dev-time test
+   (`tests/raceDevTime.test.ts`) and the seeded harnesses `tools/tune/chaos.mjs`
+   and `heat.mjs` with baselines (README *Tuning harnesses*) are done
+   2026-10-31. Still open: re-tune medals and 5-star escape from logged real
+   play; whether gold should be reachable in any car (a sedan's clean line is
+   ×1.09–1.10 of dev; gold is ×1.05).
 4. **Blender adjustment pass** (cloud): the pip `bpy` 5.2.3 module rebuilds
    every committed GLB headless (recipe in `docs/BLENDER_TODO.md`). Then: fly the `rocket` model
    [`rocket-projectile`], GetUp/Throw timing [`clips-getup-throw`], held

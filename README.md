@@ -575,9 +575,9 @@ are `src/game/modes/*Mode.ts`.
   WASTED or BUSTED ends the run early (results after the respawn). The best
   and medal are saved and shown on the title; RESTART in the pause menu
   starts a fresh run. The medal lines are the review's (bronze is a run
-  that keeps its car and chains a few stunts); before the run's car was
-  armoured (×1.5 health, 60% crash share), a reckless autopilot wrecked it
-  in the first 15–20 s and scored 1–6.6k on foot.
+  that keeps its car and chains a few stunts). Bot baselines from
+  `tools/tune/chaos.mjs` (*Tuning harnesses* below) put a mindless driver at
+  bronze 1 run in 5 to 1 in 2 and never silver.
 - **Frenzies** (`modes/frenzies.ts`, `frenzyMode.ts`): eight spinning purple
   gems on pavements ('!' on the radar). Touch one, 3-2-1, then: KNOCK DOWN 15
   in 60 s (with an SMG), NEAR MISS ×8 in 60 s, CARJACK 5 in 120 s, DRIFT
@@ -600,9 +600,13 @@ are `src/game/modes/*Mode.ts`.
   the time against gold on the card. Medals against a developer time from
   the course (straights at 36 m/s, 1.2 s a corner, 2 s to launch): gold
   ×1.05, silver ×1.2, bronze ×1.4, paying $800 / $400 / $200 the first time
-  (a tenth on a repeat). A braking-aware autopilot in the sports car lands
-  silver; re-tune `DEV_SPEED` / `DEV_CORNER` (`modes/races.ts`) if the cars'
-  handling changes. Out of the car for 8 s, wrecking the car, WASTED,
+  (a tenth on a repeat). A clean braking-aware bot in an empty city
+  (`tests/raceDevTime.test.ts`) does every course in ×0.88–0.91 of dev in
+  the sports car (gold with ~15% to spare for traffic and mistakes) and
+  ×1.09–1.10 in a sedan (no gold); the test fails if a handling change moves
+  that, so re-tune `DEV_SPEED` / `DEV_CORNER` (`modes/races.ts`) or its
+  bounds on purpose. `RACE_REPORT=1 npx vitest run tests/raceDevTime.test.ts`
+  prints every course in three cars. Out of the car for 8 s, wrecking the car, WASTED,
   BUSTED or 2.5× the dev time ends it.
 - **Hot-car exports** (`modes/exports.ts`, `exportMode.ts`): a drive-in bay
   on an open lot at the docks ('$' on the radar, pulsing with an arrow when
@@ -677,6 +681,33 @@ pause.addButton(label, icon, onActivate)       // a button in the pause menu
 title.addInfo(element)                         // a line under the title's best score
 player.maxHealth                               // a life's starting health
 ```
+
+## Tuning harnesses
+
+`tools/tune/` drives the real game headless (Playwright + SwiftShader on the
+dev server, through `window.__ub`, bots in place of `input.readVehicle`, no
+game-code change). The page draws no frames, its clock is fixed and
+`Math.random` is seeded, so the same seeds repeat exactly: change a knob, run
+again, compare. Bots are a lower bound and a relative check, never the
+verdict on difficulty; real play (the Diagnostics report's play log) is.
+Playwright isn't a game dependency: run with
+`npx -y -p playwright@1.63.0 node tools/tune/<harness>.mjs …` (or set
+`PLAYWRIGHT` to a directory with it installed), with `npm run dev` up.
+
+- **`chaos.mjs [runs=20] [--bot rammer|weaver|drifter|all] [--seed 1]`**:
+  Chaos Runs; score percentiles, medals, how runs ended, points by category.
+  ~1.5 s a run. Baseline 2026-10-31 (20 runs each, seed 1): rammer median
+  6.5k (p75 11.3k, max 24.5k), 4 bronze; weaver 12.7k (22.6k, 30.1k), 10
+  bronze; drifter 7.8k (12.4k, 33.3k), 4 bronze; no silver or gold. Boom and
+  smash are half to three quarters of the points (the weaver: drift 39%).
+- **`heat.mjs [chases=20] [--stars 5] [--secs 180] [--tough] [--seed 1]`**:
+  chases from a built-up 3 stars to `--stars`, a junction-to-junction
+  evader; escapes, busts, wrecks, time to each lower star, crashes, shots
+  taken, helicopter time on you. `--tough` keeps the car healthy to test
+  the evasion rules alone. Baseline 2026-10-31 (20 chases, 5 stars): stock
+  sports car lost in 18, busted 2, median end 26 s, 1 drop to 4 stars;
+  tough car: none escaped, 12 down to 4 stars (median 84 s), 3 to 3 stars,
+  2 busted.
 
 ## Layout
 
