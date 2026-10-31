@@ -745,11 +745,13 @@ function simulate(dt: number) {
     // Static last so a car can't shove the player into a wall (or a ramp).
     collidePedStatic(player.ped, collision);
     collidePedStatic(player.ped, rampGrid);
+    if (look.props.loaded) knockables.collidePed(player.ped);
   }
   for (const c of population.crowd) {
     if (c.agent.mode !== 'down') for (const s of vehicleStates) collidePedVehicle(c.agent.s, s);
     collidePedStatic(c.agent.s, collision);
     collidePedStatic(c.agent.s, rampGrid);
+    if (look.props.loaded) knockables.collidePed(c.agent.s);
   }
   syncWeapon();
 }

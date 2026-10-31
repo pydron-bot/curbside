@@ -60,7 +60,7 @@ export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: num
   });
   const street = placeStreetProps(city, { avoid, keepOut });
   const knockables: KnockableItem[] = [
-    ...street.knockables.map((k) => ({ id: k.prop, kind: street.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius })),
+    ...street.knockables.map((k) => ({ id: k.prop, kind: street.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius, hx: k.hx, hz: k.hz })),
     ...landmarks.knockables.map((k) => ({ id: LANDMARK_KNOCK_ID + k.prop, kind: landmarks.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius })),
   ];
   return { street, landmarks, solids: [...street.solids, ...landmarks.solids], knockables };

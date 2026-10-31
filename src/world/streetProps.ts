@@ -54,6 +54,9 @@ export interface Knockable {
   x: number;
   z: number;
   radius: number;
+  /** Half-sizes of its box (benches), which people collide with instead of the radius, m. */
+  hx?: number;
+  hz?: number;
 }
 
 export interface StreetProps {
@@ -136,6 +139,10 @@ const KNOCK_RADIUS: Partial<Record<StreetPropKind, number>> = {
   mailbox: 0.32,
   bench: 0.95,
 };
+/** Long furniture people walk around as a box (half-sizes, m), clear of the walk line. */
+const KNOCK_BOX: Partial<Record<StreetPropKind, readonly [number, number]>> = {
+  bench: [0.9, 0.3],
+};
 
 export function placeStreetProps(city: City, opts: StreetPropOptions = {}): StreetProps {
   const props: StreetProp[] = [];
@@ -148,16 +155,18 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
 
   const put = (kind: StreetPropKind, x: number, z: number, heading: number, scale = 1, phase = 0, eastWest = false) => {
     const i = props.push({ kind, x, z, heading, scale, phase, eastWest }) - 1;
+    // Turned a quarter, a footprint swaps.
+    const turned = Math.abs(Math.sin(heading)) > 0.5;
     const half = SOLID_HALF[kind];
     if (half) {
-      // Turned a quarter, the footprint swaps.
-      const turned = Math.abs(Math.sin(heading)) > 0.5;
       const hx = (turned ? half[1] : half[0]) * scale;
       const hz = (turned ? half[0] : half[1]) * scale;
       solids.push({ minX: x - hx, minZ: z - hz, maxX: x + hx, maxZ: z + hz });
     }
     const r = KNOCK_RADIUS[kind];
-    if (r) knockables.push({ prop: i, x, z, radius: r * scale });
+    const box = KNOCK_BOX[kind];
+    if (r && box) knockables.push({ prop: i, x, z, radius: r * scale, hx: (turned ? box[1] : box[0]) * scale, hz: (turned ? box[0] : box[1]) * scale });
+    else if (r) knockables.push({ prop: i, x, z, radius: r * scale });
   };
 
   // Lamps: every one the shaders light, except where one would stand in a
