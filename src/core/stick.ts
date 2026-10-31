@@ -4,6 +4,8 @@
  * origin that follows a thumb dragged past the rim, and continuous walk → run.
  * Pure: no DOM, so the feel can be unit-tested and tuned.
  */
+
+import { len2 } from './len';
 export interface Vec2 {
   x: number;
   y: number;
@@ -16,7 +18,7 @@ export interface Vec2 {
  * Writes the vector into `out` and returns its length.
  */
 export function shapeStick(dx: number, dy: number, radius: number, deadzone: number, expo: number, out: Vec2): number {
-  const len = Math.hypot(dx, dy);
+  const len = len2(dx, dy);
   const raw = Math.min(1, len / radius);
   if (raw <= deadzone || len === 0) {
     out.x = out.y = 0;
@@ -43,7 +45,7 @@ export function shapeAxis(v: number, deadzone: number, expo: number): number {
 export function followThumb(origin: Vec2, x: number, y: number, radius: number): void {
   const dx = x - origin.x;
   const dy = y - origin.y;
-  const d = Math.hypot(dx, dy);
+  const d = len2(dx, dy);
   if (d <= radius) return;
   const k = (d - radius) / d;
   origin.x += dx * k;

@@ -19,7 +19,7 @@ npm install          # if NODE_ENV=production is set, unset it first or dev deps
 npm run dev          # vite --host, http://<host>:5173
 npm test             # vitest: the pure logic (~800 tests)
 npm run build        # typecheck + production build with service worker
-npm run icons        # regenerate PWA icons
+npx -y -p playwright@1.63.0 node tools/make-icons.mjs   # re-render the PWA icons from the game (dev server up)
 npm run assets       # rebuild GLBs from blender/ (needs `blender` on PATH; add `-- --thumbs` for previews)
 npx -y -p playwright@1.63.0 node tools/smoke.mjs   # browser smoke test (see below)
 ```
@@ -350,11 +350,14 @@ shadows go into the shared glow and shadow meshes. Measured with
 `?debug`: 43–56 calls on the iPhone profile in fights, chases, jumps and
 night rain, 55–69 on desktop (a 5-star chase with grenade spam). Combat
 allocates nothing per bullet. The sim's per-step hot paths avoid garbage
-too (sidewalk corners into a reused point, squared distances instead of
-`Math.hypot` in the per-car / per-crate loops, last-step state copied
-field by field); what remains per frame is mostly three.js's per-person
-`AnimationMixer` and V8 number boxing (JSC NaN-boxes doubles, so less on
-the iPhone).
+too (sidewalk corners into a reused point, `len2` (`core/len.ts`) in place
+of `Math.hypot`, which V8 doesn't inline and allocates for, cheap rejects
+before the per-car / per-crate work, static contacts into reused objects,
+indexed loops in `simulate`, last-step state copied field by field). In
+headless Chromium (V8) on 2026-10-31 a sim step allocated ~12 KB (from
+~55) and posing the crowd ~1.1 KB a frame (from ~3.5); what remains is
+mostly V8 number boxing, which JSC on the iPhone doesn't do (it NaN-boxes
+doubles).
 
 API for other systems:
 
@@ -734,7 +737,7 @@ src/world     ground / city
 src/ui        title/pause/settings menus, touch controls, HUD, radar, radio card, CSS
 src/audio     synthesised sound and music (pure models + Web Audio voices)
 tests/        vitest
-tools/        icon generator
+tools/        icon renderer (make-icons.mjs), smoke test, tuning harnesses
 blender/      procedural asset scripts (lib/ helpers, generators/, build_assets.py)
 ```
 
@@ -903,9 +906,11 @@ Everyone in the city is drawn from the Blender bodies in `public/assets/`
   at the docks yard for every delivery there; Deacon Pike guards his car in
   LAST CALL; the Collector wears Pike's coat in white. Story characters
   keep their own colours; only the friendly ones cheer.
-- **Clips** (`characterAnim.ts`): the 22 clips are sampled by hand from
-  shared interpolants (no `AnimationMixer` per person, no objects made
-  per frame) into three layers: legs (Idle/Walk/Run on one gait phase at the
+- **Clips** (`characterAnim.ts`): the 22 clips are baked at load into
+  Float32Arrays per body (each track's own 24 fps keys; anything not evenly
+  keyed and linear is resampled at 30 fps) and sampled by hand with inline
+  nlerp/slerp (no `AnimationMixer` per person, no three.js interpolants, no
+  garbage per frame) into three layers: legs (Idle/Walk/Run on one gait phase at the
   authored `walkSpeed` / `runSpeed`), a whole-body layer (Fall, Down, GetUp,
   Arrested, Cower, Cheer, EnterCar, Ride, Stagger: these move the root
   bone, so the instance is never tipped while they play) and the arms,

@@ -17,6 +17,7 @@ import { launch, type VehicleState } from '../entities/vehicle';
 import { BLOCK_SIZE, ROAD_WIDTH, type Rect } from './city';
 import { DIR_VEC, MAX_NODE, dirHeading, type Dir } from './roads';
 import { mulberry32 } from './random';
+import { len2 } from '../core/len';
 
 export type RampKind = 'ramp' | 'kicker';
 
@@ -104,7 +105,7 @@ export function placeRamps(seed: number, count = RAMP_COUNT): Ramp[] {
     // Room to land: the next junction along must be inside the city too.
     if (Math.abs(ix + v.x) > inner || Math.abs(iz + v.z) > inner) continue;
     const r = rampAt(ix, iz, d);
-    if (ramps.some((q) => Math.hypot(q.x - r.x, q.z - r.z) < SPACING)) continue;
+    if (ramps.some((q) => len2(q.x - r.x, q.z - r.z) < SPACING)) continue;
     ramps.push(r);
   }
   return ramps;
@@ -125,8 +126,8 @@ export function placeKickers(seed: number, ramps: readonly Ramp[], count = KICKE
     const v = DIR_VEC[d];
     if (Math.abs(ix + v.x) > inner || Math.abs(iz + v.z) > inner) continue;
     const k = rampAt(ix, iz, d, 'kicker');
-    if (ramps.some((q) => Math.hypot(q.x - k.x, q.z - k.z) < KICKER_SPACING)) continue;
-    if (out.some((q) => Math.hypot(q.x - k.x, q.z - k.z) < KICKER_SPACING)) continue;
+    if (ramps.some((q) => len2(q.x - k.x, q.z - k.z) < KICKER_SPACING)) continue;
+    if (out.some((q) => len2(q.x - k.x, q.z - k.z) < KICKER_SPACING)) continue;
     out.push(k);
   }
   return out;

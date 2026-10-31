@@ -15,6 +15,7 @@ import { getQuality } from '../render/quality';
 import { wallToBlow, type Breaches, type WallAhead } from '../systems/breaches';
 import type { Rect } from '../world/city';
 import { blowWallBlocker, clearOfHud } from './destructionProbe';
+import { len2 } from '../core/len';
 
 export interface BlowWallDeps {
   events: EventBus;
@@ -64,7 +65,7 @@ export class BlowWall {
     if (!w) return null;
     const d = this.d;
     d.log('blow-wall', `building ${w.building} side ${w.side} ${w.dist.toFixed(1)} m${w.offScreen ? ' off-screen' : ''} · ${getQuality().name}`);
-    d.events.emit({ type: 'explosion', x: w.x, z: w.z, distance: Math.hypot(d.rig.focusX - w.x, d.rig.focusZ - w.z), byPlayer: false, source: 'rocket' });
+    d.events.emit({ type: 'explosion', x: w.x, z: w.z, distance: len2(d.rig.focusX - w.x, d.rig.focusZ - w.z), byPlayer: false, source: 'rocket' });
     return w;
   }
 

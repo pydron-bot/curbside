@@ -48,6 +48,7 @@ import { ChainBank, chainLive } from './progressBank';
 import { pruneSave } from './progressSave';
 import { TAXI_GOAL, completion } from './progressStats';
 import { TUTORIAL_DONE, advanceTutorial, pointerWaits, tutorialText, type TutorialEvent } from './tutorial';
+import { len2 } from '../core/len';
 
 /** Stand on the safehouse door this long to open the shop, s. */
 const SHOP_HOLD = 0.4;
@@ -295,7 +296,7 @@ export class ProgressDirector implements ModeCtx {
       for (let i = 0; i < this.modes.length && prompt === null; i++) prompt = this.modes[i].prompt();
       // Nothing nearer to hand: the first run's next pointer (on a phone, not over a moving car).
       const car = this.deps.player.driving;
-      this.pointerWaiting = getDevice().handheld && pointerWaits(this.pointerWaiting, car ? Math.hypot(car.sim.vx, car.sim.vz) : null);
+      this.pointerWaiting = getDevice().handheld && pointerWaits(this.pointerWaiting, car ? len2(car.sim.vx, car.sim.vz) : null);
       if (prompt === null && this.freeRoam && !this.busy && this.live && !this.pointerWaiting) prompt = tutorialText(this.progress.data.tutorial, this.deps.input.lastDevice);
     }
     ui.prompt(prompt);
@@ -426,12 +427,12 @@ export class ProgressDirector implements ModeCtx {
     }
     const p = this.deps.player;
     const at = p.position;
-    const d = Math.hypot(at.x - SAFEHOUSE.x, at.z - SAFEHOUSE.z);
+    const d = len2(at.x - SAFEHOUSE.x, at.z - SAFEHOUSE.z);
     this.nearShop = d < 8 && !p.driving;
     const offer = this.shopOffered();
     if (offer === this.shopButton.hidden) this.shopButton.hidden = !offer;
     if (d > 4) this.shopArmed = true;
-    if (!this.live || !this.freeRoam || this.busy || p.driving || d > SHOP_REACH || !this.shopArmed || Math.hypot(p.ped.vx, p.ped.vz) > 1.5) {
+    if (!this.live || !this.freeRoam || this.busy || p.driving || d > SHOP_REACH || !this.shopArmed || len2(p.ped.vx, p.ped.vz) > 1.5) {
       this.shopHeld = 0;
       return;
     }
@@ -444,7 +445,7 @@ export class ProgressDirector implements ModeCtx {
   /** The pause menu's SHOP: free roam, nothing on, near the safehouse. */
   private shopOffered(): boolean {
     const at = this.deps.player.position;
-    return this.live && this.freeRoam && !this.busy && Math.hypot(at.x - SAFEHOUSE.x, at.z - SAFEHOUSE.z) < SHOP_NEAR;
+    return this.live && this.freeRoam && !this.busy && len2(at.x - SAFEHOUSE.x, at.z - SAFEHOUSE.z) < SHOP_NEAR;
   }
 
   private openShop(fromStreet = false): void {

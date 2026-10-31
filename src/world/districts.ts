@@ -7,6 +7,7 @@
  * you are from a glance at the roofs and pavements.
  */
 import { BLOCKS_PER_SIDE } from './city';
+import { len2 } from '../core/len';
 
 export type District = 'downtown' | 'oldtown' | 'arts' | 'industrial' | 'residential';
 
@@ -152,7 +153,7 @@ export function districtOf(bx: number, bz: number): District {
   const centre = (BLOCKS_PER_SIDE - 1) / 2;
   const dx = bx - centre;
   const dz = bz - centre;
-  if (Math.hypot(dx, dz) < DOWNTOWN_RADIUS) return 'downtown';
+  if (len2(dx, dz) < DOWNTOWN_RADIUS) return 'downtown';
   // Wobble the quarter borders by up to a block, depending on how far out you are.
   const wx = dx + Math.sin(bz * 0.9 + 1.3) * 0.9;
   const wz = dz + Math.sin(bx * 0.8 + 0.4) * 0.9;

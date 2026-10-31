@@ -11,6 +11,7 @@ import type { Haptics } from './haptics';
 import { ICONS } from './icons';
 import { chordBetween, pedalsAt, type PedalCircle, type PedalLayout, type PedalState } from './pedalZones';
 import { safeInsets } from './safeArea';
+import { len2 } from '../core/len';
 
 export type ControlMode = 'foot' | 'car';
 
@@ -223,7 +224,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     const dx = thumb.x - origin.x;
     const dy = thumb.y - origin.y;
     placeBase(stickBase, origin.x, origin.y);
-    const len = Math.hypot(dx, dy);
+    const len = len2(dx, dy);
     const k = len > tune.stickR ? tune.stickR / len : 1;
     moveKnob(stickKnob, dx * k, dy * k);
     writeStick(dx, dy);
@@ -339,7 +340,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     const dx = aimThumb.x - aimOrigin.x;
     const dy = aimThumb.y - aimOrigin.y;
     placeBase(aimBase, aimOrigin.x, aimOrigin.y);
-    const len = Math.hypot(dx, dy);
+    const len = len2(dx, dy);
     const k = len > tune.aimR ? tune.aimR / len : 1;
     moveKnob(aimKnob, dx * k, dy * k);
     const m = shapeStick(dx, dy, tune.aimR, tune.aimDz, 1, shaped);

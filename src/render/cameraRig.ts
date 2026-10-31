@@ -1,6 +1,7 @@
 import { PerspectiveCamera, Vector3 } from 'three';
 import type { Rect } from '../world/city';
 import { Spring, Trauma, smoothNoise, softClamp } from './fxMotion';
+import { len2 } from '../core/len';
 
 /** NDC corners of the screen, for projecting the view onto the ground. */
 const SCREEN_CORNERS = [
@@ -138,7 +139,7 @@ export class CameraRig {
 
   /** Jolt the view `metres` along (dirX, dirZ) (normalised here); it springs back. */
   kick(dirX: number, dirZ: number, metres: number): void {
-    const len = Math.hypot(dirX, dirZ);
+    const len = len2(dirX, dirZ);
     if (len < 1e-6 || metres <= 0) return;
     const m = this.reducedMotion ? metres * 0.4 : metres;
     // A spring kicked with velocity v peaks near v / sqrt(stiffness).
@@ -166,7 +167,7 @@ export class CameraRig {
 
   update(dt: number, targetX: number, targetZ: number, vx: number, vz: number): void {
     const o = this.opts;
-    const speed = Math.hypot(vx, vz);
+    const speed = len2(vx, vz);
     const wantHeight = Math.min(o.maxHeight, o.minHeight + speed * o.heightPerSpeed);
     this.height += (wantHeight - this.height) * (1 - Math.exp(-o.zoomRate * dt));
     this.liftNow += (this.lift - this.liftNow) * (1 - Math.exp(-2 * dt));

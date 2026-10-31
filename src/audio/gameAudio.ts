@@ -36,6 +36,7 @@ import { STATIONS, type Station } from './music/stations';
 import * as sfx from './sfx';
 import { NoiseBank, Voice, automateDip, makeImpulse, nodeStats } from './synth';
 import { RateGate, VoiceLimiter } from './voices';
+import { len2 } from '../core/len';
 
 export { createCarSound, describeCar, type CarSound } from './carSound';
 export type { SirenStyle } from './loops';
@@ -829,7 +830,7 @@ export class GameAudio {
     let pan = 0;
     if (at) {
       const dx = at.x - this.listenerX;
-      d = Math.hypot(dx, at.z - this.listenerZ);
+      d = len2(dx, at.z - this.listenerZ);
       gain *= distanceGain(d, falloff);
       pan = panFor(dx);
     }
@@ -920,7 +921,7 @@ export class GameAudio {
 
   private onExplosion(e: EventOf<'explosion'>): void {
     const now = this.ctx!.currentTime;
-    const d = Math.hypot(e.x - this.listenerX, e.z - this.listenerZ);
+    const d = len2(e.x - this.listenerX, e.z - this.listenerZ);
     this.chaos.add(d < 60 ? 1.2 : 0.4);
     // A chain reaction makes a couple of booms, not thirty.
     if (!this.gate.allow('boom', now, 0.06, 2)) return;
@@ -966,7 +967,7 @@ export class GameAudio {
 
   /** An NPC's bullet passing close to the listener whizzes by (after its flight time). */
   private maybeWhiz(e: EventOf<'shot'>): void {
-    const len = Math.hypot(e.dirX, e.dirZ) || 1;
+    const len = len2(e.dirX, e.dirZ) || 1;
     const dx = e.dirX / len;
     const dz = e.dirZ / len;
     const lx = this.listenerX - e.x;
@@ -1162,7 +1163,7 @@ export class GameAudio {
       const flaming = dmg.burning || (dmg.wrecked && v.wreckAge < 4);
       if (!flaming) continue;
       const dx = v.sim.x - this.listenerX;
-      const d = Math.hypot(dx, v.sim.z - this.listenerZ);
+      const d = len2(dx, v.sim.z - this.listenerZ);
       if (d > FALLOFF.fire.max) continue;
       const w = distanceGain(d, FALLOFF.fire) * (dmg.wrecked ? clamp01(1 - v.wreckAge / 4) : 1);
       sum += w;
@@ -1199,7 +1200,7 @@ export class GameAudio {
         continue;
       }
       const dx = s.x - this.listenerX;
-      const d = Math.hypot(dx, s.z - this.listenerZ);
+      const d = len2(dx, s.z - this.listenerZ);
       s.place(distanceGain(d, FALLOFF.siren), panFor(dx), airCutoff(d), d, dt, now);
     }
     const r = this.rotorVoice;
@@ -1210,7 +1211,7 @@ export class GameAudio {
         this.rotorVoice = null;
       } else {
         const dx = r.x - this.listenerX;
-        const d = Math.hypot(dx, r.z - this.listenerZ);
+        const d = len2(dx, r.z - this.listenerZ);
         r.place(distanceGain(d, FALLOFF.rotor), panFor(dx), airCutoff(d), now);
       }
     }

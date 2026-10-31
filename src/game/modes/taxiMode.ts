@@ -17,6 +17,7 @@ import type { CrowdPed, Vehicle } from '../population';
 import { KeyedText, type Mode, type ModeCtx } from './context';
 import { pavement } from './places';
 import { TRIP_RANGE, TaxiDuty, fareFor, type TaxiInput } from './taxi';
+import { len2 } from '../../core/len';
 
 /** Where a hail can come from: this far from the cab, m... */
 const HAIL_RANGE = [14, 60] as const;
@@ -101,7 +102,7 @@ export class TaxiMode implements Mode {
       if (a.mode !== 'walk' || a.role !== 'civilian') continue;
       const dx = a.s.x - car.sim.x;
       const dz = a.s.z - car.sim.z;
-      const d = Math.hypot(dx, dz);
+      const d = len2(dx, dz);
       if (d < HAIL_RANGE[0] || d > HAIL_RANGE[1] || (dx * fx + dz * fz) / d < HAIL_AHEAD) continue;
       if (d < bestD) {
         bestD = d;
@@ -133,7 +134,7 @@ export class TaxiMode implements Mode {
     if (f) deps.population.removePed(f);
     const car = deps.player.driving!;
     const dest = this.destination(car.sim.x, car.sim.z);
-    const dist = Math.hypot(dest.x - car.sim.x, dest.z - car.sim.z);
+    const dist = len2(dest.x - car.sim.x, dest.z - car.sim.z);
     this.duty.startTrip(dest.x, dest.z, dist, car.damage.health / car.damage.maxHealth);
     this.ctx.busy = 'taxi';
     deps.radar.setWaypoint(dest.x, dest.z);
@@ -148,7 +149,7 @@ export class TaxiMode implements Mode {
     let p = { x: 0, z: 0 };
     for (let i = 0; i < 60; i++) {
       p = pavement(Math.floor(rand() * BLOCKS_PER_SIDE), Math.floor(rand() * BLOCKS_PER_SIDE), Math.floor(rand() * 4), 0.2 + rand() * 0.6);
-      const d = Math.hypot(p.x - x, p.z - z);
+      const d = len2(p.x - x, p.z - z);
       if (d >= TRIP_RANGE[0] && d <= TRIP_RANGE[1]) break;
     }
     return p;
@@ -214,7 +215,7 @@ export class TaxiMode implements Mode {
       ui.timer(d.timeLeft, d.timeLeft <= 10, 0);
       const at = this.ctx.deps.player.position;
       // To the nearest 10 m, and the fare as it stands.
-      const left = Math.round(Math.hypot(d.dest.x - at.x, d.dest.z - at.z) / 10) * 10;
+      const left = Math.round(len2(d.dest.x - at.x, d.dest.z - at.z) / 10) * 10;
       const fare = fareFor(d.tripDist, d.timeLeft, d.timeTotal);
       if (this.goal.stale(left * 100000 + fare)) this.goal.text = `DROP-OFF ${left} M · $${fmt(fare)}`;
       ui.goal(this.goal.text);

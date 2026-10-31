@@ -11,6 +11,7 @@ import { MARK, groundRing, nearView, type ProgressProps } from '../../render/pro
 import type { City, Rect } from '../../world/city';
 import type { Mode, ModeCtx } from './context';
 import { PACKAGE_COUNT, PACKAGE_PAY, PACKAGE_REACH_CAR, PACKAGE_REACH_FOOT, generatePackages, perkFor, type HiddenPackage } from './packages';
+import { len2 } from '../../core/len';
 
 /** First aid (the 40-package perk): health refills this fast after this long unhurt. */
 const FIRST_AID_DELAY = 6;
@@ -62,7 +63,7 @@ export class PackageMode implements Mode {
     for (const pk of this.packages) {
       if (this.found.has(pk.index)) continue;
       if (Math.abs(pk.x - at.x) > reach || Math.abs(pk.z - at.z) > reach) continue;
-      if (Math.hypot(pk.x - at.x, pk.z - at.z) > reach) continue;
+      if (len2(pk.x - at.x, pk.z - at.z) > reach) continue;
       this.collect(pk);
     }
   }

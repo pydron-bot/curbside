@@ -10,6 +10,7 @@
 import type { PedState } from '../entities/pedestrian';
 import { CAR_BODY, type CarBody, type VehicleState } from '../entities/vehicle';
 import type { StaticGrid } from '../world/collision';
+import { len2 } from '../core/len';
 
 /** The standard car's circles (most cars); long vehicles and bikes carry their own (VehicleState.body). */
 export const CAR_CIRCLE_RADIUS = CAR_BODY.radius;
@@ -91,7 +92,7 @@ export function bodyDistance(s: VehicleState, x: number, z: number): number {
   const fz = Math.cos(s.heading);
   let best = Infinity;
   for (const o of body.offsets) {
-    const d = Math.hypot(s.x + fx * o - x, s.z + fz * o - z);
+    const d = len2(s.x + fx * o - x, s.z + fz * o - z);
     if (d < best) best = d;
   }
   return Math.max(0, best - body.radius);
@@ -123,7 +124,7 @@ export function collideVehicleStatic(s: VehicleState, grid: StaticGrid, contact?
   if (from) {
     const dx = s.x - from.x;
     const dz = s.z - from.z;
-    const travel = Math.hypot(dx, dz);
+    const travel = len2(dx, dz);
     const span = SWEEP_SHARE * (THIN_HALF + bodyOf(s).radius);
     if (travel > span && travel < SWEEP_MAX) {
       // Re-run the move in short hops, each from where the last was pushed to:
@@ -151,7 +152,8 @@ function resolveStatic(s: VehicleState, grid: StaticGrid, contact: Point | undef
   const fz = Math.cos(s.heading);
   const pos = scratchPos;
   const { offsets, radius } = bodyOf(s);
-  for (const offset of offsets) {
+  for (let i = 0; i < offsets.length; i++) {
+    const offset = offsets[i];
     pos.x = s.x + fx * offset;
     pos.z = s.z + fz * offset;
     const c = grid.resolveCircle(pos, radius);
@@ -188,6 +190,13 @@ function resolveStatic(s: VehicleState, grid: StaticGrid, contact: Point | undef
   return impact;
 }
 
+/** Cheap reject for collideVehicles: false if the two bodies can't be touching. */
+export function bodiesMayTouch(a: VehicleState, b: VehicleState): boolean {
+  const reach = bodyOf(a).reach + bodyOf(b).reach;
+  if (Math.abs(a.x - b.x) > reach || Math.abs(a.z - b.z) > reach) return false;
+  return Math.abs(a.y - b.y) <= CLEARANCE;
+}
+
 /**
  * Separate two overlapping cars and exchange momentum, the heavier car
  * (`massA`, `massB`: relative masses) moving less. If `contact` is given
@@ -196,12 +205,9 @@ function resolveStatic(s: VehicleState, grid: StaticGrid, contact: Point | undef
  * (one flying over the other) don't touch.
  */
 export function collideVehicles(a: VehicleState, b: VehicleState, contact?: Point | CarContact, massA = 1, massB = 1): number {
-  // Cheap reject: centres further apart than the two bodies reach.
+  if (!bodiesMayTouch(a, b)) return 0;
   const bodyA = bodyOf(a);
   const bodyB = bodyOf(b);
-  const reach = bodyA.reach + bodyB.reach;
-  if (Math.abs(a.x - b.x) > reach || Math.abs(a.z - b.z) > reach) return 0;
-  if (Math.abs(a.y - b.y) > CLEARANCE) return 0;
 
   let impact = 0;
   const touch = bodyA.radius + bodyB.radius;
@@ -215,7 +221,7 @@ export function collideVehicles(a: VehicleState, b: VehicleState, contact?: Poin
     for (const q of cb) {
       let dx = p.x - q.x;
       let dz = p.z - q.z;
-      const d = Math.hypot(dx, dz);
+      const d = len2(dx, dz);
       const overlap = touch - d;
       if (overlap <= 0) continue;
       if (d > 1e-6) {
@@ -274,7 +280,7 @@ export function collidePedVehicle(p: PedState, v: VehicleState): number {
   for (const q of carCircles(v, scratchA)) {
     let dx = p.x - q.x;
     let dz = p.z - q.z;
-    const d = Math.hypot(dx, dz);
+    const d = len2(dx, dz);
     const overlap = body.radius + PED_RADIUS - d;
     if (overlap <= 0) continue;
     if (d > 1e-6) {

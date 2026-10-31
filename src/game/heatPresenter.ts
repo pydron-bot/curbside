@@ -7,6 +7,7 @@ import type { BlipOptions, Radar } from '../ui/radar';
 import type { ScoreHud } from '../ui/scoreHud';
 import { createWantedFrame, type WantedHud } from '../ui/wantedHud';
 import type { Heat } from './heat';
+import { len2 } from '../core/len';
 
 /** Sirens actually voiced (the nearest); the audio engine allows 8 in all. */
 const MAX_SIRENS = 5;
@@ -142,7 +143,7 @@ export class HeatPresenter {
     let best = Infinity;
     const shops = this.heat.shops;
     for (let i = 0; i < shops.length; i++) {
-      const d = Math.hypot(shops[i].x - x, shops[i].z - z);
+      const d = len2(shops[i].x - x, shops[i].z - z);
       if (d < best) {
         best = d;
         nearest = i;
@@ -163,7 +164,7 @@ export class HeatPresenter {
     for (const u of this.heat.police.units) {
       const v = u.vehicle;
       if (!v || u.dismissed) continue;
-      const d = Math.hypot(v.sim.x - x, v.sim.z - z);
+      const d = len2(v.sim.x - x, v.sim.z - z);
       if (d > SIREN_RANGE) continue;
       // Insertion into a short sorted list (no allocation).
       let i = near.length;

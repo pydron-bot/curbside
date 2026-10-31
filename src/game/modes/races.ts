@@ -8,6 +8,7 @@
 import { BLOCK_SIZE } from '../../world/city';
 import { MAX_NODE, dirHeading, lanePoint, type Dir } from '../../world/roads';
 import type { Medal } from '../progressSave';
+import { len2 } from '../../core/len';
 
 export interface RaceDef {
   id: string;
@@ -197,7 +198,7 @@ export class RaceRun {
     if (this.phase !== 'live') return null;
     this.time += dt;
     const n = this.def.nodes[this.next];
-    if (Math.hypot(x - nodeX(n), z - nodeZ(n)) < CHECKPOINT_RADIUS) {
+    if (len2(x - nodeX(n), z - nodeZ(n)) < CHECKPOINT_RADIUS) {
       this.next++;
       if (this.next >= this.def.nodes.length) {
         this.phase = 'finished';

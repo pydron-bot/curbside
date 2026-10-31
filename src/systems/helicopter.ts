@@ -4,6 +4,8 @@
  * predicted position, slower than a fast car (so it can be outrun), and
  * while the light is on them they're seen. Pure maths.
  */
+
+import { len2 } from '../core/len';
 export const HELI_FROM = 5;
 const HELI_SPEED = 27;
 const HELI_ACCEL = 7;
@@ -54,7 +56,7 @@ export function stepHelicopter(h: Helicopter, goalX: number, goalZ: number, goal
   if (h.leaving) {
     const dx = h.x - px;
     const dz = h.z - pz;
-    const d = Math.hypot(dx, dz) || 1;
+    const d = len2(dx, dz) || 1;
     tx = h.x + (dx / d) * 100;
     tz = h.z + (dz / d) * 100;
   } else {
@@ -64,13 +66,13 @@ export function stepHelicopter(h: Helicopter, goalX: number, goalZ: number, goal
   }
   const dx = tx - h.x;
   const dz = tz - h.z;
-  const d = Math.hypot(dx, dz);
+  const d = len2(dx, dz);
   const want = Math.min(HELI_SPEED, d * 0.9);
   const wx = d > 0.01 ? (dx / d) * want : 0;
   const wz = d > 0.01 ? (dz / d) * want : 0;
   const ex = wx - h.vx;
   const ez = wz - h.vz;
-  const e = Math.hypot(ex, ez);
+  const e = len2(ex, ez);
   const maxDv = HELI_ACCEL * dt;
   if (e <= maxDv) {
     h.vx = wx;
@@ -81,14 +83,14 @@ export function stepHelicopter(h: Helicopter, goalX: number, goalZ: number, goal
   }
   h.x += h.vx * dt;
   h.z += h.vz * dt;
-  if (Math.hypot(h.vx, h.vz) > 1) h.heading = Math.atan2(h.vx, h.vz);
+  if (len2(h.vx, h.vz) > 1) h.heading = Math.atan2(h.vx, h.vz);
 
   // The light reaches 30 m from under the helicopter toward the target (led a
   // little, the operator anticipates), wandering a little.
   h.sweep += dt;
   const ax = goalX + goalVx * 0.25 - h.x;
   const az = goalZ + goalVz * 0.25 - h.z;
-  const ad = Math.hypot(ax, az) || 1;
+  const ad = len2(ax, az) || 1;
   const reach = Math.min(ad, 30);
   const sx = h.x + (ax / ad) * reach + Math.cos(h.sweep * 1.7) * SPOT_WANDER;
   const sz = h.z + (az / ad) * reach + Math.sin(h.sweep * 1.3) * SPOT_WANDER;
@@ -96,5 +98,5 @@ export function stepHelicopter(h: Helicopter, goalX: number, goalZ: number, goal
   const k = Math.min(1, dt * 4);
   h.spotX += (sx - h.spotX) * k;
   h.spotZ += (sz - h.spotZ) * k;
-  h.sees = !h.leaving && Math.hypot(h.spotX - px, h.spotZ - pz) < SPOT_RADIUS;
+  h.sees = !h.leaving && len2(h.spotX - px, h.spotZ - pz) < SPOT_RADIUS;
 }

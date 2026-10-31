@@ -21,6 +21,7 @@ import { FLAG, FRAME, InstanceBuffer, ParticlePool, RAMP, type Frame } from './f
 import { GLOW, type GlowShape, type GlowSprites } from './glowSprites';
 import { getQuality } from './quality';
 import { worldUniforms } from './shaderLib';
+import { len2 } from '../core/len';
 
 /** Tracer look per shooter: width (m), head speed (m/s), tint. */
 export type TracerKind = 'pistol' | 'smg' | 'shotgun' | 'npc';
@@ -346,7 +347,7 @@ export class Effects {
   tracer(x1: number, z1: number, x2: number, z2: number, kind: TracerKind = 'pistol'): void {
     const dx = x2 - x1;
     const dz = z2 - z1;
-    const len = Math.hypot(dx, dz);
+    const len = len2(dx, dz);
     if (len < 0.2) return;
     const i = this.tracerNext;
     this.tracerNext = (i + 1) % MAX_TRACERS;
@@ -368,7 +369,7 @@ export class Effects {
    * dirZ) (zero for all directions), streaked along their flight.
    */
   sparks(x: number, y: number, z: number, count: number, lo: number, hi: number, dirX: number, dirZ: number): void {
-    const dl = Math.hypot(dirX, dirZ);
+    const dl = len2(dirX, dirZ);
     for (let k = 0; k < count; k++) {
       let a = Math.random() * Math.PI * 2;
       if (dl > 0) a = Math.atan2(dirZ, dirX) + (Math.random() - 0.5) * 2.2;
@@ -460,7 +461,7 @@ export class Effects {
   impact(x: number, z: number, target: 'ped' | 'vehicle' | 'player' | 'wall' | 'none', fromX: number, fromZ: number): void {
     const dx = fromX - x;
     const dz = fromZ - z;
-    const d = Math.hypot(dx, dz) || 1;
+    const d = len2(dx, dz) || 1;
     // Bounce back toward the shooter.
     const bx = dx / d;
     const bz = dz / d;

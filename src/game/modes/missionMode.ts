@@ -26,6 +26,7 @@ import type { CrowdPed, Vehicle } from '../population';
 import { KeyedText, type Mode, type ModeCtx } from './context';
 import { CAR_NAMES } from './exports';
 import { SAFEHOUSE, placePayphones, type Spot } from './places';
+import { len2 } from '../../core/len';
 
 /** Answering: on foot this close, or stopped in a car this close, m. */
 const ANSWER_FOOT = 2.4;
@@ -196,7 +197,7 @@ export class MissionMode implements Mode {
     this.near = null;
     if (!phone || !ctx.live) return;
     const at = ctx.deps.player.position;
-    const d = Math.hypot(at.x - phone.x, at.z - phone.z);
+    const d = len2(at.x - phone.x, at.z - phone.z);
     if (d < PROMPT_RANGE) this.near = phone;
     if (d < RING_RANGE && (this.ringIn -= dt) <= 0) {
       this.ringIn = RING_EVERY;
@@ -402,7 +403,7 @@ export class MissionMode implements Mode {
     if (car) for (const c of this.carList) if (c.v === car) v.carTag = c.tag;
     v.carArchetype = car ? (car.archetype as VehicleArchetype) : null;
     v.carHealth = car ? car.damage.health / car.damage.maxHealth : 0;
-    v.speed = Math.hypot(at.vx, at.vz);
+    v.speed = len2(at.vx, at.vz);
     v.stars = heat.wanted.level;
   }
 
@@ -420,7 +421,7 @@ export class MissionMode implements Mode {
         m.ped = null;
       }
       if (!m.ped) {
-        if (Math.hypot(at.x - m.x, at.z - m.z) > MATERIALISE) continue;
+        if (len2(at.x - m.x, at.z - m.z) > MATERIALISE) continue;
         const agent = spawnPed(0, 0, 0, 0, ctx.deps.rand);
         Object.assign(agent.s, { x: m.x, z: m.z, vx: 0, vz: 0 });
         agent.temper = m.armed ? 'armed' : m.hostile ? 'fighter' : 'calm';
@@ -434,7 +435,7 @@ export class MissionMode implements Mode {
         m.down = true;
         continue;
       }
-      const d = Math.hypot(at.x - a.s.x, at.z - a.s.z);
+      const d = len2(at.x - a.s.x, at.z - a.s.z);
       if (m.hostile) {
         if (a.mode === 'arrest' && d < HOSTILE_RANGE && ctx.live) provoke(a, at.x, at.z);
         continue;

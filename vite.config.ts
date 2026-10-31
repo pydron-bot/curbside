@@ -101,7 +101,9 @@ export default defineConfig({
         // Only players who turn the destruction test on download Rapier (~0.8 MB
         // gzip), so it isn't precached; it's cached on first use instead. Setting
         // globIgnores replaces workbox's default, so node_modules stays listed.
-        globIgnores: ['**/node_modules/**/*', '**/assets/rapier*'],
+        // The 512 px icons (~250 KB each) are read by the installer, not by the
+        // game, so they aren't precached either.
+        globIgnores: ['**/node_modules/**/*', '**/assets/rapier*', '**/icons/*512.png'],
         runtimeCaching: [
           {
             urlPattern: /\/assets\/rapier[\w-]*\.(?:js|wasm)$/,

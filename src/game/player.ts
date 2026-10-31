@@ -17,6 +17,7 @@ import { createPedState, type PedState } from '../entities/pedestrian';
 import { driverDoorPosition, isPoliceArchetype } from '../entities/vehicle';
 import { Arsenal } from '../systems/weapons';
 import type { Vehicle } from './population';
+import { len2 } from '../core/len';
 
 export const MAX_HEALTH = 100;
 /** Body armour soaks up damage before health does, up to this much. */
@@ -162,7 +163,7 @@ export class Player {
     if (this.driving) return;
     const dx = this.ped.x - fromX;
     const dz = this.ped.z - fromZ;
-    const d = Math.hypot(dx, dz) || 1;
+    const d = len2(dx, dz) || 1;
     this.ped.vx = (dx / d) * push;
     this.ped.vz = (dz / d) * push;
     // Bowled over backwards, facing whatever did it (the fall clip lands them on their back);

@@ -17,6 +17,9 @@ export class StaticGrid {
   private cells = new Map<number, Rect[]>();
   /** Reused result for queries spanning several cells. */
   private readonly scratch: Rect[] = [];
+  /** Reused contacts for resolveCircle. */
+  private readonly hit: Contact = { nx: 0, nz: 0, depth: 0 };
+  private readonly deepest: Contact = { nx: 0, nz: 0, depth: 0 };
 
   constructor(
     obstacles: Rect[],
@@ -66,18 +69,26 @@ export class StaticGrid {
   /**
    * Resolve one circle against all nearby boxes, accumulating push-out.
    * Returns the deepest contact (for velocity response), or null if clear.
-   * `pos` is updated in place.
+   * `pos` is updated in place. The contact is shared (this runs for every
+   * body circle every step): read it before the next call, don't keep it.
    */
   resolveCircle(pos: { x: number; z: number }, radius: number): Contact | null {
-    let deepest: Contact | null = null;
-    for (const rect of this.near(pos.x, pos.z, radius)) {
-      const c = circleVsRect(pos.x, pos.z, radius, rect);
-      if (!c) continue;
+    const c = this.hit;
+    const deepest = this.deepest;
+    let found = false;
+    const near = this.near(pos.x, pos.z, radius);
+    for (let i = 0; i < near.length; i++) {
+      if (!circleVsRectInto(pos.x, pos.z, radius, near[i], c)) continue;
       pos.x += c.nx * c.depth;
       pos.z += c.nz * c.depth;
-      if (!deepest || c.depth > deepest.depth) deepest = c;
+      if (!found || c.depth > deepest.depth) {
+        deepest.nx = c.nx;
+        deepest.nz = c.nz;
+        deepest.depth = c.depth;
+        found = true;
+      }
     }
-    return deepest;
+    return found ? deepest : null;
   }
 }
 
@@ -88,16 +99,23 @@ function cellKey(cx: number, cz: number): number {
   return ((cx + 32768) << 16) | (cz + 32768);
 }
 
+/** The contact of a circle with a box, or null if clear (allocates; see circleVsRectInto). */
 export function circleVsRect(x: number, z: number, r: number, b: Rect): Contact | null {
+  const out: Contact = { nx: 0, nz: 0, depth: 0 };
+  return circleVsRectInto(x, z, r, b, out) ? out : null;
+}
+
+/** circleVsRect into `out`, allocation-free; false (out untouched) if clear. */
+export function circleVsRectInto(x: number, z: number, r: number, b: Rect, out: Contact): boolean {
   const px = Math.max(b.minX, Math.min(x, b.maxX));
   const pz = Math.max(b.minZ, Math.min(z, b.maxZ));
   const dx = x - px;
   const dz = z - pz;
   const d2 = dx * dx + dz * dz;
   if (d2 > 0) {
-    if (d2 >= r * r) return null;
+    if (d2 >= r * r) return false;
     const d = Math.sqrt(d2);
-    return { nx: dx / d, nz: dz / d, depth: r - d };
+    return set(out, dx / d, dz / d, r - d);
   }
   // Centre is inside the box: push out through the nearest face.
   const left = x - b.minX;
@@ -105,8 +123,15 @@ export function circleVsRect(x: number, z: number, r: number, b: Rect): Contact 
   const top = z - b.minZ;
   const bottom = b.maxZ - z;
   const m = Math.min(left, right, top, bottom);
-  if (m === left) return { nx: -1, nz: 0, depth: left + r };
-  if (m === right) return { nx: 1, nz: 0, depth: right + r };
-  if (m === top) return { nx: 0, nz: -1, depth: top + r };
-  return { nx: 0, nz: 1, depth: bottom + r };
+  if (m === left) return set(out, -1, 0, left + r);
+  if (m === right) return set(out, 1, 0, right + r);
+  if (m === top) return set(out, 0, -1, top + r);
+  return set(out, 0, 1, bottom + r);
+}
+
+function set(out: Contact, nx: number, nz: number, depth: number): true {
+  out.nx = nx;
+  out.nz = nz;
+  out.depth = depth;
+  return true;
 }

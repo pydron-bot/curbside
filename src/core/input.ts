@@ -3,6 +3,7 @@ import type { VehicleControls, VehicleState } from '../entities/vehicle';
 import type { AimState } from './aim';
 import { settings } from './settings';
 import { createDirectionalState, directionalControls, resetDirectionalState, type DirectionalInput } from './steering';
+import { len2 } from './len';
 
 /**
  * One input abstraction over keyboard, mouse, touch and gamepad. Every source
@@ -90,7 +91,7 @@ export const AIM_DEADZONE = 0.2;
  * into `out` (no allocation).
  */
 export function radialDeadzone(x: number, y: number, dz: number, out: { x: number; y: number }): void {
-  const mag = Math.hypot(x, y);
+  const mag = len2(x, y);
   if (mag <= dz) {
     out.x = out.y = 0;
     return;
@@ -527,7 +528,7 @@ export class Input {
     let best = this.keyboard;
     let sprint = false;
     for (const s of this.sources) {
-      if (Math.hypot(s.moveX, s.moveY) > Math.hypot(best.moveX, best.moveY)) best = s;
+      if (len2(s.moveX, s.moveY) > len2(best.moveX, best.moveY)) best = s;
       if (s.sprint) sprint = true;
     }
     const out = this.moveOut;

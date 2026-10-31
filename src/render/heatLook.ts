@@ -10,6 +10,7 @@ import { GLOW, type GlowSprites } from './glowSprites';
 import { HeliModel } from './heliModel';
 import { worldUniforms } from './shaderLib';
 import type { WorldProps } from './worldProps';
+import { len2 } from '../core/len';
 
 /** Colours (linear) for the spray bay's light gate: hot pink and cyan. */
 const PINK = [1.0, 0.12, 0.45] as const;
@@ -88,7 +89,7 @@ export function addHeatLook(
  */
 function drawRoadblocks(props: WorldProps, units: readonly PoliceUnit[], view: Rect, knocked: Map<number, number>, extras: HeatLookExtras): void {
   const car = extras.playerCar?.() ?? null;
-  const fast = car !== null && Math.hypot(car.vx, car.vz) > 4;
+  const fast = car !== null && len2(car.vx, car.vz) > 4;
   for (const u of units) {
     const v = u.vehicle;
     if (u.role !== 'roadblock' || !v) {
@@ -105,7 +106,7 @@ function drawRoadblocks(props: WorldProps, units: readonly PoliceUnit[], view: R
       const [kind, along, across, reach] = DRESSING[i];
       const x = s.x + fx * along + fz * across;
       const z = s.z + fz * along - fx * across;
-      if (fast && Math.abs(car!.x - x) < reach + 1 && Math.abs(car!.z - z) < reach + 1 && Math.hypot(car!.x - x, car!.z - z) < reach + 1) {
+      if (fast && Math.abs(car!.x - x) < reach + 1 && Math.abs(car!.z - z) < reach + 1 && len2(car!.x - x, car!.z - z) < reach + 1) {
         mask |= 1 << i;
         extras.knock?.(kind, x, z, car!.vx, car!.vz);
         continue;

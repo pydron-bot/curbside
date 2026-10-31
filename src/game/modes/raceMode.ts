@@ -16,6 +16,7 @@ import type { Vehicle } from '../population';
 import type { Medal } from '../progressSave';
 import { KeyedText, type Mode, type ModeCtx } from './context';
 import { MEDAL_FACTORS, MEDAL_PAY, RACES, RaceRun, carPace, START_RADIUS, formatRaceTime, legDir, nodeX, nodeZ, raceMedal, startGrid, type RaceDef } from './races';
+import { len2 } from '../../core/len';
 
 /** Out of the car this long and the race is off, s. */
 const OUT_OF_CAR = 8;
@@ -93,7 +94,7 @@ export class RaceMode implements Mode {
     for (const def of RACES) {
       const sx = nodeX(def.nodes[0]);
       const sz = nodeZ(def.nodes[0]);
-      const d = Math.hypot(at.x - sx, at.z - sz);
+      const d = len2(at.x - sx, at.z - sz);
       if (d > START_RADIUS + 10) this.armed.set(def.id, true);
       if (d < PROMPT_RANGE) this.near = def;
       if (!car || car.damage.wrecked || ctx.busy || !this.armed.get(def.id)) continue;

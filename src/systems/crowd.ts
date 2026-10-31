@@ -15,9 +15,10 @@
  * officers take hits the same way.
  */
 import { PLAYER_ON_FOOT, createPedState, stepPedestrian, type PedSpec, type PedState } from '../entities/pedestrian';
-import { speed, type VehicleState } from '../entities/vehicle';
+import { type VehicleState } from '../entities/vehicle';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK } from '../world/city';
 import { PED_RADIUS, bodyOf, carCircles } from './physics';
+import { len2 } from '../core/len';
 
 export type PedMode = 'walk' | 'flee' | 'down' | 'fight' | 'shoot' | 'arrest';
 export type PedRole = 'civilian' | 'cop';
@@ -190,7 +191,7 @@ export function hurtPed(p: PedAgent, damage: number, fromX: number, fromZ: numbe
   // A small shove away from the hit.
   const dx = p.s.x - fromX;
   const dz = p.s.z - fromZ;
-  const d = Math.hypot(dx, dz) || 1;
+  const d = len2(dx, dz) || 1;
   p.s.vx = (dx / d) * 1.6;
   p.s.vz = (dz / d) * 1.6;
   return 'hit';
@@ -235,7 +236,7 @@ export function provoke(p: PedAgent, fromX: number, fromZ: number): void {
 export function knockDown(p: PedAgent, fromX: number, fromZ: number, push = 3, seconds = 2.5): void {
   const dx = p.s.x - fromX;
   const dz = p.s.z - fromZ;
-  const d = Math.hypot(dx, dz) || 1;
+  const d = len2(dx, dz) || 1;
   // Bowled over backwards: facing whatever hit them (already lying there, they don't spin round).
   if (p.mode !== 'down') p.s.heading = Math.atan2(-dx, -dz);
   p.mode = 'down';
@@ -250,7 +251,7 @@ export function scare(p: PedAgent, fromX: number, fromZ: number, seconds = 4): v
   if (p.mode === 'down' || p.mode === 'fight' || p.mode === 'shoot' || p.role === 'cop') return;
   const dx = p.s.x - fromX;
   const dz = p.s.z - fromZ;
-  const d = Math.hypot(dx, dz) || 1;
+  const d = len2(dx, dz) || 1;
   p.mode = 'flee';
   p.timer = seconds;
   p.fleeX = dx / d;
@@ -277,9 +278,14 @@ export function stepCrowdPed(
   p.attackCooldown = Math.max(0, p.attackCooldown - dt);
   // --- Hit or about to be hit by a car? ---
   let struck: VehicleState | null = null;
-  for (const v of vehicles) {
-    const sp = speed(v);
-    if (sp < 3 || p.mode === 'down') continue;
+  for (let i = 0; i < vehicles.length; i++) {
+    const v = vehicles[i];
+    // Every car against every pedestrian each step: drop the far ones first.
+    // 17 m covers dodge's reach (16 m ahead, 3 m aside) and touchesCar's 8 m.
+    if (Math.abs(v.x - p.s.x) > 17 || Math.abs(v.z - p.s.z) > 17) continue;
+    const sp2 = v.vx * v.vx + v.vz * v.vz;
+    if (sp2 < 9 || p.mode === 'down') continue;
+    const sp = Math.sqrt(sp2);
     if (Math.abs(v.x - p.s.x) > 8 || Math.abs(v.z - p.s.z) > 8) {
       if (sp > 7) dodge(p, v, sp);
       continue;
@@ -329,7 +335,7 @@ export function stepCrowdPed(
       }
       p.mode = 'flee';
       p.timer = 3;
-      const d = Math.hypot(p.s.vx, p.s.vz) || 1;
+      const d = len2(p.s.vx, p.s.vz) || 1;
       p.fleeX = p.s.vx / d || 1;
       p.fleeZ = p.s.vz / d;
       if (p.provoked && target) {
@@ -413,7 +419,7 @@ function move(x: number, y: number, sprint: boolean): typeof moveIn {
 function stepArrest(p: PedAgent, target: Target | undefined, dt: number): void {
   const dx = p.goalX - p.s.x;
   const dz = p.goalZ - p.s.z;
-  const d = Math.hypot(dx, dz);
+  const d = len2(dx, dz);
   const run = d > ARREST_STOP;
   copMove.x = run ? dx / d : 0;
   copMove.y = run ? -dz / d : 0;
@@ -427,7 +433,7 @@ function stepHostile(p: PedAgent, target: Target | undefined, dt: number): Crowd
   p.timer -= dt;
   const dx = target ? target.x - p.s.x : 0;
   const dz = target ? target.z - p.s.z : 0;
-  const d = Math.hypot(dx, dz);
+  const d = len2(dx, dz);
   const cop = p.role === 'cop';
   // Officers stay on the job until the police system stands them down.
   const done = !target || !target.alive || (!cop && (p.timer <= 0 || d > GIVE_UP_DISTANCE));
@@ -510,7 +516,7 @@ export function resumeWalking(p: PedAgent) {
   let bestD = Infinity;
   for (let c = 0; c < 4; c++) {
     const pt = cornerPoint(bx, bz, c, cornerAt);
-    const dd = Math.hypot(pt.x - p.s.x, pt.z - p.s.z);
+    const dd = len2(pt.x - p.s.x, pt.z - p.s.z);
     if (dd < bestD) {
       bestD = dd;
       best = c;

@@ -6,6 +6,7 @@
  * Heading uses the same convention as vehicles: nose along (sin h, cos h).
  */
 import { wrapAngle } from './vehicle';
+import { len2 } from '../core/len';
 
 export interface PedSpec {
   /** Full-stick walking speed, m/s. */
@@ -57,7 +58,7 @@ export function createPedState(x = 0, z = 0, heading = Math.PI): PedState {
 }
 
 export function stepPedestrian(s: PedState, m: MoveInput, spec: PedSpec, dt: number): void {
-  let mag = Math.hypot(m.x, m.y);
+  let mag = len2(m.x, m.y);
   let dx = 0;
   let dz = 0;
   if (mag > DEADZONE) {
@@ -75,7 +76,7 @@ export function stepPedestrian(s: PedState, m: MoveInput, spec: PedSpec, dt: num
   // Move velocity toward the target, limited by accel.
   const ex = tx - s.vx;
   const ez = tz - s.vz;
-  const err = Math.hypot(ex, ez);
+  const err = len2(ex, ez);
   const maxDelta = spec.accel * dt;
   if (err <= maxDelta) {
     s.vx = tx;

@@ -22,6 +22,7 @@ import { forwardSpeed, speed, wrapAngle, type VehicleControls, type VehicleState
 import { BLOCK_SIZE } from '../world/city';
 import { DIR_VEC, canLeave, reverse, turnLeft, turnRight, type Dir } from '../world/roads';
 import { driveAi, rerouteAi, type AiDriver, type Obstacle } from './traffic';
+import { len2 } from '../core/len';
 
 export type PursuitMode = 'route' | 'chase' | 'ram' | 'pit' | 'box';
 
@@ -132,7 +133,7 @@ type Point = { x: number; z: number };
 export function interceptPoint(car: VehicleState, t: PursuitTarget, out: Point): Point {
   const dx = t.x - car.x;
   const dz = t.z - car.z;
-  const d = Math.hypot(dx, dz) || 1;
+  const d = len2(dx, dz) || 1;
   // How fast the gap shrinks driving straight at it: our speed (or what we'll
   // soon be doing) minus the quarry's speed away from us.
   const away = (t.vx * dx + t.vz * dz) / d;
@@ -153,7 +154,7 @@ export function routeToward(ix: number, iz: number, dir: Dir, tx: number, tz: nu
   const gz = tz / BLOCK_SIZE;
   const ux = gx - ix;
   const uz = gz - iz;
-  const len = Math.hypot(ux, uz) || 1;
+  const len = len2(ux, uz) || 1;
   let best: Dir = reverse(dir);
   let bestScore = Infinity;
   for (let k = 0; k < 3; k++) {
@@ -189,13 +190,13 @@ export function alongside(car: VehicleState, t: PursuitTarget): boolean {
  * ways)? Then no ramming: a head-on at a combined 50 m/s wrecks both cars.
  */
 export function headOn(car: VehicleState, t: PursuitTarget): boolean {
-  return t.inCar && Math.hypot(t.vx, t.vz) > 5 && Math.cos(car.heading - t.heading) < -0.3;
+  return t.inCar && len2(t.vx, t.vz) > 5 && Math.cos(car.heading - t.heading) < -0.3;
 }
 
 /** Pick this step's mode. */
 export function choosePursuitMode(d: PursuitDriver, car: VehicleState, t: PursuitTarget, distance: number): PursuitMode {
   if (!t.seen || distance > ROUTE_DISTANCE) return 'route';
-  const quarrySpeed = Math.hypot(t.vx, t.vz);
+  const quarrySpeed = len2(t.vx, t.vz);
   if (d.boxes && distance < BOX_DISTANCE && (!t.inCar || quarrySpeed < BOX_SPEED)) return 'box';
   if (d.aggression >= 0.5 && d.ramCooldown <= 0 && distance < RAM_DISTANCE && !headOn(car, t)) {
     return t.inCar && quarrySpeed > 8 && alongside(car, t) ? 'pit' : 'ram';
@@ -222,7 +223,7 @@ export function drivePursuit(
   d.ramCooldown = Math.max(0, d.ramCooldown - dt);
   const dx = t.x - car.x;
   const dz = t.z - car.z;
-  const distance = Math.hypot(dx, dz);
+  const distance = len2(dx, dz);
   const mode = choosePursuitMode(d, car, t, distance);
   if (mode === 'route' && d.mode !== 'route') rerouteAi(d.road, car, rand);
   d.mode = mode;
@@ -249,11 +250,11 @@ export function drivePursuit(
     return controls;
   }
 
-  const quarrySpeed = Math.hypot(t.vx, t.vz);
+  const quarrySpeed = len2(t.vx, t.vz);
   let want: number;
   if (mode === 'box') {
     const slot = boxSlot(d, car, t, aim);
-    const gap = Math.hypot(slot.x - car.x, slot.z - car.z);
+    const gap = len2(slot.x - car.x, slot.z - car.z);
     // Slot behind us (we overshot) or reached: just stop where we are.
     const behind = Math.abs(headingError(car, slot.x, slot.z)) > 2 && gap < 12;
     want = gap < 2 || behind ? 0 : Math.min(14, gap * 0.9);
@@ -311,7 +312,7 @@ function boxSlot(d: PursuitDriver, car: VehicleState, t: PursuitTarget, out: Poi
     // On foot: stop short, on our side of them.
     const dx = car.x - t.x;
     const dz = car.z - t.z;
-    const dist = Math.hypot(dx, dz) || 1;
+    const dist = len2(dx, dz) || 1;
     out.x = t.x + (dx / dist) * FOOT_STOP;
     out.z = t.z + (dz / dist) * FOOT_STOP;
     return out;

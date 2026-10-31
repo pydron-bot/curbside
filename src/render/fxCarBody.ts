@@ -10,6 +10,7 @@
  * same for the player, AI traffic and cars shoved by a blast.
  */
 import { Spring } from './fxMotion';
+import { len2 } from '../core/len';
 
 /** The parts of a sim vehicle this reads. */
 export interface BodySim {
@@ -93,7 +94,7 @@ export class CarBody {
     const dz = z - sim.z;
     const s = Math.sin(sim.heading);
     const c = Math.cos(sim.heading);
-    const d = Math.hypot(dx, dz) || 1;
+    const d = len2(dx, dz) || 1;
     const along = (dx * s + dz * c) / d;
     const side = (dx * c - dz * s) / d;
     const k = Math.min(1, strength / 25);
@@ -112,7 +113,7 @@ export class CarBody {
     if (power <= 0) return;
     const dx = sim.x - x;
     const dz = sim.z - z;
-    const d = Math.hypot(dx, dz);
+    const d = len2(dx, dz);
     const s = Math.sin(sim.heading);
     const c = Math.cos(sim.heading);
     // Direction away from the blast in car space (random when it's the car itself).

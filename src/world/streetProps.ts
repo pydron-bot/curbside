@@ -20,6 +20,7 @@ import type { District } from './districts';
 import { mulberry32 } from './random';
 import { signalPoles } from './signals';
 import { generateStreetLamps } from './streetLamps';
+import { len2 } from '../core/len';
 
 export type StreetPropKind =
   | 'streetlamp'
@@ -151,7 +152,7 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
   const avoid = opts.avoid ?? [];
   const keepOut = opts.keepOut ?? [];
   const outside = (x: number, z: number, r: number) => !keepOut.some((k) => x > k.minX - r && x < k.maxX + r && z > k.minZ - r && z < k.maxZ + r);
-  const clear = (x: number, z: number, r: number) => outside(x, z, r) && !avoid.some((a) => Math.hypot(a.x - x, a.z - z) < a.r + r);
+  const clear = (x: number, z: number, r: number) => outside(x, z, r) && !avoid.some((a) => len2(a.x - x, a.z - z) < a.r + r);
 
   const put = (kind: StreetPropKind, x: number, z: number, heading: number, scale = 1, phase = 0, eastWest = false) => {
     const i = props.push({ kind, x, z, heading, scale, phase, eastWest }) - 1;

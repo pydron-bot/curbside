@@ -8,6 +8,8 @@
  * maths and the duty state machine), unit-tested; taxiMode.ts does the rest.
  */
 
+import { len2 } from '../../core/len';
+
 export const FARE_BASE = 50;
 /** Dollars per metre of trip. */
 export const FARE_PER_M = 0.6;
@@ -125,7 +127,7 @@ export class TaxiDuty {
           this.hailIn = this.nextHail();
           return 'lapsed';
         }
-        const near = Math.hypot(i.x - i.fare.x, i.z - i.fare.z) < PICKUP_RANGE && i.speed < PICKUP_SPEED;
+        const near = len2(i.x - i.fare.x, i.z - i.fare.z) < PICKUP_RANGE && i.speed < PICKUP_SPEED;
         this.held = near ? this.held + dt : 0;
         this.phase = near ? 'boarding' : 'hailed';
         if (this.held >= PICKUP_HOLD) return 'board';
@@ -135,7 +137,7 @@ export class TaxiDuty {
         this.timeLeft = Math.max(0, this.timeLeft - dt);
         if (this.healthAtPickup - i.health > BAIL_DAMAGE || i.stars >= BAIL_STARS) return this.endTrip('bailed');
         if (this.timeLeft <= 0) return this.endTrip('late');
-        if (Math.hypot(i.x - this.dest.x, i.z - this.dest.z) < DROP_RANGE && i.speed < DROP_SPEED) return this.endTrip('fare');
+        if (len2(i.x - this.dest.x, i.z - this.dest.z) < DROP_RANGE && i.speed < DROP_SPEED) return this.endTrip('fare');
         return null;
       }
     }

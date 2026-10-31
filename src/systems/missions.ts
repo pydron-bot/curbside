@@ -13,6 +13,7 @@
 import type { BodyKind } from '../game/bodies';
 import type { VehicleArchetype } from '../entities/vehicle';
 import type { WeaponKind } from './weapons';
+import { len2 } from '../core/len';
 
 export interface DialogueLine {
   who: string;
@@ -171,7 +172,7 @@ export class MissionRun {
       }
       if (f.lost) {
         const car = v.vehicle(f.lost);
-        if (!car || Math.hypot(car.x - v.x, car.z - v.z) > LOST_RANGE) return this.fail(f.reason);
+        if (!car || len2(car.x - v.x, car.z - v.z) > LOST_RANGE) return this.fail(f.reason);
       }
     }
     return this.check(s, dt, v);
@@ -187,19 +188,19 @@ export class MissionRun {
   private check(s: MissionStep, dt: number, v: MissionView): MissionSignal | null {
     switch (s.kind) {
       case 'goto':
-        if ((s.inCar && !v.inCar) || Math.hypot(v.x - s.x, v.z - s.z) > (s.r ?? GOTO_RADIUS)) return null;
+        if ((s.inCar && !v.inCar) || len2(v.x - s.x, v.z - s.z) > (s.r ?? GOTO_RADIUS)) return null;
         return this.advance(s);
       case 'enter':
         return v.inCar && this.carMatches(s.tag, s.archetype, v) ? this.advance(s) : null;
       case 'deliver': {
         if (!v.inCar || !this.carMatches(s.tag, s.archetype, v)) return null;
-        if (Math.hypot(v.x - s.x, v.z - s.z) > (s.r ?? GOTO_RADIUS) || v.speed > DELIVER_SPEED) return null;
+        if (len2(v.x - s.x, v.z - s.z) > (s.r ?? GOTO_RADIUS) || v.speed > DELIVER_SPEED) return null;
         if (s.minHealth !== undefined && v.carHealth < s.minHealth) return this.fail('THE CAR IS TOO BADLY DAMAGED');
         return this.advance(s);
       }
       case 'pickup': {
         const p = v.ped(s.tag);
-        const near = !!p && !p.down && v.inCar && v.speed < PICKUP_SPEED && Math.hypot(p.x - v.x, p.z - v.z) < PICKUP_RANGE;
+        const near = !!p && !p.down && v.inCar && v.speed < PICKUP_SPEED && len2(p.x - v.x, p.z - v.z) < PICKUP_RANGE;
         this.held = near ? this.held + dt : 0;
         return this.held >= PICKUP_HOLD ? this.advance(s) : null;
       }
@@ -226,7 +227,7 @@ export class MissionRun {
         for (let i = 0; i < s.points.length; i++) {
           if (this.collected[i]) continue;
           const [px, pz] = s.points[i];
-          if (Math.hypot(v.x - px, v.z - pz) < r) {
+          if (len2(v.x - px, v.z - pz) < r) {
             this.collected[i] = true;
             got = true;
           }
@@ -236,7 +237,7 @@ export class MissionRun {
       }
       case 'race': {
         const [ix, iz] = s.nodes[this.next];
-        if (Math.hypot(v.x - ix * BLOCK, v.z - iz * BLOCK) > MISSION_CHECKPOINT) return null;
+        if (len2(v.x - ix * BLOCK, v.z - iz * BLOCK) > MISSION_CHECKPOINT) return null;
         this.next++;
         return this.next >= s.nodes.length ? this.advance(s) : { kind: 'progress' };
       }

@@ -4,6 +4,7 @@
  * jump. Short hops (under MIN_AIRTIME) don't count. Pure logic.
  */
 import { wrapAngle, type VehicleState } from '../entities/vehicle';
+import { len2 } from '../core/len';
 
 /** Jumps shorter than this (s in the air) aren't stunts. */
 export const MIN_AIRTIME = 0.45;
@@ -82,7 +83,7 @@ export class StuntTracker {
     if (this.airtime < MIN_AIRTIME) return null;
     const r = this.result;
     r.airtime = this.airtime;
-    r.distance = Math.hypot(s.x - this.x0, s.z - this.z0);
+    r.distance = len2(s.x - this.x0, s.z - this.z0);
     r.spin = Math.abs(this.spin) * (180 / Math.PI);
     r.height = this.height;
     r.points = stuntPoints(r.airtime, r.distance, r.spin);

@@ -17,6 +17,8 @@
  * grip or steering until they land.
  */
 
+import { len2 } from '../core/len';
+
 export interface VehicleSpec {
   /** Top forward speed flat out on the level, m/s: the car really reaches it. */
   maxSpeed: number;
@@ -510,7 +512,7 @@ export function lateralSpeed(s: VehicleState): number {
 }
 
 export function speed(s: VehicleState): number {
-  return Math.hypot(s.vx, s.vz);
+  return len2(s.vx, s.vz);
 }
 
 /**

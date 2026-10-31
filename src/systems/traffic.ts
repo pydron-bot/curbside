@@ -33,6 +33,7 @@ import {
   type Dir,
 } from '../world/roads';
 import type { SignalView } from '../world/signals';
+import { len2 } from '../core/len';
 
 export interface AiDriver {
   /** Intersection being driven toward. */
@@ -263,11 +264,11 @@ export function driveAi(
   let target = currentWaypoint(ai);
   // Traffic lights (the light facing us as we approach): how far our nose is from the stop line.
   const light = signals && ai.phase === 'approach' && !panic && !ai.urgent ? signals.at(ai.ix, ai.iz, ai.dir) : null;
-  const toLine = light && light !== 'green' ? Math.hypot(target.x - car.x, target.z - car.z) - STOP_SHORT - Math.max(1.7, (car.body ?? CAR_BODY).reach) : 0;
+  const toLine = light && light !== 'green' ? len2(target.x - car.x, target.z - car.z) - STOP_SHORT - Math.max(1.7, (car.body ?? CAR_BODY).reach) : 0;
   // Held at a red short of the line: never on into the junction, however close the waypoint.
   const heldAtRed = light === 'red' && toLine > -0.5;
   // Turning left across oncoming traffic: wait at the entry for a gap (calm drivers only).
-  const toEntry = Math.hypot(target.x - car.x, target.z - car.z);
+  const toEntry = len2(target.x - car.x, target.z - car.z);
   const leftTurn = ai.phase === 'approach' && ai.next === turnLeft(ai.dir) && !ai.turnCommitted && !panic && !ai.urgent;
   // Stopped at the line as the light goes green: the oncoming queue starts at the same
   // moment and is still standing, so look again after a beat (a stopped car isn't counted).
@@ -280,7 +281,7 @@ export function driveAi(
     (rightTurn && toEntry < GIVE_WAY_LOOK && exitTaken(ai, car, obstacles));
   // Moving off within a car's length of the line with the way clear: committed to the turn.
   if ((leftTurn || rightTurn) && !givingWay && (light === null || light === 'green') && toEntry < STOP_SHORT + 6 && forwardSpeed(car) > 0.3) ai.turnCommitted = true;
-  if (Math.hypot(target.x - car.x, target.z - car.z) < WAYPOINT_RADIUS && !heldAtRed && !givingWay) {
+  if (len2(target.x - car.x, target.z - car.z) < WAYPOINT_RADIUS && !heldAtRed && !givingWay) {
     ai.progress = ai.bestProgress = Infinity;
     ai.stuck = ai.stalled = ai.attempts = 0;
     if (ai.phase === 'approach') {
@@ -298,7 +299,7 @@ export function driveAi(
     }
     target = currentWaypoint(ai);
   }
-  const distToWaypoint = Math.hypot(target.x - car.x, target.z - car.z);
+  const distToWaypoint = len2(target.x - car.x, target.z - car.z);
 
   // Pure pursuit. On approach, chase a point a little ahead on the lane line
   // rather than the far waypoint, so a car knocked sideways merges back onto
@@ -550,7 +551,7 @@ function oncomingInWay(ai: AiDriver, car: VehicleState, obstacles: Obstacle[]): 
     const exitArm = along >= 0 && lateral > half + 1 && lateral < half + EXIT_ARM;
     if (along <= half && Math.abs(lateral) > half + 1 && !exitArm) continue; // off the junction box
     const closing = -(other.vx * v.x + other.vz * v.z);
-    const moving = Math.hypot(other.vx, other.vz) > GIVE_WAY_MOVING;
+    const moving = len2(other.vx, other.vz) > GIVE_WAY_MOVING;
     if (!moving) continue;
     if (along <= half) return true; // already in the junction, going through
     if (closing > 0 && (along - half) / closing < clearTime) return true;
@@ -581,7 +582,7 @@ function exitTaken(ai: AiDriver, car: VehicleState, obstacles: Obstacle[]): bool
     if (other.vx * e.x + other.vz * e.z > GIVE_WAY_MOVING) return true;
     // Still swinging round toward our road (a left-turner early in its turn).
     const toward = wrapAngle(exitHeading - other.heading);
-    if (along <= half && Math.hypot(other.vx, other.vz) > GIVE_WAY_MOVING && Math.abs(toward) < 1.8 && other.yawRate * toward > 0.15) return true;
+    if (along <= half && len2(other.vx, other.vz) > GIVE_WAY_MOVING && Math.abs(toward) < 1.8 && other.yawRate * toward > 0.15) return true;
   }
   return false;
 }

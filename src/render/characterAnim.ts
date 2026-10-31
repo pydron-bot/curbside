@@ -10,24 +10,40 @@
  * over that (Aim*, Shoot*, Punch*, Throw, Hail), each crossfaded by weight.
  *
  * Sampling by hand rather than through a mixer per person: no bookkeeping
- * per action, no garbage, layers that mask bones (arms over walking legs),
- * and it costs a few dozen interpolant reads per person per frame. The
- * clips key every bone, so a bone a clip leaves out is taken as its rest
+ * per action, no garbage, layers that mask bones (arms over walking legs).
+ * The clips key every bone, so a bone a clip leaves out is taken as its rest
  * pose; the exporter's constant scale and non-root position tracks are
  * dropped at load (they are the rest pose anyway).
+ *
+ * Each track is baked at load into evenly spaced frames in a Float32Array
+ * (its own keys when they're even and linear, as Blender exports them;
+ * constant tracks into one frame) and sampled with the math written inline:
+ * three's interpolants box every keyframe read and blend through calls V8
+ * doesn't inline, which made them ~10 KB of garbage a frame.
  */
-import { Quaternion, Vector3, type AnimationClip, type Interpolant, type KeyframeTrack, type Object3D } from 'three';
+import { InterpolateLinear, Quaternion, Vector3, type AnimationClip, type Interpolant, type KeyframeTrack, type Object3D } from 'three';
 
 /** Bones the upper-body layers drive, as GLTFLoader names them ("arm.R" → "armR"). */
 export const UPPER_BONES: readonly string[] = ['armR', 'armL', 'chest', 'head'];
 
-/** One clip ready to sample: per bone slot, its rotation sampler (null = rest), and the root's position. */
+/** Frames per second for tracks that aren't evenly keyed and linear (resampled). */
+export const BAKE_FPS = 30;
+
+/** A track baked into evenly spaced frames: `dim` values per frame, `step` s apart. */
+export interface BakedTrack {
+  readonly dim: number;
+  readonly frames: number;
+  readonly step: number;
+  readonly values: Float32Array;
+}
+
+/** One clip ready to sample: per bone slot, its rotation track (null = rest), and the root's position. */
 export interface ClipData {
   readonly name: string;
   readonly duration: number;
-  readonly rot: ReadonlyArray<Interpolant | null>;
-  /** Position sampler for `posSlot` (the root bone), or null (rest). */
-  readonly pos: Interpolant | null;
+  readonly rot: ReadonlyArray<BakedTrack | null>;
+  /** Position track for `posSlot` (the root bone), or null (rest). */
+  readonly pos: BakedTrack | null;
 }
 
 /** The animated bones of one body and its clips by name. */
@@ -71,16 +87,17 @@ export class ClipBank {
     }
     this.posSlot = posSlot;
     for (const clip of clips) {
-      const rot: Array<Interpolant | null> = this.bones.map(() => null);
-      let pos: Interpolant | null = null;
+      const duration = Math.max(1e-3, clip.duration);
+      const rot: Array<BakedTrack | null> = this.bones.map(() => null);
+      let pos: BakedTrack | null = null;
       for (const t of clip.tracks) {
         const [node, prop] = splitTrack(t);
         const slot = this.bones.indexOf(node);
         if (slot < 0) continue;
-        if (prop === 'quaternion') rot[slot] = interpolant(t);
-        else if (prop === 'position' && slot === posSlot) pos = interpolant(t);
+        if (prop === 'quaternion') rot[slot] = bake(t, duration, 4);
+        else if (prop === 'position' && slot === posSlot) pos = bake(t, duration, 3);
       }
-      this.clips.set(clip.name, { name: clip.name, duration: Math.max(1e-3, clip.duration), rot, pos });
+      this.clips.set(clip.name, { name: clip.name, duration, rot, pos });
     }
   }
 
@@ -93,21 +110,25 @@ export class ClipBank {
   }
 }
 
-/** A pose under construction: one rotation per slot and the root's position. */
+/** A pose under construction: one rotation per slot (x, y, z, w) and the root's position. */
 export class Pose {
-  readonly q: Quaternion[];
-  readonly p = new Vector3();
+  readonly q: Float64Array;
+  readonly p = new Float64Array(3);
+  private readonly restQ: Float64Array;
+  private readonly restP = new Float64Array(3);
 
   constructor(readonly bank: ClipBank) {
-    this.q = bank.restQ.map((q) => q.clone());
-    this.p.copy(bank.posSlot >= 0 ? bank.restP[bank.posSlot] : new Vector3());
+    this.restQ = new Float64Array(bank.restQ.length * 4);
+    bank.restQ.forEach((q, i) => q.toArray(this.restQ, i * 4));
+    if (bank.posSlot >= 0) bank.restP[bank.posSlot].toArray(this.restP);
+    this.q = this.restQ.slice();
+    this.p.set(this.restP);
   }
 
   /** Back to the rest pose. */
   rest(): void {
-    const b = this.bank;
-    for (let i = 0; i < this.q.length; i++) this.q[i].copy(b.restQ[i]);
-    if (b.posSlot >= 0) this.p.copy(b.restP[b.posSlot]);
+    this.q.set(this.restQ);
+    this.p.set(this.restP);
   }
 
   /**
@@ -117,22 +138,72 @@ export class Pose {
    */
   overlay(clip: ClipData, t: number, w: number, mask: readonly number[]): void {
     if (w <= 0) return;
-    const b = this.bank;
     const k = Math.min(1, w);
+    const ps = this.bank.posSlot;
     for (let m = 0; m < mask.length; m++) {
       const i = mask[m];
       const s = clip.rot[i];
       if (s) {
-        const v = s.evaluate(t) as unknown as ArrayLike<number>;
-        sampleQ.set(v[0], v[1], v[2], v[3]);
-        this.q[i].slerp(sampleQ, k);
-      } else this.q[i].slerp(b.restQ[i], k);
-      if (i === b.posSlot) {
-        if (clip.pos) {
-          const v = clip.pos.evaluate(t) as unknown as ArrayLike<number>;
-          sampleP.set(v[0], v[1], v[2]);
-          this.p.lerp(sampleP, k);
-        } else this.p.lerp(b.restP[i], k);
+        // Sample: nlerp between the two frames either side of t.
+        const v = s.values;
+        let a = 0;
+        let f = 0;
+        if (s.frames > 1) {
+          const u = Math.max(0, t / s.step);
+          a = Math.min(Math.floor(u), s.frames - 2);
+          f = Math.min(1, u - a);
+          a *= 4;
+        }
+        let x = v[a];
+        let y = v[a + 1];
+        let z = v[a + 2];
+        let qw = v[a + 3];
+        if (f > 0) {
+          const b = a + 4;
+          const sg = x * v[b] + y * v[b + 1] + z * v[b + 2] + qw * v[b + 3] < 0 ? -f : f;
+          const g = 1 - f;
+          x = x * g + v[b] * sg;
+          y = y * g + v[b + 1] * sg;
+          z = z * g + v[b + 2] * sg;
+          qw = qw * g + v[b + 3] * sg;
+          const n = 1 / Math.sqrt(x * x + y * y + z * z + qw * qw);
+          x *= n;
+          y *= n;
+          z *= n;
+          qw *= n;
+        }
+        const sq = sampleQ;
+        sq[0] = x;
+        sq[1] = y;
+        sq[2] = z;
+        sq[3] = qw;
+        sq[4] = k;
+        blendQ(this.q, i * 4, sq, 0);
+      } else {
+        sampleQ[4] = k;
+        blendQ(this.q, i * 4, this.restQ, i * 4);
+      }
+      if (i === ps) {
+        const pt = clip.pos;
+        const out = this.p;
+        if (pt) {
+          const v = pt.values;
+          let a = 0;
+          let f = 0;
+          if (pt.frames > 1) {
+            const u = Math.max(0, t / pt.step);
+            a = Math.min(Math.floor(u), pt.frames - 2);
+            f = Math.min(1, u - a);
+            a *= 3;
+          }
+          for (let c = 0; c < 3; c++) {
+            const sv = f > 0 ? v[a + c] + (v[a + 3 + c] - v[a + c]) * f : v[a + c];
+            out[c] += (sv - out[c]) * k;
+          }
+        } else {
+          const r = this.restP;
+          for (let c = 0; c < 3; c++) out[c] += (r[c] - out[c]) * k;
+        }
       }
     }
   }
@@ -140,13 +211,72 @@ export class Pose {
   /** Write the pose into a rig's bones (looked up per slot by the caller). */
   apply(bones: ReadonlyArray<Object3D | null>): void {
     const ps = this.bank.posSlot;
+    const q = this.q;
     for (let i = 0; i < bones.length; i++) {
       const bone = bones[i];
       if (!bone) continue;
-      bone.quaternion.copy(this.q[i]);
-      if (i === ps) bone.position.copy(this.p);
+      const o = i * 4;
+      bone.quaternion.set(q[o], q[o + 1], q[o + 2], q[o + 3]);
+      if (i === ps) bone.position.set(this.p[0], this.p[1], this.p[2]);
     }
   }
+}
+
+/** The sampled rotation and the blend weight, handed to blendQ in an array (doubles passed as arguments get boxed). */
+const sampleQ = new Float64Array(5);
+
+/**
+ * q[o..o+3] slerped toward src[so..so+3] by sampleQ[4], as three's
+ * Quaternion.slerp (shortest way round, linear when nearly equal).
+ */
+function blendQ(q: Float64Array, o: number, src: Float64Array, so: number): void {
+  const k = sampleQ[4];
+  let x = src[so];
+  let y = src[so + 1];
+  let z = src[so + 2];
+  let w = src[so + 3];
+  if (k >= 1) {
+    q[o] = x;
+    q[o + 1] = y;
+    q[o + 2] = z;
+    q[o + 3] = w;
+    return;
+  }
+  const ax = q[o];
+  const ay = q[o + 1];
+  const az = q[o + 2];
+  const aw = q[o + 3];
+  let cos = ax * x + ay * y + az * z + aw * w;
+  if (cos < 0) {
+    x = -x;
+    y = -y;
+    z = -z;
+    w = -w;
+    cos = -cos;
+  }
+  let ka = 1 - k;
+  let kb = k;
+  if (cos < 0.9995) {
+    const sin = Math.sqrt(1 - cos * cos);
+    const half = Math.atan2(sin, cos);
+    ka = Math.sin(ka * half) / sin;
+    kb = Math.sin(kb * half) / sin;
+  }
+  let rx = ax * ka + x * kb;
+  let ry = ay * ka + y * kb;
+  let rz = az * ka + z * kb;
+  let rw = aw * ka + w * kb;
+  if (cos >= 0.9995) {
+    const n = 1 / Math.sqrt(rx * rx + ry * ry + rz * rz + rw * rw);
+    rx *= n;
+    ry *= n;
+    rz *= n;
+    rw *= n;
+  }
+  q[o] = rx;
+  q[o + 1] = ry;
+  q[o + 2] = rz;
+  q[o + 3] = rw;
 }
 
 /** One clip playing in a layer. */
@@ -238,18 +368,44 @@ function advance(s: Slot, dt: number): void {
   else s.time = Math.min(s.time, d);
 }
 
-const sampleQ = new Quaternion();
-const sampleP = new Vector3();
-
 /** "hips.quaternion" → ["hips", "quaternion"]. */
 function splitTrack(t: KeyframeTrack): [string, string] {
   const dot = t.name.lastIndexOf('.');
   return [t.name.slice(0, dot), t.name.slice(dot + 1)];
 }
 
-/** Each track has its own interpolant factory (slerp for rotations, GLTF cubic splines too). */
-function interpolant(t: KeyframeTrack): Interpolant {
-  return (t as unknown as { createInterpolant(): Interpolant }).createInterpolant();
+/**
+ * Bake a track into frames 0..duration through its own interpolant (slerp
+ * for rotations, GLTF cubic splines too), once at load. A track that holds
+ * one value the whole way bakes into a single frame.
+ */
+export function bake(t: KeyframeTrack, duration: number, dim: number): BakedTrack {
+  const sampler = (t as unknown as { createInterpolant(): Interpolant }).createInterpolant();
+  // Evenly spaced linear keys over the whole clip are kept as they are
+  // (resampling them would cut the corners between keys); anything else is
+  // resampled at BAKE_FPS. Either way the last frame lands exactly on
+  // `duration` (GetUp, Throw and EnterCar time off it).
+  const frames = evenKeys(t, duration) ? t.times.length : Math.max(2, Math.ceil(duration * BAKE_FPS) + 1);
+  const step = duration / (frames - 1);
+  const values = new Float32Array(frames * dim);
+  for (let f = 0; f < frames; f++) {
+    const v = sampler.evaluate(Math.min(duration, f * step)) as unknown as ArrayLike<number>;
+    for (let c = 0; c < dim; c++) values[f * dim + c] = v[c];
+  }
+  for (let i = dim; i < values.length; i++) {
+    if (Math.abs(values[i] - values[i % dim]) > 1e-6) return { dim, frames, step, values };
+  }
+  return { dim, frames: 1, step, values: values.slice(0, dim) };
+}
+
+/** Linear keys from 0 to `duration`, evenly spaced. */
+function evenKeys(t: KeyframeTrack, duration: number): boolean {
+  const k = t.times;
+  const n = k.length;
+  if (n < 2 || t.getInterpolation() !== InterpolateLinear || k[0] !== 0 || Math.abs(k[n - 1] - duration) > 1e-5) return false;
+  const gap = duration / (n - 1);
+  for (let i = 1; i < n; i++) if (Math.abs(k[i] - i * gap) > 1e-5) return false;
+  return true;
 }
 
 /** Does a position track hold `rest` the whole way (as the exporter writes for every bone)? */
