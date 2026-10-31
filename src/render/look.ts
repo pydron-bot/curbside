@@ -1,5 +1,5 @@
 import type { Camera, Object3D, Scene, WebGLRenderer } from 'three';
-import { planBuildings } from '../world/buildingPlans';
+import { planBuildings, type BuildingPlan } from '../world/buildingPlans';
 import type { City, Rect } from '../world/city';
 import { createCityMesh, type CityMesh } from '../world/cityMesh';
 import type { StreetProps } from '../world/streetProps';
@@ -62,6 +62,8 @@ export class Look {
   /** props.glb / pickups.glb models: street furniture, rooftop kit, trees, landmarks, and per-frame `things`. */
   readonly props: WorldProps;
   readonly post: PostEffects;
+  /** Every building's dressing (roof, props, shopfronts), in city.buildings order. */
+  readonly plans: readonly BuildingPlan[];
   private readonly sunShadow: SunShadow;
   private readonly city: CityMesh;
   private readonly view: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
@@ -92,6 +94,7 @@ export class Look {
     this.sunShadow = new SunShadow(renderer, this.lighting.sun);
     scene.add(createGround(city));
     const plans = planBuildings(city);
+    this.plans = plans;
     this.city = createCityMesh(city, plans);
     scene.add(this.city.root);
     this.props = new WorldProps(streetProps, plans);
@@ -158,6 +161,15 @@ export class Look {
     // Count the whole frame (shadow pass, scene, bloom), not just the last pass.
     this.renderer.info.reset();
     this.renderer.render(this.scene, camera);
+  }
+
+  /**
+   * The destruction test's craters in the building shader (on while the test
+   * is). Switching on compiles one program variant: do it before the first
+   * frame or while paused, then warm the shaders.
+   */
+  setBreaches(on: boolean): void {
+    this.city.setBreaches(on);
   }
 
   /**

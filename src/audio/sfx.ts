@@ -554,6 +554,39 @@ export function explosion(v: Voice, near: number): void {
   }
 }
 
+/**
+ * A facade giving way (the destruction test): a low rumble of masonry under
+ * a closing lowpass, a thump, a crackle of grit, then chunks landing.
+ * `size` 0..1 is the crater's share of the largest.
+ */
+export function crumble(v: Voice, size: number): void {
+  const t = v.t;
+  const b = v.bank;
+  const len = 1.2 + 1.2 * size;
+  const body = v.noise(b.brown, t, t + len + 0.4);
+  const lp = v.filter('lowpass', 1400, 0.6);
+  sweep(lp.frequency, t, 1400, 180, len);
+  const bg = v.gain();
+  v.chain(body, lp, bg, v.input);
+  perc(bg.gain, t, 0.7, 0.01, len * 0.35);
+
+  thump(v, t, 55 + 15 * size, 30, 0.5, 0.5 + 0.4 * size, 0.25);
+
+  const grit = v.noise(b.crackle, t + 0.05, t + len);
+  const bp = v.filter('bandpass', 900, 0.8);
+  const gg = v.gain();
+  v.chain(grit, bp, gg, v.input);
+  gg.gain.setValueAtTime(0, t + 0.05);
+  gg.gain.linearRampToValueAtTime(0.4, t + 0.2);
+  gg.gain.setTargetAtTime(0, t + 0.45, len * 0.25);
+
+  // Chunks landing on the pavement.
+  const grains = 6 + Math.round(6 * size);
+  for (let i = 0; i < grains; i++) {
+    noiseHit(v, b.white, t + rnd(0.15, 1.4), 'bandpass', rnd(600, 2200), 1.4, rnd(0.15, 0.4), 0.001, rnd(0.02, 0.05));
+  }
+}
+
 /** A high whine after a close blast: your ears ringing. */
 export function tinnitus(v: Voice, amount: number): void {
   const t = v.t;

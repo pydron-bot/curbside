@@ -47,7 +47,7 @@ The original Windows notes still apply if working there: Blender at `C:\Program 
 | Language | TypeScript | Safer refactors as systems grow. |
 | Bundler / dev server | Vite | Fast HMR, trivial static build, LAN dev server for testing on a phone (`vite --host`). |
 | Renderer | three.js (WebGLRenderer, pin exact version) | Mature, small, great glTF support. Keep WebGPURenderer as a later opt-in — WebGL2 is the safe mobile baseline. |
-| Physics | Custom arcade 2D physics on the XZ plane | Top-down game is effectively 2D: circle/OBB vs. static grid collision is cheap and tunable. Avoid a full 3D engine. Fallback if needed: Rapier 2D (WASM). |
+| Physics | Custom arcade 2D physics on the XZ plane | Top-down game is effectively 2D: circle/OBB vs. static grid collision is cheap and tunable. Avoid a full 3D engine. Fallback if needed: Rapier 2D (WASM). The destruction test's rubble is a deliberate exception: Rapier 3D, lazy-loaded, presentation only (it never moves cars or people). |
 | PWA | `vite-plugin-pwa` (Workbox) | Generates manifest + service worker, precaches the build and GLB assets for offline play. |
 | Audio | Web Audio API (or Howler.js) | Must unlock on first touch (iOS). |
 | Assets | glTF binary (`.glb`) exported from Blender, Draco or Meshopt compressed, KTX2 textures | Small downloads, fast GPU upload on mobile. |

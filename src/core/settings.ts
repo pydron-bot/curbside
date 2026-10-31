@@ -5,10 +5,13 @@
 export type QualityPreset = 'auto' | 'high' | 'medium' | 'low';
 export type SteeringMode = 'directional' | 'classic';
 export type PerfOverlay = 'off' | 'fps' | 'full';
+/** The destruction test: off, style from the quality tier, or a forced phone / desktop style. */
+export type DestructionMode = 'off' | 'auto' | 'phone' | 'desktop';
 
 export const QUALITY_PRESETS: readonly QualityPreset[] = ['auto', 'high', 'medium', 'low'];
 export const STEERING_MODES: readonly SteeringMode[] = ['directional', 'classic'];
 export const PERF_OVERLAYS: readonly PerfOverlay[] = ['off', 'fps', 'full'];
+export const DESTRUCTION_MODES: readonly DestructionMode[] = ['off', 'auto', 'phone', 'desktop'];
 
 export interface Settings {
   /** 0..1 */
@@ -27,6 +30,8 @@ export interface Settings {
   haptics: boolean;
   /** Frame-time overlay over the game: off, one fps line, or full stats. */
   perfOverlay: PerfOverlay;
+  /** Destruction test (Diagnostics sheet only): off, style from the quality tier, or forced phone / desktop style. */
+  destruction: DestructionMode;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -39,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
   leftHanded: false,
   haptics: true,
   perfOverlay: 'off',
+  destruction: 'off',
 };
 
 const KEY = 'curbside.settings';
@@ -71,6 +77,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   // The old Show FPS switch becomes the one-line overlay (its key is carried through for older builds).
   if (PERF_OVERLAYS.includes(raw.perfOverlay as PerfOverlay)) out.perfOverlay = raw.perfOverlay as PerfOverlay;
   else if (raw.showFps === true) out.perfOverlay = 'fps';
+  if (DESTRUCTION_MODES.includes(raw.destruction as DestructionMode)) out.destruction = raw.destruction as DestructionMode;
   return out;
 }
 

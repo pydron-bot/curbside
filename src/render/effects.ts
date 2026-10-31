@@ -183,9 +183,11 @@ export class Effects {
   /**
    * A car exploding at (x, z): flash, shockwave, fireball rolling into a
    * column of smoke, sparks, embers, flying panels in `paint`, and a scorch.
-   * Several at once (a chain reaction) share a budget.
+   * Several at once (a chain reaction) share a budget. `masonry`: a carless
+   * blast breaching a wall (the destruction test): lumps of wall in `paint`
+   * instead of car panels.
    */
-  explode(x: number, z: number, paint: Rgb = CHARCOAL): void {
+  explode(x: number, z: number, paint: Rgb = CHARCOAL, masonry = false): void {
     this.recentBooms += 1;
     const budget = this.scale / Math.max(1, this.recentBooms * 0.6);
     const n = (count: number) => Math.max(1, Math.round(count * budget));
@@ -286,9 +288,9 @@ export class Effects {
     this.sparks(x, 1.4, z, n(28), 12, 26, 0, 0);
     this.embers(x, z, n(22), 2.5, 7);
 
-    // Panels in the car's colour, dark chunks, glass. Debris is one instanced
-    // draw whatever the count, so it isn't cut on phones: 12 for a lone blast,
-    // fewer per car in a chain.
+    // Panels in the car's colour (or lumps of the wall), dark chunks, glass.
+    // Debris is one instanced draw whatever the count, so it isn't cut on
+    // phones: 12 for a lone blast, fewer per car in a chain.
     const pieces = Math.max(4, Math.round(12 / Math.max(1, this.recentBooms * 0.6)));
     const parts = this.debris.hasParts;
     // Each blast throws a run of different parts, starting anywhere in the list.
@@ -297,7 +299,7 @@ export class Effects {
       const a = Math.random() * Math.PI * 2;
       const sp = 3 + Math.random() * 8;
       const own = k % 3 !== 2;
-      if (own && parts) {
+      if (own && parts && !masonry) {
         // The real thing (debris.glb): a door, the hood, a bumper, a wheel, twisted panels, in the car's paint.
         this.debris.throwPart(
           part++ % 7,
@@ -316,7 +318,9 @@ export class Effects {
         continue;
       }
       const c = own ? paint : CHARCOAL;
-      const w = own ? 0.5 + Math.random() * 0.6 : 0.25 + Math.random() * 0.35;
+      // Wall lumps are the rubble's size (a 1 m pale sheet read as a car's hood).
+      const lump = own && masonry;
+      const w = lump ? 0.15 + Math.random() * 0.2 : own ? 0.5 + Math.random() * 0.6 : 0.25 + Math.random() * 0.35;
       this.debris.throw(
         x + Math.cos(a) * 0.8,
         1.2,
@@ -325,8 +329,8 @@ export class Effects {
         6 + Math.random() * 9,
         Math.sin(a) * sp,
         w,
-        own ? 0.06 : 0.2 + Math.random() * 0.2,
-        own ? 0.4 + Math.random() * 0.5 : 0.25 + Math.random() * 0.3,
+        lump ? w * (0.5 + 0.5 * Math.random()) : own ? 0.06 : 0.2 + Math.random() * 0.2,
+        lump ? 0.15 + Math.random() * 0.2 : own ? 0.4 + Math.random() * 0.5 : 0.25 + Math.random() * 0.3,
         c.r,
         c.g,
         c.b,

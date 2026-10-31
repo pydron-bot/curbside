@@ -12,6 +12,11 @@ export interface CarDims {
   rear: number;
   /** Roof height. */
   height: number;
+  /** The hood line: the top of the front fifth (all of the height for a van or a bus). */
+  hood: number;
+  /** Along local +Z, where the body rises well over the hood line (the cabin); equal when nothing does. */
+  cabinFrom: number;
+  cabinTo: number;
 }
 
 /**
@@ -68,7 +73,20 @@ export class VehicleModels {
 export function dimsOf(geo: BufferGeometry): CarDims {
   geo.computeBoundingBox();
   const b = geo.boundingBox ?? new Box3(new Vector3(-0.95, 0, -2.2), new Vector3(0.95, 1.6, 2.2));
-  return { halfWidth: Math.max(-b.min.x, b.max.x), front: b.max.z, rear: -b.min.z, height: b.max.y };
+  // The top silhouette, for the destruction test's rubble (render/destruction.ts): chunks rest on the hood, not over it.
+  const pos = geo.getAttribute('position');
+  const noseFrom = b.max.z - 0.2 * (b.max.z - b.min.z);
+  let hood = 0;
+  for (let i = 0; i < pos.count; i++) if (pos.getZ(i) >= noseFrom && pos.getY(i) > hood) hood = pos.getY(i);
+  let cabinFrom = Infinity;
+  let cabinTo = -Infinity;
+  for (let i = 0; i < pos.count; i++) {
+    if (pos.getY(i) <= hood + 0.12) continue;
+    cabinFrom = Math.min(cabinFrom, pos.getZ(i));
+    cabinTo = Math.max(cabinTo, pos.getZ(i));
+  }
+  if (cabinFrom > cabinTo) cabinFrom = cabinTo = 0;
+  return { halfWidth: Math.max(-b.min.x, b.max.x), front: b.max.z, rear: -b.min.z, height: b.max.y, hood, cabinFrom, cabinTo };
 }
 
 function mergeCar(root: Object3D): BufferGeometry | null {

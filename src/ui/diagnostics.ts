@@ -6,6 +6,7 @@ import { getQuality } from '../render/quality';
 import type { FrontDoor } from './frontDoor';
 import type { Haptics } from './haptics';
 import { ICONS } from './icons';
+import { DestructionProbe, destructionSummary, type DestructionProbeDeps } from './destructionProbe';
 import { InputProbes } from './inputProbes';
 import { MenuNav, overlay, type Panel } from './menu';
 import { safeInsets } from './safeArea';
@@ -25,6 +26,25 @@ export interface DiagnosticsDeps {
   canvas: HTMLCanvasElement;
   /** For the on-device haptic / rumble / pad probes. */
   haptics?: Haptics;
+  /** The destruction test's switch, BLOW A WALL and readout. */
+  destruction?: DestructionProbeDeps;
+}
+
+/** Rapier's files as loaded (Resource Timing): did Pages gzip the wasm, did it come from cache? */
+function rapierFiles(): Array<{ file: string; transfer: number; encoded: number; decoded: number; ms: number }> {
+  try {
+    return (performance.getEntriesByType('resource') as PerformanceResourceTiming[])
+      .filter((e) => /rapier/i.test(e.name))
+      .map((e) => ({
+        file: e.name.split('/').pop()!.split('?')[0],
+        transfer: e.transferSize,
+        encoded: e.encodedBodySize,
+        decoded: e.decodedBodySize,
+        ms: Math.round(e.duration),
+      }));
+  } catch {
+    return [];
+  }
 }
 
 function storage(): KeyValueStore | null {
@@ -56,6 +76,7 @@ export class Diagnostics implements Panel {
   private readonly fallback: HTMLTextAreaElement;
   private readonly firstBtn: HTMLButtonElement;
   private readonly probes: InputProbes | null = null;
+  private readonly destruction: DestructionProbe | null = null;
   private readonly frameOut = emptySummary();
   private onClose: () => void = () => {};
   private tier = '';
@@ -102,6 +123,11 @@ export class Diagnostics implements Panel {
     this.summaryEl = card.querySelector('.diag-summary')!;
     this.statusEl = card.querySelector('.diag-status')!;
     this.fallback = card.querySelector('.diag-fallback')!;
+    // The destruction test first: its pads fit unscrolled at 852x340.
+    if (deps.destruction) {
+      this.destruction = new DestructionProbe(deps.destruction, this.nav);
+      this.summaryEl.before(this.destruction.el);
+    }
     if (deps.haptics) {
       this.probes = new InputProbes(deps.haptics, this.nav);
       this.summaryEl.before(this.probes.el);
@@ -133,8 +159,10 @@ export class Diagnostics implements Panel {
     this.fallback.hidden = true;
     this.refresh();
     this.probes?.start();
+    this.destruction?.start();
     this.root.hidden = false;
-    this.nav.focusElement(this.firstBtn);
+    // The destruction test's mode pads first while it is on the sheet (the header's buttons are up from there).
+    this.nav.focusElement(this.destruction?.current ?? this.firstBtn);
     this.nav.showFocus(showFocus);
   }
 
@@ -142,12 +170,14 @@ export class Diagnostics implements Panel {
     if (this.root.hidden) return;
     this.root.hidden = true;
     this.probes?.stop();
+    this.destruction?.stop();
     this.onClose();
   }
 
   hide(): void {
     this.root.hidden = true;
     this.probes?.stop();
+    this.destruction?.stop();
   }
 
   /** The whole report: a few readable lines, then JSON with the session log and the play log. */
@@ -184,6 +214,8 @@ export class Diagnostics implements Panel {
       audioState: this.deps.audioState(),
       settings: { ...settings },
       frame: { ...f },
+      destruction: this.deps.destruction?.stats() ?? null,
+      rapierFiles: rapierFiles(),
       session: this.log.data(),
       previous: this.previous,
       playlog,
@@ -201,6 +233,7 @@ export class Diagnostics implements Panel {
       `SCREEN ${screen.width}x${screen.height} · inner ${innerWidth}x${innerHeight} · dpr ${devicePixelRatio}`,
       `SAFE t${s.top} r${s.right} b${s.bottom} l${s.left} · ${standalone() ? 'home-screen app' : 'browser tab'}`,
       `TIER ${getQuality().name} @ ${this.deps.ratio().toFixed(2)}x · ${this.deps.drawCalls()} dc · audio ${this.deps.audioState()}`,
+      ...(this.deps.destruction ? [destructionSummary(this.deps.destruction.stats())] : []),
       `FRAMES ${f.fps.toFixed(1)} fps · p50 ${f.p50.toFixed(1)} p95 ${f.p95.toFixed(1)} p99 ${f.p99.toFixed(1)} ms · js p95 ${f.jsP95.toFixed(1)} · ${f.hitchesPerMin.toFixed(1)} hitch/min`,
       `SESSION ${this.log.seconds(performance.now()).toFixed(0)} s · ${d.samples.length} samples (every ${SAMPLE_EVERY_MS / 1000} s) · ${this.log.eventCount} events`,
       `PREVIOUS ${this.previous ? `${this.previous.samples.length} samples from ${this.previous.started}` : 'none'}`,
@@ -278,6 +311,7 @@ export class Diagnostics implements Panel {
     }
     if (this.log.due(now)) {
       const f = this.deps.frame(this.frameOut);
+      const d = this.deps.destruction?.stats();
       this.log.addSample(now, {
         fps: f.fps,
         p50: f.p50,
@@ -290,6 +324,7 @@ export class Diagnostics implements Panel {
         dc: this.deps.drawCalls(),
         audioState: audio,
         paused: this.deps.paused(),
+        ...(d && d.mode !== 'off' ? { rubble: d.live, physP95: d.stepP95 } : {}),
       });
     }
     this.log.persist(now, storage());

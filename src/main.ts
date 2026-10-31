@@ -45,7 +45,7 @@ import { CombatLook } from './render/combatLook';
 import { PeoplePose } from './render/peoplePose';
 import { PigeonLook } from './render/pigeonMesh';
 import { createRenderer, precompile } from './render/post';
-import { getQuality } from './render/quality';
+import { getQuality, setQualityTier } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
 import { charVehicle, restoreVehicleLook } from './render/vehicleLooks';
 import { knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
@@ -105,6 +105,9 @@ import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audi
 import { StreetLife } from './game/streetLife';
 import { mountRadioToast } from './ui/radioToast';
 import { publicUrl } from './core/paths';
+import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
+import { Destruction } from './render/destruction';
+import { BlowWall } from './ui/blowWall';
 
 const app = document.getElementById('app')!;
 
@@ -155,6 +158,13 @@ const rig = new CameraRig(1);
 // Lights, time of day, ground, city, props, and the batched people/car/glow renderers.
 const look = new Look(renderer, scene, city, rig, pickups, app, dressing.street);
 look.props.setLandmarks(dressing.landmarks);
+/** The destruction test's craters (systems/breaches.ts): building faces found through the collision grid, awnings from the city's plans. */
+const breaches = new Breaches(
+  city.buildings,
+  collision,
+  new Map<Rect, number>(city.buildings.map((b, i) => [b, i])),
+  look.plans.map((p) => p.shopfronts.filter((s) => s.awning !== null)),
+);
 const effects = new Effects(scene);
 /** Hydrants, bins, benches, cones: a car knocks them flying (they're back a minute later). */
 const knockables = new Knockables(dressing.knockables);
@@ -434,7 +444,31 @@ const fx = new FxDirector({
   audio,
   // Muzzle flashes at the end of the barrel in the shooter's hand.
   muzzle: (e, out) => look.characters.placeShot(e, out),
+  // A blast about to breach a wall throws wall-coloured panels (the destruction test).
+  blastPaint: (e, out) => !attract.active && destruction.blastPaint(blastKindOf(e.source), e.x, e.z, out),
 });
+// The destruction test (off by default): blasts near a wall breach it; dust, rubble and its physics.
+const destruction = new Destruction({
+  bus: events,
+  scene,
+  effects,
+  breaches,
+  vehicles,
+  playerCar: () => player.driving,
+  holdOff: (s) => resolution.holdOff(s),
+  setBreaches: (on) => look.setBreaches(on),
+  // Switched on or off from the paused Diagnostics sheet: the other city variant compiles and links behind the card.
+  warmShaders: () => {
+    logEvent('warm', `${Math.round(warmShaders())} ms`);
+    redrawPaused = true;
+  },
+  quiet: () => paused || attract.active,
+  log: (kind, detail) => logEvent(kind, detail),
+  contactShadows: look.contactShadows,
+  carDims: (a) => look.cars.dims(a),
+});
+look.addGlowSource((_g, view) => destruction.draw(view));
+new BreachSystem(events, breaches, { enabled: () => destruction.mode !== 'off', playing: () => !attract.active });
 events.on('enterVehicle', () => {
   // PeoplePose hides the body once it has ducked into the car.
   rig.setHeights(...CAMERA_CAR);
@@ -536,6 +570,8 @@ function respawnPlayer() {
   rig.snapTo(player.ped.x, player.ped.z);
   knockables.reset(restoreProp);
   knockFx.clear();
+  breaches.reset();
+  destruction.clear();
   maintainPopulation(true);
   // The run is over anyway: a good moment to pick up a waiting app update.
   updates.atSafePoint();
@@ -942,7 +978,11 @@ function frame(now: number) {
 
   // Hit-stop slows the sim on big moments; the camera keeps real time.
   // Cards freeze it; the end of a Chaos Run slows it to a stop.
-  const alpha = loop.advance(frameSeconds * fx.simScale(frameSeconds) * progress.simScale(), simulate);
+  // BLOW A WALL from the Diagnostics sheet goes off now that play has resumed (sound, hit-stop and all).
+  blowWall.update();
+  // Computed once: fx.simScale advances the hit-stop.
+  const simDt = frameSeconds * fx.simScale(frameSeconds) * progress.simScale();
+  const alpha = loop.advance(simDt, simulate);
 
   // Interpolate render state between the last two sim steps.
   // Read once per frame: the wheel steer and the engine sound share it.
@@ -964,6 +1004,8 @@ function frame(now: number) {
   const focus = attract.active ? attract : player.position;
   pigeons.update(frameSeconds * fx.hitStop.scale, focus.x, focus.z, rig, vehicles, population.crowd, attract.active ? null : player);
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
+  // Rubble on the sim's clock: frozen by pause, cards and hit-stop like the world.
+  destruction.update(simDt);
   // Bikes lean and carry their riders; emergency sirens and the ice cream chime.
   streetLife.update(frameSeconds, focus.x, focus.z, !attract.active);
   combatLook.update(frameSeconds * fx.hitStop.scale);
@@ -1063,7 +1105,7 @@ const hud = new Hud(document.body, score, events, {
   debugText: (full) => {
     const f = frameStats.summarize(frameSummary);
     const head = full ? `${formatFrameStats(f)}\n` : `${formatFps(f.fps)} fps · `;
-    return `${head}${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc`;
+    return `${head}${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc${full ? destruction.overlayText() : ''}`;
   },
 });
 const combatHud = new CombatHud(document.getElementById('hud')!);
@@ -1113,7 +1155,8 @@ const progress = new ProgressDirector({
  * first draw mid-play. precompile targets the pass actually used (the HDR
  * target on desktop), which renderer.compile on the canvas would miss.
  */
-function warmShaders() {
+function warmShaders(): number {
+  const t0 = performance.now();
   try {
     precompile(renderer, scene, rig.camera);
     look.cars.precompileDepth(scene, rig.camera);
@@ -1121,6 +1164,7 @@ function warmShaders() {
   } catch {
     // A lost context mid-compile: the first frames compile instead.
   }
+  return performance.now() - t0;
 }
 
 /** PLAY: from the attract city to a fresh run at the spawn corner. */
@@ -1164,7 +1208,23 @@ haptics.enabled = false;
 audio.setMusicMode('menu');
 frontDoor.showTitle(score.best);
 frontDoor.rotate.check();
-requestAnimationFrame(() => warmShaders());
+// Behind the title: compile everything, and load the destruction test's physics if it is on.
+requestAnimationFrame(() => {
+  logEvent('warm', `${Math.round(warmShaders())} ms boot`);
+  destruction.preload();
+});
+
+/** The destruction test's BLOW A WALL (the Diagnostics sheet and __ub.blowWall()). */
+const blowWall = new BlowWall({
+  events,
+  breaches,
+  player,
+  rig,
+  attract: () => attract.active,
+  stats: () => destruction.stats(),
+  log: (kind, detail) => logEvent(kind, detail),
+  setPaused: (p) => setPaused(p),
+});
 
 // --- Lifecycle ---
 // App updates wait for a moment when reloading costs nothing (see UpdateGate).
@@ -1223,6 +1283,11 @@ document.addEventListener('visibilitychange', () => {
   setPaused(true);
 });
 
+/** A line in the Diagnostics session log (shader warm-ups, the destruction test's loading and blasts). */
+function logEvent(kind: string, detail?: string) {
+  diagnostics.log.addEvent(performance.now(), kind, detail);
+}
+
 // Session perf log and the Diagnostics sheet (pause card, Perf overlay on).
 const diagnostics = new Diagnostics(document.body, {
   frame: (out) => frameStats.summarize(out),
@@ -1232,6 +1297,13 @@ const diagnostics = new Diagnostics(document.body, {
   paused: () => paused,
   canvas: renderer.domElement,
   haptics,
+  destruction: {
+    stats: (out) => destruction.stats(out),
+    setMode: (m) => destruction.setMode(m),
+    tier: () => getQuality().name,
+    // Checked now (paused); it goes off as play resumes, which closes the sheet.
+    blowWall: () => blowWall.request(),
+  },
 });
 addDiagnosticsButton(diagnostics, frontDoor, () => input.lastDevice !== 'touch');
 
@@ -1287,6 +1359,11 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   events,
   audio,
   explode,
+  /** The destruction test: stats(), setMode(m), whenReady(), settle(s), clear(), batch, poses, lastBreach. */
+  destruction,
+  breaches,
+  blowWall: () => blowWall.fire(),
+  setQualityTier,
   heat,
   progress,
   combat,
@@ -1322,6 +1399,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   fastForward(seconds: number) {
     for (let t = 0; t < seconds; t += 1 / 60) {
       simulate(1 / 60);
+      destruction.update(1 / 60);
       if ((maintainTimer -= 1 / 60) <= 0) {
         maintainTimer = 0.25;
         maintainPopulation();

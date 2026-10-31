@@ -5,6 +5,7 @@
  * allocation-light: listeners run immediately, in subscription order.
  */
 import type { VehicleArchetype } from '../entities/vehicle';
+import type { BlastKind } from '../systems/damage';
 import type { Award } from '../systems/score';
 import type { WantedReason } from '../systems/wanted';
 import type { WeaponKind } from '../systems/weapons';
@@ -33,6 +34,41 @@ export type GameEvent =
       police?: boolean;
       /** What blew up: a car (the default), a grenade or a rocket. */
       source?: 'vehicle' | 'grenade' | 'rocket';
+    }
+  /**
+   * A blast blew a crater in a building's facade (the destruction test).
+   * Emitted from inside the explosion's dispatch (by its `explosion`
+   * listener), so onAny listeners see the breach before the explosion
+   * itself. Presentation only: collision is unchanged.
+   */
+  | {
+      type: 'breach';
+      /** Scar slot 0..MAX_BREACHES-1; a merge reuses its slot. */
+      slot: number;
+      /** It grew an existing crater rather than starting a new one. */
+      merged: boolean;
+      /** Crater centre on the facade plane, m. */
+      x: number;
+      y: number;
+      z: number;
+      /** Outward face normal (axis-aligned). */
+      nx: number;
+      nz: number;
+      /** 0 north (−Z), 1 east (+X), 2 south (+Z), 3 west (−X): the buildingPlans / shader convention. */
+      side: 0 | 1 | 2 | 3;
+      /** Crater radius along the face and depth into the wall, m (including earlier hits). */
+      radius: number;
+      depth: number;
+      /** This blast's share, 0..1: it sizes the rubble and the sound. */
+      strength: number;
+      kind: BlastKind;
+      /** Index into city.buildings. */
+      building: number;
+      /** 0..1 from building, side, position and hit count: the rim noise and the chunk layout. */
+      seed: number;
+      byPlayer: boolean;
+      /** Distance from the camera focus, m (the explosion's). */
+      distance: number;
     }
   /**
    * A gun went off at (x, z) (the muzzle). weapon is null for NPC guns;

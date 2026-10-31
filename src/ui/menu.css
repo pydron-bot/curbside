@@ -766,6 +766,12 @@ kbd.pad.b {
   touch-action: manipulation;
 }
 
+/* The destruction test: BLOW A WALL set apart from the mode pads, in the danger colour. */
+.diag-pad.diag-blow {
+  margin-left: 10px;
+  color: var(--danger);
+}
+
 .diag-probe-out {
   margin: 4px 0 2px;
   white-space: pre-wrap;

@@ -17,6 +17,7 @@ import {
   type BufferGeometry,
   type Material,
 } from 'three';
+import { BREACH_FRAGMENT_GLSL, BREACH_VERTEX_GLSL, breachUniforms } from '../render/breachScars';
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from '../render/shaderLib';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, type City, type Rect } from './city';
 import { AWNING_DEPTH, AWNING_HEIGHT, planBuildings, type BuildingPlan, type RoofProp } from './buildingPlans';
@@ -71,6 +72,13 @@ export interface CityMesh {
   update(night: number): void;
   /** props.glb arrived and its models are drawn (render/worldProps.ts): drop the stand-ins for good. */
   hideStandIns(): void;
+  /**
+   * The destruction test's craters in the building shader (render/breachScars.ts):
+   * a define, so with the test off the city draws with the program it always
+   * had. Switching on compiles a variant once (precompile it while paused);
+   * switching back reuses the original.
+   */
+  setBreaches(on: boolean): void;
 }
 
 /**
@@ -179,12 +187,18 @@ export function createCityMesh(city: City, plans: readonly BuildingPlan[] = plan
       }
       standIns.length = 0;
     },
+    setBreaches(on: boolean) {
+      if (on === (buildingMat.defines?.CURBSIDE_BREACH !== undefined)) return;
+      buildingMat.defines = on ? { CURBSIDE_BREACH: '' } : {};
+      buildingMat.needsUpdate = true;
+    },
   };
 }
 
 // --- Content ---------------------------------------------------------------
 
-function wallColour(district: District, tint: number, out: Color): Color {
+/** A building's wall colour (sRGB set, so linear in `out`); rubble chunks match the facade with it. */
+export function wallColour(district: District, tint: number, out: Color): Color {
   const walls = DISTRICT_STYLES[district].walls;
   out.set(walls[Math.floor(tint * walls.length) % walls.length]);
   return out.offsetHSL(0, 0, ((tint * 13.7) % 0.06) - 0.03);
@@ -380,8 +394,13 @@ function boundaryWallMesh(city: City, geo: BufferGeometry, mat: Material): Insta
 
 // --- Materials ---------------------------------------------------------------
 
-/** Rooftop props, awnings, lamps, trunks: instance colour, plus `aGlow` emission at night (neon, lamp heads). */
-function propMaterial(): MeshLambertMaterial {
+/**
+ * Rooftop props, awnings, lamps, trunks: instance colour, plus `aGlow`
+ * emission at night (neon, lamp heads). Every instance shares one program
+ * (the cache key), so other batches (rubble) can use it for free; they need
+ * `instanceColor` and an `aGlow` attribute from the start.
+ */
+export function propMaterial(): MeshLambertMaterial {
   const mat = new MeshLambertMaterial();
   mat.onBeforeCompile = (shader) => {
     useWorldUniforms(shader);
@@ -450,6 +469,7 @@ function glowMaterial(): ShaderMaterial {
  */
 function buildingMaterial(): MeshLambertMaterial {
   const mat = new MeshLambertMaterial();
+  mat.defines = {};
   const uDistWin = {
     value: DISTRICTS.map((d, i) => {
       const s = DISTRICT_STYLES[d];
@@ -461,6 +481,8 @@ function buildingMaterial(): MeshLambertMaterial {
     useWorldUniforms(shader);
     shader.uniforms.uDistWin = uDistWin;
     shader.uniforms.uDistGlass = uDistGlass;
+    // Inactive (and skipped by three) unless CURBSIDE_BREACH is defined.
+    Object.assign(shader.uniforms, breachUniforms);
     shader.vertexShader = after(
       shader.vertexShader,
       '#include <common>',
@@ -471,7 +493,8 @@ function buildingMaterial(): MeshLambertMaterial {
       varying vec3 vBN;
       varying vec3 vRoof;
       varying vec4 vInfo;
-      varying vec3 vWorldB;`,
+      varying vec3 vWorldB;
+      ${BREACH_VERTEX_GLSL}`,
     );
     shader.vertexShader = after(
       shader.vertexShader,
@@ -481,7 +504,10 @@ function buildingMaterial(): MeshLambertMaterial {
       vBN = normal;
       vRoof = aRoofColor;
       vInfo = aInfo;
-      vWorldB = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;`,
+      vWorldB = (modelMatrix * instanceMatrix * vec4(position, 1.0)).xyz;
+      #ifdef CURBSIDE_BREACH
+      vBreachMask = breachMask(instanceMatrix[3].xyz, vSize); // the chunks sit at the origin
+      #endif`,
     );
     shader.fragmentShader = after(
       shader.fragmentShader,
@@ -496,7 +522,8 @@ function buildingMaterial(): MeshLambertMaterial {
       uniform vec3 uDistGlass[${DISTRICTS.length}];
       ${UB_COMMON}
       ${UB_STREET_LIGHT}
-      ${BUILDING_GLSL}`,
+      ${BUILDING_GLSL}
+      ${BREACH_FRAGMENT_GLSL}`,
     );
     shader.fragmentShader = replace(
       shader.fragmentShader,
@@ -508,7 +535,10 @@ function buildingMaterial(): MeshLambertMaterial {
       vec3 bd = fwidth(bl);
       float bpx = max(max(bd.x, bd.y), bd.z);
       if (vBN.y > 0.5) roofSurface(diffuseColor.rgb, bGlow, bNormal, bl, bpx);
-      else if (vBN.y > -0.5) wallSurface(diffuseColor.rgb, bGlow, bl, bpx);`,
+      else if (vBN.y > -0.5) wallSurface(diffuseColor.rgb, bGlow, bl, bpx);
+      #ifdef CURBSIDE_BREACH
+      if (vBreachMask != 0u && abs(vBN.y) < 0.5) breachSurface(diffuseColor.rgb, bGlow, bNormal, vWorldB, bpx);
+      #endif`,
     );
     shader.fragmentShader = after(
       shader.fragmentShader,

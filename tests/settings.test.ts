@@ -25,6 +25,7 @@ describe('settings: sanitising what was stored', () => {
       leftHanded: true,
       haptics: false,
       perfOverlay: 'full',
+      destruction: 'desktop',
     };
     expect(sanitizeSettings(stored)).toEqual(stored);
   });
@@ -79,6 +80,13 @@ describe('settings: sanitising what was stored', () => {
   it('the perf overlay must be a known mode', () => {
     for (const mode of ['off', 'fps', 'full'] as const) expect(sanitizeSettings({ perfOverlay: mode }).perfOverlay).toBe(mode);
     for (const bad of [true, 1, 'FULL', 'debug', null, {}]) expect(sanitizeSettings({ perfOverlay: bad }).perfOverlay).toBe('off');
+  });
+
+  it('the destruction test must be a known mode, and is off by default', () => {
+    expect(DEFAULT_SETTINGS.destruction).toBe('off');
+    for (const mode of ['off', 'auto', 'phone', 'desktop'] as const) expect(sanitizeSettings({ destruction: mode }).destruction).toBe(mode);
+    for (const bad of [true, 1, 'DESKTOP', 'tablet', null, {}, undefined]) expect(sanitizeSettings({ destruction: bad }).destruction).toBe('off');
+    expect(sanitizeSettings({ quality: 'low' }).destruction).toBe('off');
   });
 
   it('the old Show FPS switch becomes the one-line overlay', () => {

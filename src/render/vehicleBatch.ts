@@ -171,6 +171,11 @@ export class CarBatch {
     return this.models?.seat(archetype);
   }
 
+  /** An archetype's model size and top silhouette (undefined until vehicles.glb has loaded). */
+  dims(archetype: VehicleArchetype): CarDims | undefined {
+    return this.models?.dims(archetype);
+  }
+
   /** vehicles.glb arrived: every car switches from the placeholder boxes to its model. */
   setModels(models: VehicleModels): void {
     this.models = models;

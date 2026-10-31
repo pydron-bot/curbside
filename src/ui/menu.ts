@@ -92,7 +92,10 @@ export class MenuNav {
       return;
     }
     const next = nearest(cur, items, cmd);
-    if (next) this.focus(next);
+    if (!next) return;
+    this.focus(next);
+    // In a scrolling sheet (Diagnostics at 340 high) the keyboard can move below the fold.
+    next.el.scrollIntoView?.({ block: 'nearest' });
   }
 
   private visible(): NavItem[] {

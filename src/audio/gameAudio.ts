@@ -10,6 +10,7 @@
  */
 import { events as defaultBus, type EventBus, type EventOf, type GameEvent } from '../core/events';
 import { onSettingsChange, settings, type Settings } from '../core/settings';
+import { BREACH_RADIUS_CAP } from '../systems/breaches';
 import type { Award } from '../systems/score';
 import type { CarSound } from './carSound';
 import { ChaosMeter, MAX_INTENSITY } from './chaos';
@@ -457,6 +458,8 @@ export class GameAudio {
         return this.onCrash(e);
       case 'explosion':
         return this.onExplosion(e);
+      case 'breach':
+        return this.onBreach(e);
       case 'shot':
         return this.onShot(e);
       case 'bulletHit':
@@ -935,6 +938,17 @@ export class GameAudio {
         this.commit('player', t);
       }
     }
+  }
+
+  /** A facade crumbling (the destruction test): masonry and chunks landing, just after the boom. */
+  private onBreach(e: EventOf<'breach'>): void {
+    const now = this.ctx!.currentTime;
+    // A chain makes a couple of crumbles, not five.
+    if (!this.gate.allow('crumble', now, 0.12, 2)) return;
+    const v = this.voice(e, FALLOFF.crash, 0.55 + 0.45 * e.strength, 0.5, 0.12);
+    if (!v) return;
+    sfx.crumble(v, clamp01(e.radius / BREACH_RADIUS_CAP));
+    this.commit('crash', v);
   }
 
   private onShot(e: EventOf<'shot'>): void {

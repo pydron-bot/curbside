@@ -68,6 +68,12 @@ export interface FxDeps {
    * hand, `out` in world space), or false to keep the shot's own point.
    */
   muzzle?: (e: EventOf<'shot'>, out: { x: number; y: number; z: number }) => boolean;
+  /**
+   * The colour (linear, into `out`) of the wall a carless blast is about to
+   * breach (the destruction test), or false: it throws lumps of that wall
+   * instead of car panels.
+   */
+  blastPaint?: (e: EventOf<'explosion'>, out: Rgb) => boolean;
 }
 
 const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
@@ -257,10 +263,13 @@ export class FxDirector {
   private onExplosion(e: EventOf<'explosion'>): void {
     const source = this.vehicleAt(e.x, e.z);
     const p = source ? source.mesh.paint : null;
-    this.paint.r = p ? p.r : 0.05;
-    this.paint.g = p ? p.g : 0.045;
-    this.paint.b = p ? p.b : 0.04;
-    this.d.effects.explode(e.x, e.z, this.paint);
+    const wall = !p && this.d.blastPaint?.(e, this.paint) === true;
+    if (!wall) {
+      this.paint.r = p ? p.r : 0.05;
+      this.paint.g = p ? p.g : 0.045;
+      this.paint.b = p ? p.b : 0.04;
+    }
+    this.d.effects.explode(e.x, e.z, this.paint, wall);
     this.driving.blast(this.d.vehicles, e.x, e.z, BLAST_RADIUS + 3);
 
     const close = e.ownCar ? 1 : Math.max(0, 1 - e.distance / 55);

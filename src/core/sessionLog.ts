@@ -30,6 +30,9 @@ export interface SessionSample {
   dc: number;
   audioState: string;
   paused: boolean;
+  /** The destruction test, while it is on: rubble bodies alive, and physics p95 per stepped frame (ms). */
+  rubble?: number;
+  physP95?: number;
 }
 
 export interface SessionEvent {
@@ -101,6 +104,8 @@ export class SessionLog {
       audioState: s.audioState,
       paused: s.paused,
     };
+    if (s.rubble !== undefined) entry.rubble = s.rubble;
+    if (s.physP95 !== undefined) entry.physP95 = Math.round(s.physP95 * 100) / 100;
     if (this.samples.length < SAMPLE_CAPACITY) this.samples.push(entry);
     else {
       this.samples[this.head] = entry;

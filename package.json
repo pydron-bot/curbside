@@ -17,6 +17,7 @@
     "assets": "blender -b --factory-startup -P blender/build_assets.py -- --out public/assets"
   },
   "dependencies": {
+    "@dimforge/rapier3d": "0.20.0",
     "three": "0.186.1"
   },
   "devDependencies": {

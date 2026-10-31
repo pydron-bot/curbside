@@ -58,6 +58,48 @@ export class ContactShadows {
     this.shape.setXYZW(i, halfWidth, halfLength, soft, Math.min(1, opacity * this.strength));
   }
 
+  /**
+   * add() with its seven numbers (x, z, heading, halfWidth, halfLength,
+   * soft, opacity) read from `src` at `o`: V8 boxes doubles passed to a call
+   * it doesn't inline, and the rubble adds up to 36 a frame. Writes the
+   * buffers directly (no Matrix4).
+   */
+  addFrom(src: Float32Array, o: number): void {
+    if (this.count >= this.capacity) return;
+    const i = this.count++;
+    const halfWidth = src[o + 3];
+    const halfLength = src[o + 4];
+    const soft = src[o + 5];
+    const sx = 2 * (halfWidth + soft);
+    const sz = 2 * (halfLength + soft);
+    const c = Math.cos(src[o + 2]);
+    const s = Math.sin(src[o + 2]);
+    // As add(): rotation about Y, scaled, at (x, 0.03, z); column-major.
+    const e = this.mesh.instanceMatrix.array as Float32Array;
+    const m = i * 16;
+    e[m] = c * sx;
+    e[m + 1] = 0;
+    e[m + 2] = -s * sx;
+    e[m + 3] = 0;
+    e[m + 4] = 0;
+    e[m + 5] = 1;
+    e[m + 6] = 0;
+    e[m + 7] = 0;
+    e[m + 8] = s * sz;
+    e[m + 9] = 0;
+    e[m + 10] = c * sz;
+    e[m + 11] = 0;
+    e[m + 12] = src[o];
+    e[m + 13] = 0.03;
+    e[m + 14] = src[o + 1];
+    e[m + 15] = 1;
+    const a = this.shape.array as Float32Array;
+    a[i * 4] = halfWidth;
+    a[i * 4 + 1] = halfLength;
+    a[i * 4 + 2] = soft;
+    a[i * 4 + 3] = Math.min(1, src[o + 6] * this.strength);
+  }
+
   end(): void {
     this.mesh.count = this.count;
     uploadRange(this.mesh.instanceMatrix, this.count);

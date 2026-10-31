@@ -111,6 +111,28 @@ and chest badge (SWAT too) [part of `characters-looks` / `props-world`].
    sheet), then pause → DIAGNOSTICS → SHARE and send back the report (it
    carries the play log). Also look at cops at night: nobody has seen the
    new silver cap band on a phone yet.
+   **The destruction test is ready for this run** (README *Destruction
+   test*; off by default, nothing changes until it is switched on). On the
+   phone, with the Perf overlay on Full: pause → DIAGNOSTICS → DESTRUCTION
+   (TEST) → PHONE, wait on the sheet until the readout says `rapier …
+   ready` (the first download is ~0.8 MB; BLOW A WALL says so until then),
+   then BLOW A WALL three times on one wall and once on a few others,
+   standing 3–4 m from the wall and facing it (further off, the crater
+   would land under the pause button, and the button says so; nearer, the
+   phone's big chunks land on you); drive
+   through a pile; blow up a car chain beside a wall; then DESKTOP (forced
+   on the phone) and the same again. SHARE the report.
+   On a desktop the same with DESKTOP (or `?destruction=desktop`). Record:
+   physics avg / p95 from the overlay (the worst-second average when it
+   shows `(q)`) against the estimates, phone ≤ 0.4 ms and desktop ≤ 1.3 ms
+   p95; any GC sawtooth in the Safari timeline while rubble settles;
+   whether switching on or the first breach hitches (the `rapier ready
+   <load>+<import>+<warm> ms` event: the import and warm-up are the
+   main-thread parts and run behind the card, the load is the download;
+   and the `warm` event); whether Pages gzips the wasm (`rapierFiles`:
+   `encoded` < `decoded`); the boot `warm` time against an `off` session;
+   draw calls with rubble on screen; how the two styles look; and whether
+   forced DESKTOP holds 60 fps on the phone.
 3. **Races and tuning** (cloud): the bot-vs-dev-time test [`tune-race-dev-times`]; commit
    the `__ub` bot harnesses [`tune-chaos-medals`, `tune-five-star-escape`].
    Re-tune medals and 5-star escape only from logged real play.
