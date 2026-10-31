@@ -610,7 +610,8 @@ are `src/game/modes/*Mode.ts`.
   the time against gold on the card. Medals against a developer time from
   the course (straights at 36 m/s, 1.2 s a corner, 2 s to launch) in the
   sports car, scaled for the car on the line so gold is in reach in any
-  (`carPace`: top speed and grip; a sedan ×1.22, a bus ×1.81): gold
+  (`carPace`: top speed and grip; a sedan ×1.22, a bus ×1.81; a faster
+  car taken mid-race tightens it, `RaceRun.takeCar`): gold
   ×1.05, silver ×1.2, bronze ×1.4, paying $800 / $400 / $200 the first time
   (a tenth on a repeat). A clean braking-aware bot in an empty city
   (`tests/raceDevTime.test.ts`) does every course in ×0.88–0.91 of dev in

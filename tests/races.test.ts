@@ -58,6 +58,15 @@ describe('races: courses', () => {
 describe('races: a run', () => {
   const def = RACES[0];
 
+  it('a faster car taken mid-race tightens the dev time; a slower one never loosens it', () => {
+    const run = new RaceRun(def, 1.81);
+    expect(run.dev).toBe(devTime(def, 1.81));
+    run.takeCar(1);
+    expect(run.dev).toBe(devTime(def));
+    run.takeCar(1.5);
+    expect(run.dev).toBe(devTime(def));
+  });
+
   it('waits for the 3-2-1, then takes the checkpoints in order and finishes', () => {
     const run = new RaceRun(def);
     expect(run.step(0.5, nodeX(def.nodes[1]), nodeZ(def.nodes[1]))).toBeNull();
