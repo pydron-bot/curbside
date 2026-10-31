@@ -1209,10 +1209,11 @@ function setPaused(p: boolean, reason: PauseReason = 'paused') {
 document.addEventListener('visibilitychange', () => {
   // A waiting update goes in behind the title, or on return after a long absence; never on a plain app switch mid-run.
   if (!document.hidden) {
-    updates.pageShown(performance.now());
+    updates.pageShown(Date.now());
     return;
   }
-  updates.pageHidden(performance.now(), frontDoor.inTitle);
+  // Wall clock: performance.now() can stall while an iPhone sleeps, hiding a long absence.
+  updates.pageHidden(Date.now(), frontDoor.inTitle);
   if (frontDoor.inTitle) return;
   pausedForContext = false;
   setPaused(true);

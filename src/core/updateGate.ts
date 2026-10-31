@@ -2,8 +2,8 @@
  * Holds a downloaded app update until reloading can't cost the player
  * anything. vite-plugin-pwa's autoUpdate mode reloaded the page as soon as
  * a new service worker took over, wiping whatever run was in progress; now
- * the new version waits until a safe point: the run just ended (respawn
- * after WASTED/BUSTED), the title screen went to the background, the page
+ * the new version waits until a safe point: the run just ended (the fresh
+ * run after WASTED; a bust keeps the run going), the title screen went to the background, the page
  * came back after a long absence, or the player chose "restart" on the pause
  * screen. A plain app switch mid-run is not one: the run is still there to
  * resume. Pure logic; main.ts wires it to virtual:pwa-register.
