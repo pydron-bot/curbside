@@ -173,15 +173,25 @@ compare against. Full numbers in README *Destruction test*.
    [`hub-social-meta`], [`curbside-og-meta`], [`curbside-linkback`];
    same-origin rules [`shared-origin-landing`]; live HTTPS/domain check is
    the user's [`pages-domain-check`].
-6. **Remaining minor issues:** ~~left turns give way~~ [`minor-junction-turns`]:
-   done 2026-10-31 (README *Traffic lights*); animation sampling garbage
-   [`anim-bake`], `Math.hypot` and call boxing in the sim
-   [`hypot-hot-loops`, `sim-call-boxing`] (V8 only; wait for the device
-   timeline). Done 2026-10-31: the browser smoke test and CI
-   [`smoke-ci`: `tools/smoke.mjs`, `.github/workflows/ci.yml`], M8's
-   criteria in PLAN.md [`m8-closeout`], branch cleanup [`repo-hygiene`].
-   Still open: a real home-screen icon [`icons-splash`]; an Android/desktop
-   Install button (`beforeinstallprompt`) if wanted.
+6. **Minor issues: all done 2026-10-31.** Left turns give way
+   [`minor-junction-turns`] (README *Traffic lights*); the browser smoke
+   test and CI [`smoke-ci`: `tools/smoke.mjs`, `.github/workflows/ci.yml`];
+   M8's criteria in PLAN.md [`m8-closeout`]; branch cleanup
+   [`repo-hygiene`]. Garbage [`anim-bake`, `hypot-hot-loops`,
+   `sim-call-boxing`]: clips baked into Float32Arrays, `len2` for
+   `Math.hypot`, allocation-free static contacts, indexed loops in
+   `simulate`; headless V8 now allocates ~12 KB per sim step (was ~55) and
+   ~1.1 KB per frame posing the crowd (was ~3.5); `tests/animBake.test.ts`
+   checks the baked clips against three's interpolants. Home-screen icon
+   [`icons-splash`]: rendered from the game (`tools/make-icons.mjs`: the
+   car from above at night in its ring), with a 180 px apple-touch-icon and
+   a PNG favicon; still to note on the device pass: how it looks on the
+   home screen and what iOS shows at launch (no startup images yet). An
+   INSTALL button on the title for Android / desktop Chrome and Edge
+   (`ui/installPrompt.ts`, shown only while the browser offers
+   `beforeinstallprompt`; iOS keeps its Add to Home Screen tip). The
+   manifest keeps no explicit `id` (it defaults to the start URL, which is
+   what installed copies already have).
 7. **Ideas:** district names + an area card first [`districts-landmarks`
    phase A], since chatter and gang turf need them; then police radio
    chatter [`police-chatter`]; missions after the eighth (payphones never
@@ -189,8 +199,7 @@ compare against. Full numbers in README *Destruction test*.
    gangs [`gangs-respect`]; leaderboard needs a decision on any backend
    [`online-leaderboard`].
 
-Smaller things found on the way (details in BACKLOG.md): README still
-describes an `AnimationMixer` that's gone; the Old Town race's leg 1 has a
+Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
 launch ramp landing at a corner checkpoint (is that a feature?).
 
 ## Working conventions that worked

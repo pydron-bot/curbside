@@ -10,6 +10,9 @@
 #title[hidden] {
   display: none;
 }
+.title-install[hidden] {
+  display: none;
+}
 
 @keyframes title-in {
   from {

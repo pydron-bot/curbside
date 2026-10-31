@@ -1,98 +1,112 @@
-// Generates the PWA icons (PNG) with no image dependencies: rasterises a tiny
-// procedural design and encodes PNG by hand via zlib.
-// Usage: npm run icons
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { deflateSync } from 'node:zlib';
+// Renders the PWA icons from the game itself: the player's car from above at
+// night, inside its marker ring, on a seeded city (so a rerun after an art
+// change frames the same street). Needs the dev server (npm run dev) and
+// Playwright, as the tuning harnesses do:
+//   npx -y -p playwright@1.63.0 node tools/make-icons.mjs
+// URL overrides the address (tools/tune/lib.mjs).
+import { writeFileSync } from 'node:fs';
+import { URL as GAME, launch } from './tune/lib.mjs';
 
 const OUT = new URL('../public/icons/', import.meta.url);
-mkdirSync(OUT, { recursive: true });
+/** Night, and camera heights for the regular and the maskable art (maskable keeps the car well inside the 80% safe circle). */
+const HOUR = 22;
+const HEIGHT = 12;
+const MASKABLE_HEIGHT = 16;
 
-const BG = [17, 18, 20];
-const ROAD = [43, 44, 48];
-const LINE = [217, 194, 90];
-const CAR = [200, 52, 43];
-const GLASS = [29, 39, 51];
-
-/** Draw at size `s`; `pad` shrinks the art for maskable safe zones. */
-function draw(s, pad = 0) {
-  const px = new Uint8Array(s * s * 3);
-  const set = (x, y, c) => {
-    if (x < 0 || y < 0 || x >= s || y >= s) return;
-    px.set(c, (y * s + x) * 3);
+const browser = await launch();
+const page = await browser.newPage({ viewport: { width: 900, height: 900 } });
+page.on('pageerror', (e) => console.error('pageerror:', e.message));
+await page.addInitScript(() => {
+  // Seeded like the harnesses, but real frames keep running (the game must draw).
+  let s = 1;
+  Math.random = () => {
+    s = (s + 0x6d2b79f5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  const rect = (x0, y0, x1, y1, c) => {
-    for (let y = Math.round(y0 * s); y < Math.round(y1 * s); y++)
-      for (let x = Math.round(x0 * s); x < Math.round(x1 * s); x++) set(x, y, c);
-  };
-  const k = 1 - 2 * pad;
-  const r = (x0, y0, x1, y1, c) => rect(pad + x0 * k, pad + y0 * k, pad + x1 * k, pad + y1 * k, c);
+  const t0 = Date.UTC(2026, 0, 1);
+  Date.now = () => t0;
+});
+await page.goto(GAME);
+await page.waitForFunction(() => window.__ub, null, { timeout: 60000 });
+await page.waitForTimeout(2000);
+await page.evaluate(() => window.__ub.startGame());
+await page.waitForTimeout(2500);
 
-  rect(0, 0, 1, 1, BG);
-  // Crossroads seen from above
-  r(0.36, 0, 0.64, 1, ROAD);
-  r(0, 0.36, 1, 0.64, ROAD);
-  for (let i = 0; i < 1; i += 0.12) {
-    if (i > 0.3 && i < 0.62) continue;
-    r(0.495, i, 0.505, i + 0.06, LINE);
-    r(i, 0.495, i + 0.06, 0.505, LINE);
-  }
-  // Car heading up, slightly right of centre line
-  r(0.52, 0.3, 0.62, 0.56, CAR);
-  r(0.535, 0.36, 0.605, 0.47, GLASS);
-  return px;
+// Into the parked car at the spawn: stand at its door and press enter.
+const car = await page.evaluate(() => {
+  const ub = window.__ub;
+  const v = ub.vehicles.find((v) => !v.ai && !v.pursuit && !v.damage.wrecked && Math.hypot(v.sim.vx, v.sim.vz) < 0.5);
+  if (!v) return null;
+  ub.player.ped.x = v.sim.x + Math.cos(v.sim.heading) * 1.6;
+  ub.player.ped.z = v.sim.z - Math.sin(v.sim.heading) * 1.6;
+  return v.archetype;
+});
+await page.waitForTimeout(300);
+await page.keyboard.press('KeyE');
+await page.waitForTimeout(2000);
+if (!car || !(await page.evaluate(() => !!window.__ub.player.driving))) throw new Error('could not get into a parked car');
+
+// Only the game canvas: no HUD, radar or touch controls.
+await page.evaluate(() => (window.__ub.renderer.domElement.id = 'icon-canvas'));
+await page.addStyleTag({ content: 'body * { visibility: hidden !important; } #icon-canvas { visibility: visible !important; }' });
+
+async function shot(height) {
+  await page.evaluate(
+    ([hour, h]) => {
+      const ub = window.__ub;
+      clearInterval(window.__iconHold);
+      window.__iconHold = setInterval(() => (ub.look.time.hour = hour), 16);
+      ub.rig.setHeights(h, h);
+    },
+    [HOUR, height],
+  );
+  // The camera eases to a new height over a few seconds.
+  await page.waitForTimeout(7000);
+  return (await page.screenshot()).toString('base64');
 }
 
-function crc32(buf) {
-  let c = ~0;
-  for (const b of buf) {
-    c ^= b;
-    for (let i = 0; i < 8; i++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
-  }
-  return ~c >>> 0;
+/** The square screenshot scaled to `size` px in the browser (smooth downscale), as PNG bytes. */
+async function scaled(b64, size) {
+  const url = await page.evaluate(
+    async ([b64, size]) => {
+      const img = new Image();
+      img.src = `data:image/png;base64,${b64}`;
+      await img.decode();
+      // Halve in steps so a 900 → 180 downscale stays smooth.
+      let src = img;
+      let w = img.width;
+      while (w / 2 >= size) {
+        const c = document.createElement('canvas');
+        c.width = c.height = (w = Math.round(w / 2));
+        const g = c.getContext('2d');
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(src, 0, 0, w, w);
+        src = c;
+      }
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      const g = c.getContext('2d');
+      g.imageSmoothingQuality = 'high';
+      g.drawImage(src, 0, 0, size, size);
+      return c.toDataURL('image/png');
+    },
+    [b64, size],
+  );
+  return Buffer.from(url.split(',')[1], 'base64');
 }
 
-function chunk(type, data) {
-  const len = Buffer.alloc(4);
-  len.writeUInt32BE(data.length);
-  const td = Buffer.concat([Buffer.from(type, 'ascii'), data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(td));
-  return Buffer.concat([len, td, crc]);
-}
-
-function png(s, rgb) {
-  const ihdr = Buffer.alloc(13);
-  ihdr.writeUInt32BE(s, 0);
-  ihdr.writeUInt32BE(s, 4);
-  ihdr[8] = 8; // bit depth
-  ihdr[9] = 2; // RGB
-  const raw = Buffer.alloc(s * (s * 3 + 1));
-  for (let y = 0; y < s; y++) raw.set(rgb.subarray(y * s * 3, (y + 1) * s * 3), y * (s * 3 + 1) + 1);
-  return Buffer.concat([
-    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', deflateSync(raw)),
-    chunk('IEND', Buffer.alloc(0)),
-  ]);
-}
-
-for (const [name, size, pad] of [
-  ['icon-192.png', 192, 0],
-  ['icon-512.png', 512, 0],
-  ['icon-maskable-512.png', 512, 0.1],
+const regular = await shot(HEIGHT);
+const maskable = await shot(MASKABLE_HEIGHT);
+for (const [name, b64, size] of [
+  ['icon-512.png', regular, 512],
+  ['icon-192.png', regular, 192],
+  ['apple-touch-icon.png', regular, 180],
+  ['favicon-32.png', regular, 32],
+  ['icon-maskable-512.png', maskable, 512],
 ]) {
-  writeFileSync(new URL(name, OUT), png(size, draw(size, pad)));
+  writeFileSync(new URL(name, OUT), await scaled(b64, size));
   console.log('wrote', name);
 }
-
-// SVG favicon with the same design.
-writeFileSync(
-  new URL('icon.svg', OUT),
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-<rect width="100" height="100" fill="#111214"/>
-<rect x="36" width="28" height="100" fill="#2b2c30"/><rect y="36" width="100" height="28" fill="#2b2c30"/>
-<rect x="52" y="30" width="10" height="26" fill="#c8342b"/><rect x="53.5" y="36" width="7" height="11" fill="#1d2733"/>
-</svg>
-`,
-);
-console.log('wrote icon.svg');
+await browser.close();

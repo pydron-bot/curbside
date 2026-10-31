@@ -3,6 +3,7 @@ import './title.css';
 import type { GameAudio } from '../audio/gameAudio';
 import type { InputDevice } from '../core/input';
 import { ICONS } from './icons';
+import { onInstallAvailable, promptInstall } from './installPrompt';
 import { MenuNav, menuButton, type NavItem, type Panel } from './menu';
 import { fmt } from './scoreHud';
 import { onTap } from './tap';
@@ -106,6 +107,19 @@ export class TitleScreen implements Panel {
         opts.onHowTo();
       },
     });
+    // Only while the browser offers to install (Android, desktop Chrome/Edge).
+    const install = menuButton('INSTALL', { icon: 'plusSquare', className: 'small title-install' });
+    install.hidden = true;
+    row.append(install);
+    this.nav.add({
+      el: install,
+      activate: () => {
+        audio.ui('click');
+        void promptInstall();
+      },
+    });
+    // Hidden buttons are skipped by the nav.
+    onInstallAvailable((available) => (install.hidden = !available));
     // Same tab: the hub's PLAY brings you back.
     this.nav.add({
       el: this.hubLink,
