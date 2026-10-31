@@ -1,6 +1,8 @@
 import { Scene, type ColorRepresentation } from 'three';
 import { registerSW } from 'virtual:pwa-register';
 import { events } from './core/events';
+import { BUILD_ID } from './core/build';
+import { PlayLog, browserStorage } from './game/playLog';
 import { Input } from './core/input';
 import { FixedStep } from './core/loop';
 import { UpdateGate } from './core/updateGate';
@@ -393,6 +395,9 @@ const streetLife = new StreetLife({
 
 // --- Input ---
 const input = new Input();
+// Results, races and chases kept locally for tuning (localStorage 'curbside.playlog').
+const playLog = new PlayLog({ storage: browserStorage(), build: BUILD_ID, device: () => input.lastDevice, tier: () => getQuality().name, now: () => simTime });
+playLog.attach(events);
 input.attachMouse(renderer.domElement);
 const haptics = new Haptics(input, events);
 // Screen on while a run is played and not paused (controller-only play never touches it).
@@ -543,7 +548,7 @@ function releasePlayer() {
   player.respawn(st.x, st.z, st.heading);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true, false);
-  updates.atSafePoint();
+  // Not a safe point for app updates: the run (score, car, stars) carries on.
 }
 
 // --- Simulation ---
@@ -1202,16 +1207,16 @@ function setPaused(p: boolean, reason: PauseReason = 'paused') {
   events.emit({ type: 'pause', paused: p });
 }
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) return;
-  // Behind the title there's nothing to lose: just take any waiting update.
-  if (frontDoor.inTitle) {
-    updates.atSafePoint();
+  // A waiting update goes in behind the title, or on return after a long absence; never on a plain app switch mid-run.
+  if (!document.hidden) {
+    updates.pageShown(Date.now());
     return;
   }
+  // Wall clock: performance.now() can stall while an iPhone sleeps, hiding a long absence.
+  updates.pageHidden(Date.now(), frontDoor.inTitle);
+  if (frontDoor.inTitle) return;
   pausedForContext = false;
   setPaused(true);
-  // Backgrounded: nobody is watching, so a waiting update can go in now.
-  updates.atSafePoint();
 });
 
 // iOS drops the GL context of backgrounded or memory-starved pages. Say so,
@@ -1289,6 +1294,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
     return paused;
   },
   setPaused,
+  playLog,
   get simTime() {
     return simTime;
   },

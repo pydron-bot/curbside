@@ -224,6 +224,7 @@ export class ChaosRunMode implements Mode {
     const medal = chaosMedal(this.finalScore);
     progress.recordMedal(CHAOS_RUN_ID, medal);
     progress.flush();
+    deps.bus.emit({ type: 'activityEnd', kind: 'chaosRun', id: CHAOS_RUN_ID, time: run.elapsed, score: this.finalScore, medal, end: reason, bonusTime: run.bonusTime });
     const next = nextMedal(this.finalScore);
     this.result = {
       title: 'CHAOS RUN',
