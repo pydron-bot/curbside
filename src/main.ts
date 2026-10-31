@@ -1100,6 +1100,7 @@ const progress = new ProgressDirector({
   audio,
   frontDoor,
   input,
+  nitro,
   haptics,
   scene,
   pinned: activityCars,
@@ -1230,6 +1231,7 @@ const diagnostics = new Diagnostics(document.body, {
   audioState: () => audio.state,
   paused: () => paused,
   canvas: renderer.domElement,
+  haptics,
 });
 addDiagnosticsButton(diagnostics, frontDoor, () => input.lastDevice !== 'touch');
 

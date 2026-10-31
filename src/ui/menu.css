@@ -743,6 +743,37 @@ kbd.pad.b {
 }
 
 /* Diagnostics sheet: monospace summary; the buttons sit in the header so they show unscrolled at 340 high. */
+.diag-probes {
+  margin-bottom: 12px;
+}
+
+.diag-probes h3 {
+  margin: 8px 0 4px;
+  font: 800 11px/1 var(--hud-font);
+  letter-spacing: 0.08em;
+  color: var(--ink-dim);
+}
+
+.diag-pads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.diag-pad {
+  background: rgb(255 255 255 / 0.06);
+  color: var(--ink);
+  touch-action: manipulation;
+}
+
+.diag-probe-out {
+  margin: 4px 0 2px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 12px/1.45 ui-monospace, Menlo, monospace;
+  color: var(--ink);
+}
+
 .diag-summary {
   margin: 0;
   white-space: pre-wrap;

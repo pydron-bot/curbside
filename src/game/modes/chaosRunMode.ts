@@ -184,6 +184,8 @@ export class ChaosRunMode implements Mode {
   glow(_g: GlowSprites, _props: ProgressProps): void {}
 
   reset(): void {
+    // Quit during the slow-mo: the run still counts.
+    if (this.phase === 'ending' && !this.result && this.run?.ended === 'time') this.settle('time');
     if (this.phase !== 'off') {
       // Leaving a run: its points mustn't carry into free roam (or its best).
       this.ctx.deps.score.resetRun();
@@ -210,15 +212,36 @@ export class ChaosRunMode implements Mode {
     this.finish(reason);
   }
 
-  /** The run is over: score it now (before a respawn resets the score), results shortly. */
+  /**
+   * The run is over, results shortly. Cut short: score it now (before the
+   * respawn resets the score). Time up: the sim runs on through the slow-mo
+   * (a drift banks after its grace), so score at the freeze, never below the
+   * HUD at the buzzer.
+   */
   private finish(reason: ChaosEnd): void {
-    const { progress, deps, ui } = this.ctx;
-    const run = this.run!;
-    run.cues.length = 0;
+    const { deps, ui } = this.ctx;
+    this.run!.cues.length = 0;
     this.phase = 'ending';
     this.endClock = 0;
     this.finalScore = deps.score.total;
     this.awaitRespawn = reason !== 'time';
+    if (reason !== 'time') this.settle(reason);
+    if (reason === 'time') {
+      ui.banner("TIME'S UP!", 'fail', '', RESULTS_AFTER);
+      deps.audio.ui('go');
+    }
+    // Nobody's chasing a frozen car (and the next run starts clean anyway).
+    if (reason === 'time') {
+      deps.heat.wanted.clear('reset');
+      deps.heat.police.standDown();
+    }
+  }
+
+  /** Record the run (best, medal, activityEnd) and build its results card. */
+  private settle(reason: ChaosEnd): void {
+    const { progress, deps } = this.ctx;
+    const run = this.run!;
+    this.finalScore = Math.max(this.finalScore, deps.score.total);
     const best = progress.best(CHAOS_RUN_ID);
     const newBest = progress.recordBest(CHAOS_RUN_ID, this.finalScore);
     const medal = chaosMedal(this.finalScore);
@@ -236,18 +259,10 @@ export class ChaosRunMode implements Mode {
       note: next ? `${MEDAL_WORD[next.medal]} AT ${fmt(next.at)}` : `+${Math.round(run.bonusTime)} S EARNED`,
       rows: CHAOS_CATEGORIES.map((c) => ({ label: c.label, count: run.tally[c.id].count, points: run.tally[c.id].points })),
     };
-    if (reason === 'time') {
-      ui.banner("TIME'S UP!", 'fail', '', RESULTS_AFTER);
-      deps.audio.ui('go');
-    }
-    // Nobody's chasing a frozen car (and the next run starts clean anyway).
-    if (reason === 'time') {
-      deps.heat.wanted.clear('reset');
-      deps.heat.police.standDown();
-    }
   }
 
   private showResults(): void {
+    if (!this.result && this.run?.ended === 'time') this.settle('time');
     const r = this.result;
     if (!r) return;
     this.phase = 'results';

@@ -32,12 +32,15 @@ export class Haptics {
   private iosPendingAt = -Infinity;
   private iosLastAt = -Infinity;
   private rumbleUntil = 0;
+  /** The switch's 'change' events: proof the toggle ran (Diagnostics probes). */
+  switchChanges = 0;
 
   constructor(
     private readonly input: Input,
     bus: EventBus,
   ) {
     this.iosLabel = isIos() ? makeSwitch() : null;
+    this.iosLabel?.querySelector('input')?.addEventListener('change', () => this.switchChanges++);
     bus.on('crash', (e) => {
       if (e.involvesPlayer) this.pulse(clamp01((e.impact - 3) / 18), 40 + Math.min(160, e.impact * 6));
     });
@@ -66,6 +69,33 @@ export class Haptics {
     this.iosPendingAt = -Infinity;
     this.iosLastAt = now;
     this.iosLabel.click();
+  }
+
+  /**
+   * Diagnostics probe: toggle the iOS switch now, past the rate limit and
+   * the setting (a switched-off setting mustn't read as no support). False
+   * when there's no switch (not iOS).
+   */
+  probeTick(): boolean {
+    if (!this.iosLabel) return false;
+    this.iosLabel.click();
+    return true;
+  }
+
+  /** Diagnostics probe: one rumble on the first pad; resolves to what playEffect said. */
+  probeRumble(): Promise<string> {
+    const pad = this.input.pad as (Gamepad & { vibrationActuator?: RumbleActuator | null }) | null;
+    if (!pad) return Promise.resolve('no gamepad');
+    const act = pad.vibrationActuator;
+    if (!act?.playEffect) return Promise.resolve('unsupported (no vibrationActuator)');
+    try {
+      return act.playEffect('dual-rumble', { duration: 400, strongMagnitude: 1, weakMagnitude: 0.6 }).then(
+        (r) => `resolved: ${String(r)}`,
+        (e: unknown) => `rejected: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`,
+      );
+    } catch (e) {
+      return Promise.resolve(`threw: ${e instanceof Error ? `${e.name} ${e.message}` : String(e)}`);
+    }
   }
 
   /** One haptic bump: strength 0..1 for `ms` milliseconds, on the device in use. */

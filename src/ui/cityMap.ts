@@ -5,6 +5,7 @@
  * the player each redraw, so the city costs nothing per frame.
  */
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, SIDEWALK, WORLD_LIMIT, type City } from '../world/city';
+import type { District } from '../world/districts';
 
 /** Map resolution: about native for a ~100 px radar at 2x showing ±60 m. */
 export const MAP_PX_PER_M = 1.5;
@@ -23,12 +24,14 @@ const PLAZA = '#6a6153';
 const OUTSIDE = '#090b10';
 const WALL = '#11131a';
 
-/** District hue for a point: a downtown core and four quadrants, so each part of town reads differently. */
-export function districtHue(x: number, z: number): number {
-  if (Math.hypot(x, z) < HALF_EXTENT * 0.32) return 285; // downtown: violet
-  if (x >= 0) return z < 0 ? 185 : 215; // NE teal, SE blue
-  return z < 0 ? 32 : 345; // NW amber, SW rose
-}
+/** Radar hue per district (the city's own, wobbly borders and all), so each part of town reads differently. */
+export const DISTRICT_HUE: Readonly<Record<District, number>> = {
+  downtown: 285, // violet
+  arts: 185, // NE teal
+  industrial: 215, // SE blue
+  oldtown: 32, // NW amber
+  residential: 345, // SW rose
+};
 
 export function renderCityMap(city: City, pxPerM = MAP_PX_PER_M): HTMLCanvasElement {
   const size = Math.ceil(MAP_EXTENT * 2 * pxPerM);
@@ -67,9 +70,7 @@ export function renderCityMap(city: City, pxPerM = MAP_PX_PER_M): HTMLCanvasElem
   }
 
   for (const bd of city.buildings) {
-    const cx = (bd.minX + bd.maxX) / 2;
-    const cz = (bd.minZ + bd.maxZ) / 2;
-    const hue = districtHue(cx, cz);
+    const hue = DISTRICT_HUE[bd.district];
     // Taller buildings read lighter, like roofs catching the sun; the
     // district shows as a gentle tint, not a colour wash.
     const light = 36 + Math.min(1, bd.height / 12) * 14 + bd.tint * 6;

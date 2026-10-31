@@ -322,7 +322,8 @@ clips), so it works with the existing loader as one more batch:
 **4. `weapons.glb`** (`pistol`, `smg`, `shotgun`; 48–88 tris):
 - Origin is at the grip, the barrel points game +Z, and Y is up.
 - Each root has a `muzzle` extra: the distance in metres from the grip to the
-  muzzle along +Z, for muzzle flashes.
+  muzzle along +Z, for muzzle flashes. The flash's height above the grip is
+  read from the `<root>_muzzle` (else `<root>_barrel`) child's Y.
 
 **`pickups.glb`** (`crate_pistol`, `crate_smg`, `crate_shotgun`, `health_kit`,
 `package`, `cash`; 36–168 tris): origin is at ground centre. Each crate has the

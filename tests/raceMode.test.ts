@@ -6,6 +6,7 @@ import { RaceMode } from '../src/game/modes/raceMode';
 import { RACES, nodeX, nodeZ } from '../src/game/modes/races';
 import { Player } from '../src/game/player';
 import type { Vehicle } from '../src/game/population';
+import { NITRO_START, Nitro } from '../src/game/nitro';
 import { Progress } from '../src/game/progress';
 import { defaultSave } from '../src/game/progressSave';
 import type { CarMesh } from '../src/render/carMesh';
@@ -24,6 +25,7 @@ function setup(stars: number) {
       heat: { wanted },
       audio: { ui() {} },
       rig: { snapTo() {} },
+      nitro: new Nitro(bus),
       radar: { setWaypoint() {}, clearWaypoint() {} },
     },
     progress: new Progress(defaultSave(), null),
@@ -60,10 +62,12 @@ describe('race mode', () => {
     expect(ctx.busy).toBeNull();
     expect(ctx.holdControls).toBe(false);
     expect(mode.prompt()).toContain('LOSE THE HEAT FIRST');
-    // Heat gone, still on the line: it starts.
+    // Heat gone, still on the line: it starts, on the same tank as a respawn.
+    ctx.deps.nitro.charge = 1;
     wanted.level = 0;
     mode.step(DT);
     expect(ctx.busy).toBe('race');
     expect(ctx.holdControls).toBe(true);
+    expect(ctx.deps.nitro.charge).toBe(NITRO_START);
   });
 });
