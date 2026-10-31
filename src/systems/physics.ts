@@ -189,6 +189,13 @@ function resolveStatic(s: VehicleState, grid: StaticGrid, contact: Point | undef
   return impact;
 }
 
+/** Cheap reject for collideVehicles: false if the two bodies can't be touching. */
+export function bodiesMayTouch(a: VehicleState, b: VehicleState): boolean {
+  const reach = bodyOf(a).reach + bodyOf(b).reach;
+  if (Math.abs(a.x - b.x) > reach || Math.abs(a.z - b.z) > reach) return false;
+  return Math.abs(a.y - b.y) <= CLEARANCE;
+}
+
 /**
  * Separate two overlapping cars and exchange momentum, the heavier car
  * (`massA`, `massB`: relative masses) moving less. If `contact` is given
@@ -197,12 +204,9 @@ function resolveStatic(s: VehicleState, grid: StaticGrid, contact: Point | undef
  * (one flying over the other) don't touch.
  */
 export function collideVehicles(a: VehicleState, b: VehicleState, contact?: Point | CarContact, massA = 1, massB = 1): number {
-  // Cheap reject: centres further apart than the two bodies reach.
+  if (!bodiesMayTouch(a, b)) return 0;
   const bodyA = bodyOf(a);
   const bodyB = bodyOf(b);
-  const reach = bodyA.reach + bodyB.reach;
-  if (Math.abs(a.x - b.x) > reach || Math.abs(a.z - b.z) > reach) return 0;
-  if (Math.abs(a.y - b.y) > CLEARANCE) return 0;
 
   let impact = 0;
   const touch = bodyA.radius + bodyB.radius;

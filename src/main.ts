@@ -66,6 +66,7 @@ import { StuntTracker } from './systems/stunts';
 import { enteringRamp, placeKickers, placeRamps, rampSolids, rideRamps } from './world/ramps';
 import { RampMesh } from './render/rampMesh';
 import {
+  bodiesMayTouch,
   bodyDistance,
   bodyOf,
   collidePedStatic,
@@ -685,6 +686,8 @@ function simulate(dt: number) {
     for (let j = i + 1; j < vehicles.length; j++) {
       const a = vehicles[i];
       const b = vehicles[j];
+      // Most pairs are far apart: reject before passing (boxed) masses to the call.
+      if (!bodiesMayTouch(a.sim, b.sim)) continue;
       const ma = VEHICLE_SPECS[a.archetype].mass;
       const mb = VEHICLE_SPECS[b.archetype].mass;
       const impact = collideVehicles(a.sim, b.sim, contact, ma, mb);
@@ -884,10 +887,17 @@ function explode(source: Vehicle) {
   combat.vehicleExploded(source);
 }
 
+/** Reused every step; the crowd reads it during the step and never keeps it. */
+const targetScratch: Target = { x: 0, z: 0, inCar: false, alive: false };
+
 function playerTarget(): Target {
   const at = player.position;
+  targetScratch.x = at.x;
+  targetScratch.z = at.z;
+  targetScratch.inCar = player.driving !== null;
   // Behind the title the player is hidden and out of play: nobody comes for them.
-  return { x: at.x, z: at.z, inCar: player.driving !== null, alive: player.alive && !player.arrested && !attract.active };
+  targetScratch.alive = player.alive && !player.arrested && !attract.active;
+  return targetScratch;
 }
 
 /** An NPC (an armed ped, the police) shot from (sx, sz) along unit (dirX, dirZ). */
