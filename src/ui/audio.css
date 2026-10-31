@@ -97,6 +97,22 @@ body:not([data-scene='play']) #radio {
   text-shadow: 0 0 10px color-mix(in srgb, var(--radio-a) 80%, transparent);
 }
 
+.radio-song {
+  max-width: 220px;
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.radio-song[hidden] {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #radio { transition: opacity 0.2s; transform: translate(-50%, 0); }
   .radio-eq i { animation: none; height: 10px; }

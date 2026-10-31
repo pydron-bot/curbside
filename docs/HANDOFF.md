@@ -200,7 +200,14 @@ compare against. Full numbers in README *Destruction test*.
    `beforeinstallprompt`; iOS keeps its Add to Home Screen tip). The
    manifest keeps no explicit `id` (it defaults to the start URL, which is
    what installed copies already have).
-7. **Ideas:** district names + an area card first [`districts-landmarks`
+7. **Music, next steps** (2026-10-31: the first one, better sound and song
+   structure, is done: rendered drum kit, four songs per station through a
+   song form, song titles on the card). Ideas Derek has kept for later, in
+   BACKLOG.md *Music*: new stations [`music-stations`], a living radio (DJ,
+   idents, ads) [`music-radio-life`], chase music and music on foot
+   [`music-reactive`], themes for missions and screens [`music-themes`],
+   recorded tracks [`music-recorded`].
+8. **Ideas:** district names + an area card first [`districts-landmarks`
    phase A], since chatter and gang turf need them; then police radio
    chatter [`police-chatter`]; missions after the eighth (payphones never
    ring again today; the `drive` spawn option is ignored) [`missions-store`];

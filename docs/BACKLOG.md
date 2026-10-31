@@ -1013,6 +1013,46 @@ It stays local only, with no network and no backend.
 
 **Suggested order:** Do hub-screenshots first; the images are already shown to work from here and they feed every other item. Then hub-page and hub-social-meta together as one commit to pydron-bot.github.io, checked in a local mirror that copies the GitHub Pages layout (hub at the root, Curbside built at /curbside/) before anything is pushed. Pushing that repo's main goes live at once, so get the user's OK on a screenshot or open a PR first. Then curbside-og-meta and curbside-linkback as one small curbside commit, which goes through the tests and Pages workflow. The user does pages-domain-check on a real network, since deeek.org is unreachable from this container. The whole cluster is about half a day, it is independent of the game to-dos, and the user needs to answer a few branding questions first.
 
+## 5. Music (ideas kept for later, 2026-10-31)
+
+Done first (Derek's pick): better sound and song structure, with a drum kit
+rendered in code (no samples or licences) and songs through a form. These
+are the other directions, roughly in the order recommended.
+
+### music-stations: New stations that suit the game [M, cloud]
+
+Phonk / drift (cowbell, heavy 808 bass; fits the drift scoring), funk /
+disco (slap bass, wah guitar; a chase sound), chiptune, dub / reggae (a
+cruising station), and a police scanner station (no music, dispatcher
+chatter; shares its voice with `police-chatter`). Each is station data in
+`stations.ts` (tiers, sound, songs) plus any new instrument in
+`musicPlayer.ts` / `drumKit.ts` (an 808 bass with long glide, a cowbell, a
+wah-filtered guitar stab).
+
+### music-radio-life: A radio that feels alive [M, cloud]
+
+Station idents and a synthesised DJ voice between songs, short parody ads,
+districts favouring certain stations. The voice work is shared with
+`police-chatter` (a synthesised voice plus subtitles).
+
+### music-reactive: Chase music and music on foot [M, cloud]
+
+From three stars the station gives way to a dedicated chase track that
+calms down once you lose the cops; on foot the car radio fades out and you
+hear music faintly from parked cars and shops as you pass.
+
+### music-themes: Themes of our own [S-M, cloud]
+
+Mission themes, WASTED / BUSTED stings, a title theme with a hook, the
+Chaos Run countdown.
+
+### music-recorded: Real recorded tracks [M, you]
+
+Sounds most like real songs, but costs download size and needs safe
+licences (CC0 or royalty-free packs; AI-generated tracks depend on each
+service's terms for a public site), and can't follow the game's intensity
+unless it comes as stems. Needs Derek's call on sources.
+
 ## 6. Ideas not started
 
 ### police-chatter: Police radio chatter (a synthesised dispatcher plus subtitles) [M, cloud]

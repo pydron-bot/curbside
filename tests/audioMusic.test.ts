@@ -41,6 +41,9 @@ const parts = (steps: NoteEvent[][]) => new Set(steps.flat().map((e) => e.part))
 const stepsWith = (steps: NoteEvent[][], part: Part) =>
   steps.flatMap((evs, i) => (evs.some((e) => e.part === part) ? [i % STEPS_PER_BAR] : []));
 
+/** The old behaviour (one song's verse looping): the song form is tested on its own below. */
+const LOOP = { form: false };
+
 describe('look-ahead step clock', () => {
   it('books exactly one bar of 16ths per bar of time, evenly spaced, from 25 ms ticks', () => {
     const clock = new StepClock(120); // 16th = 0.125 s, bar = 2 s
@@ -125,7 +128,7 @@ describe('stations', () => {
 
 describe('arranger (adaptive layers)', () => {
   it('intensity 0 is chill: bass and hats, no kick or snare', () => {
-    const a = new Arranger(STATIONS[0]);
+    const a = new Arranger(STATIONS[0], LOOP);
     const p = parts(play(a, 2));
     expect(p.has('bass')).toBe(true);
     expect(p.has('hat')).toBe(true);
@@ -136,7 +139,7 @@ describe('arranger (adaptive layers)', () => {
 
   it('layers in kick, snare on the backbeat, arps and lead as intensity rises', () => {
     for (const station of STATIONS) {
-      const a = new Arranger(station);
+      const a = new Arranger(station, LOOP);
       a.setIntensity(5);
       play(a, 1); // the change lands on the next bar line
       const steps = play(a, 8);
@@ -149,7 +152,7 @@ describe('arranger (adaptive layers)', () => {
   });
 
   it('changes intensity only on a bar line, with a drum fill leading into a step up', () => {
-    const a = new Arranger(STATIONS[0]);
+    const a = new Arranger(STATIONS[0], LOOP);
     play(a, 1);
     playSteps(a, 5); // into the bar
     a.setIntensity(3);
@@ -165,7 +168,7 @@ describe('arranger (adaptive layers)', () => {
   });
 
   it('drops intensity at the next bar line without a fill', () => {
-    const a = new Arranger(STATIONS[0]);
+    const a = new Arranger(STATIONS[0], LOOP);
     a.setIntensity(4);
     play(a, 2);
     expect(a.intensity).toBe(4);
@@ -176,7 +179,7 @@ describe('arranger (adaptive layers)', () => {
   });
 
   it('glides the tempo a few BPM per bar instead of jumping', () => {
-    const a = new Arranger(STATIONS[0]);
+    const a = new Arranger(STATIONS[0], LOOP);
     play(a, 1);
     const start = a.bpm;
     a.setIntensity(5);
@@ -194,7 +197,7 @@ describe('arranger (adaptive layers)', () => {
   });
 
   it('switches station on the next bar line and restarts the phrase', () => {
-    const a = new Arranger(STATIONS[0]);
+    const a = new Arranger(STATIONS[0], LOOP);
     play(a, 3);
     a.setStation(STATIONS[1]);
     expect(a.station).toBe(STATIONS[0]);
@@ -205,7 +208,7 @@ describe('arranger (adaptive layers)', () => {
   });
 
   it('plays a drumless arrangement in menu mode and nothing when off', () => {
-    const a = new Arranger(STATIONS[0]);
+    const a = new Arranger(STATIONS[0], LOOP);
     a.setIntensity(5);
     a.setMode('menu');
     play(a, 1);
@@ -220,7 +223,7 @@ describe('arranger (adaptive layers)', () => {
 
   it('keeps the bass low and the chords following the progression', () => {
     for (const station of STATIONS) {
-      const a = new Arranger(station);
+      const a = new Arranger(station, LOOP);
       a.setIntensity(3);
       const steps = play(a, 9);
       for (const e of steps.flat()) {
