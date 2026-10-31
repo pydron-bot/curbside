@@ -76,8 +76,9 @@ export class StaticGrid {
     const c = this.hit;
     const deepest = this.deepest;
     let found = false;
-    for (const rect of this.near(pos.x, pos.z, radius)) {
-      if (!circleVsRectInto(pos.x, pos.z, radius, rect, c)) continue;
+    const near = this.near(pos.x, pos.z, radius);
+    for (let i = 0; i < near.length; i++) {
+      if (!circleVsRectInto(pos.x, pos.z, radius, near[i], c)) continue;
       pos.x += c.nx * c.depth;
       pos.z += c.nz * c.depth;
       if (!found || c.depth > deepest.depth) {

@@ -278,7 +278,8 @@ export function stepCrowdPed(
   p.attackCooldown = Math.max(0, p.attackCooldown - dt);
   // --- Hit or about to be hit by a car? ---
   let struck: VehicleState | null = null;
-  for (const v of vehicles) {
+  for (let i = 0; i < vehicles.length; i++) {
+    const v = vehicles[i];
     // Every car against every pedestrian each step: drop the far ones first.
     // 17 m covers dodge's reach (16 m ahead, 3 m aside) and touchesCar's 8 m.
     if (Math.abs(v.x - p.s.x) > 17 || Math.abs(v.z - p.s.z) > 17) continue;

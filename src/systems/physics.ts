@@ -152,7 +152,8 @@ function resolveStatic(s: VehicleState, grid: StaticGrid, contact: Point | undef
   const fz = Math.cos(s.heading);
   const pos = scratchPos;
   const { offsets, radius } = bodyOf(s);
-  for (const offset of offsets) {
+  for (let i = 0; i < offsets.length; i++) {
+    const offset = offsets[i];
     pos.x = s.x + fx * offset;
     pos.z = s.z + fz * offset;
     const c = grid.resolveCircle(pos, radius);
