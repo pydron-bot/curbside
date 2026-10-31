@@ -111,6 +111,8 @@ export class RaceMode implements Mode {
     Object.assign(car.sim, createVehicleState(g.x, g.z, g.heading));
     Object.assign(car.prev, car.sim);
     ctx.deps.rig.snapTo(g.x, g.z);
+    // Same tank for everyone: a full one carried in is worth ~2 s.
+    ctx.deps.nitro.reset();
     this.run = new RaceRun(def);
     this.gold = formatRaceTime(this.run.dev * MEDAL_FACTORS.gold);
     this.goal.reset();

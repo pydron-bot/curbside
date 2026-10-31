@@ -22,6 +22,7 @@ import type { ProgressHud } from '../../ui/progressHud';
 import type { BlipOptions, Radar } from '../../ui/radar';
 import type { City, Rect } from '../../world/city';
 import type { Heat } from '../heat';
+import type { Nitro } from '../nitro';
 import type { Player } from '../player';
 import type { Population, Vehicle } from '../population';
 import type { Progress } from '../progress';
@@ -63,6 +64,8 @@ export interface ProgressDeps {
   audio: GameAudio;
   frontDoor: FrontDoor;
   input: Input;
+  /** The nitro tank (a race starts it at NITRO_START, like a respawn). */
+  nitro: Nitro;
   /** Haptic ticks for the cards (a refused purchase). */
   haptics?: Haptics;
   /** False behind the title (attract mode). */

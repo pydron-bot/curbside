@@ -1098,6 +1098,7 @@ const progress = new ProgressDirector({
   audio,
   frontDoor,
   input,
+  nitro,
   haptics,
   scene,
   pinned: activityCars,
