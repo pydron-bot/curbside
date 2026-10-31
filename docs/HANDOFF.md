@@ -16,10 +16,16 @@ this file is the *where things stand* and *what's left*.
   185.199.108–111.153, CNAME `www` → `pydron-bot.github.io`). Project repos
   with Pages on the `pydron-bot` account appear at `deeek.org/<repo>/`. Don't
   set a custom domain on this repo; it inherits.
-- **Branches:** `main` is the shipped game. `claude/game-overhaul` is the
-  overhaul's integration branch (same as `main` after the final merge). The
-  `stage*/…` branches are the per-stream work that was merged in; they can be
-  deleted. `blender/assets` is the Blender session's branch (merged).
+- **Branches:** `main` is the shipped game; work goes on a branch (CI checks
+  it) and merges to `main` to deploy. Cleaned up 2026-10-31: every merged
+  branch was deleted (local and on GitHub) and the `curbside-blender`
+  worktree removed. Their tips, should one be wanted (`git branch <name>
+  <sha>`; the commits are all in `main`'s history): claude/game-overhaul
+  3c10413, claude/destruction-test 0e8bf2c, blender/assets 890beb8,
+  stage1/audio cf04f04, stage1/core b83c520, stage2/look 556701e, stage2/ui
+  9718d38, stage3/fx ebb1965, stage3/heat 5f3d532, stage4/feel 82848a5,
+  stage4/play a38e987, stage5/qa 0faca68, stage6/assets 00c4d65,
+  stage6/people 9d63f9c, stage6/world 3717b34.
 
 ## What the overhaul did
 
