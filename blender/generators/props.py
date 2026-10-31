@@ -68,7 +68,7 @@ def mats():
         "ramp": material("ramp", (110, 116, 124), 0.5),
         "barrier_orange": material("barrier_orange", (235, 110, 30), 0.6),
         "booth_wall": material("booth_wall", (196, 190, 176), 0.9),
-        "booth_roof": material("booth_roof", (80, 84, 90), 0.7),
+        "booth_roof": material("booth_roof", (140, 144, 152), 0.7),
         "spray_sign": material("spray_sign", (230, 60, 140), 0.4),
         "police_lamp": material("police_lamp", (60, 120, 255), 0.3),
         "police_blue": material("police_blue", (24, 48, 120), 0.5),
@@ -88,8 +88,10 @@ def streetlamp(m):
         cylinder("streetlamp_base", 0.17, 0.5, (0, 0, 0.25), m["pole"], verts=8),
         cylinder("streetlamp_pole", 0.08, 6.0, (0, 0, 3.0), m["pole"], verts=6, radius2=0.06),
         box("streetlamp_arm", (0.08, 1.9, 0.08), (0, -0.9, 6.0), m["pole"]),
-        box("streetlamp_head", (0.36, 0.7, 0.14), (0, -1.85, 5.96), m["pole"]),
-        box("streetlamp_lamp", (0.3, 0.6, 0.04), (0, -1.85, 5.87), m["lamp"]),
+        box("streetlamp_head", (0.46, 0.9, 0.14), (0, -1.85, 5.96), m["pole"]),
+        box("streetlamp_lamp", (0.38, 0.8, 0.04), (0, -1.85, 5.87), m["lamp"]),
+        # A lens on top too: the camera looks down on the head, never up into it.
+        box("streetlamp_toplens", (0.3, 0.66, 0.02), (0, -1.85, 6.04), m["lamp"]),
     ]
 
 
@@ -104,6 +106,8 @@ def traffic_light(m):
         parts.append(cylinder(f"traffic_light_{colour}", 0.09, 0.04, (0, -0.14, z), m[colour], verts=8,
                               rotation=(90, 0, 0)))
         parts.append(box(f"traffic_light_visor{i}", (0.22, 0.12, 0.02), (0, -0.19, z + 0.11), m["signal_box"]))
+        # The same light on the head's top (lit by the cycle like the lens): what reads from above.
+        parts.append(box(f"traffic_light_top{i}", (0.1, 0.2, 0.02), (-0.11 + i * 0.11, 0, 4.035), m[colour]))
     return parts
 
 
@@ -374,7 +378,8 @@ def police_sign(m):
         box("police_sign_letters", (1.8, 0.02, 0.18), (0, -0.15, 3.0), m["white"]),
         box("police_sign_bracket", (0.08, 0.7, 0.08), (0, -0.35, 3.6), m["dark"]),
         box("police_sign_lamp", (0.34, 0.34, 0.42), (0, -0.7, 3.4), m["police_lamp"]),
-        cylinder("police_sign_cap", 0.26, 0.14, (0, -0.7, 3.68), m["dark"], verts=4, radius2=0.05,
+        # Lit too (a dark cap read as a black square from above).
+        cylinder("police_sign_cap", 0.26, 0.14, (0, -0.7, 3.68), m["police_lamp"], verts=4, radius2=0.05,
                  rotation=(0, 0, 45)),
     ]
 
@@ -382,18 +387,22 @@ def police_sign(m):
 # ---------------------------------------------------------------- activities (§8)
 
 def start_gantry(m):
-    # Start/finish arch ~12.5 m wide over the road (spans X), chequered beam readable from the side and above.
-    span, h = 12.5, 5.5
+    # Start/finish arch over the 16 m road (spans X): pillars on the kerb lines either side, 17.2 m
+    # apart, so the game draws it at 1:1. A white beam with black squares laid over it (chequered from
+    # the side and above, half the boxes of a full chequer).
+    span, h = 17.2, 5.5
     parts = []
     for x in (-1, 1):
         parts.append(box(f"start_gantry_pillar{x:+d}", (0.5, 0.5, h), (x * span / 2, 0, h / 2), m["pole"]))
         parts.append(box(f"start_gantry_foot{x:+d}", (0.9, 0.9, 0.2), (x * span / 2, 0, 0.1), m["concrete"]))
-    cols = 8
+    parts.append(box("start_gantry_beam", (span, 1.0, 1.0), (0, 0, h + 0.5), m["white"]))
+    cols = 11
     w = span / cols
     for i in range(cols):
-        for j, y in enumerate((-0.25, 0.25)):
-            mat = m["chequer_black"] if (i + j) % 2 else m["white"]
-            parts.append(box(f"start_gantry_check{i}_{j}", (w, 0.5, 1.0), (-span / 2 + (i + 0.5) * w, y, h + 0.5), mat))
+        for j, y in enumerate((-0.255, 0.255)):
+            if (i + j) % 2:
+                parts.append(box(f"start_gantry_check{i}_{j}", (w, 0.51, 1.02), (-span / 2 + (i + 0.5) * w, y, h + 0.5),
+                                 m["chequer_black"]))
     return parts
 
 
@@ -429,7 +438,8 @@ def safehouse_door(m):
         box("safehouse_door_door", (W, 0.08, H), (0, -0.1, H / 2), m["garage_door"]),
         box("safehouse_door_lampbracket", (0.08, 0.4, 0.08), (0, -0.2, H + 0.55), m["dark"]),
         box("safehouse_door_lamp", (0.5, 0.25, 0.14), (0, -0.4, H + 0.5), m["lamp"]),
-        box("safehouse_door_shade", (0.6, 0.35, 0.06), (0, -0.4, H + 0.6), m["dark"]),
+        # The shade's top lit (seen from above, a dark one hid the lamp).
+        box("safehouse_door_shade", (0.6, 0.35, 0.06), (0, -0.4, H + 0.6), m["lamp"]),
     ]
     for i in range(4):
         parts.append(box(f"safehouse_door_rib{i}", (W - 0.1, 0.04, 0.05), (0, -0.15, 0.5 + i * 0.65), m["pole"]))

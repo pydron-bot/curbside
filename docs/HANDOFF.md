@@ -162,12 +162,20 @@ compare against. Full numbers in README *Destruction test*.
    play. Gold is reachable in any car (decided 2026-10-31): the dev time
    scales with the car on the line (`carPace` in `modes/races.ts`), and
    tightens if a faster one is taken mid-race (`RaceRun.takeCar`).
-4. **Blender adjustment pass** (cloud): the pip `bpy` 5.2.3 module rebuilds
-   every committed GLB headless (recipe in `docs/BLENDER_TODO.md`). Then: fly the `rocket` model
-   [`rocket-projectile`], GetUp/Throw timing [`clips-getup-throw`], held
-   weapons [`weapons-held`], slim backpack / Pike's collar
-   [`characters-looks`], lamp and signal heads, police sign, safehouse door,
-   booth roof, gantry span [`props-world`].
+4. **Blender adjustment pass: done 2026-10-31** (rebuilt with the local
+   Blender 5.2.3 LTS, `npm run assets`; the pip `bpy` recipe in
+   `docs/BLENDER_TODO.md` gives the same files). The flying `rocket`,
+   `grenade` and `molotov` models from weapons.glb [`rocket-projectile`,
+   `render/combatLook.ts`, same shader program before and after the load];
+   `GetUpFast` and a Throw that releases at 25% [`clips-getup-throw`;
+   `GETUP_LEAD` 0.92, Throw from 0 at 1×]; held guns bigger across with a
+   stripe on top, a bigger grenade and molotov, the launcher on the
+   shoulder (rockets fly at 1.45 m) [`weapons-held`]; a big boxy slim
+   backpack and Pike's pale collar [`characters-looks`]; lamp and signal
+   tops, a lit police-lamp cap and safehouse shade, a lighter booth roof
+   and a 17.2 m gantry at 1:1 [`props-world`]. Still for the device pass:
+   whether all that reads on the phone, the heli's size at night, and the
+   pickups' scale (left in code, [`pickups-debris`] skipped as low value).
 5. **deeek.org landing page** (cloud, after the user picks branding, the
    project list and the image): [`hub-screenshots`], [`hub-page`],
    [`hub-social-meta`], [`curbside-og-meta`], [`curbside-linkback`];

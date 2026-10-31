@@ -422,20 +422,24 @@ const RUN_TO = 4.5;
 const FULL_FADE_OUT = 0.14;
 /**
  * Lying down, GetUp starts this long before they're back on their feet
- * (at up to GETUP_RUSH × speed), so they're up when the game lets them move.
+ * (its own length, so a full knock-down plays it at 1×; shorter ones rush
+ * it up to GETUP_RUSH × or take GetUpFast), so they're up when the game
+ * lets them move.
  */
-const GETUP_LEAD = 0.7;
+const GETUP_LEAD = 0.92;
 const GETUP_RUSH = 2.2;
+/** GetUp rushed past this to fit: GetUpFast instead (when the body has it). */
+const GETUP_FAST_ABOVE = 1.2;
 /** Punches start this far in (s) and play this much faster: the fist lands ~0.1 s after the press. */
 const PUNCH_FROM = 0.04;
 const PUNCH_SPEED = 1.25;
 /**
- * Throw: start this far in, at this speed, so the release (55%, 0.229 s)
- * comes ~0.08 s after the press; the projectile leaves at once (the sim
- * throws on the press), so the one in the hand is hidden from the start.
+ * Throw: from the start at its own speed; the release (25%, 0.104 s) comes
+ * ~0.1 s after the press. The projectile leaves at once (the sim throws on
+ * the press), so the one in the hand is hidden from the start.
  */
-const THROW_FROM = 0.1;
-const THROW_SPEED = 1.6;
+const THROW_FROM = 0;
+const THROW_SPEED = 1;
 /** Fakes (no clip): punch and shot timings, the stagger lean. */
 const PUNCH_SECONDS = 0.3;
 const SHOOT_SECONDS = 0.12;
@@ -659,8 +663,8 @@ export class CharacterModel {
         full.rate = 1 / FULL_FADE_OUT;
       } else {
         const spec = FULL[want];
-        const speed = want === 'getup' ? this.getUpSpeed(lyingDown, downLeft) : 1;
-        full.play(this.clipFor(want)!, spec.loop, 0, speed, spec.fade);
+        const [clip, speed] = want === 'getup' ? this.getUp(lyingDown, downLeft) : [this.clipFor(want)!, 1];
+        full.play(clip, spec.loop, 0, speed, spec.fade);
         full.target = 1;
         full.rate = 1 / spec.fade;
       }
@@ -919,11 +923,18 @@ export class CharacterModel {
     return 'none';
   }
 
-  /** GetUp's playback rate: rushed to fit the time left down, or brisk once they're already up. */
-  private getUpSpeed(lyingDown: boolean, downLeft: number): number {
-    const d = this.clipFor('getup')?.duration ?? 1;
-    if (!lyingDown) return 1.6;
-    return Math.min(GETUP_RUSH, Math.max(1, d / Math.max(0.05, downLeft)));
+  /**
+   * GetUp and its playback rate: rushed to fit the time left down, or brisk
+   * once they're already up; GetUpFast instead when GetUp would be rushed
+   * past GETUP_FAST_ABOVE.
+   */
+  private getUp(lyingDown: boolean, downLeft: number): [ClipData, number] {
+    const slow = this.clipFor('getup')!;
+    const rate = (d: number) => (lyingDown ? Math.min(GETUP_RUSH, Math.max(1, d / Math.max(0.05, downLeft))) : 1.6);
+    const fast = this.bank?.get('GetUpFast');
+    const s = rate(slow.duration);
+    if (!fast || s <= GETUP_FAST_ABOVE) return [slow, s];
+    return [fast, lyingDown ? rate(fast.duration) : 1];
   }
 
   private startAct(kind: CharacterModel['actKind'], clip: ClipData, loop: boolean, from: number, speed: number, fade: number): void {

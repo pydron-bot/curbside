@@ -157,7 +157,7 @@ describe('landmark models', () => {
     const gantries = landmarks.props.filter((p) => p.kind === 'start_gantry');
     expect(gantries).toHaveLength(6);
     for (const g of gantries) {
-      const across = 6.25 * g.sx;
+      const across = 8.6 * g.sx; // the model's pillars stand 8.6 m from its middle
       expect(across).toBeGreaterThan(LANE_OFFSET + 1 + 3); // a car pulled over to the kerb still passes
     }
     // Ramps and kickers carry their models.
