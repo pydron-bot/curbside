@@ -560,13 +560,10 @@ are used.
 
 Things that look off from the game camera (high, near top-down), for a
 future Blender pass. The code works round each one for now:
-- **Near-black tops on the rooftop kit.** `rooftop_door_roof` and
-  `water_tank_roof` are `dark` (0.018), and from above that's most of what
-  you see, so every stair hut and water tank reads as a black square or
-  disc. A tar-grey cap (about 0.12) and a galvanised or weathered-wood lid
-  would read much better. The `ac_unit` fan grille is fine. (Until then
-  the code recolours those two parts by node name: `PART_COLOURS` in
-  `src/render/propModels.ts`; drop the entries once the GLB changes.)
+- ~~**Near-black tops on the rooftop kit.**~~ Done: `rooftop_door_roof`
+  is `tar_roof` (tar grey, about 0.12 linear) and `water_tank_roof` is
+  `tank_lid` (weathered boards), so the code's `PART_COLOURS` recolour
+  is gone.
 - **Lamp and signal heads are tiny from above.** The `streetlamp` head and
   the `traffic_light` lenses are a few pixels on a phone, and the lenses
   face along the road, so from above you can't see which one is lit. The

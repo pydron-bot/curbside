@@ -79,20 +79,6 @@ export function surfaceFor(material: string, root: string): number {
   }
 }
 
-/**
- * Colours (linear) for parts whose GLB colour reads badly from the game's
- * near-overhead camera, until the models change (docs/BLENDER_TODO.md, "Code
- * side integrated"): the stair huts' and water tanks' caps are the near-black
- * `dark`, and from above they are most of the model, so every roof showed
- * black holes. Keyed by the part's node name.
- */
-const PART_COLOURS: Readonly<Record<string, readonly [number, number, number]>> = {
-  // Tar-grey roofing felt.
-  rooftop_door_roof: [0.12, 0.12, 0.125],
-  // Weathered boards, darker than the staves.
-  water_tank_roof: [0.12, 0.062, 0.03],
-};
-
 /** A prop's extent in its own frame (origin on the ground unless the GLB says otherwise), m. */
 export interface PropDims {
   min: Vector3;
@@ -171,8 +157,7 @@ export function tagged(mesh: Mesh, toRoot: Matrix4, rootName: string): BufferGeo
   if (geo.index) geo = geo.toNonIndexed();
   geo.applyMatrix4(toRoot);
   const mat = mesh.material as MeshStandardMaterial;
-  const part = PART_COLOURS[mesh.name];
-  const colour = part ? new Color(part[0], part[1], part[2]) : (mat.color ?? new Color(1, 1, 1));
+  const colour = mat.color ?? new Color(1, 1, 1);
   const surf = surfaceFor(mat.name, rootName);
   const n = geo.getAttribute('position').count;
   const c = new Float32Array(n * 3);
