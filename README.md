@@ -598,13 +598,16 @@ are `src/game/modes/*Mode.ts`.
   otherwise): the car lines up, 3-2-1, then gates of
   light (the next-but-one small), a radar route to the next checkpoint and
   the time against gold on the card. Medals against a developer time from
-  the course (straights at 36 m/s, 1.2 s a corner, 2 s to launch): gold
+  the course (straights at 36 m/s, 1.2 s a corner, 2 s to launch) in the
+  sports car, scaled for the car on the line so gold is in reach in any
+  (`carPace`: top speed and grip; a sedan ×1.22, a bus ×1.81): gold
   ×1.05, silver ×1.2, bronze ×1.4, paying $800 / $400 / $200 the first time
   (a tenth on a repeat). A clean braking-aware bot in an empty city
   (`tests/raceDevTime.test.ts`) does every course in ×0.88–0.91 of dev in
-  the sports car (gold with ~15% to spare for traffic and mistakes) and
-  ×1.09–1.10 in a sedan (no gold); the test fails if a handling change moves
-  that, so re-tune `DEV_SPEED` / `DEV_CORNER` (`modes/races.ts`) or its
+  the sports car (gold with ~15% to spare for traffic and mistakes), and
+  every other car (corners at a speed set by its grip) ×0.88–0.93 of its own
+  dev time (the limo ×1.0: the bot clips kerbs in it); the test fails if a
+  handling change moves that, so re-tune `DEV_SPEED` / `DEV_CORNER` (`modes/races.ts`) or its
   bounds on purpose. `RACE_REPORT=1 npx vitest run tests/raceDevTime.test.ts`
   prints every course in three cars. Out of the car for 8 s, wrecking the car, WASTED,
   BUSTED or 2.5× the dev time ends it.

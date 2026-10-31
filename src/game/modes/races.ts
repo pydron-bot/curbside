@@ -3,7 +3,7 @@
  * intersections (node (ix, iz) is the crossing at world (ix·64, iz·64)).
  * Drive into the chequered start in a car, 3-2-1, then through each
  * checkpoint in turn; medals are against a developer time computed from the
- * course (straights at speed, a cost per corner). Pure logic, unit-tested.
+ * course (straights at speed, a cost per corner) and scaled for the car. Pure logic, unit-tested.
  */
 import { BLOCK_SIZE } from '../../world/city';
 import { MAX_NODE, dirHeading, lanePoint, type Dir } from '../../world/roads';
@@ -105,9 +105,24 @@ export function courseCorners(r: RaceDef): number {
   return n;
 }
 
-/** The developer time for a course, s (one decimal). */
-export function devTime(r: RaceDef): number {
-  return Math.round((DEV_LAUNCH + courseLength(r) / DEV_SPEED + courseCorners(r) * DEV_CORNER) * 10) / 10;
+/** The car the developer pace above is for: the sports car's top speed (m/s) and cornering grip. */
+const PACE_TOP = 42;
+const PACE_GRIP = 26;
+
+/**
+ * How much longer a course takes in a car than in the sports car (1 for
+ * it), so gold is in reach in any car: fitted to a clean bot's times in all
+ * nineteen (tests/raceDevTime.test.ts, corners at a speed set by the car's
+ * grip), top speed counting for more than grip (acceleration hardly
+ * mattered). A sedan ×1.22, a bus ×1.81.
+ */
+export function carPace(spec: { maxSpeed: number; latAccel: number }): number {
+  return (PACE_TOP / spec.maxSpeed) ** 0.56 * (PACE_GRIP / spec.latAccel) ** 0.3;
+}
+
+/** The developer time for a course in a car of `pace` (carPace), s (one decimal). */
+export function devTime(r: RaceDef, pace = 1): number {
+  return Math.round((DEV_LAUNCH + courseLength(r) / DEV_SPEED + courseCorners(r) * DEV_CORNER) * pace * 10) / 10;
 }
 
 export function raceMedal(time: number, dev: number): Medal | null {
@@ -143,8 +158,12 @@ export class RaceRun {
   next = 1;
   readonly dev: number;
 
-  constructor(readonly def: RaceDef) {
-    this.dev = devTime(def);
+  /** `pace`: the car's carPace (its dev time is the sports car's times this). */
+  constructor(
+    readonly def: RaceDef,
+    pace = 1,
+  ) {
+    this.dev = devTime(def, pace);
   }
 
   get checkpoints(): number {

@@ -6,7 +6,7 @@
  * counts the time up against the gold time. Medals pay the first time
  * they're reached (races.ts).
  */
-import { createVehicleState, speed } from '../../entities/vehicle';
+import { VEHICLE_SPECS, createVehicleState, speed } from '../../entities/vehicle';
 import type { GlowSprites } from '../../render/glowSprites';
 import { MARK, chequer, gate, groundRing, nearView, type ProgressProps } from '../../render/progressLook';
 import { fmt } from '../../ui/scoreHud';
@@ -15,7 +15,7 @@ import { dirHeading } from '../../world/roads';
 import type { Vehicle } from '../population';
 import type { Medal } from '../progressSave';
 import { KeyedText, type Mode, type ModeCtx } from './context';
-import { MEDAL_FACTORS, MEDAL_PAY, RACES, RaceRun, START_RADIUS, formatRaceTime, legDir, nodeX, nodeZ, raceMedal, startGrid, type RaceDef } from './races';
+import { MEDAL_FACTORS, MEDAL_PAY, RACES, RaceRun, carPace, START_RADIUS, formatRaceTime, legDir, nodeX, nodeZ, raceMedal, startGrid, type RaceDef } from './races';
 
 /** Out of the car this long and the race is off, s. */
 const OUT_OF_CAR = 8;
@@ -113,7 +113,8 @@ export class RaceMode implements Mode {
     ctx.deps.rig.snapTo(g.x, g.z);
     // Same tank for everyone: a full one carried in is worth ~2 s.
     ctx.deps.nitro.reset();
-    this.run = new RaceRun(def);
+    // Gold in any car: the dev time is scaled for the one on the line.
+    this.run = new RaceRun(def, carPace(VEHICLE_SPECS[car.archetype]));
     this.gold = formatRaceTime(this.run.dev * MEDAL_FACTORS.gold);
     this.goal.reset();
     this.car = car;

@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { VEHICLE_SPECS, copyVehicleState, createVehicleState, forwardSpeed, stepVehicle, wrapAngle, type VehicleArchetype, type VehicleControls } from '../src/entities/vehicle';
-import { RACES, RaceRun, legDir, startGrid, type RaceDef } from '../src/game/modes/races';
+import { RACES, RaceRun, carPace, legDir, startGrid, type RaceDef } from '../src/game/modes/races';
 import { collideVehicleStatic } from '../src/systems/physics';
 import { BLOCK_SIZE, generateCity } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
@@ -32,7 +32,7 @@ interface BotStyle {
   lookahead: number;
   /** Aim down the next leg once this close to the corner, m. */
   turnIn: number;
-  /** Speed to take a right-angle corner at, m/s. */
+  /** Speed to take a right-angle corner at in the sports car, m/s (others by their grip). */
   cornerSpeed: number;
   /** Share of the car's braking the plan counts on. */
   brakeShare: number;
@@ -59,7 +59,7 @@ function drive(def: RaceDef, archetype: VehicleArchetype, bot: BotStyle = BOT): 
   const prev = createVehicleState();
   const out: VehicleControls = { throttle: 0, steer: 0, handbrake: false };
   const target = { x: 0, z: 0 };
-  const run = new RaceRun(def);
+  const run = new RaceRun(def, carPace(spec));
   let worstHit = 0;
   for (let t = 0; t < 400; t += DT) {
     const live = run.phase === 'live';
@@ -80,7 +80,8 @@ function drive(def: RaceDef, archetype: VehicleArchetype, bot: BotStyle = BOT): 
     out.steer = live ? Math.max(-1, Math.min(1, -err * bot.gain)) : 0;
     // Brake when the corner ahead is within stopping distance (down to corner speed), else full gas.
     const v = forwardSpeed(car);
-    const vc = bot.cornerSpeed;
+    // Corners as fast as the car's grip allows (lateral accel ~ v²/r): slower in a truck.
+    const vc = bot.cornerSpeed * Math.sqrt(spec.latAccel / VEHICLE_SPECS.sports.latAccel);
     const stop = v > vc ? (v * v - vc * vc) / (2 * spec.brakeDecel * bot.brakeShare) : 0;
     const braking = c !== undefined && left > 0 && left < stop + v * 0.15;
     out.throttle = !live ? 0 : braking ? -1 : Math.abs(err) > 0.9 && v > vc ? 0 : 1;
@@ -101,10 +102,10 @@ describe('race developer times against the bot', () => {
   const sports = RACES.map((def) => ({ def, r: drive(def, 'sports') }));
   // RACE_REPORT=1 npx vitest run tests/raceDevTime.test.ts: every course in three cars, for re-tuning.
   if (process.env.RACE_REPORT) {
-    for (const a of ['sports', 'muscle', 'sedan'] as VehicleArchetype[]) {
+    for (const a of (process.env.RACE_CARS?.split(',') ?? ['sports', 'muscle', 'sedan']) as VehicleArchetype[]) {
       for (const def of RACES) {
         const r = drive(def, a);
-        process.stderr.write(`${a} ${def.id} ${r.finished ? r.time.toFixed(1) : 'DNF'} s, x${(r.time / new RaceRun(def).dev).toFixed(3)} of dev, worst hit ${r.worstHit.toFixed(1)}\n`);
+        process.stderr.write(`${a} ${def.id} ${r.finished ? r.time.toFixed(1) : 'DNF'} s, x${(r.time / new RaceRun(def, carPace(VEHICLE_SPECS[a])).dev).toFixed(3)} of dev, worst hit ${r.worstHit.toFixed(1)}\n`);
       }
     }
   }
@@ -133,6 +134,21 @@ describe('race developer times against the bot', () => {
       expect(sedan.finished, def.id).toBe(true);
       expect(sedan.time, def.id).toBeGreaterThan(r.time);
     }
+  });
+
+  it('gold is in reach in any car: the clean bot beats every car-scaled gold time', () => {
+    // Bikes, buses and trucks too. The bot is tuned for nimble cars: heavy ones
+    // clip kerbs and still finish under gold, so this is a loose upper bound.
+    const bad: string[] = [];
+    for (const a of Object.keys(VEHICLE_SPECS) as VehicleArchetype[]) {
+      const ratios = RACES.map((def) => {
+        const r = drive(def, a);
+        return r.finished ? r.time / new RaceRun(def, carPace(VEHICLE_SPECS[a])).dev : Infinity;
+      });
+      const mean = ratios.reduce((x, y) => x + y, 0) / ratios.length;
+      if (!(mean < 1.03 && mean > 0.8)) bad.push(`${a} x${mean.toFixed(3)}`);
+    }
+    expect(bad).toEqual([]);
   });
 });
 
