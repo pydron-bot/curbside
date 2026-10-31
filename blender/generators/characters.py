@@ -206,11 +206,15 @@ def build_body(rig, spec, name, d):
     attach(box(f"{name}_nose", (0.04, 0.05, 0.05), (0, -0.135, d.neck_z + 0.12), skin), "head")
 
     if spec.get("police"):
-        # Peaked cap: crown (hair slot, set navy by the game) and a black brim + band.
+        # Peaked cap: crown (hair slot, set navy by the game), a black brim and a silver band
+        # (fixed-colour badge slot) that sets officers apart from above at night.
+        badge = material(f"{name}_badge", (214, 218, 226), 0.4)
         attach(frustum(f"{name}_cap", (0.135, 0.14), (0.16, 0.17), d.neck_z + 0.2, d.neck_z + 0.3, hair, sides=8),
                "head")
         attach(box(f"{name}_brim", (0.22, 0.12, 0.025), (0, -0.14, d.neck_z + 0.205), shoes), "head")
-        attach(box(f"{name}_capband", (0.28, 0.29, 0.035), (0, 0, d.neck_z + 0.215), shoes), "head")
+        attach(box(f"{name}_capband", (0.28, 0.29, 0.035), (0, 0, d.neck_z + 0.215), badge), "head")
+        attach(box(f"{name}_badge", (0.07, 0.03, 0.08), (0.12 * sw, -0.14 * dp - 0.01, d.shoulder_z - 0.1), badge),
+               "chest")
     elif spec.get("short_hair"):
         attach(ico(f"{name}_hair", 0.145, (0, 0.02, d.neck_z + 0.2), hair, subdiv=1, scale=(1, 1.05, 0.62)), "head")
     elif spec.get("slick_hair"):

@@ -57,6 +57,9 @@ def mats():
         "concrete": material("concrete", (160, 158, 150), 0.95),
         "ac": material("ac", (205, 208, 210), 0.6),
         "tank_wood": material("tank_wood", (120, 82, 50), 0.9),
+        # Lighter tops for the kit seen from above: weathered boards and tar felt.
+        "tank_lid": material("tank_lid", (97, 70, 48), 0.9),
+        "tar_roof": material("tar_roof", (97, 97, 99), 0.9),
         "white": material("white", (230, 232, 235), 0.5),
         "trunk": material("trunk", (92, 64, 42), 0.9),
         "leaf": material("leaf", (60, 130, 60), 0.85),
@@ -220,7 +223,7 @@ def vent(m):
 def water_tank(m):
     parts = [
         cylinder("water_tank_barrel", 1.15, 2.0, (0, 0, 2.6), m["tank_wood"], verts=10),
-        cylinder("water_tank_roof", 1.25, 0.6, (0, 0, 3.9), m["dark"], verts=10, radius2=0.1),
+        cylinder("water_tank_roof", 1.25, 0.6, (0, 0, 3.9), m["tank_lid"], verts=10, radius2=0.1),
         cylinder("water_tank_hoop", 1.17, 0.08, (0, 0, 2.2), m["dark"], verts=10),
         cylinder("water_tank_hoop2", 1.17, 0.08, (0, 0, 3.0), m["dark"], verts=10),
         box("water_tank_deck", (2.4, 2.4, 0.1), (0, 0, 1.55), m["dark"]),
@@ -248,7 +251,7 @@ def rooftop_door(m):
         box("rooftop_door_hut", (1.5, 1.8, 2.4), (0, 0, 1.2), m["concrete"]),
         hull("rooftop_door_roof", [(-0.85, -1.0, 2.4), (0.85, -1.0, 2.4), (-0.85, 1.0, 2.4), (0.85, 1.0, 2.4),
                                    (-0.85, -1.0, 2.55), (0.85, -1.0, 2.55), (-0.85, 1.0, 2.75),
-                                   (0.85, 1.0, 2.75)], m["dark"]),
+                                   (0.85, 1.0, 2.75)], m["tar_roof"]),
         box("rooftop_door_door", (0.9, 0.04, 2.0), (0, -0.91, 1.0), m["pole"]),
         box("rooftop_door_light", (0.2, 0.1, 0.12), (0, -0.95, 2.2), m["lamp"]),
     ]

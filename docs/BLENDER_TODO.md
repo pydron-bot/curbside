@@ -298,10 +298,9 @@ clips), so it works with the existing loader as one more batch:
   `cop.glb` (peaked cap, short sleeves, duty belt and holster).
 - Accessories are baked into the variants because the batch can't toggle
   parts per person. Their slots: backpack = `pants`, ball cap = `hair`.
-- Cop: cap crown = `hair` (set it navy), brim, cap band, belt and holster =
-  `shoes`. **No badge:** an unknown material suffix falls back to the
-  `skin` slot, so a fixed-colour part isn't possible in a character file.
-  If you want one, add a sixth slot to `SLOTS`.
+- Cop: cap crown = `hair` (set it navy); brim, belt and holster =
+  `shoes`; the cap band and a chest badge are the fixed-colour silver
+  `cop_badge` (SWAT wear cop.glb, so they get it too).
 - All bodies are 484–592 tris.
 
 **3. `props.glb`:** roots `streetlamp`, `traffic_light`, `hydrant`, `bench`,
@@ -526,10 +525,8 @@ on the iPhone profile and 27 m on desktop, by day and at night):
    shoulder and the tube only 0.11 m above the grip, so the launcher reads
    as hip-held rather than on the shoulder. Raise arm.R in AimRocket /
    ShootRocket, or move the tube higher over the grip in `rocket_launcher`.
-3. **Cops from above.** The cap crown is the main read; the game now uses a
-   lighter police blue shirt and navy cap, but a light cap band or the badge
-   (now possible, see above) would set officers apart from dark-clad
-   civilians at night.
+3. ~~**Cops from above.**~~ Done: a silver `cop_badge` cap band and chest
+   badge (cop.glb 568 → 580 tris).
 4. **Street bodies from 27 m.** The stocky ball cap (the game gives it cap
    colours) and the coat's hem read; the slim body's backpack barely shows
    from above. A bigger, boxier backpack would help.
@@ -540,9 +537,8 @@ on the iPhone profile and 27 m on desktop, by day and at night):
    grenade leaves at once), so the clip starts 0.1 s in at 1.6× (release
    ~0.08 s after the press). A clip with its release at ~25% would line up
    without speeding it up.
-7. **Pigeons are hard to see at night** (dark grey on dark asphalt, 34
-   tris, drawn 1.3× by the game and lit by street lamps). A paler back or
-   white wing bars would keep flocks readable after dark.
+7. ~~**Pigeons are hard to see at night.**~~ Done: a paler body and
+   near-white `pigeon_wing` wings (still 34 tris, same rig and `Flap`).
 8. **Pike at night:** the black coat on dark asphalt nearly disappears; a
    lighter collar or lapels (`badge` or `hair` slot) would help. Vex's
    orange hair and Tuna's teal headphones read well from above.
@@ -561,13 +557,10 @@ are used.
 
 Things that look off from the game camera (high, near top-down), for a
 future Blender pass. The code works round each one for now:
-- **Near-black tops on the rooftop kit.** `rooftop_door_roof` and
-  `water_tank_roof` are `dark` (0.018), and from above that's most of what
-  you see, so every stair hut and water tank reads as a black square or
-  disc. A tar-grey cap (about 0.12) and a galvanised or weathered-wood lid
-  would read much better. The `ac_unit` fan grille is fine. (Until then
-  the code recolours those two parts by node name: `PART_COLOURS` in
-  `src/render/propModels.ts`; drop the entries once the GLB changes.)
+- ~~**Near-black tops on the rooftop kit.**~~ Done: `rooftop_door_roof`
+  is `tar_roof` (tar grey, about 0.12 linear) and `water_tank_roof` is
+  `tank_lid` (weathered boards), so the code's `PART_COLOURS` recolour
+  is gone.
 - **Lamp and signal heads are tiny from above.** The `streetlamp` head and
   the `traffic_light` lenses are a few pixels on a phone, and the lenses
   face along the road, so from above you can't see which one is lit. The

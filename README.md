@@ -924,9 +924,8 @@ and every new program is compiled behind the current frame.
   mailboxes, payphones; busiest downtown), dumpsters at alley mouths,
   bollards round plazas, park trees by district (round, tall, palms);
   rooftop kit fitted to the building plans (AC units, vents, water tanks,
-  dishes, stair huts, antennas with a blinking tip; the huts' and tanks'
-  near-black caps are recoloured until the GLB changes, see
-  `propModels.ts: PART_COLOURS`); spray booths with
+  dishes, stair huts, antennas with a blinking tip; the huts' tar-grey and
+  the tanks' weathered-board tops read from above); spray booths with
   their mouth to the street (the roof opens while you're inside), the
   export bay, the police sign and the safehouse door on their walls (both
   lamps glow at night), race-start gantries with barriers and cones, ramp
