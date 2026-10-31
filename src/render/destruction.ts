@@ -41,6 +41,7 @@ import {
 } from './destructionStyle';
 import { BreachScars } from './breachScars';
 import type { Effects, Rgb } from './effects';
+import { DECAL } from './fxDecals';
 import { getQuality, onQualityChange, preferredTier } from './quality';
 import { worldUniforms } from './shaderLib';
 import { RubbleBatch, type RubbleSource } from './rubbleBatch';
@@ -95,6 +96,8 @@ const WARM_SITE = { x: 900, y: 1.2, z: 900, nx: 0, nz: 1, radius: 1.5, strength:
 const CONCRETE = new Color('#8a867f');
 const BRICK = new Color('#8c4a3a');
 const DUST = 0.55;
+/** The rubble spill on the pavement outlives desktop rubble (120 s) and fades over its last 40%, s. */
+const SPILL_LIFE = 200;
 
 export interface DestructionStats {
   mode: DestructionMode;
@@ -627,6 +630,8 @@ export class Destruction {
     const sb = this.scarBudget(style);
     this.scars.setCap(sb.scarCap);
     this.scars.write(e.slot, e.x, e.y, e.z, e.radius, e.side, e.depth, e.seed, sb.richScar, worldUniforms.uTime.value);
+    // Dust and gravel at the wall's foot (the decal layer: no draw call of its own), in every style.
+    this.d.effects.decals.stamp(e.x, e.z, e.radius * 1.5 + 1, Math.atan2(-e.nx, e.nz), 1, SPILL_LIFE, this.isBrick(e.building) ? DECAL.spillBrick : DECAL.spill);
     const v = this.lastView;
     if (e.x < v.minX - FAR_CUT || e.x > v.maxX + FAR_CUT || e.z < v.minZ - FAR_CUT || e.z > v.maxZ + FAR_CUT) return;
     this.lastBreach.x = e.x;
@@ -713,6 +718,12 @@ export class Destruction {
     }
   }
 
+  /** Old Town and residential walls are brick inside; the rest concrete. */
+  private isBrick(building: number): boolean {
+    const district = this.d.breaches.buildings[building]?.district;
+    return district === 'oldtown' || district === 'residential';
+  }
+
   /** The breached building's wall colour, linear. */
   private wallLinear(building: number, out: Color): Color {
     const bd = this.d.breaches.buildings[building];
@@ -779,8 +790,7 @@ export class Destruction {
     const n = this.slots.claim(plan.count, b, now, this.claimed);
     const si = this.claimSite(site.x, site.z);
     const wall = this.wallLinear(building, this.tmp);
-    const district = bs.buildings[building]?.district;
-    const core = district === 'oldtown' || district === 'residential' ? BRICK : CONCRETE;
+    const core = this.isBrick(building) ? BRICK : CONCRETE;
     for (let j = 0; j < n; j++) {
       const slot = this.claimed[j];
       if (!w.spawnAt(slot, plan.px[j], plan.py[j], plan.pz[j], plan.qx[j], plan.qy[j], plan.qz[j], plan.qw[j], plan.hx[j], plan.hy[j], plan.hz[j], plan.vx[j], plan.vy[j], plan.vz[j], plan.wx[j], plan.wy[j], plan.wz[j])) {
@@ -792,11 +802,14 @@ export class Destruction {
       this.size[s3 + 1] = plan.hy[j] * 2;
       this.size[s3 + 2] = plan.hz[j] * 2;
       const tone = plan.tone[j];
-      const c = tone === TONE_CORE ? core : wall;
+      // A wall chunk is paint over broken core: part of it shows through.
+      // Each chunk's tint wanders a little, so the pile isn't one flat colour.
+      const m = tone === TONE_CORE ? 1 : 0.15 + 0.3 * Math.random();
       const shade = plan.shade[j] * (tone === TONE_SCORCHED ? 0.3 : 1);
-      this.colour[s3] = c.r * shade;
-      this.colour[s3 + 1] = c.g * shade;
-      this.colour[s3 + 2] = c.b * shade;
+      const warm = (Math.random() - 0.5) * 0.14;
+      this.colour[s3] = (wall.r + (core.r - wall.r) * m) * shade * (1 + warm);
+      this.colour[s3 + 1] = (wall.g + (core.g - wall.g) * m) * shade;
+      this.colour[s3 + 2] = (wall.b + (core.b - wall.b) * m) * shade * (1 - warm);
       this.site[slot] = si;
       this.siteLive[si]++;
       this.deskBorn[slot] = b.shadows ? 1 : 0;

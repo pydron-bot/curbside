@@ -142,10 +142,11 @@ compare against. Full numbers in README *Destruction test*.
    `warm` event with the test on at boot (relaunch the app with AUTO
    saved) against one from an `off` session. On a desktop machine the
    same with DESKTOP (or `?destruction=desktop`), against the estimate of
-   ≤ 1.3 ms physics p95. (b) **Rubble look polish** (cloud): reviewers
-   said the chunks read as clean boxes rather than broken masonry; make
-   them read as broken brick and concrete, still one batch and no new
-   program.
+   ≤ 1.3 ms physics p95. (b) **Rubble look polish**: done in the cloud
+   2026-10-31 (desktop sizes skewed small, more core, per-chunk tint, a
+   dust-and-gravel spill decal at the wall's foot; still one batch, no new
+   program or draw call). Needs a look on the phone in daylight and at night
+   during the soak.
    (c) Then decide whether the test goes on by default.
 3. **Races and tuning** (cloud): the bot-vs-dev-time test [`tune-race-dev-times`]; commit
    the `__ub` bot harnesses [`tune-chaos-medals`, `tune-five-star-escape`].

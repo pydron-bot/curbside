@@ -65,6 +65,8 @@ export interface StyleBudget {
   /** Chunk half-extent range, m. */
   halfMin: number;
   halfMax: number;
+  /** Sizes skewed small (a heap of bits round a few lumps) rather than even. */
+  skewSmall: boolean;
   /** Share of chunks that are thin plates (hy × 0.4). */
   slabShare: number;
   /** Share that are long thin shards (one side ×1.5, the others about halved). */
@@ -100,13 +102,15 @@ export interface StyleBudget {
 
 export const STYLE: Readonly<Record<'low' | 'phone' | 'desktop', StyleBudget>> = {
   desktop: {
-    chunksBase: 12,
-    chunksPerStrength: 24,
-    halfMin: 0.07,
+    chunksBase: 14,
+    chunksPerStrength: 26,
+    halfMin: 0.06,
     halfMax: 0.2,
+    skewSmall: true,
     slabShare: 0.3,
     shardShare: 0.2,
-    coreShare: 0.3,
+    // Broken masonry shows its core on most faces; a painted face is the exception.
+    coreShare: 0.45,
     scorchShare: 0.06,
     chipsBase: 0,
     chipsPerStrength: 0,
@@ -127,6 +131,7 @@ export const STYLE: Readonly<Record<'low' | 'phone' | 'desktop', StyleBudget>> =
     chunksPerStrength: 4,
     halfMin: 0.2,
     halfMax: 0.42,
+    skewSmall: false,
     slabShare: 0.25,
     shardShare: 0.25,
     // Big faces: more broken core and soot, so they read as rubble, not blocks.
@@ -151,6 +156,7 @@ export const STYLE: Readonly<Record<'low' | 'phone' | 'desktop', StyleBudget>> =
     chunksPerStrength: 0,
     halfMin: 0,
     halfMax: 0,
+    skewSmall: false,
     slabShare: 0,
     shardShare: 0,
     coreShare: 0,

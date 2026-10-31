@@ -1166,8 +1166,13 @@ clean boxes (`docs/HANDOFF.md`).
   corner cuts, pulled in, sheared, each face broken round a raised or
   dented point, facet normals tilted, so no face is one evenly lit square)
   on the city's prop material (no new program): blocks, plates and shards
-  in the breached wall's colour, some concrete or brick core, scorched
-  near the centre and a share more at random, shaded 0.35–0.85; +1 draw
+  in the breached wall's colour (each with 15–45% of the core showing
+  through, its tint wandering a little), some bare concrete or brick core,
+  scorched near the centre and a share more at random, shaded 0.35–0.85;
+  under them a **spill** on the pavement (`DECAL.spill` / `spillBrick` in
+  the ground-decal layer, its own ring after the scorches, so no draw call
+  or program of its own: dust and angular gravel stones with a shadow each,
+  densest at the wall, 200 s, in every style including `low`); +1 draw
   call (+1 in the shadow pass in the desktop style) while any is on
   screen, and its buffers go up only on frames where something drawn
   changed (a settled pile uploads nothing). About
@@ -1186,7 +1191,7 @@ clean boxes (`docs/HANDOFF.md`).
 
 | Per style | Desktop (`auto` on `high` and `medium`) | Phone (forced only) | Low (`auto` on `low`: scar + particles) |
 |---|---|---|---|
-| Chunks per breach | 12–36, 0.14–0.4 m (30% plates, 20% shards to 0.5 m), 30% core, 6% scorched | 3–7, 0.4–0.84 m (25% plates, 25% shards to 1.1 m), half core, 15% scorched, plus 4 chips | none: 4–10 debris chips |
+| Chunks per breach | 14–40, 0.12–0.4 m skewed small (a heap of bits round a few lumps; 30% plates, 20% shards to 0.5 m), 45% core, 6% scorched | 3–7, 0.4–0.84 m (25% plates, 25% shards to 1.1 m), half core, 15% scorched, plus 4 chips | none: 4–10 debris chips |
 | Live bodies at most | 200 (the oldest crumble away) | 36 | 0 |
 | Life | 120 s, then removed once out of view | 7 s, then crumbles away (0.6 s: settles 4 cm and darkens, then flattens and shrinks into the pavement) | chips ~3 s |
 | Settling | Rapier sleep; forced after 10 s unless a moving car is within 6 m | gone at 7.6 s | – |

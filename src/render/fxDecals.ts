@@ -21,6 +21,14 @@ export const DECAL = {
   pock: 2,
   /** Metal scrape: a pale scratch line. */
   scuff: 3,
+  /**
+   * Rubble spill at the foot of a breached wall: dust and gravel, densest at
+   * the wall (uv.y 0.5) and thinning outward (uv.y 1); the half behind the
+   * wall is never drawn. Grey concrete.
+   */
+  spill: 4,
+  /** The same in brick: red-brown. */
+  spillBrick: 5,
 } as const;
 export type DecalKind = (typeof DECAL)[keyof typeof DECAL];
 
@@ -28,7 +36,9 @@ export type DecalKind = (typeof DECAL)[keyof typeof DECAL];
 const RIBBON_QUADS = 2400;
 /** Scorch marks get their own ring so tyre marks never erase them. */
 const SCORCH_QUADS = 32;
-const QUADS = RIBBON_QUADS + SCORCH_QUADS;
+/** Rubble spills: their own ring, after the scorches, so the gravel lies on the soot. */
+const SPILL_QUADS = 32;
+const QUADS = RIBBON_QUADS + SCORCH_QUADS + SPILL_QUADS;
 /** Height above the ground (the ground is y = 0; contact shadows sit at 0.03). */
 const Y = 0.018;
 
@@ -54,6 +64,7 @@ export class GroundDecals {
   private readonly material: ShaderMaterial;
   private ribbonNext = 0;
   private scorchNext = 0;
+  private spillNext = 0;
   private dirtyMin = Infinity;
   private dirtyMax = -1;
   /** Seconds, advanced by update(); the shader's clock. */
@@ -144,6 +155,9 @@ export class GroundDecals {
     if (kind === DECAL.scorch) {
       q = RIBBON_QUADS + this.scorchNext;
       this.scorchNext = (this.scorchNext + 1) % SCORCH_QUADS;
+    } else if (kind === DECAL.spill || kind === DECAL.spillBrick) {
+      q = RIBBON_QUADS + SCORCH_QUADS + this.spillNext;
+      this.spillNext = (this.spillNext + 1) % SPILL_QUADS;
     } else {
       q = this.ribbonNext;
       this.ribbonNext = (this.ribbonNext + 1) % RIBBON_QUADS;
@@ -232,11 +246,13 @@ function decalMaterial(): ShaderMaterial {
       varying vec2 vUv;
       varying float vAlpha;
       varying float vKind;
+      varying vec2 vWorld;
       void main() {
         float age = uDecalTime - aDecal.x;
         float life = aDecal.y;
         vUv = uv;
         vKind = aDecal.w;
+        vWorld = position.xz;
         // Fade over the last 40% of life; the first moments of a scorch are hot and dark.
         vAlpha = aDecal.z * (1.0 - smoothstep(life * 0.6, life, age));
         if (age < 0.0 || age > life) {
@@ -250,6 +266,7 @@ function decalMaterial(): ShaderMaterial {
       varying vec2 vUv;
       varying float vAlpha;
       varying float vKind;
+      varying vec2 vWorld;
       float hash(vec2 p) {
         p = fract(p * vec2(123.34, 456.21));
         p += dot(p, p + 45.32);
@@ -285,11 +302,43 @@ function decalMaterial(): ShaderMaterial {
           float r = length(p);
           a = 1.0 - smoothstep(0.25, 1.0, r);
           col = vec3(0.02);
-        } else {
+        } else if (vKind < 3.5) {
           float x = vUv.x;
           a = smoothstep(0.0, 0.35, x) * smoothstep(1.0, 0.65, x) * (0.6 + 0.4 * noise(vec2(x * 4.0, vUv.y * 6.0)));
           // Bare metal catches the daylight; unlit at night it would glow on the dark road.
           col = vec3(0.62, 0.6, 0.56) * (1.0 - 0.75 * uNight);
+        } else {
+          // Rubble spill: x along the wall, y out from it (behind it: nothing).
+          vec2 p = vUv * 2.0 - 1.0;
+          float d = length(vec2(p.x, max(p.y, 0.0) / 0.7));
+          float ragged = noise(vWorld * 1.4) * 0.35 + noise(vWorld * 4.5) * 0.15;
+          float body = (1.0 - smoothstep(0.35, 0.9, d + ragged - 0.2)) * smoothstep(-0.02, 0.05, p.y);
+          vec3 dust = vKind < 4.5 ? vec3(0.42, 0.405, 0.38) : vec3(0.42, 0.24, 0.18);
+          // Gravel: at most one stone per 20 cm cell, denser near the wall; each
+          // lit on its sun side and shadowed on the other, so it reads as a bump.
+          vec2 g = vWorld * 5.0;
+          vec2 cell = floor(g);
+          vec2 f = fract(g) - 0.5 - (vec2(hash(cell + 3.1), hash(cell + 7.7)) - 0.5) * 0.4;
+          float size = 0.16 + 0.22 * hash(cell + 1.7);
+          float on = step(hash(cell), body * (1.05 - 0.75 * d));
+          // Angular, not round: a turned blend of a square and a diamond, stretched.
+          float t = hash(cell + 9.2) * 6.283;
+          mat2 turn = mat2(cos(t), -sin(t), sin(t), cos(t));
+          vec2 stretch = vec2(1.0, 1.25 + 0.5 * hash(cell + 2.4));
+          float sq = hash(cell + 4.6);
+          vec2 r = turn * f * stretch;
+          float poly = mix(max(abs(r.x), abs(r.y)), (abs(r.x) + abs(r.y)) * 0.75, sq);
+          float stone = on * (1.0 - smoothstep(size * 0.8, size * 0.9, poly));
+          // Its shadow: the same shape a little way off in world space.
+          vec2 rs = turn * (f - vec2(0.06, 0.07)) * stretch;
+          float spoly = mix(max(abs(rs.x), abs(rs.y)), (abs(rs.x) + abs(rs.y)) * 0.75, sq);
+          float shadow = on * (1.0 - smoothstep(size * 0.8, size * 1.0, spoly)) * (1.0 - stone);
+          float tone = 0.55 + 0.45 * hash(cell + 5.3);
+          float lit = 0.95 - 0.5 * (f.x + f.y) / max(size, 0.01);
+          col = mix(dust * 0.75, dust * tone * lit, stone);
+          col = mix(col, vec3(0.03), shadow * 0.8);
+          a = max(body * 0.65 * (1.0 - 0.5 * d), max(stone, shadow * 0.7));
+          col *= 1.0 - 0.7 * uNight;
         }
         a *= vAlpha;
         if (a < 0.004) discard;

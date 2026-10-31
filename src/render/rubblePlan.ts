@@ -91,10 +91,24 @@ export function planChunks(b: BreachSite, style: StyleBudget, out: ChunkPlan, bl
   const tx = -b.nz;
   const tz = b.nx;
   for (let i = 0; i < n; i++) {
-    const span = style.halfMax - style.halfMin;
-    let hx = style.halfMin + span * rand();
-    let hy = style.halfMin + span * rand();
-    let hz = style.halfMin + span * rand();
+    const lo = style.halfMin;
+    const span = style.halfMax - lo;
+    let hx: number;
+    let hy: number;
+    let hz: number;
+    if (style.skewSmall) {
+      // Mostly bits round a few big lumps (one size, squared, then a little
+      // per axis): three even draws per axis gave a pile of same-sized dice.
+      const sk = rand();
+      const base = lo + span * sk * sk;
+      hx = Math.min(style.halfMax, Math.max(lo, base * (0.7 + 0.6 * rand())));
+      hy = Math.min(style.halfMax, Math.max(lo, base * (0.7 + 0.6 * rand())));
+      hz = Math.min(style.halfMax, Math.max(lo, base * (0.7 + 0.6 * rand())));
+    } else {
+      hx = lo + span * rand();
+      hy = lo + span * rand();
+      hz = lo + span * rand();
+    }
     const shape = rand();
     if (shape < style.slabShare) hy *= 0.4;
     else if (shape < style.slabShare + style.shardShare) {
