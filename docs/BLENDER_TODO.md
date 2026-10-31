@@ -298,10 +298,9 @@ clips), so it works with the existing loader as one more batch:
   `cop.glb` (peaked cap, short sleeves, duty belt and holster).
 - Accessories are baked into the variants because the batch can't toggle
   parts per person. Their slots: backpack = `pants`, ball cap = `hair`.
-- Cop: cap crown = `hair` (set it navy), brim, cap band, belt and holster =
-  `shoes`. **No badge:** an unknown material suffix falls back to the
-  `skin` slot, so a fixed-colour part isn't possible in a character file.
-  If you want one, add a sixth slot to `SLOTS`.
+- Cop: cap crown = `hair` (set it navy); brim, belt and holster =
+  `shoes`; the cap band and a chest badge are the fixed-colour silver
+  `cop_badge` (SWAT wear cop.glb, so they get it too).
 - All bodies are 484–592 tris.
 
 **3. `props.glb`:** roots `streetlamp`, `traffic_light`, `hydrant`, `bench`,
@@ -525,10 +524,8 @@ on the iPhone profile and 27 m on desktop, by day and at night):
    shoulder and the tube only 0.11 m above the grip, so the launcher reads
    as hip-held rather than on the shoulder. Raise arm.R in AimRocket /
    ShootRocket, or move the tube higher over the grip in `rocket_launcher`.
-3. **Cops from above.** The cap crown is the main read; the game now uses a
-   lighter police blue shirt and navy cap, but a light cap band or the badge
-   (now possible, see above) would set officers apart from dark-clad
-   civilians at night.
+3. ~~**Cops from above.**~~ Done: a silver `cop_badge` cap band and chest
+   badge (cop.glb 568 → 580 tris).
 4. **Street bodies from 27 m.** The stocky ball cap (the game gives it cap
    colours) and the coat's hem read; the slim body's backpack barely shows
    from above. A bigger, boxier backpack would help.
