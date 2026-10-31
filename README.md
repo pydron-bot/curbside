@@ -997,7 +997,19 @@ and every new program is compiled behind the current frame.
   run them. Drivers see a long vehicle as a point per body circle
   (`traffic.ts: vehicleObstacles`), and a long driver keeps its gap from
   its own nose, so a bus or fire truck in a queue neither rams the car
-  ahead nor gets driven into.
+  ahead nor gets driven into. **Turns give way** (calm drivers; panic and
+  urgent ones don't): a left-turner waits at the line until nothing moving
+  on the oncoming approach would arrive before it clears the crossing
+  (longer for a long vehicle), and after a stop it gives the oncoming queue
+  a 1.2 s beat to pull away; stopped oncoming cars (a queue, the opposite
+  left-turner) don't count, so nobody waits on each other. A right-turner
+  waits while anyone is already heading into its road. Once a turner pulls
+  away from the line on green it is committed. Followers never go faster
+  than they could stop from in the gap ahead, and waiting behind a car
+  facing the same way never trips the gridlock breaker. A busy-junction
+  Monte Carlo (`tests/junctionTurns.test.ts`: 4 cars an approach, random
+  turns, 40 runs with and without a long vehicle per queue) went from 49 and
+  107 contacts to none, everyone through within three light cycles.
 - **Pickups, tokens, debris**: pickups are the pickups.glb models (drawn
   ×1.7 so they read from the camera) with their rings and bob; frenzy
   tokens spin and bob in the frenzy's colour; an explosion throws a run of

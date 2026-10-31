@@ -166,9 +166,8 @@ compare against. Full numbers in README *Destruction test*.
    [`hub-social-meta`], [`curbside-og-meta`], [`curbside-linkback`];
    same-origin rules [`shared-origin-landing`]; live HTTPS/domain check is
    the user's [`pages-domain-check`].
-6. **Remaining minor issues:** left
-   turns give way to the opposite queue (the real cause of the junction
-   clipping) [`minor-junction-turns`]; animation sampling garbage
+6. **Remaining minor issues:** ~~left turns give way~~ [`minor-junction-turns`]:
+   done 2026-10-31 (README *Traffic lights*); animation sampling garbage
    [`anim-bake`], `Math.hypot` and call boxing in the sim
    [`hypot-hot-loops`, `sim-call-boxing`] (V8 only; wait for the device
    timeline). Also: a committed browser smoke test in CI [`smoke-ci`],

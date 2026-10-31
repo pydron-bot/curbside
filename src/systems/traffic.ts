@@ -15,7 +15,7 @@
  * panicking or urgent drivers run them.
  */
 import { CAR_BODY, forwardSpeed, wrapAngle, type VehicleControls, type VehicleState } from '../entities/vehicle';
-import { BLOCK_SIZE } from '../world/city';
+import { BLOCK_SIZE, ROAD_WIDTH } from '../world/city';
 import {
   DIR_VEC,
   LANE_OFFSET,
@@ -28,6 +28,8 @@ import {
   lanePoint,
   nodeValid,
   reverse,
+  turnLeft,
+  turnRight,
   type Dir,
 } from '../world/roads';
 import type { SignalView } from '../world/signals';
@@ -73,6 +75,10 @@ export interface AiDriver {
   urgent: boolean;
   /** Seconds left in the oncoming lane, overtaking. */
   overtaking: number;
+  /** Pulled away from the line into a left turn: no second thoughts (a hesitant turner gets rear-ended). */
+  turnCommitted: boolean;
+  /** Seconds stopped at the line, free to go (green, or no lights), waiting to turn left. */
+  lineBeat: number;
 }
 
 export type Mood = 'calm' | 'panic' | 'rage';
@@ -153,6 +159,21 @@ const SIGNAL_QUEUE = 70;
 /** Overtaking: this far left of our lane line (into the oncoming lane), for at least this long. */
 const OVERTAKE_SHIFT = 2 * LANE_OFFSET;
 const OVERTAKE_SECONDS = 1.6;
+/** A left-turner starts looking for oncoming traffic this close to the entry, m. */
+const GIVE_WAY_LOOK = 30;
+/** Oncoming traffic further up the road than this is no concern, m. */
+const GIVE_WAY_RANGE = 60;
+/** Slower than this, an oncoming vehicle is waiting (queued, or turning left itself) and doesn't hold us up, m/s. */
+const GIVE_WAY_MOVING = 1.2;
+/** Anything moving in the first this-many metres of the road we turn into holds us up, m. */
+const EXIT_ARM = 14;
+/** Following: the braking a driver keeps in hand for the car ahead stopping, m/s², and the gap it stops at. */
+const FOLLOW_DECEL = 5;
+const FOLLOW_STOP = 2.6;
+/** A left-turner stopped at the line waits this long after it may go before looking, s. */
+const LINE_BEAT = 1.2;
+/** Margin on top of our own clearing time, s. */
+const GIVE_WAY_MARGIN = 1;
 
 /**
  * Place a new AI car on a random lane. Returns null if the pick was off-map.
@@ -204,6 +225,8 @@ export function createDriver(ix: number, iz: number, dir: Dir, rand: () => numbe
     honk: 0,
     urgent: false,
     overtaking: 0,
+    turnCommitted: false,
+    lineBeat: 0,
   };
 }
 
@@ -241,7 +264,21 @@ export function driveAi(
   const toLine = light && light !== 'green' ? Math.hypot(target.x - car.x, target.z - car.z) - STOP_SHORT - Math.max(1.7, (car.body ?? CAR_BODY).reach) : 0;
   // Held at a red short of the line: never on into the junction, however close the waypoint.
   const heldAtRed = light === 'red' && toLine > -0.5;
-  if (Math.hypot(target.x - car.x, target.z - car.z) < WAYPOINT_RADIUS && !heldAtRed) {
+  // Turning left across oncoming traffic: wait at the entry for a gap (calm drivers only).
+  const toEntry = Math.hypot(target.x - car.x, target.z - car.z);
+  const leftTurn = ai.phase === 'approach' && ai.next === turnLeft(ai.dir) && !ai.turnCommitted && !panic && !ai.urgent;
+  // Stopped at the line as the light goes green: the oncoming queue starts at the same
+  // moment and is still standing, so look again after a beat (a stopped car isn't counted).
+  if (leftTurn && !heldAtRed && light !== 'amber' && toEntry < STOP_SHORT + 6 && forwardSpeed(car) < 0.5) ai.lineBeat += dt;
+  else if (!leftTurn || heldAtRed) ai.lineBeat = 0;
+  // Turning right: the opposite left-turner (or cross traffic) already heading into our road goes first.
+  const rightTurn = ai.phase === 'approach' && ai.next === turnRight(ai.dir) && !ai.turnCommitted && !panic && !ai.urgent;
+  const givingWay =
+    (leftTurn && toEntry < GIVE_WAY_LOOK && ((ai.lineBeat > 0 && ai.lineBeat < LINE_BEAT) || oncomingInWay(ai, car, obstacles))) ||
+    (rightTurn && toEntry < GIVE_WAY_LOOK && exitTaken(ai, car, obstacles));
+  // Moving off within a car's length of the line with the way clear: committed to the turn.
+  if ((leftTurn || rightTurn) && !givingWay && (light === null || light === 'green') && toEntry < STOP_SHORT + 6 && forwardSpeed(car) > 0.3) ai.turnCommitted = true;
+  if (Math.hypot(target.x - car.x, target.z - car.z) < WAYPOINT_RADIUS && !heldAtRed && !givingWay) {
     ai.progress = ai.bestProgress = Infinity;
     ai.stuck = ai.stalled = ai.attempts = 0;
     if (ai.phase === 'approach') {
@@ -254,6 +291,8 @@ export function driveAi(
       ai.iz += v.z;
       ai.next = chooseTurn(ai.ix, ai.iz, ai.dir, rand);
       ai.phase = 'approach';
+      ai.turnCommitted = false;
+      ai.lineBeat = 0;
     }
     target = currentWaypoint(ai);
   }
@@ -325,6 +364,13 @@ export function driveAi(
     }
   }
 
+  // Giving way: wait at the stop line, as at a red, so a light changing meanwhile finds us behind it.
+  if (givingWay) {
+    const d = Math.max(0, distToWaypoint - STOP_SHORT - Math.max(1.7, (car.body ?? CAR_BODY).reach));
+    wantSpeed = d < 0.4 ? 0 : Math.min(wantSpeed, Math.sqrt(2 * SIGNAL_EASE * d), d * 1.2);
+    queued = true;
+  }
+
   // Brake for anything in our path (in a hurry: pass it if the other lane is clear).
   const vF = forwardSpeed(car);
   if (ai.overtaking > 0) {
@@ -339,6 +385,8 @@ export function driveAi(
     let gap = clearDistance(car, obstacles, ai.overtaking > 0 ? -OVERTAKE_SHIFT : 0);
     // Read before a second clearDistance() (the passing lane) overwrites it.
     const playerAhead = blockerIsPlayer;
+    // Behind a car facing our way (a queue, perhaps for a left-turner giving way): not a jam.
+    const inQueue = blockerOwner !== null && Math.cos(blockerOwner.heading - car.heading) > 0.9;
     if (ai.urgent && ai.overtaking <= 0 && ai.phase === 'approach' && gap < safe * 1.8 && !playerAhead) {
       const passing = clearDistance(car, obstacles, -OVERTAKE_SHIFT);
       if (passing > safe * 1.8) {
@@ -348,8 +396,8 @@ export function driveAi(
     }
     if (gap < safe) {
       wantSpeed = 0;
-      // Waiting behind cars at a red light isn't a jam.
-      if (!queued) ai.waited += dt;
+      // Waiting behind cars at a red light, or in a queue, isn't a jam.
+      if (!queued && !inQueue) ai.waited += dt;
       ai.blockedByPlayer = playerAhead ? ai.blockedByPlayer + dt : 0;
       if (ai.blockedByPlayer > HONK_AFTER && ai.hornCooldown <= 0) honk(ai, 0.5 + rand() * 0.5, 2 + rand());
       if (ai.waited > 4) {
@@ -360,7 +408,8 @@ export function driveAi(
     } else {
       ai.waited = 0;
       ai.blockedByPlayer = 0;
-      wantSpeed = Math.min(wantSpeed, Math.max(0, (gap - safe) * 0.8 + 2));
+      // Never faster than we could stop from short of it (gap ~2.3 is touching, for two cars).
+      wantSpeed = Math.min(wantSpeed, Math.max(0, (gap - safe) * 0.8 + 2), Math.sqrt(2 * FOLLOW_DECEL * Math.max(0, gap - FOLLOW_STOP)));
     }
   }
 
@@ -470,8 +519,74 @@ export function rerouteAi(ai: AiDriver, car: VehicleState, rand: () => number): 
   }
 }
 
-/** Whether the nearest obstacle the last clearDistance() found was the player. */
+/**
+ * Would turning left at (ai.ix, ai.iz) now cut across a vehicle coming the
+ * other way? Anything on the oncoming approach or in the junction moving
+ * toward or through it that arrives before we could clear the crossing
+ * (longer for a long vehicle). Stopped ones don't count: a queue at a red,
+ * or the opposite left-turner waiting too (so the two never wait on each
+ * other).
+ */
+function oncomingInWay(ai: AiDriver, car: VehicleState, obstacles: Obstacle[]): boolean {
+  const v = DIR_VEC[ai.dir];
+  const cx = ai.ix * BLOCK_SIZE;
+  const cz = ai.iz * BLOCK_SIZE;
+  const half = ROAD_WIDTH / 2;
+  const clearTime = (2 * (car.body ?? CAR_BODY).reach + ROAD_WIDTH) / ai.turnSpeed + GIVE_WAY_MARGIN;
+  for (const o of obstacles) {
+    const other = o.owner;
+    if (!other || other === car) continue;
+    const rx = o.x - cx;
+    const rz = o.z - cz;
+    // Up the road ahead of us (the oncoming side), or in the junction.
+    const along = rx * v.x + rz * v.z;
+    if (along < -half || along > GIVE_WAY_RANGE) continue;
+    const lateral = rx * v.z - rz * v.x; // + to our left
+    if (along > half && (lateral < -1 || lateral > half + 1)) continue; // a road beyond, or the far pavement
+    // The start of the road we're turning into (its lane on the near side): the opposite
+    // right-turner pulls into the same lane, just ahead of us.
+    const exitArm = along >= 0 && lateral > half + 1 && lateral < half + EXIT_ARM;
+    if (along <= half && Math.abs(lateral) > half + 1 && !exitArm) continue; // off the junction box
+    const closing = -(other.vx * v.x + other.vz * v.z);
+    const moving = Math.hypot(other.vx, other.vz) > GIVE_WAY_MOVING;
+    if (!moving) continue;
+    if (along <= half) return true; // already in the junction, going through
+    if (closing > 0 && (along - half) / closing < clearTime) return true;
+  }
+  return false;
+}
+
+/**
+ * Is somebody already moving into the road we're about to turn right into:
+ * in the junction or the first metres of that road, going its way? (The
+ * opposite left-turner who went first, or cross traffic finishing.)
+ */
+function exitTaken(ai: AiDriver, car: VehicleState, obstacles: Obstacle[]): boolean {
+  const e = DIR_VEC[ai.next];
+  const exitHeading = dirHeading(ai.next);
+  const cx = ai.ix * BLOCK_SIZE;
+  const cz = ai.iz * BLOCK_SIZE;
+  const half = ROAD_WIDTH / 2;
+  for (const o of obstacles) {
+    const other = o.owner;
+    if (!other || other === car) continue;
+    const rx = o.x - cx;
+    const rz = o.z - cz;
+    const along = rx * e.x + rz * e.z;
+    const across = rx * e.z - rz * e.x;
+    // (A car's middle can be a couple of metres outside the box with its nose in it.)
+    if (along < -half - 2 || along > half + EXIT_ARM || Math.abs(across) > half + 3) continue;
+    if (other.vx * e.x + other.vz * e.z > GIVE_WAY_MOVING) return true;
+    // Still swinging round toward our road (a left-turner early in its turn).
+    const toward = wrapAngle(exitHeading - other.heading);
+    if (along <= half && Math.hypot(other.vx, other.vz) > GIVE_WAY_MOVING && Math.abs(toward) < 1.8 && other.yawRate * toward > 0.15) return true;
+  }
+  return false;
+}
+
+/** Whether the nearest obstacle the last clearDistance() found was the player, and whose it was. */
 let blockerIsPlayer = false;
+let blockerOwner: VehicleState | null = null;
 
 /**
  * Distance to the nearest obstacle ahead within our lane width, or Infinity.
@@ -485,6 +600,7 @@ export function clearDistance(car: VehicleState, obstacles: Obstacle[], shift = 
   const longer = Math.max(0, (car.body ?? CAR_BODY).reach - CAR_BODY.reach);
   let best = Infinity;
   blockerIsPlayer = false;
+  blockerOwner = null;
   for (const o of obstacles) {
     if (o.owner === car) continue;
     const rx = o.x - car.x;
@@ -497,6 +613,7 @@ export function clearDistance(car: VehicleState, obstacles: Obstacle[], shift = 
     if (lateral < 1.1 + o.halfWidth && gap < best) {
       best = gap;
       blockerIsPlayer = o.player === true;
+      blockerOwner = o.owner ?? null;
     }
   }
   return best;
