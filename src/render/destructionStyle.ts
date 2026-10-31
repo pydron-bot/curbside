@@ -4,18 +4,24 @@
  * breaches.ts) and the same on every device; this decides only how it is
  * shown: 'desktop' throws tens of small Rapier chunks that linger, 'phone' a
  * few big ones that sink away after a few seconds, 'low' no bodies at all
- * (the scar and the existing debris chips).
+ * (the scar and the existing debris chips). 'auto' shows desktop on every
+ * tier but 'low'; 'phone' stays as a forced style to compare against.
  */
 import { DESTRUCTION_MODES, type DestructionMode } from '../core/settings';
 import type { QualityTierName } from './quality';
 
 export type DestructionStyle = 'off' | 'low' | 'phone' | 'desktop';
 
-/** Mode × tier → style. 'auto' follows the tier; 'phone' / 'desktop' are forced on any tier. */
+/**
+ * Mode × tier → style. 'auto' is desktop on 'high' and 'medium' (an iPhone
+ * 15 Pro on 'medium' held 60 fps with it) and scar-only on 'low', the tier
+ * DynamicResolution drops a struggling device to. 'phone' / 'desktop' are
+ * forced on any tier.
+ */
 export function resolveStyle(mode: DestructionMode, tier: QualityTierName): DestructionStyle {
   if (mode === 'off') return 'off';
   if (mode === 'phone' || mode === 'desktop') return mode;
-  return tier === 'high' ? 'desktop' : tier === 'medium' ? 'phone' : 'low';
+  return tier === 'low' ? 'low' : 'desktop';
 }
 
 /** Styles that throw Rapier bodies (and so need Rapier loaded). */

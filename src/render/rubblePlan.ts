@@ -233,10 +233,10 @@ export class RubbleSlots {
    * Claims up to `k` slots for a new breach's chunks (written to `out`; the
    * count is returned), first evicting LIVE chunks (the oldest off-screen,
    * then the oldest) so live + k stays within `b.maxLive`. Already over it
-   * (the style dropped: a desktop pile meets a phone breach), at most `k`
-   * go, so the old pile thins out breach by breach rather than crumbling
-   * all at once. With no FREE slot left, the most-sunk SINKING slot is
-   * reclaimed.
+   * (switched from DESKTOP to PHONE: a desktop pile meets a phone breach),
+   * at most `k` go, so the old pile thins out breach by breach rather than
+   * crumbling all at once. With no FREE slot left, the most-sunk SINKING
+   * slot is reclaimed.
    */
   claim(k: number, b: SlotBudget, now: number, out: Int32Array): number {
     k = Math.min(k, b.maxLive, out.length);

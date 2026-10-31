@@ -5,7 +5,7 @@
 export type QualityPreset = 'auto' | 'high' | 'medium' | 'low';
 export type SteeringMode = 'directional' | 'classic';
 export type PerfOverlay = 'off' | 'fps' | 'full';
-/** The destruction test: off, style from the quality tier, or a forced phone / desktop style. */
+/** The destruction test: off, auto (desktop style, scar-only on the 'low' tier), or a forced phone / desktop style. */
 export type DestructionMode = 'off' | 'auto' | 'phone' | 'desktop';
 
 export const QUALITY_PRESETS: readonly QualityPreset[] = ['auto', 'high', 'medium', 'low'];

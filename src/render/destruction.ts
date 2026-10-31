@@ -1,9 +1,10 @@
 /**
  * The destruction test, presentation side: listens for `breach` events (the
  * simulation decides where and how big, systems/breaches.ts) and shows them
- * in the style of the device or the forced mode: dust, Rapier rubble chunks
- * (one instanced batch), or debris chips where there is no physics. Rubble
- * is presentation only: cars push it (kinematic proxies), it never pushes
+ * in the style 'auto' picks for the live tier (desktop, or scar-only on
+ * 'low') or the forced mode's: dust, Rapier rubble chunks (one instanced
+ * batch), or debris chips where there is no physics. Rubble is
+ * presentation only: cars push it (kinematic proxies), it never pushes
  * anything back, and nothing here writes to the simulation.
  *
  * The crater itself is drawn by the building shader (breachScars.ts): written
@@ -247,7 +248,8 @@ export class Destruction {
       this.preload();
     });
     this.autoStyle = resolveStyle('auto', getQuality().name);
-    // 'auto' follows the live tier: DynamicResolution stepping it restyles the scars already on the walls.
+    // 'auto' follows the live tier: DynamicResolution stepping down to 'low' (or back up) restyles the
+    // scars already on the walls; 'medium' ↔ 'high' is desktop either way and changes nothing.
     onQualityChange((tier) => {
       const style = resolveStyle('auto', tier.name);
       if (style === this.autoStyle) return;
@@ -603,7 +605,7 @@ export class Destruction {
     this.scars.setCap(b.scarCap);
   }
 
-  /** Sun shadows while any desktop chunk is alive (a phone breach after a tier drop doesn't flip the pile's). */
+  /** Sun shadows while any desktop chunk is alive (a phone breach after switching from DESKTOP doesn't flip the pile's). */
   private updateShadows(): void {
     let desk = false;
     const st = this.slots.state;
@@ -647,8 +649,8 @@ export class Destruction {
 
   /**
    * Dust out of the crater, tinted by the wall (brick dust is red): a cloud,
-   * a ring at the foot and a haze that hangs over the rubble on desktop; a
-   * short puff on phones.
+   * a ring at the foot and a haze that hangs over the rubble in the desktop
+   * style; a short puff in the phone style.
    */
   private dust(e: EventOf<'breach'>, b: StyleBudget, wall: Color): void {
     const fx = this.d.effects;

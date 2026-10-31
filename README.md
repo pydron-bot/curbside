@@ -792,8 +792,9 @@ the first time it comes into view.
   About 160–250k triangles on the phone (most at night), ~245k on desktop,
   most of it the instanced city in both passes. The destruction test (off
   by default, *Destruction test* below) adds one rubble batch, +1 call
-  (+1 in the shadow pass on desktop) while chunks are on screen; its
-  craters are drawn by the building shader, at no call.
+  (+1 in the shadow pass with the desktop style, which `auto` uses on
+  phones too) while chunks are on screen; its craters are drawn by the
+  building shader, at no call.
 - **Light.** `timeOfDay.ts` (pure, tested) keyframes sun/moon direction,
   colour and strength, sky and ground fill, fog, exposure, reflection
   strength and a shared `uNight` (night keeps a strong blue moon and sky
@@ -1119,8 +1120,9 @@ fx.overlay.edgeFlash(cssColour, strength)
 A prototype, **off by default**: a combat blast near a building blows a
 crater out of its facade and throws rubble onto the pavement, with real
 rigid-body physics (Rapier 3D, `@dimforge/rapier3d` 0.20, loaded only when
-the test is on). It is there to be measured on the iPhone and a desktop
-before anything like it ships.
+the test is on). It stays a test until a 15+ minute soak on the iPhone
+shows no throttling and the rubble reads as broken masonry rather than
+clean boxes (`docs/HANDOFF.md`).
 
 - **Same rules everywhere** (`systems/breaches.ts`, pure, tested):
   `BreachSystem` listens for `explosion` (cars, grenades, rockets; molotovs
@@ -1166,14 +1168,14 @@ before anything like it ships.
   on the city's prop material (no new program): blocks, plates and shards
   in the breached wall's colour, some concrete or brick core, scorched
   near the centre and a share more at random, shaded 0.35–0.85; +1 draw
-  call (+1 in the shadow pass on desktop) while any is on screen, and
-  its buffers go up only on frames where something drawn changed (a
-  settled pile uploads nothing). About
+  call (+1 in the shadow pass in the desktop style) while any is on
+  screen, and its buffers go up only on frames where something drawn
+  changed (a settled pile uploads nothing). About
   60% slump: they start in the crater's lower half and barely leave the
   wall, so the pile lies at its foot; the rest fly, most not far (the
-  phone's heavy chunks hop at most 2 m/s). Under a raised crater they
-  start past the awning. Its own fixed 1/60 clock fed with sim-scaled time
-  (pause, cards and hit-stop freeze it), at most two steps a frame, none
+  phone style's heavy chunks hop at most 2 m/s). Under a raised crater
+  they start past the awning. Its own fixed 1/60 clock fed with
+  sim-scaled time (pause, cards and hit-stop freeze it), at most two steps a frame, none
   while nothing is awake and no car near it moves. Nearby buildings become
   static boxes. One breach spawns per frame (a chain queues, 8 at most).
   Awake bodies come from Rapier's active islands, their poses through its
@@ -1182,7 +1184,7 @@ before anything like it ships.
   and float arguments in V8 (pose reads ~112 B per awake body per step,
   moving car proxies), bounded and gone once the pile sleeps.
 
-| Per style | Desktop (`high`) | Phone (`medium`) | Low (scar + particles) |
+| Per style | Desktop (`auto` on `high` and `medium`) | Phone (forced only) | Low (`auto` on `low`: scar + particles) |
 |---|---|---|---|
 | Chunks per breach | 12–36, 0.14–0.4 m (30% plates, 20% shards to 0.5 m), 30% core, 6% scorched | 3–7, 0.4–0.84 m (25% plates, 25% shards to 1.1 m), half core, 15% scorched, plus 4 chips | none: 4–10 debris chips |
 | Live bodies at most | 200 (the oldest crumble away) | 36 | 0 |
@@ -1195,13 +1197,17 @@ before anything like it ships.
 | Scars drawn at once | 32 | 16 | 16 |
 
 A breach beyond the last view + 20 m gets its scar but no rubble or dust.
-`auto` follows the **live** tier per breach (DynamicResolution stepping a
-phone down to `low` makes later breaches scar-only), and a tier change
-restyles and re-caps the scars already on the walls. Rubble from before a
-drop lives out its life: a smaller style's breach evicts at most its own
-chunk count, so the old pile thins out breach by breach, and the batch
-keeps sun shadows while any desktop chunk is alive. PHONE and DESKTOP
-force a style on any device.
+`auto` is the desktop style on `high` and `medium`, so phones get it too
+(an iPhone 15 Pro held 60 fps with it: *Measured on the device* below),
+and scar-only on `low`. It follows the **live** tier per breach:
+DynamicResolution stepping a struggling device down to `low` makes later
+breaches scar-only (the safety valve) and restyles and re-caps the scars
+already on the walls, climbing back undoes that, and `medium` ↔ `high`
+changes nothing. Rubble from before a drop to `low` lives out its life.
+PHONE and DESKTOP force a style on any device; PHONE stays for
+comparison. Switched from DESKTOP to PHONE, a phone breach evicts at most
+its own chunk count, so the old pile thins out breach by breach, and the
+batch keeps sun shadows while any desktop chunk is alive.
 
 - **Switch.** `settings.destruction`: `off` / `auto` / `phone` /
   `desktop`, sanitised at boot. There is no Settings row: pause →
@@ -1249,10 +1255,12 @@ force a style on any device.
   `physP95` while the test is on.
 - **Budget** (headless Chromium + SwiftShader on 4 shared CPUs, BLOW A
   WALL at building 772's south face, by day): rubble adds +1 draw call
-  while any is on screen (+1 more in the shadow pass on desktop), and the
-  blast's own particles 2–4 for a few seconds. Desktop 61 before, 64 at
-  the blast, 60–64 over the next 5 s; iPhone profile 45 → 46, then
-  38–46; `low` 28 → 35 (chips and particles). People and traffic moving in
+  while any is on screen (+1 more in the shadow pass in the desktop
+  style), and the blast's own particles 2–4 for a few seconds. Desktop 61
+  before, 64 at the blast, 60–64 over the next 5 s; iPhone profile with
+  the phone style 45 → 46, then 38–46 (`auto` there is now the desktop
+  style: 31 bodies, 44–53 calls, no new program); `low` 28 → 35 (chips
+  and particles). People and traffic moving in
   and out of view swing these by ±5 between frames, so compare at the
   same moment (round 1's review measured 62 → 68 and 48 → 53, with car
   panels flying). Programs: with the test on at boot as many as off (34
@@ -1267,7 +1275,20 @@ force a style on any device.
   0.10 / p95 0.3 ms; a desktop breach spawns in 1–6 ms, a phone one in
   0.7 ms (BLOW A WALL, from 1.4 m, now throws 31 and 6). A settled pile
   costs no steps and no uploads, with or without a parked car by it. The
-  device run (`docs/HANDOFF.md`) is what counts.
+  device is what counts:
+- **Measured on the device** (one 2.5-minute session, build `0e8bf2c`:
+  iPhone 15 Pro, home-screen app, iOS 18.7, tier `medium` at 1.50x,
+  DESKTOP forced): 59.9 fps, frame p50 17 / p95 17 / p99 18 ms, JS p95
+  4 ms, no hitches overall; 145 rubble bodies alive, none awake once
+  settled; physics avg 0.28 ms, worst one-second average 0.58 ms (p95
+  reads 1.00 ms only because iOS timers have 1 ms resolution, the `(q)`
+  flag); 46–59 draw calls with rubble (budget 150). Rapier load 880 +
+  import 33 + warm 34 ms; Pages serves the wasm compressed (770 KB
+  transferred for 2.02 MB decoded, ~222 ms), and the second load came from
+  the runtime cache; switching modes warmed in 3 ms (no shader compile).
+  One 10 s window after the second DESKTOP blast dipped to 57 fps, p99
+  26 ms (one hitch), then recovered. Not measured yet: thermal throttling
+  over 10+ minutes.
 
 Test hooks on `window.__ub`:
 

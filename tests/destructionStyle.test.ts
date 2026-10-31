@@ -11,17 +11,23 @@ import {
 } from '../src/render/destructionStyle';
 
 describe('destruction styles', () => {
-  it('auto follows the tier; phone and desktop are forced on any tier; off is off', () => {
+  it('auto is desktop on high and medium, scar-only on low; phone and desktop are forced on any tier; off is off', () => {
     const tiers = ['high', 'medium', 'low'] as const;
     const expected = {
       off: ['off', 'off', 'off'],
-      auto: ['desktop', 'phone', 'low'],
+      // Phones start on 'medium' and get the desktop style (an iPhone 15 Pro held 60 fps with it).
+      auto: ['desktop', 'desktop', 'low'],
       phone: ['phone', 'phone', 'phone'],
       desktop: ['desktop', 'desktop', 'desktop'],
     } as const;
     for (const mode of DESTRUCTION_MODES) {
       tiers.forEach((tier, i) => expect(resolveStyle(mode, tier), `${mode} on ${tier}`).toBe(expected[mode][i]));
     }
+    // Under auto only a step to or from 'low' changes the style (and restyles the scars); medium ↔ high doesn't.
+    expect(resolveStyle('auto', 'medium')).toBe(resolveStyle('auto', 'high'));
+    expect(resolveStyle('auto', 'low')).not.toBe(resolveStyle('auto', 'medium'));
+    expect(needsPhysics(resolveStyle('auto', 'medium'))).toBe(true);
+    expect(needsPhysics(resolveStyle('auto', 'low'))).toBe(false);
   });
 
   it('only phone and desktop styles need Rapier', () => {
