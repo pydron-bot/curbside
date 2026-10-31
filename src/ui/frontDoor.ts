@@ -9,6 +9,7 @@ import type { GameAudio } from '../audio/gameAudio';
 import type { Input, NavCommand } from '../core/input';
 import { Countdown } from './countdown';
 import { HowToPlay } from './howToPlay';
+import { CharacterPicker } from './characterPicker';
 import type { Panel } from './menu';
 import { PauseOverlay, type PauseReason } from './pauseOverlay';
 import { RotateOverlay } from './rotateOverlay';
@@ -35,6 +36,7 @@ export class FrontDoor {
   readonly pause: PauseOverlay;
   readonly settings: SettingsPanel;
   readonly howTo: HowToPlay;
+  readonly character: CharacterPicker;
   readonly rotate: RotateOverlay;
   readonly countdown: Countdown;
   /** Screens receiving navigation, bottom to top. */
@@ -53,6 +55,7 @@ export class FrontDoor {
       onMode: (mode) => this.play(mode),
       onSettings: () => this.openSettings(),
       onHowTo: () => this.openHowTo(),
+      onCharacter: () => this.openCharacter(),
     });
     this.pause = new PauseOverlay(pauseEl, {
       resume: () => this.resume(),
@@ -72,6 +75,7 @@ export class FrontDoor {
     });
     this.settings = new SettingsPanel(parent, audio);
     this.howTo = new HowToPlay(parent, audio);
+    this.character = new CharacterPicker(parent, audio);
     this.countdown = new Countdown(parent, audio);
     this.rotate = new RotateOverlay(
       parent,
@@ -204,6 +208,11 @@ export class FrontDoor {
   private openSettings(): void {
     this.settings.open(() => this.pop(this.settings), this.input.lastDevice !== 'touch');
     this.stack.push(this.settings);
+  }
+
+  private openCharacter(): void {
+    this.character.open(() => this.pop(this.character), this.input.lastDevice !== 'touch');
+    this.stack.push(this.character);
   }
 
   private openHowTo(): void {

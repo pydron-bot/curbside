@@ -24,6 +24,7 @@ export interface TitleOptions {
   onMode(mode: TitleMode): void;
   onSettings(): void;
   onHowTo(): void;
+  onCharacter(): void;
 }
 
 const TIP_KEY = 'curbside.a2hsTip';
@@ -90,9 +91,17 @@ export class TitleScreen implements Panel {
     this.modes.append(this.playBtn);
     this.nav.add({ el: this.playBtn, activate: () => this.select(opts.onPlay) });
     const row = root.querySelector('.title-row')!;
+    const character = menuButton('CHARACTER', { icon: 'person', className: 'small' });
     const settings = menuButton('SETTINGS', { icon: 'gear', className: 'small' });
     const howTo = menuButton('HOW TO PLAY', { icon: 'help', className: 'small' });
-    row.append(settings, howTo);
+    row.append(character, settings, howTo);
+    this.nav.add({
+      el: character,
+      activate: () => {
+        audio.ui('click');
+        opts.onCharacter();
+      },
+    });
     this.nav.add({
       el: settings,
       activate: () => {

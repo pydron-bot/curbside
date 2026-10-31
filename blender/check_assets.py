@@ -24,7 +24,7 @@ CHAR_CLIPS = {
     "Uppercut": (0.4, 0.05), "Stagger": (0.3, 0.05), "Hail": (1.0, 0.05), "Cower": (1.0, 0.05), "Cheer": (1.0, 0.05),
     "Ride": (1.0, 0.05),
 }
-CHARACTER_FILES = re.compile(r"^(player|ped_\w+|cop|vex|tuna|pike)\.glb$")
+CHARACTER_FILES = re.compile(r"^(player(_f)?|ped_\w+|cop|vex|tuna|pike)\.glb$")
 TWO_WHEELERS = {"scooter": 600, "cop_bike": 600}
 BUDGET = {"pigeon": 40, "character": 600, "vehicle": 1500, "vehicle_heli": 1500, "prop": 300, "debris": 80}
 # Large props that are allowed more than the small-prop budget.

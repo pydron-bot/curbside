@@ -6,20 +6,21 @@
  */
 import { publicUrl } from '../core/paths';
 
-export type BodyKind = 'player' | 'ped_slim' | 'ped_stocky' | 'ped_coat' | 'cop' | 'vex' | 'tuna' | 'pike';
+export type BodyKind = 'player' | 'player_f' | 'ped_slim' | 'ped_stocky' | 'ped_coat' | 'cop' | 'vex' | 'tuna' | 'pike';
 
 /** Every body, in the order their batches are drawn. */
-export const BODY_KINDS: readonly BodyKind[] = ['player', 'ped_slim', 'ped_stocky', 'ped_coat', 'cop', 'vex', 'tuna', 'pike'];
+export const BODY_KINDS: readonly BodyKind[] = ['player', 'player_f', 'ped_slim', 'ped_stocky', 'ped_coat', 'cop', 'vex', 'tuna', 'pike'];
 
 /** Story characters: they keep the colours they were built with (no random outfit). */
 export const STORY_BODIES: readonly BodyKind[] = ['vex', 'tuna', 'pike'];
 
 /**
- * The street crowd's mix. The player's own body is in it too (in other
+ * The street crowd's mix. The player's two bodies are in it too (in other
  * clothes): the yellow jacket stays the player's alone.
  */
 export const CROWD_BODIES: ReadonlyArray<readonly [BodyKind, number]> = [
-  ['player', 0.28],
+  ['player', 0.14],
+  ['player_f', 0.14],
   ['ped_slim', 0.26],
   ['ped_stocky', 0.24],
   ['ped_coat', 0.22],
@@ -30,6 +31,11 @@ export function pickCrowdBody(rand: () => number): BodyKind {
   let r = rand();
   for (const [kind, w] of CROWD_BODIES) if ((r -= w) <= 0) return kind;
   return CROWD_BODIES[CROWD_BODIES.length - 1][0];
+}
+
+/** The player's body for a CHARACTER choice (title screen, settings.character). */
+export function playerBody(character: 'male' | 'female'): BodyKind {
+  return character === 'female' ? 'player_f' : 'player';
 }
 
 /** Where a body's GLB is served from. */

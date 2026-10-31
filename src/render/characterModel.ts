@@ -157,6 +157,12 @@ export class CharacterBatch {
     return model;
   }
 
+  /** @internal A person moving over from another body (CharacterModel.moveTo). */
+  adopt(model: CharacterModel): void {
+    this.models.push(model);
+    if (this.template) model.attach(this.template);
+  }
+
   /** @internal */
   forget(model: CharacterModel): void {
     const i = this.models.indexOf(model);
@@ -528,7 +534,7 @@ export class CharacterModel {
   private readonly placeholder = new Matrix4().makeTranslation(0, 0.85, 0);
 
   constructor(
-    private readonly batch: CharacterBatch,
+    private batch: CharacterBatch,
     outfit: Outfit,
   ) {
     this.root.add(this.body);
@@ -860,6 +866,18 @@ export class CharacterModel {
   dispose(): void {
     this.root.removeFromParent();
     this.batch.forget(this);
+  }
+
+  /**
+   * @internal Be drawn by another body's batch (CharacterBodies.setBody).
+   * Every body has the same bones, so until its GLB is in the old rig is
+   * drawn by the new batch; then it attaches like anyone new.
+   */
+  moveTo(batch: CharacterBatch): void {
+    if (batch === this.batch) return;
+    this.batch.forget(this);
+    this.batch = batch;
+    batch.adopt(this);
   }
 
   /** @internal Pack bone matrices, palette and flash into the batch's texture row at `at`. */

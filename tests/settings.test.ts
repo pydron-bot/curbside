@@ -26,6 +26,7 @@ describe('settings: sanitising what was stored', () => {
       haptics: false,
       perfOverlay: 'full',
       destruction: 'desktop',
+      character: 'female',
     };
     expect(sanitizeSettings(stored)).toEqual(stored);
   });

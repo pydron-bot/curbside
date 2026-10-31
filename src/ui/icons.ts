@@ -94,6 +94,10 @@ export const ICONS = {
   help: svg(
     '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M9.4 9.3a2.7 2.7 0 1 1 3.9 2.4c-.8.4-1.3 1-1.3 1.9v.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><circle cx="12" cy="17.2" r="1.2" fill="currentColor"/>',
   ),
+  /** A person (title → CHARACTER). */
+  person: svg(
+    '<circle cx="12" cy="7.5" r="3.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M5 20.5c.6-4.2 3.3-6.8 7-6.8s6.4 2.6 7 6.8" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',
+  ),
   restart: svg(
     '<path d="M5 12a7 7 0 1 0 2.1-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M6.2 3.2l.9 3.8 3.8-.9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   ),
