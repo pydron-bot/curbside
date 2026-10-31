@@ -18,8 +18,9 @@ SHOULDER_Z = 0.17
 
 def build(out_dir: Path, thumbs: bool = False):
     reset_scene()
-    grey = material("pigeon", (140, 146, 160), 0.8)
-    dark = material("pigeon_dark", (84, 88, 100), 0.8)
+    # Pale back and wings so flocks still read on dark asphalt at night.
+    grey = material("pigeon", (150, 156, 170), 0.8)
+    pale = material("pigeon_wing", (212, 216, 224), 0.8)
     beak = material("beak", (60, 50, 44), 0.7)
 
     arm = bpy.data.armatures.new("pigeon_rig")
@@ -48,7 +49,7 @@ def build(out_dir: Path, thumbs: bool = False):
     for side, x in (("L", 1), ("R", -1)):
         wing = hull(f"pigeon_wing.{side}", [(x * 0.05, -0.04, SHOULDER_Z), (x * 0.07, -0.02, SHOULDER_Z - 0.01),
                                             (x * 0.06, 0.2, SHOULDER_Z - 0.03), (x * 0.05, 0.08, SHOULDER_Z + 0.015)],
-                    dark)
+                    pale)
         parent_to_bone(wing, rig, f"wing.{side}")
         parts.append(wing)
 

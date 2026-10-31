@@ -539,9 +539,8 @@ on the iPhone profile and 27 m on desktop, by day and at night):
    grenade leaves at once), so the clip starts 0.1 s in at 1.6× (release
    ~0.08 s after the press). A clip with its release at ~25% would line up
    without speeding it up.
-7. **Pigeons are hard to see at night** (dark grey on dark asphalt, 34
-   tris, drawn 1.3× by the game and lit by street lamps). A paler back or
-   white wing bars would keep flocks readable after dark.
+7. ~~**Pigeons are hard to see at night.**~~ Done: a paler body and
+   near-white `pigeon_wing` wings (still 34 tris, same rig and `Flap`).
 8. **Pike at night:** the black coat on dark asphalt nearly disappears; a
    lighter collar or lapels (`badge` or `hair` slot) would help. Vex's
    orange hair and Tuna's teal headphones read well from above.
