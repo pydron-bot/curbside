@@ -1,4 +1,6 @@
 import { Scene, type ColorRepresentation } from 'three';
+import { onSettingsChange, settings } from './core/settings';
+import { playerBody } from './game/bodies';
 import { registerSW } from 'virtual:pwa-register';
 import { events } from './core/events';
 import { BUILD_ID } from './core/build';
@@ -256,8 +258,10 @@ VehicleModels.load(publicUrl('assets/vehicles.glb')).then(
 
 // --- Player ---
 const player = new Player(events, SPAWN_POINT.x, SPAWN_POINT.z);
-const playerModel = look.characters.create();
+// The body picked on the title screen (CHARACTER), and a new pick at once.
+const playerModel = look.characters.create({}, playerBody(settings.character));
 scene.add(playerModel.root);
+onSettingsChange((s) => look.characters.setBody(playerModel, playerBody(s.character)));
 
 let viewW = 0;
 let viewH = 0;

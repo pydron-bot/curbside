@@ -32,7 +32,7 @@ import {
 } from './mix';
 import { MusicPlayer } from './music/musicPlayer';
 import type { MusicMode } from './music/sequencer';
-import { STATIONS, type Station } from './music/stations';
+import { STATIONS, type Song, type Station } from './music/stations';
 import * as sfx from './sfx';
 import { NoiseBank, Voice, automateDip, makeImpulse, nodeStats } from './synth';
 import { RateGate, VoiceLimiter } from './voices';
@@ -218,6 +218,7 @@ export class GameAudio {
   private readonly gate = new RateGate();
   private readonly chaos = new ChaosMeter();
   private readonly stationListeners: Array<(s: Station) => void> = [];
+  private readonly songListeners: Array<(song: Song, s: Station) => void> = [];
   private readonly cleanups: Array<() => void> = [];
   /** The world muffle as one merged state (a hurt can't cut short a blast's or WASTED's). */
   private readonly muffleDip = new Dip(OPEN);
@@ -432,6 +433,20 @@ export class GameAudio {
     const station = this.music ? this.music.setStation(this.stationIndex) : STATIONS[this.stationIndex];
     for (const fn of this.stationListeners) fn(station);
     return station;
+  }
+
+  /** The song on the radio (null before the music starts). */
+  get song(): Song | null {
+    return this.music?.arranger.song ?? null;
+  }
+
+  /** A new song started on the radio (the first song too). */
+  onSongChange(fn: (song: Song, s: Station) => void): () => void {
+    this.songListeners.push(fn);
+    return () => {
+      const i = this.songListeners.indexOf(fn);
+      if (i >= 0) this.songListeners.splice(i, 1);
+    };
   }
 
   onStationChange(fn: (s: Station) => void): () => void {
@@ -769,6 +784,9 @@ export class GameAudio {
     this.musicBus.connect(this.master);
 
     this.music = new MusicPlayer(ctx, bank, this.musicBus, impulse, STATIONS[this.stationIndex]);
+    this.music.onSong = (song, station) => {
+      for (const fn of this.songListeners) fn(song, station);
+    };
     if (this.musicMode !== 'off' && !this.dead) this.music.setMode(this.musicMode);
     this.ambient = new AmbientBed(ctx, bank, this.worldIn, ctx.currentTime);
     if (this.paused) {

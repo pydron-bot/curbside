@@ -3,12 +3,15 @@
  * calls pump(), which books every 16th due in the next ~0.12 s on the
  * AudioContext clock. Bass and lead are persistent mono synths (no nodes per
  * note, free portamento); drums, pads, keys and arps are short-lived voices
- * that are disconnected once they finish. Works on an OfflineAudioContext too.
+ * that are disconnected once they finish. Drums play from a kit rendered
+ * per station sound (drumKit.ts); the live drum voices below stand in if a
+ * kit can't be made. Works on an OfflineAudioContext too.
  */
 import { Dip } from '../mix';
 import { NoiseBank, Voice, automateDip, perc, sweep } from '../synth';
 import { Arranger, StepClock, swingOffset, type MusicMode, type NoteEvent } from './sequencer';
-import { STATIONS, type Station, type StationSound } from './stations';
+import { kitJobs, type KitPart } from './drumKit';
+import { STATIONS, type Song, type Station, type StationSound } from './stations';
 import { midiToHz } from './theory';
 
 /** How far ahead the scheduler books notes, s. */
@@ -19,6 +22,8 @@ const KEYS_LEVEL = 0.2;
 const ARP_LEVEL = 0.1;
 const BASS_LEVEL = 0.17;
 const LEAD_LEVEL = 0.1;
+/** The rendered kit is denser than the live drums were: this brings it back to the same loudness. */
+const KIT_TRIM = 0.5;
 /** Paused, the music drops back to this fraction of the station's trim. */
 const PAUSE_TRIM = 0.6;
 
@@ -28,6 +33,9 @@ export class MusicPlayer {
   stationIndex = 0;
   /** Steps booked so far (debug: proves the scheduler runs). */
   stepsScheduled = 0;
+  /** A new song is about to start (called as its first bar is booked, ~0.1 s ahead). */
+  onSong: ((song: Song, station: Station) => void) | null = null;
+  private songSeen = 0;
   private readonly events: NoteEvent[] = [];
   private readonly notes: Voice[] = [];
   /** Persistent nodes (channels, mono synths, effects). */
@@ -40,6 +48,12 @@ export class MusicPlayer {
   /** Volume at zero: nothing booked, rig unhooked from the output (see setDormant). */
   private dormant = false;
   private readonly duckDip = new Dip(1);
+  /** The station sound's drum kit (null: the live voices play the drums). */
+  private kit: Record<KitPart, AudioBuffer[]> | null = null;
+  private readonly kits = new Map<string, Record<KitPart, AudioBuffer[]>>();
+  private disposed = false;
+  /** Round robin over each hit's takes. */
+  private take = 0;
 
   private readonly duckGain: GainNode;
   private readonly fadeGain: GainNode;
@@ -175,6 +189,10 @@ export class MusicPlayer {
     while (this.clock.due(now, lookahead) && guard++ < 256) {
       const t = this.clock.nextTime;
       const step = this.arranger.next(this.events);
+      if (this.arranger.songNumber !== this.songSeen) {
+        this.songSeen = this.arranger.songNumber;
+        this.onSong?.(this.arranger.song, this.arranger.station);
+      }
       if (this.arranger.station.sound !== this.sound) this.applySound(this.arranger.station.sound, t);
       if (step === 0) this.onBar(t);
       this.clock.bpm = this.arranger.bpm;
@@ -286,6 +304,7 @@ export class MusicPlayer {
 
   dispose(): void {
     this.running = false;
+    this.disposed = true;
     for (const v of this.notes) v.dispose();
     this.notes.length = 0;
     this.rig.dispose();
@@ -295,6 +314,7 @@ export class MusicPlayer {
 
   private applySound(s: StationSound, t: number): void {
     this.sound = s;
+    this.kit = this.kitFor(s);
     this.trim.gain.setTargetAtTime(s.trim * (this.paused ? PAUSE_TRIM : 1), t, 0.05);
     this.bassA.type = s.bass === 'round' ? 'triangle' : 'sawtooth';
     this.bassB.type = s.bass === 'saw' ? 'square' : s.bass === 'reese' ? 'sawtooth' : 'sine';
@@ -306,6 +326,48 @@ export class MusicPlayer {
     this.verbSend.gain.setValueAtTime(s.reverb, t);
     this.crackleGain.gain.setTargetAtTime(s.crackle ? 0.05 : 0, t, 0.2);
     this.padLp.frequency.setValueAtTime(s.pad === 'dark' ? 900 : s.pad === 'soft' ? 1400 : 2000, t);
+  }
+
+  /**
+   * The kit for a sound. The first time, it's rendered a take at a time
+   * between frames (a few ms each); parts not in yet play on the live voices.
+   */
+  private kitFor(s: StationSound): Record<KitPart, AudioBuffer[]> | null {
+    const key = `${s.kickTune}|${s.kickDecay}|${s.snare}|${s.hat}`;
+    const have = this.kits.get(key);
+    if (have !== undefined) return have;
+    const kit: Record<KitPart, AudioBuffer[]> = { kick: [], snare: [], clap: [], hat: [], openHat: [], perc: [], crash: [] };
+    this.kits.set(key, kit);
+    const rate = this.ctx.sampleRate;
+    const jobs = kitJobs(s, rate);
+    const next = () => {
+      const job = jobs.shift();
+      if (!job || this.disposed) return;
+      try {
+        const data = job.run();
+        const b = this.ctx.createBuffer(1, data.length, rate);
+        b.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
+        kit[job.part].push(b);
+      } catch {
+        return; // no kit for this part: the live voice plays it
+      }
+      setTimeout(next, 0);
+    };
+    setTimeout(next, 0);
+    return kit;
+  }
+
+  /** A kit hit into `dest` (and the room by `verb`); false when there's no kit. */
+  private hit(part: KitPart, t: number, vel: number, dest: AudioNode, verb = 0): boolean {
+    const takes = this.kit?.[part];
+    if (!takes || takes.length === 0) return false;
+    const v = this.voice(t, dest, vel * KIT_TRIM);
+    v.burst(takes[this.take++ % takes.length], t, undefined, 0).connect(v.out);
+    if (verb > 0) {
+      const send = v.gain(verb);
+      v.chain(v.out, send, this.verbSend);
+    }
+    return true;
   }
 
   private onBar(t: number): void {
@@ -354,6 +416,10 @@ export class MusicPlayer {
 
   private kick(t: number, vel: number): void {
     const s = this.sound;
+    if (this.hit('kick', t, vel, this.drums)) {
+      this.sidechain(t);
+      return;
+    }
     const v = this.voice(t, this.drums, 0);
     const o = v.osc('sine', s.kickTune * 3, t, t + s.kickDecay + 0.1);
     sweep(o.frequency, t, s.kickTune * 3.2, s.kickTune, 0.07);
@@ -367,13 +433,18 @@ export class MusicPlayer {
     const cg = v.gain();
     v.chain(click, cg, this.drums);
     perc(cg.gain, t, vel * 0.1, 0.0005, 0.003);
-    // Sidechain pump: pads and bass duck under every kick.
+    this.sidechain(t);
+  }
+
+  /** Sidechain pump: pads and bass duck under every kick. */
+  private sidechain(t: number): void {
     this.side.gain.setValueAtTime(0.35, t);
     this.side.gain.setTargetAtTime(1, t + 0.02, 0.09);
   }
 
   private snare(t: number, vel: number): void {
     const s = this.sound;
+    if (this.hit('snare', t, vel, this.drums, s.snare === 'gated' ? 0.45 : s.snare === 'rim' ? 0.35 : 0.25)) return;
     if (s.snare === 'rim') return this.rim(t, vel * 0.9);
     const gated = s.snare === 'gated';
     const v = this.voice(t, this.drums, 1);
@@ -416,6 +487,7 @@ export class MusicPlayer {
   }
 
   private clap(t: number, vel: number): void {
+    if (this.hit('clap', t, vel, this.drums, 0.4)) return;
     const v = this.voice(t, this.drums, 1);
     const n = v.noise(this.bank.white, t, t + 0.3);
     const bp = v.filter('bandpass', 1150, 1.4);
@@ -428,6 +500,7 @@ export class MusicPlayer {
   }
 
   private hat(t: number, vel: number, open: boolean): void {
+    if (this.hit(open ? 'openHat' : 'hat', t, vel, this.drums)) return;
     const shaker = this.sound.hat === 'shaker';
     const v = this.voice(t, this.hatBus, 0);
     const n = v.noise(this.bank.white, t, t + (open ? 0.5 : 0.12));
@@ -445,6 +518,7 @@ export class MusicPlayer {
   }
 
   private perc(t: number, vel: number): void {
+    if (this.hit('perc', t, vel, this.drums, this.sound.snare === 'rim' ? 0.3 : 0.15)) return;
     if (this.sound.snare === 'rim') return this.rim(t, vel * 0.7);
     // A tuned bongo-ish knock.
     const v = this.voice(t, this.drums, 0);
@@ -455,6 +529,7 @@ export class MusicPlayer {
   }
 
   private crash(t: number): void {
+    if (this.hit('crash', t, 1, this.drums, 0.4)) return;
     const v = this.voice(t, this.drums, 0);
     const n = v.noise(this.bank.white, t, t + 2.4);
     const hp = v.filter('highpass', 4200, 0.5);

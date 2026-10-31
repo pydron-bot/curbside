@@ -7,11 +7,14 @@ export type SteeringMode = 'directional' | 'classic';
 export type PerfOverlay = 'off' | 'fps' | 'full';
 /** The destruction test: off, auto (desktop style, scar-only on the 'low' tier), or a forced phone / desktop style. */
 export type DestructionMode = 'off' | 'auto' | 'phone' | 'desktop';
+/** The player's body (title → CHARACTER). */
+export type PlayerCharacter = 'male' | 'female';
 
 export const QUALITY_PRESETS: readonly QualityPreset[] = ['auto', 'high', 'medium', 'low'];
 export const STEERING_MODES: readonly SteeringMode[] = ['directional', 'classic'];
 export const PERF_OVERLAYS: readonly PerfOverlay[] = ['off', 'fps', 'full'];
 export const DESTRUCTION_MODES: readonly DestructionMode[] = ['off', 'auto', 'phone', 'desktop'];
+export const PLAYER_CHARACTERS: readonly PlayerCharacter[] = ['male', 'female'];
 
 export interface Settings {
   /** 0..1 */
@@ -32,6 +35,8 @@ export interface Settings {
   perfOverlay: PerfOverlay;
   /** Destruction test (Diagnostics sheet only): off, style from the quality tier, or forced phone / desktop style. */
   destruction: DestructionMode;
+  /** The player's body: picked on the title screen (CHARACTER). */
+  character: PlayerCharacter;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -45,6 +50,7 @@ export const DEFAULT_SETTINGS: Settings = {
   haptics: true,
   perfOverlay: 'off',
   destruction: 'off',
+  character: 'male',
 };
 
 const KEY = 'curbside.settings';
@@ -78,6 +84,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   if (PERF_OVERLAYS.includes(raw.perfOverlay as PerfOverlay)) out.perfOverlay = raw.perfOverlay as PerfOverlay;
   else if (raw.showFps === true) out.perfOverlay = 'fps';
   if (DESTRUCTION_MODES.includes(raw.destruction as DestructionMode)) out.destruction = raw.destruction as DestructionMode;
+  if (PLAYER_CHARACTERS.includes(raw.character as PlayerCharacter)) out.character = raw.character as PlayerCharacter;
   return out;
 }
 

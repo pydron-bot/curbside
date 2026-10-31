@@ -217,7 +217,8 @@ describe('population: recycling', () => {
     const { pop, created } = setup(5);
     for (let i = 0; i < 60; i++) pop.maintain(ctx(i % 2 ? 400 : -400, 0, { seed: true }));
     // Each teleport swaps the whole crowd; pooled models make that free.
-    expect(created.models).toBeLessThanOrEqual(CROWD_COUNT * 2 + 4);
+    // (Pools are per body, so each crowd body adds a little slack.)
+    expect(created.models).toBeLessThanOrEqual(CROWD_COUNT * 2 + 4 * CROWD_BODIES.length);
     expect(pop.stats.spareModels).toBeLessThanOrEqual(40);
   });
 });

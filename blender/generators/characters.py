@@ -7,6 +7,7 @@ head + shoulders, with swinging arms and legs showing at the sides.
 One GLB per body (the game's CharacterBatch merges every mesh in a file into
 one person, so each body is one more batch / draw call):
   player.glb    the player (yellow jacket)
+  player_f.glb  the player's other body (title → CHARACTER): narrower shoulders, a waist, a ponytail
   ped_slim.glb  tall and narrow, with a backpack
   ped_stocky.glb broad, with a baseball cap
   ped_coat.glb  long coat / dress silhouette
@@ -63,6 +64,10 @@ PLAYER = {
 # Default colours only: the game recolours every person through a palette.
 BODIES = {
     "player": dict(rig="Player", palette=PLAYER),
+    # Same jacket, rig and clips; a smaller frame tapering to a waist, wider hips and a ponytail
+    # that sticks out behind the head (reads from above).
+    "player_f": dict(rig="player_f", height=0.97, shoulders=0.9, depth=0.92, limbs=0.88, waist=True, hips=1.12,
+                     ponytail=True, palette=PLAYER),
     "ped_slim": dict(
         rig="ped_slim", height=1.06, shoulders=0.88, depth=0.9, limbs=0.85, backpack=True,
         palette={"skin": (190, 140, 105), "hair": (25, 20, 18), "shirt": (70, 130, 170),
@@ -195,12 +200,16 @@ def build_body(rig, spec, name, d):
     torso_h = d.shoulder_z - d.hip_z
     torso_mid = d.hip_z + 0.03 + torso_h / 2
     # Torso: broad shoulders, narrower waist. Blender -Y is the character's front.
-    if spec.get("belly"):
+    if spec.get("waist"):
+        attach(frustum(f"{name}_torso", (0.2 * sw, 0.135 * dp), (0.255 * sw, 0.15 * dp),
+                       d.hip_z + 0.03, d.shoulder_z + 0.03, shirt, sides=8), "chest")
+    elif spec.get("belly"):
         attach(frustum(f"{name}_torso", (0.27 * sw, 0.17 * dp), (0.26 * sw, 0.14 * dp),
                        d.hip_z + 0.03, d.shoulder_z + 0.03, shirt, sides=8, y_off=-0.01), "chest")
     else:
         attach(box(f"{name}_torso", (0.5 * sw, 0.28 * dp, torso_h), (0, 0, torso_mid), shirt, bevel=0.04), "chest")
-    attach(box(f"{name}_pelvis", (0.36 * sw, 0.24 * dp, 0.2), (0, 0, d.hip_z + 0.02), pants, bevel=0.03), "hips")
+    hw = spec.get("hips", 1.0)
+    attach(box(f"{name}_pelvis", (0.36 * sw * hw, 0.24 * dp, 0.2), (0, 0, d.hip_z + 0.02), pants, bevel=0.03), "hips")
     attach(ico(f"{name}_head", 0.13, (0, 0, d.neck_z + 0.13), skin, subdiv=2, scale=(1, 1.05, 1.1)), "head")
     # Nose nub so facing direction reads from above.
     attach(box(f"{name}_nose", (0.04, 0.05, 0.05), (0, -0.135, d.neck_z + 0.12), skin), "head")
@@ -226,6 +235,8 @@ def build_body(rig, spec, name, d):
     else:
         attach(ico(f"{name}_hair", 0.14, (0, 0.025, d.neck_z + 0.18), hair, subdiv=2, scale=(1, 1.05, 0.75)),
                "head")
+    if spec.get("ponytail"):
+        attach(box(f"{name}_ponytail", (0.1, 0.1, 0.26), (0, 0.17, d.neck_z + 0.08), hair, 0.02), "head")
     if spec.get("long_hair"):
         attach(box(f"{name}_hairback", (0.26, 0.1, 0.3), (0, 0.1, d.neck_z + 0.02), hair), "head")
 

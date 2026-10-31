@@ -9,6 +9,7 @@ import { HeldWeapons } from './heldWeapons';
 /** Rows each body's batch starts with (they grow when more are on screen). */
 const START_ROWS: Record<BodyKind, number> = {
   player: 16,
+  player_f: 16,
   ped_slim: 16,
   ped_stocky: 16,
   ped_coat: 16,
@@ -45,6 +46,11 @@ export class CharacterBodies {
   /** A new person wearing `body` (the player's own by default). */
   create(outfit: Outfit = {}, body: BodyKind = 'player'): CharacterModel {
     return this.byKind[body].create(outfit);
+  }
+
+  /** Redraw `model` with another body (the player's CHARACTER choice); outfit and state carry over. */
+  setBody(model: CharacterModel, body: BodyKind): void {
+    model.moveTo(this.byKind[body]);
   }
 
   /** Write everyone on screen (`view`: the ground the camera sees) and what they hold; contact shadows too. */

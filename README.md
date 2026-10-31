@@ -784,12 +784,25 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
 - **Events.** It subscribes to every `GameEvent` on the bus (`src/core/events.ts`);
   nothing in the simulation calls it directly.
 - **Music.** A look-ahead scheduler (25 ms timer, 0.12 s ahead on the audio
-  clock) plays original 8-bar progressions in three styles: NIGHTDRIVE FM
-  (synthwave), BREAKNECK 99.1 (breakbeat), LOW TIDE (lo-fi). Intensity 0–5
-  layers in kick, snare, arps, lead, crashes and risers, opens the filter and
-  lifts the tempo; changes land on bar lines with a fill, tempo glides. It
-  follows chaos (combos, explosions, speed) above a floor set with
-  `setIntensity`. `'menu'` mode is a drumless arrangement for a title screen.
+  clock) plays original songs in three styles: NIGHTDRIVE FM (synthwave),
+  BREAKNECK 99.1 (breakbeat), LOW TIDE (lo-fi), four songs each (made-up
+  titles and artists, `stations.ts` `songs`), each in its own key with its
+  own verse and chorus chords and melody. A song runs through a form (intro
+  4 bars, verse 8, chorus 8, break 4, chorus 8, outro 4; `sequencer.ts`
+  `FORM` / `shapeTier`): while calm the intro and outro are drumless, the
+  melody waits for the chorus and the break drops to chords and arp; from
+  intensity 3 (a chase) every section plays in full. Then the next song;
+  retuning picks up a station with its next song. Intensity 0–5 layers in
+  kick, snare, arps, lead, crashes and risers, opens the filter and lifts
+  the tempo; changes land on bar lines with a fill, tempo glides. It follows
+  chaos (combos, explosions, speed) above a floor set with `setIntensity`.
+  `'menu'` mode is a drumless arrangement for a title screen. Drums play
+  from a kit rendered per station sound (`drumKit.ts`: layered, saturated
+  hits, 808-style metal hats, a four-hand clap, up to three takes each in
+  round robin), rendered a take at a time between frames when a station is
+  first heard; the live drum voices stand in until each part is in. The
+  NOW PLAYING card shows the song and artist (`audio.song`,
+  `audio.onSongChange`) and drops in for each new song while you drive.
 
 | Module | What |
 |---|---|
@@ -888,7 +901,10 @@ Everyone in the city is drawn from the Blender bodies in `public/assets/`
 (rebuild scripts in `blender/`, contracts in `docs/BLENDER_TODO.md`):
 
 - **Bodies, one batch each** (`render/characterBodies.ts`,
-  `characterModel.ts`, `game/bodies.ts`): `player`, the street bodies
+  `characterModel.ts`, `game/bodies.ts`): `player` and `player_f` (the
+  player's two bodies, picked on the title screen with CHARACTER and saved
+  as `settings.character`; `characters.setBody(model, kind)` moves a model
+  between batches at once), the street bodies
   `ped_slim` (backpack), `ped_stocky` (ball cap) and `ped_coat` (long coat or
   dress), `cop`, and the story characters `vex`, `tuna` and `pike`. Each GLB
   is one `CharacterBatch`: one draw call plus its shadow pass, and none at
@@ -898,8 +914,8 @@ Everyone in the city is drawn from the Blender bodies in `public/assets/`
   `skin`, `hair` (the ball cap, the cop's cap crown), `shirt` (coats too),
   `pants` (the backpack, Vex's overalls), `shoes` (the cop's brim, belt and
   holster, Tuna's headphones), and a fixed-colour `badge` for later.
-- **Who wears what.** The crowd is a mix of `player` / `ped_slim` /
-  `ped_stocky` / `ped_coat` (28/26/24/22%) in the street palettes (caps get
+- **Who wears what.** The crowd is a mix of `player` / `player_f` / `ped_slim` /
+  `ped_stocky` / `ped_coat` (14/14/26/24/22%) in the street palettes (caps get
   brighter colours than hair); pooled models only come back as the same
   body, dressed from scratch (nothing of their last outfit carries over;
   when the pool is full the longest-waiting model goes). Officers on foot wear `cop` in police blue with a navy cap (SWAT in

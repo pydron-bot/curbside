@@ -58,6 +58,24 @@ export interface StationSound {
   trim: number;
 }
 
+/**
+ * One song on a station: its own key, progressions and melody, played
+ * through the song form (intro, verse, chorus, break, chorus, outro; see
+ * sequencer.ts), then the next song.
+ */
+export interface Song {
+  title: string;
+  /** Made up, like the stations. */
+  artist: string;
+  /** Semitones from the station's key (within ±5, so voicings and the bass stay in range). */
+  transpose: number;
+  /** Intro, verse, break and outro chords, one per bar (8). */
+  verse: readonly Chord[];
+  /** Chorus chords (8); the verse's when left out. */
+  chorus?: readonly Chord[];
+  leadSeed: number;
+}
+
 export interface Station {
   id: string;
   name: string;
@@ -80,7 +98,23 @@ export interface Station {
   tiers: readonly Tier[];
   menu: Tier;
   sound: StationSound;
+  /** The station's songs, in play order (the first is `progression` / `leadSeed`). */
+  songs: readonly Song[];
 }
+
+/** A chord: root in semitones above the key, quality. */
+const c = (root: number, quality: Chord['quality']): Chord => ({ root, quality });
+
+const NIGHTDRIVE_PROGRESSION: readonly Chord[] = [
+  { root: 0, quality: 'min' },
+  { root: 8, quality: 'maj' },
+  { root: 3, quality: 'maj' },
+  { root: 10, quality: 'maj' },
+  { root: 0, quality: 'min' },
+  { root: 8, quality: 'maj' },
+  { root: 5, quality: 'min' },
+  { root: 7, quality: 'maj' },
+];
 
 const NIGHTDRIVE: Station = {
   id: 'nightdrive',
@@ -92,16 +126,7 @@ const NIGHTDRIVE: Station = {
   leadScale: SCALES.pentatonicMinor,
   leadSeed: 7,
   // Am F C G | Am F Dm E
-  progression: [
-    { root: 0, quality: 'min' },
-    { root: 8, quality: 'maj' },
-    { root: 3, quality: 'maj' },
-    { root: 10, quality: 'maj' },
-    { root: 0, quality: 'min' },
-    { root: 8, quality: 'maj' },
-    { root: 5, quality: 'min' },
-    { root: 7, quality: 'maj' },
-  ],
+  progression: NIGHTDRIVE_PROGRESSION,
   bpm: [90, 116],
   swing: 0,
   tiers: [
@@ -169,7 +194,52 @@ const NIGHTDRIVE: Station = {
     reverb: 0.32,
     trim: 1,
   },
+  songs: [
+    {
+      title: 'Neon Overpass',
+      artist: 'Vela Grey',
+      transpose: 0,
+      verse: NIGHTDRIVE_PROGRESSION,
+      chorus: [c(8, 'maj'), c(10, 'maj'), c(0, 'min'), c(0, 'min'), c(8, 'maj'), c(10, 'maj'), c(7, 'maj'), c(7, 'maj')],
+      leadSeed: 7,
+    },
+    {
+      title: 'Tail Lights in the Rain',
+      artist: 'Midnight Arcade',
+      transpose: 3,
+      verse: [c(0, 'min'), c(10, 'maj'), c(8, 'maj'), c(10, 'maj'), c(0, 'min'), c(10, 'maj'), c(8, 'maj'), c(7, 'maj')],
+      chorus: [c(8, 'maj'), c(10, 'maj'), c(0, 'min'), c(0, 'min'), c(5, 'min'), c(8, 'maj'), c(7, 'maj'), c(7, 'maj')],
+      leadSeed: 21,
+    },
+    {
+      title: 'Chrome Heart',
+      artist: 'Static Coast',
+      transpose: -2,
+      verse: [c(0, 'min'), c(0, 'min'), c(5, 'min'), c(5, 'min'), c(8, 'maj'), c(8, 'maj'), c(7, 'maj'), c(7, 'maj')],
+      chorus: [c(0, 'min'), c(8, 'maj'), c(3, 'maj'), c(10, 'maj'), c(0, 'min'), c(8, 'maj'), c(3, 'maj'), c(10, 'maj')],
+      leadSeed: 44,
+    },
+    {
+      title: 'Last Exit 99',
+      artist: 'Vela Grey',
+      transpose: 5,
+      verse: [c(8, 'maj7'), c(10, 'maj'), c(0, 'min7'), c(0, 'min7'), c(8, 'maj7'), c(10, 'maj'), c(3, 'maj7'), c(7, 'maj')],
+      chorus: [c(0, 'min'), c(10, 'maj'), c(8, 'maj'), c(10, 'maj'), c(0, 'min'), c(10, 'maj'), c(8, 'maj'), c(7, 'dom7')],
+      leadSeed: 63,
+    },
+  ],
 };
+
+const BREAKNECK_PROGRESSION: readonly Chord[] = [
+  { root: 0, quality: 'min7' },
+  { root: 1, quality: 'maj7' },
+  { root: 0, quality: 'min7' },
+  { root: 10, quality: 'maj' },
+  { root: 0, quality: 'min7' },
+  { root: 1, quality: 'maj7' },
+  { root: 8, quality: 'maj7' },
+  { root: 7, quality: 'min7' },
+];
 
 const BREAKNECK: Station = {
   id: 'breakneck',
@@ -181,16 +251,7 @@ const BREAKNECK: Station = {
   leadScale: SCALES.pentatonicMinor,
   leadSeed: 31,
   // Em7 Fmaj7 Em7 D | Em7 Fmaj7 Cmaj7 Bm7
-  progression: [
-    { root: 0, quality: 'min7' },
-    { root: 1, quality: 'maj7' },
-    { root: 0, quality: 'min7' },
-    { root: 10, quality: 'maj' },
-    { root: 0, quality: 'min7' },
-    { root: 1, quality: 'maj7' },
-    { root: 8, quality: 'maj7' },
-    { root: 7, quality: 'min7' },
-  ],
+  progression: BREAKNECK_PROGRESSION,
   bpm: [100, 128],
   swing: 0.06,
   tiers: [
@@ -258,7 +319,52 @@ const BREAKNECK: Station = {
     reverb: 0.26,
     trim: 0.95,
   },
+  songs: [
+    {
+      title: 'Kerb Crawler',
+      artist: 'DJ Hazard Lights',
+      transpose: 0,
+      verse: BREAKNECK_PROGRESSION,
+      chorus: [c(8, 'maj7'), c(10, 'maj'), c(0, 'min7'), c(0, 'min7'), c(8, 'maj7'), c(10, 'maj'), c(7, 'min7'), c(7, 'min7')],
+      leadSeed: 31,
+    },
+    {
+      title: 'Amen to That',
+      artist: 'Rotor & Clutch',
+      transpose: 2,
+      verse: [c(0, 'min7'), c(0, 'min7'), c(1, 'maj7'), c(1, 'maj7'), c(0, 'min7'), c(0, 'min7'), c(10, 'maj'), c(8, 'maj7')],
+      chorus: [c(5, 'min7'), c(5, 'min7'), c(1, 'maj7'), c(1, 'maj7'), c(5, 'min7'), c(3, 'maj'), c(1, 'maj7'), c(10, 'maj')],
+      leadSeed: 52,
+    },
+    {
+      title: 'Red Light Runner',
+      artist: 'Siren Theory',
+      transpose: -3,
+      verse: [c(0, 'min7'), c(3, 'maj'), c(5, 'min7'), c(3, 'maj'), c(0, 'min7'), c(3, 'maj'), c(1, 'maj7'), c(1, 'maj7')],
+      chorus: [c(8, 'maj7'), c(7, 'min7'), c(5, 'min7'), c(3, 'maj'), c(8, 'maj7'), c(7, 'min7'), c(1, 'maj7'), c(1, 'maj7')],
+      leadSeed: 77,
+    },
+    {
+      title: 'Overpass Bass',
+      artist: 'DJ Hazard Lights',
+      transpose: 4,
+      verse: [c(0, 'min9'), c(0, 'min9'), c(10, 'maj'), c(10, 'maj'), c(8, 'maj7'), c(8, 'maj7'), c(1, 'maj7'), c(1, 'maj7')],
+      chorus: [c(0, 'min7'), c(1, 'maj7'), c(0, 'min7'), c(10, 'maj'), c(8, 'maj7'), c(10, 'maj'), c(1, 'maj7'), c(1, 'maj7')],
+      leadSeed: 90,
+    },
+  ],
 };
+
+const LOW_TIDE_PROGRESSION: readonly Chord[] = [
+  { root: 0, quality: 'min9' },
+  { root: 0, quality: 'min9' },
+  { root: 8, quality: 'maj9' },
+  { root: 8, quality: 'maj9' },
+  { root: 5, quality: 'min9' },
+  { root: 5, quality: 'min9' },
+  { root: 7, quality: 'dom7' },
+  { root: 7, quality: 'dom7' },
+];
 
 const LOW_TIDE: Station = {
   id: 'lowtide',
@@ -270,16 +376,7 @@ const LOW_TIDE: Station = {
   leadScale: SCALES.pentatonicMinor,
   leadSeed: 113,
   // Cm9 Cm9 Abmaj9 Abmaj9 | Fm9 Fm9 G7 G7
-  progression: [
-    { root: 0, quality: 'min9' },
-    { root: 0, quality: 'min9' },
-    { root: 8, quality: 'maj9' },
-    { root: 8, quality: 'maj9' },
-    { root: 5, quality: 'min9' },
-    { root: 5, quality: 'min9' },
-    { root: 7, quality: 'dom7' },
-    { root: 7, quality: 'dom7' },
-  ],
+  progression: LOW_TIDE_PROGRESSION,
   bpm: [76, 92],
   swing: 0.22,
   tiers: [
@@ -347,6 +444,40 @@ const LOW_TIDE: Station = {
     reverb: 0.3,
     trim: 0.9,
   },
+  songs: [
+    {
+      title: 'Rain on the Windshield',
+      artist: 'Mellow Hydrant',
+      transpose: 0,
+      verse: LOW_TIDE_PROGRESSION,
+      chorus: [c(8, 'maj9'), c(8, 'maj9'), c(10, 'dom7'), c(10, 'dom7'), c(0, 'min9'), c(0, 'min9'), c(7, 'dom7'), c(7, 'dom7')],
+      leadSeed: 113,
+    },
+    {
+      title: '3 AM Laundromat',
+      artist: 'Soft Tyres',
+      transpose: -3,
+      verse: [c(5, 'min9'), c(10, 'dom7'), c(3, 'maj9'), c(3, 'maj9'), c(5, 'min9'), c(10, 'dom7'), c(0, 'min9'), c(0, 'min9')],
+      chorus: [c(8, 'maj9'), c(7, 'dom7'), c(0, 'min9'), c(0, 'min9'), c(8, 'maj9'), c(7, 'dom7'), c(0, 'min9'), c(10, 'sus2')],
+      leadSeed: 127,
+    },
+    {
+      title: 'Parking Garage Echo',
+      artist: 'Mellow Hydrant',
+      transpose: 2,
+      verse: [c(0, 'min9'), c(0, 'min9'), c(5, 'dom7'), c(5, 'dom7'), c(0, 'min9'), c(0, 'min9'), c(5, 'dom7'), c(7, 'dom7')],
+      chorus: [c(3, 'maj9'), c(3, 'maj9'), c(5, 'min9'), c(5, 'min9'), c(8, 'maj9'), c(8, 'maj9'), c(7, 'dom7'), c(7, 'dom7')],
+      leadSeed: 141,
+    },
+    {
+      title: 'Night Bus Home',
+      artist: 'Corner Store Choir',
+      transpose: 5,
+      verse: [c(0, 'min9'), c(8, 'maj9'), c(3, 'maj9'), c(10, 'dom7'), c(0, 'min9'), c(8, 'maj9'), c(3, 'maj9'), c(10, 'dom7')],
+      chorus: [c(5, 'min9'), c(5, 'min9'), c(0, 'min9'), c(0, 'min9'), c(8, 'maj9'), c(10, 'dom7'), c(0, 'min9'), c(0, 'min9')],
+      leadSeed: 166,
+    },
+  ],
 };
 
 export const STATIONS: readonly Station[] = [NIGHTDRIVE, BREAKNECK, LOW_TIDE];
