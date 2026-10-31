@@ -140,7 +140,8 @@ vibration, perf overlay (Off / FPS / Full).
 - **Front door, controls and HUD** (`src/ui/`, see *UI* below): a title
   screen over a live attract mode (the city runs, the camera cruises after
   traffic) with PLAY, a mode list other systems extend, settings, how to
-  play and the best score; the first tap unlocks audio, shaders are warmed
+  play, the best score and a small MORE AT DEEEK.ORG link to the hub (title
+  only, never the pause menu); the first tap unlocks audio, shaders are warmed
   behind it; a one-time "Add to Home Screen" tip on iPhone Safari. Pause
   menu (resume, settings, how to play, restart, quit to title) that still
   offers waiting app updates and covers a lost GL context. A rotate-your-

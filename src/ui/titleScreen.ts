@@ -25,11 +25,15 @@ export interface TitleOptions {
 }
 
 const TIP_KEY = 'curbside.a2hsTip';
+/** The deeek.org hub. Absolute: '/' is the game itself wherever base is '/' (dev, hive1). */
+const HUB_URL = 'https://deeek.org/';
 
 /**
  * The front door: the CURBSIDE wordmark over the live city (the sim runs
  * behind it in attract mode, see attract.ts), PLAY plus any modes other
- * systems add with addMode(), SETTINGS and HOW TO PLAY, and the best score.
+ * systems add with addMode(), SETTINGS and HOW TO PLAY, the best score and
+ * a small link back to the deeek.org hub (here only, never on the pause
+ * menu, where a mis-tap would throw away a run).
  * The first tap, click or key also unlocks audio (iOS needs a gesture) and
  * starts the menu music. On iPhone Safari (not installed) a one-time tip
  * explains Add to Home Screen, the only way to get true full screen there.
@@ -39,6 +43,7 @@ export class TitleScreen implements Panel {
   readonly nav: MenuNav;
   private readonly modes: HTMLElement;
   private readonly bestEl: HTMLElement;
+  private readonly hubLink: HTMLAnchorElement;
   private readonly hints: HTMLElement;
   private readonly tip: HTMLElement;
   private readonly modeItems = new Map<string, { el: HTMLElement; item: NavItem }>();
@@ -62,6 +67,7 @@ export class TitleScreen implements Panel {
         <div class="title-modes"></div>
         <div class="title-row"></div>
         <div class="title-best" hidden>BEST <b></b></div>
+        <a class="title-hub" href="${HUB_URL}" tabindex="-1">MORE AT DEEEK.ORG</a>
       </div>
       <div class="title-hints"></div>
       <div class="a2hs" hidden>
@@ -74,6 +80,7 @@ export class TitleScreen implements Panel {
     this.nav = new MenuNav(root);
     this.modes = root.querySelector('.title-modes')!;
     this.bestEl = root.querySelector('.title-best')!;
+    this.hubLink = root.querySelector('.title-hub')!;
     this.hints = root.querySelector('.title-hints')!;
     this.tip = root.querySelector('.a2hs')!;
 
@@ -96,6 +103,14 @@ export class TitleScreen implements Panel {
       activate: () => {
         audio.ui('click');
         opts.onHowTo();
+      },
+    });
+    // Same tab: the hub's PLAY brings you back.
+    this.nav.add({
+      el: this.hubLink,
+      activate: () => {
+        audio.ui('click');
+        location.assign(HUB_URL);
       },
     });
 
@@ -124,9 +139,9 @@ export class TitleScreen implements Panel {
     this.modeItems.set(mode.id, { el, item });
   }
 
-  /** A line of another system's under the best score (e.g. cash). */
+  /** A line of another system's under the best score (e.g. cash); the hub link stays last. */
   addInfo(el: HTMLElement): void {
-    this.root.querySelector('.title-main')!.append(el);
+    this.hubLink.before(el);
   }
 
   removeMode(id: string): void {
