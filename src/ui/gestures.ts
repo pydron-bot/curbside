@@ -6,8 +6,8 @@
  *
  * `surfaces` are the elements played on (canvas, touch controls): their
  * touchstart is cancelled outright (pointer events still fire). Menus are
- * left alone so taps on their buttons still turn into clicks and their
- * lists can scroll.
+ * left alone so their lists can scroll and :active shows; their buttons act
+ * on pointer taps (tap.ts), since a thumb held on a surface blocks clicks.
  */
 export function blockBrowserGestures(surfaces: HTMLElement[]): void {
   const stop = (e: Event) => e.preventDefault();

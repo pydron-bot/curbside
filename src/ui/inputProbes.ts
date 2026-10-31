@@ -62,14 +62,14 @@ export class InputProbes {
     this.hapticEl = this.el.querySelector('.diag-haptic-out')!;
     this.rumbleEl = this.el.querySelector('.diag-rumble-out')!;
     this.padEl = this.el.querySelector('.diag-pad-out')!;
-    const pad = (parent: Element, label: string, activate: () => void) => {
+    const pad = (parent: Element, label: string, activate: () => void, clickOnly = false) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.tabIndex = -1;
       b.className = 'tab diag-pad';
       b.textContent = label;
       parent.append(b);
-      nav.add({ el: b, activate });
+      nav.add({ el: b, activate, clickOnly });
       return b;
     };
     // Enter / A on the down or up pad (no pointer involved) still fires, as a click.
@@ -84,7 +84,8 @@ export class InputProbes {
     const up = pad(pads, 'ON UP', keyOnly);
     up.addEventListener('pointerdown', () => (this.lastPointer = performance.now()));
     up.addEventListener('pointerup', () => this.fire('up'));
-    pad(pads, 'ON CLICK', () => this.fire('click'));
+    // The browser's own click (menu buttons act on the tap, see tap.ts).
+    pad(pads, 'ON CLICK', () => this.fire('click'), true);
     pad(pads, 'AFTER 500 MS', () => {
       this.hapticEl.textContent = 'waiting 500 ms…';
       window.setTimeout(() => this.fire('timeout'), 500);

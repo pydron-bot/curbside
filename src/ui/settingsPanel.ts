@@ -3,6 +3,7 @@ import { BUILD_ID } from '../core/build';
 import { onSettingsChange, settings, updateSettings, type Settings } from '../core/settings';
 import { ICONS } from './icons';
 import { MenuNav, overlay, type Panel } from './menu';
+import { onTap } from './tap';
 
 type SliderKey = 'masterVolume' | 'sfxVolume' | 'musicVolume';
 type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics';
@@ -242,10 +243,8 @@ export class SettingsPanel implements Panel {
       b.type = 'button';
       b.tabIndex = -1;
       b.textContent = text;
-      b.addEventListener('click', (e) => {
-        e.stopPropagation();
-        pick(value);
-      });
+      // Its own tap, not the row's (onTap: the innermost control wins).
+      onTap(b, () => pick(value));
       seg.append(b);
       return b;
     });

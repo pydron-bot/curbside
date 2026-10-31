@@ -5,6 +5,7 @@ import type { InputDevice } from '../core/input';
 import { ICONS } from './icons';
 import { MenuNav, menuButton, type NavItem, type Panel } from './menu';
 import { fmt } from './scoreHud';
+import { onTap } from './tap';
 
 /** A way to play, listed on the title screen under PLAY. */
 export interface TitleMode {
@@ -117,7 +118,7 @@ export class TitleScreen implements Panel {
     // The first touch anywhere on the title unlocks audio (GameAudio also
     // listens globally; this makes the intent explicit).
     root.addEventListener('pointerdown', () => audio.unlock(), { capture: true });
-    root.querySelector('.a2hs-close')!.addEventListener('click', () => this.dismissTip());
+    onTap(root.querySelector<HTMLElement>('.a2hs-close')!, () => this.dismissTip());
     this.tip.hidden = !shouldOfferInstallTip();
   }
 
