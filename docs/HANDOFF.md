@@ -160,7 +160,8 @@ compare against. Full numbers in README *Destruction test*.
    and `heat.mjs` with baselines (README *Tuning harnesses*) are done
    2026-10-31. Still open: re-tune medals and 5-star escape from logged real
    play. Gold is reachable in any car (decided 2026-10-31): the dev time
-   scales with the car on the line (`carPace` in `modes/races.ts`).
+   scales with the car on the line (`carPace` in `modes/races.ts`), and
+   tightens if a faster one is taken mid-race (`RaceRun.takeCar`).
 4. **Blender adjustment pass** (cloud): the pip `bpy` 5.2.3 module rebuilds
    every committed GLB headless (recipe in `docs/BLENDER_TODO.md`). Then: fly the `rocket` model
    [`rocket-projectile`], GetUp/Throw timing [`clips-getup-throw`], held

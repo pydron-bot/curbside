@@ -610,7 +610,8 @@ are `src/game/modes/*Mode.ts`.
   the time against gold on the card. Medals against a developer time from
   the course (straights at 36 m/s, 1.2 s a corner, 2 s to launch) in the
   sports car, scaled for the car on the line so gold is in reach in any
-  (`carPace`: top speed and grip; a sedan ×1.22, a bus ×1.81): gold
+  (`carPace`: top speed and grip; a sedan ×1.22, a bus ×1.81; a faster
+  car taken mid-race tightens it, `RaceRun.takeCar`): gold
   ×1.05, silver ×1.2, bronze ×1.4, paying $800 / $400 / $200 the first time
   (a tenth on a repeat). A clean braking-aware bot in an empty city
   (`tests/raceDevTime.test.ts`) does every course in ×0.88–0.91 of dev in
@@ -1016,7 +1017,8 @@ and every new program is compiled behind the current frame.
   waits while anyone is already heading into its road. Once a turner pulls
   away from the line on green it is committed. Followers never go faster
   than they could stop from in the gap ahead, and waiting behind a car
-  facing the same way never trips the gridlock breaker. A busy-junction
+  facing the same way trips the gridlock breaker 8× later (32 s, not 4: a
+  queue moves on, a wreck or a car left in the lane doesn't). A busy-junction
   Monte Carlo (`tests/junctionTurns.test.ts`: 4 cars an approach, random
   turns, 40 runs with and without a long vehicle per queue) went from 49 and
   107 contacts to none, everyone through within three light cycles.

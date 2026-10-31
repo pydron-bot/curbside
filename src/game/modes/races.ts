@@ -156,7 +156,7 @@ export class RaceRun {
   time = 0;
   /** Index into def.nodes of the checkpoint to reach next. */
   next = 1;
-  readonly dev: number;
+  dev: number;
 
   /** `pace`: the car's carPace (its dev time is the sports car's times this). */
   constructor(
@@ -164,6 +164,15 @@ export class RaceRun {
     pace = 1,
   ) {
     this.dev = devTime(def, pace);
+  }
+
+  /**
+   * The player is now in a car of `pace`: the dev time is the fastest car's
+   * of the run, so a bus on the line swapped for a sports car isn't a free gold.
+   */
+  takeCar(pace: number): void {
+    const d = devTime(this.def, pace);
+    if (d < this.dev) this.dev = d;
   }
 
   get checkpoints(): number {

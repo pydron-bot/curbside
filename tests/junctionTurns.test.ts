@@ -115,3 +115,25 @@ describe('a busy signalled junction', () => {
   }, 30000);
 });
 
+
+describe('a car left standing in the lane', () => {
+  it('traffic behind it does not queue there for good', () => {
+    // A wreck or a car the player left, facing the way traffic goes: unlike a queue, it never moves on.
+    const r = random(7);
+    const s = spawnAi(2, 0, 0, 0.2, r)!;
+    s.driver.next = 0;
+    const car = createVehicleState(s.x, s.z, s.heading);
+    const parked = createVehicleState(s.x + Math.sin(s.heading) * 14, s.z + Math.cos(s.heading) * 14, s.heading);
+    const obstacles: Obstacle[] = [];
+    let pushed = false;
+    for (let t = 0; t < 90 && !pushed; t += DT) {
+      obstacles.length = 0;
+      for (const v of [car, parked]) vehicleObstacles(v, false, (x, z, halfWidth, player, owner) => obstacles.push({ x, z, halfWidth, player, owner }));
+      stepVehicle(car, driveAi(s.driver, car, obstacles, r, DT, null), VEHICLE_SPECS.sedan, DT);
+      stepVehicle(parked, { throttle: 0, steer: 0, handbrake: true }, VEHICLE_SPECS.sedan, DT);
+      collideVehicles(car, parked);
+      pushed = s.driver.pushThrough > 0;
+    }
+    expect(pushed).toBe(true);
+  });
+});

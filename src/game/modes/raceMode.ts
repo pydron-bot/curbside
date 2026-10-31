@@ -58,6 +58,10 @@ export class RaceMode implements Mode {
         if (this.outOfCar > OUT_OF_CAR) return this.end(false, 'YOU LEFT THE CAR');
       } else {
         this.outOfCar = 0;
+        if (car !== this.car) {
+          run.takeCar(carPace(VEHICLE_SPECS[car.archetype]));
+          this.gold = formatRaceTime(run.dev * MEDAL_FACTORS.gold);
+        }
         this.car = car;
       }
       const before = run.phase;
