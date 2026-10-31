@@ -556,7 +556,7 @@ F. TOUCH FEEL (5 min each, write 3 notes per control):
 - pedal reach without looking, accidental BRAKE, finding the DRIFT band, accidental EXIT;
 - walk/run threshold, aim tap-to-fire, grenade on release, left-handed layout;
 - no pinch zoom, magnifier or text selection.
-- menu taps with a thumb still down: PAUSE with a thumb on the stick, RESUME with one resting, the street shop's X and an item while still holding the stick; a scroll or fling of the shop list never buys; VoiceOver double-tap still activates.
+- menu taps with a thumb still down: PAUSE with a thumb on the stick, RESUME with one resting, the street shop's X and an item while still holding the stick; a scroll or fling of the shop list never buys; the stick thumb lifting and landing on a shop item while the other taps X closes the shop and buys nothing; a slow (2 s) lone press on RESUME and on a shop item still acts (left to iOS's own long-press click); VoiceOver double-tap still activates.
 - If the tuning panel is in, try values and keep the best (they go in the report).
 
 WHAT TO SEND BACK:

@@ -42,7 +42,6 @@ export class MenuNav {
       onTap(
         item.el,
         () => {
-          (document.activeElement as HTMLElement | null)?.blur?.();
           this.focus(item);
           item.activate?.();
         },

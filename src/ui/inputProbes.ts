@@ -9,7 +9,7 @@ import type { MenuNav } from './menu';
 
 /** The pad readout refreshes this often while the sheet is open, ms. */
 const PAD_POLL_MS = 100;
-/** A pointer press this recent means a click on a down/up pad isn't a keyboard press, ms. */
+/** A pointer that pressed or lifted this recently means a down/up pad's activation isn't a keyboard press, ms. */
 const POINTER_RECENT_MS = 1000;
 
 type Trigger = 'down' | 'up' | 'click' | 'timeout';
@@ -76,14 +76,20 @@ export class InputProbes {
     const keyOnly = () => {
       if (performance.now() - this.lastPointer >= POINTER_RECENT_MS) this.fire('click');
     };
+    // From the lift as well: a tap acts in its touchend however long it was held.
+    const pointer = () => (this.lastPointer = performance.now());
     const down = pad(pads, 'ON DOWN', keyOnly);
     down.addEventListener('pointerdown', () => {
-      this.lastPointer = performance.now();
+      pointer();
       this.fire('down');
     });
+    down.addEventListener('pointerup', pointer);
     const up = pad(pads, 'ON UP', keyOnly);
-    up.addEventListener('pointerdown', () => (this.lastPointer = performance.now()));
-    up.addEventListener('pointerup', () => this.fire('up'));
+    up.addEventListener('pointerdown', pointer);
+    up.addEventListener('pointerup', () => {
+      pointer();
+      this.fire('up');
+    });
     // The browser's own click (menu buttons act on the tap, see tap.ts).
     pad(pads, 'ON CLICK', () => this.fire('click'), true);
     pad(pads, 'AFTER 500 MS', () => {

@@ -183,11 +183,7 @@ export class Hud {
     this.setGhostScale = styleSetter(this.hpGhost, 'transform');
     drawTicks(q('.sp-ticks'));
 
-    const pause = q('.hud-pause');
-    onTap(pause, () => {
-      pause.blur();
-      opts.onPause();
-    });
+    onTap(q('.hud-pause'), () => opts.onPause());
     const showDebug = () => {
       // ?debug forces the full overlay for this session without saving it.
       const mode = this.debugFromUrl ? 'full' : settings.perfOverlay;

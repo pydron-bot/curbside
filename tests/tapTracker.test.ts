@@ -46,9 +46,20 @@ describe('tap tracker', () => {
     expect(tr.up(1, 198 + TAP_SLOP - 1, 72, 1100)).toBeNull(); // within the slop, but 11 px off the button
   });
 
-  it('a thumb left resting on the button is not a tap', () => {
-    expect(press().up(1, 150, 72, 1000 + TAP_MAX_MS + 1)).toBeNull();
-    expect(press().up(1, 150, 72, 1000 + TAP_MAX_MS - 1)).toBe('btn');
+  it('a thumb left resting on the button is not a tap (but says it was slow, for the browser to judge)', () => {
+    const tr = press();
+    expect(tr.up(1, 150, 72, 1000 + TAP_MAX_MS + 1)).toBeNull();
+    expect(tr.slow).toBe('btn');
+    const quick = press();
+    expect(quick.up(1, 150, 72, 1000 + TAP_MAX_MS - 1)).toBe('btn');
+    expect(quick.slow).toBeNull();
+  });
+
+  it('only a slow press that would otherwise be a tap is slow', () => {
+    const tr = press();
+    tr.move(1, 150 + TAP_SLOP + 1, 72);
+    expect(tr.up(1, 150, 72, 1000 + TAP_MAX_MS + 1)).toBeNull();
+    expect(tr.slow).toBeNull();
   });
 
   it('pointercancel (the browser took the touch) ends the press with nothing', () => {
@@ -58,11 +69,41 @@ describe('tap tracker', () => {
     expect(tr.up(1, 150, 72, 1100)).toBeNull();
   });
 
-  it('the newest press wins: an earlier finger on a button is just resting', () => {
+  it('the first finger to lift as a tap acts; the others then lift as nothing', () => {
+    // X pressed, then the stick thumb lands on a shop item: X lifts first.
     const tr = press(1);
-    tr.down('other', 2, 150, 72, 1200, rect);
-    expect(tr.up(1, 150, 72, 1250)).toBeNull();
-    expect(tr.up(2, 150, 72, 1300)).toBe('other');
+    tr.down('item', 2, 150, 72, 1050, rect);
+    expect(tr.up(1, 150, 72, 1100)).toBe('btn');
+    expect(tr.pressing(2)).toBe('item'); // still ours (its click is eaten)…
+    expect(tr.up(2, 150, 72, 1150)).toBeNull(); // …but no tap
+    expect(tr.slow).toBeNull();
+    // Either order.
+    const tr2 = press(1);
+    tr2.down('other', 2, 150, 72, 1200, rect);
+    expect(tr2.up(2, 150, 72, 1250)).toBe('other');
+    expect(tr2.up(1, 150, 72, 1300)).toBeNull();
+  });
+
+  it('a finger resting on a button does not stop a tap elsewhere, and is not one itself', () => {
+    const tr = press(1);
+    tr.down('other', 2, 150, 72, 3000, rect);
+    expect(tr.up(1, 150, 72, 3050)).toBeNull(); // rested 2 s
+    expect(tr.up(2, 150, 72, 3080)).toBe('other');
+  });
+
+  it('a press after one acted is fresh', () => {
+    const tr = press(1);
+    expect(tr.up(1, 150, 72, 1100)).toBe('btn');
+    tr.down('btn', 2, 150, 72, 1200, rect);
+    expect(tr.up(2, 150, 72, 1250)).toBe('btn');
+  });
+
+  it('a fifth finger replaces the oldest press', () => {
+    const tr = new TapTracker<string, string>();
+    for (let id = 1; id <= 5; id++) tr.down(`b${id}`, id, 150, 72, 1000 + id, rect);
+    expect(tr.pressing(1)).toBeNull();
+    expect(tr.pressing(5)).toBe('b5');
+    expect(tr.up(3, 150, 72, 1100)).toBe('b3');
   });
 
   it('acts once per press', () => {
@@ -78,6 +119,16 @@ describe('tap tracker', () => {
     tr.scrolled(LIST, 1020);
     expect(tr.pressing(1)).toBe('btn'); // still ours (its click is eaten)…
     expect(tr.up(1, 150, 72, 1100)).toBeNull(); // …but no tap
+  });
+
+  it('its list having moved by the lift makes the press a drag (scroll event not seen yet)', () => {
+    const tr = new TapTracker<string, string>();
+    tr.down('btn', 1, 150, 72, 1000, rect, LIST, 200);
+    expect(tr.listOf(1)).toBe(LIST);
+    expect(tr.up(1, 150, 72, 1100, 230)).toBeNull();
+    const still = new TapTracker<string, string>();
+    still.down('btn', 1, 150, 72, 1000, rect, LIST, 200);
+    expect(still.up(1, 150, 72, 1100, 200.5)).toBe('btn');
   });
 
   it('a press that stops a fling is not a tap; one after the list settles is', () => {
@@ -110,6 +161,13 @@ describe('tap tracker', () => {
     tr.move(1, 150 + TAP_SLOP + 1, 72);
     expect(tr.up(1, 150 + TAP_SLOP + 1, 72, 1100)).toBeNull();
     expect(tr.trailingClick(150 + TAP_SLOP + 1, 72, 1120)).toBe(true);
+  });
+
+  it('releaseClick lets the next click through (a slow lone press, or a mouse pressed since)', () => {
+    const tr = press();
+    tr.up(1, 150, 72, 1100);
+    tr.releaseClick();
+    expect(tr.trailingClick(150, 72, 1150)).toBe(false);
   });
 
   it('leaves later clicks alone (mouse, keyboard, VoiceOver)', () => {

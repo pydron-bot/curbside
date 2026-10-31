@@ -255,7 +255,6 @@ export class ShopSheet implements Panel {
     card.innerHTML = `
       <header class="sheet-head"><h2>SAFEHOUSE</h2><b class="sheet-cash"></b></header>
       <div class="sheet-body" data-scroll><div class="shop-list"></div></div>`;
-    card.querySelector('.sheet-head')!.append(closeButton(this.nav, () => this.back()));
     this.cashEl = card.querySelector('.sheet-cash')!;
     this.list = card.querySelector('.shop-list')!;
     for (const e of entries) {
@@ -271,6 +270,8 @@ export class ShopSheet implements Panel {
       this.items.set(e.id, b);
       this.nav.add({ el: b, activate: () => this.buy(e.id) });
     }
+    // Registered last so opening focuses the first item, not the close button.
+    card.querySelector('.sheet-head')!.append(closeButton(this.nav, () => this.back()));
     parent.append(root);
   }
 

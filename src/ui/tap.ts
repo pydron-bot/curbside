@@ -23,11 +23,10 @@ interface Tap {
 
 const taps = new WeakMap<Element, Tap>();
 const tracker = new TapTracker<HTMLElement, Element>();
-/** The pressed control's scrolling list, and its scrollTop at the press. */
-let pressList: Element | null = null;
-let pressScroll = 0;
 /** The control whose press just lifted: its touchend is cancelled (no click). */
 let ending: HTMLElement | null = null;
+/** Each press lifting into that touchend would have been a tap but for its length: a lone finger's is the browser's call. */
+let slow = false;
 /** A tap waiting for that touchend to run in. */
 let pending: Tap | null = null;
 let installed = false;
@@ -36,15 +35,21 @@ let installed = false;
  * Run `fn` when `el` is tapped (touch / pen, judged on pointer events) or
  * clicked (mouse, keyboard, assistive tech). The innermost registered
  * control under the finger wins, so a button inside a registered row acts
- * alone.
+ * alone. Focus is dropped first: a mouse-clicked button keeps it otherwise,
+ * and Enter would then click it natively as well as confirm the menu's
+ * highlight.
  */
 export function onTap(el: HTMLElement, fn: () => void, opts: TapOptions = {}): void {
   install();
-  taps.set(el, { fn, clickOnly: opts.clickOnly === true });
+  const act = () => {
+    (document.activeElement as HTMLElement | null)?.blur?.();
+    fn();
+  };
+  taps.set(el, { fn: act, clickOnly: opts.clickOnly === true });
   el.addEventListener('click', (e) => {
     // Never the native action (the title's hub link navigates in fn).
     e.preventDefault();
-    if (registered(e.target) === el) fn();
+    if (registered(e.target) === el) act();
   });
 }
 
@@ -76,12 +81,13 @@ function install(): void {
 }
 
 function onDown(e: PointerEvent): void {
+  // A real mouse press: the click after it is its own, not one trailing a tap (iPad trackpad, touch laptops).
+  if (e.pointerType === 'mouse') tracker.releaseClick();
   if (e.pointerType === 'mouse' || e.button !== 0) return;
   const el = registered(e.target);
   if (!el || taps.get(el)!.clickOnly) return;
-  pressList = el.closest('[data-scroll]');
-  pressScroll = pressList ? pressList.scrollTop : 0;
-  tracker.down(el, e.pointerId, e.clientX, e.clientY, e.timeStamp, el.getBoundingClientRect(), pressList);
+  const list = el.closest('[data-scroll]');
+  tracker.down(el, e.pointerId, e.clientX, e.clientY, e.timeStamp, el.getBoundingClientRect(), list, list ? list.scrollTop : 0);
 }
 
 function onMove(e: PointerEvent): void {
@@ -91,12 +97,13 @@ function onMove(e: PointerEvent): void {
 function onUp(e: PointerEvent): void {
   const el = tracker.pressing(e.pointerId);
   if (!el) return;
+  const list = tracker.listOf(e.pointerId);
+  const hit = tracker.up(e.pointerId, e.clientX, e.clientY, e.timeStamp, list ? list.scrollTop : 0);
+  // Two fingers can lift into one touchend: the browser's call only if both were slow.
+  slow = (ending === null || slow) && tracker.slow !== null;
   ending = el;
-  window.setTimeout(settle, 0);
-  const hit = tracker.up(e.pointerId, e.clientX, e.clientY, e.timeStamp);
-  // The list moved (its scroll event may not have been dispatched yet).
-  if (!hit || (pressList && Math.abs(pressList.scrollTop - pressScroll) > 1) || !usable(hit, e.clientX, e.clientY)) return;
-  pending = taps.get(hit)!;
+  window.setTimeout(settleLate, 0);
+  if (hit && usable(hit, e.clientX, e.clientY)) pending = taps.get(hit)!;
 }
 
 function onTouchEnd(e: TouchEvent): void {
@@ -105,16 +112,25 @@ function onTouchEnd(e: TouchEvent): void {
   for (let i = 0; i < touches.length; i++) {
     const t = touches[i].target;
     if (t instanceof Node && ending.contains(t)) {
-      e.preventDefault();
+      // A lone finger held past TAP_MAX_MS: iOS clicks that itself, as it did before onTap.
+      if (slow && e.touches.length === 0) tracker.releaseClick();
+      else e.preventDefault();
       settle();
       return;
     }
   }
 }
 
-/** Run the tap in its touchend, or just after the pointerup if none comes (a pen without touch events). */
+/** No touchend came for the press (a pen without touch events): nothing else is known to be down. */
+function settleLate(): void {
+  if (ending && slow) tracker.releaseClick();
+  settle();
+}
+
+/** Run the tap in its touchend, or just after the pointerup if none comes. */
 function settle(): void {
   ending = null;
+  slow = false;
   const tap = pending;
   pending = null;
   tap?.fn();
