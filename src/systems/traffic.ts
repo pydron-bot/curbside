@@ -233,6 +233,13 @@ export function createDriver(ix: number, iz: number, dir: Dir, rand: () => numbe
   };
 }
 
+/** A driver for a car put down anywhere (a mission target at a kerb): routed from where it stands. */
+export function driverFor(car: VehicleState, rand: () => number): AiDriver {
+  const ai = createDriver(0, 0, 0, rand);
+  rerouteAi(ai, car, rand);
+  return ai;
+}
+
 /** Reused output of driveAi (consume it before the next call). */
 const controls: VehicleControls = { throttle: 0, steer: 0, handbrake: false };
 const waypoint = { x: 0, z: 0 };

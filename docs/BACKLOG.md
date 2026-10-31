@@ -1209,6 +1209,13 @@ Tuning hostility needs real play.
 
 ### missions-store: Missions beyond the first eight: replays, driven target cars, then a second chapter [M, cloud]
 
+**Status (2026-10-31):** parts 1 and 2 done. `spawnCar` with `drive: true` gets a driver from
+`driverFor()` (systems/traffic.ts) and stays pinned; a test drives every story car spot through
+two crossings. After the story the phones ring with its jobs in order as REPEAT JOB
+(`replayJob` / `replayReward` in systems/missions.ts): half pay rounded to $50 (`REPLAY_PAY`),
+no completion credit, `stats.jobsReplayed` keeps the rotation. Still open: chapter 2 (needs the
+story direction below); no story job uses `drive` yet.
+
 **Findings:** **The engine** (src/systems/missions.ts) is pure and tested:
 - 10 step kinds (:57-74);
 - actions spawnCar, spawnPed, wanted, give, board, alight (:23-37);

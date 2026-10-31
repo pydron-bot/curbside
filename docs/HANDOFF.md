@@ -209,8 +209,9 @@ compare against. Full numbers in README *Destruction test*.
    recorded tracks [`music-recorded`].
 8. **Ideas:** district names + an area card first [`districts-landmarks`
    phase A], since chatter and gang turf need them; then police radio
-   chatter [`police-chatter`]; missions after the eighth (payphones never
-   ring again today; the `drive` spawn option is ignored) [`missions-store`];
+   chatter [`police-chatter`]; missions after the eighth [`missions-store`]: driven
+   target cars (`drive: true`) and REPEAT JOB replays at half pay are done
+   2026-10-31; chapter 2 waits on Derek's story direction;
    gangs [`gangs-respect`]; leaderboard needs a decision on any backend
    [`online-leaderboard`].
 

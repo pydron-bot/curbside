@@ -37,6 +37,8 @@ export interface LifetimeStats {
   maxStars: number;
   fares: number;
   exportsDelivered: number;
+  /** Repeat jobs passed after the story (also where the replay rotation is). */
+  jobsReplayed: number;
 }
 
 export interface SaveData {
@@ -80,6 +82,7 @@ export function defaultStats(): LifetimeStats {
     maxStars: 0,
     fares: 0,
     exportsDelivered: 0,
+    jobsReplayed: 0,
   };
 }
 

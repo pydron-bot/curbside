@@ -649,8 +649,9 @@ are `src/game/modes/*Mode.ts`.
   tagged car or an archetype), deliver, pickup, destroy, knockOut, survive,
   loseHeat, collect and race; each with objective text, an optional timer,
   fail conditions (a tagged car wrecked or left behind) and actions on start
-  / end (spawn a car or a person, set the wanted level, hand over a gun, a
-  passenger boards / alights). Eight jobs for the Graveyard Shift — VEX's
+  / end (spawn a car, parked or with `drive: true` pulling out into traffic
+  with a lane-following driver while staying pinned, or a person; set the
+  wanted level, hand over a gun, a passenger boards / alights). Eight jobs for the Graveyard Shift — VEX's
   tow crew, her mechanic LIL' TUNA, against DEACON PIKE's Chrome Saints —
   from four payphones; the one with a job waiting rings (a ripple of light,
   the bell within 55 m, 'M' on the radar with an arrow). Answer on foot or
@@ -658,7 +659,12 @@ are `src/game/modes/*Mode.ts`.
   on the activity card and its targets marked (a step any sedan will do
   for rings and blips the three nearest, and the wrong car says NOT A
   SEDAN); MIDNIGHT EXPRESS pins the clock at night (a fail or quit puts the
-  hour back). Pay $500–$5,000; fail and the phone rings again. A banner
+  hour back). Pay $500–$5,000; fail and the phone rings again. Once all
+  eight are passed the phones ring with them again in story order as
+  REPEAT JOBs (`replayJob` / `replayReward`): half pay rounded to $50, no
+  completion credit, the debrief says JOB DONE; `stats.jobsReplayed` counts
+  them, keeps the rotation across sessions and shows as *Repeat jobs* on
+  PROGRESS. A banner
   raised while WASTED / BUSTED is up (MISSION FAILED, RACE OVER) waits for
   the respawn.
 - **Activity HUD** (`ui/progressHud.ts`, `progress.css`): a compact card top

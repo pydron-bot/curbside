@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { SAFEHOUSE, placeDocks, placePayphones } from '../src/game/modes/places';
-import { COLLECT_RADIUS, LOST_RANGE, MissionRun, missionTags, type MissionDef, type MissionSignal, type MissionView } from '../src/systems/missions';
+import { SEDAN, createVehicleState, stepVehicle } from '../src/entities/vehicle';
+import { collideVehicleStatic } from '../src/systems/physics';
+import { driveAi, driverFor } from '../src/systems/traffic';
+import { StaticGrid } from '../src/world/collision';
+import { random } from './helpers';
+import { COLLECT_RADIUS, LOST_RANGE, MissionRun, REPLAY_PAY, missionTags, replayJob, replayReward, type MissionDef, type MissionSignal, type MissionView } from '../src/systems/missions';
 import { buildMissions } from '../src/systems/missionsData';
 import { generateCity } from '../src/world/city';
 import { MAX_NODE } from '../src/world/roads';
@@ -220,6 +225,63 @@ describe('the story', () => {
         if (s.kind === 'collect') for (const [x, z] of s.points) expect(blocked(x, z, 0.5)).toBe(false);
         if (s.kind === 'race') for (const [ix, iz] of s.nodes) expect(Math.max(Math.abs(ix), Math.abs(iz))).toBeLessThanOrEqual(MAX_NODE);
       }
+    }
+  });
+});
+
+describe('repeat jobs', () => {
+  const city = generateCity(1337);
+  const missions = buildMissions(placeDocks(city), SAFEHOUSE);
+  const ids = missions.map((m) => m.id);
+
+  it('none while any story job is still to do', () => {
+    expect(replayJob(missions, [], 0)).toBeNull();
+    expect(replayJob(missions, ids.slice(0, -1), 5)).toBeNull();
+  });
+
+  it('then the story jobs again in order, carrying on from the saved count', () => {
+    expect(replayJob(missions, ids, 0)).toBe(missions[0]);
+    expect(replayJob(missions, ids, 3)).toBe(missions[3]);
+    expect(replayJob(missions, ids, missions.length + 1)).toBe(missions[1]);
+    // A save from a newer build with extra ids still counts as done.
+    expect(replayJob(missions, [...ids, 'future-job'], 2)).toBe(missions[2]);
+  });
+
+  it('pays part of the story reward, in $50s, never nothing', () => {
+    for (const m of missions) {
+      const pay = replayReward(m);
+      expect(pay % 50, m.id).toBe(0);
+      expect(pay, m.id).toBeGreaterThan(0);
+      expect(Math.abs(pay - m.reward * REPLAY_PAY), m.id).toBeLessThanOrEqual(25);
+    }
+  });
+});
+
+describe('driven mission cars', () => {
+  const city = generateCity(1337);
+  const grid = new StaticGrid(city.obstacles);
+  const missions = buildMissions(placeDocks(city), SAFEHOUSE);
+  const spawns = missions.flatMap((m) => m.steps.flatMap((s) => [...(s.start ?? []), ...(s.done ?? [])])).filter((a) => a.do === 'spawnCar');
+
+  it('every story car spot, given a driver, pulls out and follows the roads', () => {
+    expect(spawns.length).toBeGreaterThan(0);
+    const DT = 1 / 60;
+    for (const [i, a] of spawns.entries()) {
+      const rand = random(100 + i);
+      const car = { ...createVehicleState(a.x, a.z, a.heading) };
+      const ai = driverFor(car, rand);
+      let legs = 0;
+      let last = `${ai.ix},${ai.iz}`;
+      for (let t = 0; t < 60 * 40; t++) {
+        stepVehicle(car, driveAi(ai, car, [], rand, DT), SEDAN, DT);
+        collideVehicleStatic(car, grid);
+        const key = `${ai.ix},${ai.iz}`;
+        if (key !== last) legs++;
+        last = key;
+      }
+      // Through at least two crossings in 40 s, and still on the map.
+      expect(legs, `${a.tag} at ${a.x.toFixed(0)},${a.z.toFixed(0)}`).toBeGreaterThanOrEqual(2);
+      expect(Math.max(Math.abs(ai.ix), Math.abs(ai.iz))).toBeLessThanOrEqual(MAX_NODE);
     }
   });
 });

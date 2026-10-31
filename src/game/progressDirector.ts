@@ -512,6 +512,7 @@ export class ProgressDirector implements ModeCtx {
           title: 'STORY & ACTIVITIES',
           rows: [
             { label: 'Payphone jobs', value: `${this.missions.passed}/${this.missions.missions.length}`, bar: this.missions.passed / this.missions.missions.length },
+            ...(st.jobsReplayed > 0 ? [{ label: 'Repeat jobs', value: n(st.jobsReplayed) }] : []),
             { label: 'Frenzies beaten', value: `${s.frenzies.length}/${FRENZIES.length}`, bar: s.frenzies.length / FRENZIES.length },
             { label: 'Hidden packages', value: `${s.packages.length}/${PACKAGE_COUNT}`, bar: s.packages.length / PACKAGE_COUNT },
             { label: 'Races with a medal', value: `${medalRaces}/${RACES.length}`, bar: medalRaces / RACES.length },
