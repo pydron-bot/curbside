@@ -611,6 +611,8 @@ function addObstacle(x: number, z: number, halfWidth: number, isPlayer = false, 
 const vehicleStates: Array<Vehicle['sim']> = [];
 const contact: CarContact = { x: 0, z: 0, nx: 0, nz: 0, closingA: 0, closingB: 0 };
 
+// Indexed loops throughout: simulate is too big for V8 to inline every array
+// iterator into, and each one it doesn't allocates a result per element.
 function simulate(dt: number) {
   const driving = player.driving;
   // A race or Chaos Run 3-2-1 holds the car on the line.
@@ -623,11 +625,18 @@ function simulate(dt: number) {
   // What AI drivers need to avoid this step.
   obstacles.length = 0;
   // Cars as their middle, long vehicles as a point per body circle (so queues stop at a bus's tail).
-  for (const v of vehicles) vehicleObstacles(v.sim, v === driving, addObstacle);
+  for (let i = 0; i < vehicles.length; i++) {
+    const v = vehicles[i];
+    vehicleObstacles(v.sim, v === driving, addObstacle);
+  }
   if (!driving && !attract.active) addObstacle(player.ped.x, player.ped.z, 0.4, true);
-  for (const c of population.crowd) addObstacle(c.agent.s.x, c.agent.s.z, 0.4);
+  for (let i = 0; i < population.crowd.length; i++) {
+    const c = population.crowd[i];
+    addObstacle(c.agent.s.x, c.agent.s.z, 0.4);
+  }
 
-  for (const v of vehicles) {
+  for (let i = 0; i < vehicles.length; i++) {
+    const v = vehicles[i];
     copyVehicleState(v.prev, v.sim);
     let controls = NO_CONTROLS;
     if (v.damage.wrecked) controls = NO_CONTROLS;
@@ -652,11 +661,15 @@ function simulate(dt: number) {
 
   // Cars flying over people don't touch them.
   vehicleStates.length = 0;
-  for (const v of vehicles) if (v.sim.y < 0.8) vehicleStates.push(v.sim);
+  for (let i = 0; i < vehicles.length; i++) {
+    const v = vehicles[i];
+    if (v.sim.y < 0.8) vehicleStates.push(v.sim);
+  }
   const target = playerTarget();
   // Only once the furniture is drawn (props.glb in): nothing invisible to knock.
   if (look.props.loaded) knockables.step(vehicleStates, dt, knockProp);
-  for (const c of population.crowd) {
+  for (let i = 0; i < population.crowd.length; i++) {
+    const c = population.crowd[i];
     copyPedState(c.prev, c.agent.s);
     const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, target);
     if (event?.kind === 'struck') pedHitByCar(c, driving !== null && event.car === driving.sim ? driving : null);
@@ -669,7 +682,8 @@ function simulate(dt: number) {
   }
 
   // --- Collisions ---
-  for (const v of vehicles) {
+  for (let i = 0; i < vehicles.length; i++) {
+    const v = vehicles[i];
     let impact = collideVehicleStatic(v.sim, collision, contact, v.prev);
     // A ramp's sides and back are solid to anything not riding up it.
     if (!v.sim.airborne && v.sim.y <= 0 && !enteringRamp(v.sim, ramps)) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact, v.prev));
@@ -743,7 +757,8 @@ function simulate(dt: number) {
     award(score.drift(slip, speed(ds), dt));
     if (slip > 3.5 && speed(ds) > 8) nitro.add(NITRO_DRIFT * dt);
     if (speed(ds) > NEAR_MISS_SPEED) {
-      for (const v of vehicles) {
+      for (let i = 0; i < vehicles.length; i++) {
+        const v = vehicles[i];
         if (v === driving || v.damage.wrecked) continue;
         const dx = v.sim.x - ds.x;
         const dz = v.sim.z - ds.z;
@@ -780,20 +795,30 @@ function simulate(dt: number) {
   }
 
   // --- Fire and explosions ---
-  for (const v of vehicles) {
+  for (let i = 0; i < vehicles.length; i++) {
+    const v = vehicles[i];
     // NPC drivers bail out of burning cars.
     if (v.ai && v.damage.burning) ejectDriver(v, v.sim.x, v.sim.z);
     if (stepDamage(v.damage, dt)) explode(v);
   }
   if (!player.driving) {
-    for (const s of vehicleStates) collidePedVehicle(player.ped, s);
+    for (let i = 0; i < vehicleStates.length; i++) {
+      const s = vehicleStates[i];
+      collidePedVehicle(player.ped, s);
+    }
     // Static last so a car can't shove the player into a wall (or a ramp).
     collidePedStatic(player.ped, collision);
     collidePedStatic(player.ped, rampGrid);
     if (look.props.loaded) knockables.collidePed(player.ped);
   }
-  for (const c of population.crowd) {
-    if (c.agent.mode !== 'down') for (const s of vehicleStates) collidePedVehicle(c.agent.s, s);
+  for (let i = 0; i < population.crowd.length; i++) {
+    const c = population.crowd[i];
+    if (c.agent.mode !== 'down') {
+      for (let j = 0; j < vehicleStates.length; j++) {
+        const s = vehicleStates[j];
+        collidePedVehicle(c.agent.s, s);
+      }
+    }
     collidePedStatic(c.agent.s, collision);
     collidePedStatic(c.agent.s, rampGrid);
     if (look.props.loaded) knockables.collidePed(c.agent.s);
