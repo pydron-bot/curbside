@@ -4,7 +4,9 @@ import { loadPreviousLog, SAMPLE_EVERY_MS, SessionLog, type KeyValueStore, type 
 import { onSettingsChange, settings } from '../core/settings';
 import { getQuality } from '../render/quality';
 import type { FrontDoor } from './frontDoor';
+import type { Haptics } from './haptics';
 import { ICONS } from './icons';
+import { InputProbes } from './inputProbes';
 import { MenuNav, overlay, type Panel } from './menu';
 import { safeInsets } from './safeArea';
 
@@ -21,6 +23,8 @@ export interface DiagnosticsDeps {
   audioState: () => string;
   paused: () => boolean;
   canvas: HTMLCanvasElement;
+  /** For the on-device haptic / rumble / pad probes. */
+  haptics?: Haptics;
 }
 
 function storage(): KeyValueStore | null {
@@ -51,6 +55,7 @@ export class Diagnostics implements Panel {
   private readonly statusEl: HTMLElement;
   private readonly fallback: HTMLTextAreaElement;
   private readonly firstBtn: HTMLButtonElement;
+  private readonly probes: InputProbes | null = null;
   private readonly frameOut = emptySummary();
   private onClose: () => void = () => {};
   private tier = '';
@@ -97,6 +102,10 @@ export class Diagnostics implements Panel {
     this.summaryEl = card.querySelector('.diag-summary')!;
     this.statusEl = card.querySelector('.diag-status')!;
     this.fallback = card.querySelector('.diag-fallback')!;
+    if (deps.haptics) {
+      this.probes = new InputProbes(deps.haptics, this.nav);
+      this.summaryEl.before(this.probes.el);
+    }
     parent.append(root);
 
     this.log.addEvent(performance.now(), 'boot', BUILD_ID);
@@ -123,6 +132,7 @@ export class Diagnostics implements Panel {
     this.statusEl.textContent = '';
     this.fallback.hidden = true;
     this.refresh();
+    this.probes?.start();
     this.root.hidden = false;
     this.nav.focusElement(this.firstBtn);
     this.nav.showFocus(showFocus);
@@ -131,11 +141,13 @@ export class Diagnostics implements Panel {
   back(): void {
     if (this.root.hidden) return;
     this.root.hidden = true;
+    this.probes?.stop();
     this.onClose();
   }
 
   hide(): void {
     this.root.hidden = true;
+    this.probes?.stop();
   }
 
   /** The whole report: a few readable lines, then JSON with the session log and the play log. */

@@ -1229,6 +1229,7 @@ const diagnostics = new Diagnostics(document.body, {
   audioState: () => audio.state,
   paused: () => paused,
   canvas: renderer.domElement,
+  haptics,
 });
 addDiagnosticsButton(diagnostics, frontDoor, () => input.lastDevice !== 'touch');
 
