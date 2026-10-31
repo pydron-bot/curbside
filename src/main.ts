@@ -543,7 +543,7 @@ function releasePlayer() {
   player.respawn(st.x, st.z, st.heading);
   rig.snapTo(player.ped.x, player.ped.z);
   maintainPopulation(true, false);
-  updates.atSafePoint();
+  // Not a safe point for app updates: the run (score, car, stars) carries on.
 }
 
 // --- Simulation ---
@@ -1202,16 +1202,15 @@ function setPaused(p: boolean, reason: PauseReason = 'paused') {
   events.emit({ type: 'pause', paused: p });
 }
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) return;
-  // Behind the title there's nothing to lose: just take any waiting update.
-  if (frontDoor.inTitle) {
-    updates.atSafePoint();
+  // A waiting update goes in behind the title, or on return after a long absence; never on a plain app switch mid-run.
+  if (!document.hidden) {
+    updates.pageShown(performance.now());
     return;
   }
+  updates.pageHidden(performance.now(), frontDoor.inTitle);
+  if (frontDoor.inTitle) return;
   pausedForContext = false;
   setPaused(true);
-  // Backgrounded: nobody is watching, so a waiting update can go in now.
-  updates.atSafePoint();
 });
 
 // iOS drops the GL context of backgrounded or memory-starved pages. Say so,

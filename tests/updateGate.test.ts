@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { UpdateGate } from '../src/core/updateGate';
+import { LONG_ABSENCE_MS, UpdateGate } from '../src/core/updateGate';
 
 describe('app update gate', () => {
   it('does nothing at safe points until an update is waiting', () => {
@@ -21,5 +21,46 @@ describe('app update gate', () => {
     expect(gate.atSafePoint()).toBe(true);
     expect(gate.atSafePoint()).toBe(false);
     expect(apply).toHaveBeenCalledOnce();
+  });
+});
+
+describe('app update gate and page visibility', () => {
+  it('applies when the title screen is hidden', () => {
+    const apply = vi.fn();
+    const gate = new UpdateGate(apply);
+    gate.markReady();
+    expect(gate.pageHidden(0, true)).toBe(true);
+    expect(apply).toHaveBeenCalledOnce();
+  });
+
+  it('keeps a run through a plain app switch', () => {
+    const apply = vi.fn();
+    const gate = new UpdateGate(apply);
+    gate.markReady();
+    expect(gate.pageHidden(1000, false)).toBe(false);
+    expect(gate.pageShown(1000 + LONG_ABSENCE_MS - 1)).toBe(false);
+    expect(apply).not.toHaveBeenCalled();
+    expect(gate.pending).toBe(true);
+  });
+
+  it('applies on return after a long absence', () => {
+    const apply = vi.fn();
+    const gate = new UpdateGate(apply);
+    gate.markReady();
+    gate.pageHidden(5000, false);
+    expect(gate.pageShown(5000 + LONG_ABSENCE_MS)).toBe(true);
+    expect(apply).toHaveBeenCalledOnce();
+  });
+
+  it('a show without a recorded hide never applies', () => {
+    const apply = vi.fn();
+    const gate = new UpdateGate(apply);
+    gate.markReady();
+    expect(gate.pageShown(1e9)).toBe(false);
+    // Each absence is measured from its own hide.
+    gate.pageHidden(0, false);
+    gate.pageShown(10);
+    expect(gate.pageShown(LONG_ABSENCE_MS * 2)).toBe(false);
+    expect(apply).not.toHaveBeenCalled();
   });
 });

@@ -118,8 +118,9 @@ vibration, perf overlay (Off / FPS / Full).
   a phone (never below 1x on high-DPI screens), keeps going past effects-only
   steps that don't help a fill-bound GPU, and treats a steady 30 Hz (Low
   Power Mode) as a cap, not overload.
-- App updates wait for respawn, the page being hidden, or "restart now" on
-  the pause screen; a lost WebGL context pauses until it's restored (back
+- App updates wait for respawn after WASTED/BUSTED, the title screen
+  going to the background, a return after 10+ minutes away, or "restart
+  now" on the pause screen (never a plain app switch mid-run); a lost WebGL context pauses until it's restored (back
   on the pause menu, the city is redrawn and every program compiled behind
   it at once, not on RESUME), and offers RELOAD THE GAME (save flushed
   first) if no restore comes within 6 s.
