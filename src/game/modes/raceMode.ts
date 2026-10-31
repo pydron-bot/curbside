@@ -127,6 +127,15 @@ export class RaceMode implements Mode {
     const run = this.run!;
     run.fail();
     ctx.holdControls = false;
+    ctx.deps.bus.emit({
+      type: 'activityEnd',
+      kind: 'race',
+      id: run.def.id,
+      time: run.time,
+      dev: run.dev,
+      medal: finished ? raceMedal(run.time, run.dev) : null,
+      end: finished ? 'finish' : why,
+    });
     if (finished) {
       const id = run.def.id;
       const medal = raceMedal(run.time, run.dev);

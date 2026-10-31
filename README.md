@@ -488,6 +488,14 @@ recycling, and routes `HeatDeps.pay`, RESTART and quit-to-title through it.
 The rules are pure, tested modules; the runtimes that put them on screen
 are `src/game/modes/*Mode.ts`.
 
+- **Play log** (`game/playLog.ts`): local tuning telemetry, never sent
+  anywhere. A ring of the last 200 results in `curbside.playlog` (JSON
+  array): Chaos Runs (score, medal, elapsed, end), races (time, dev, ratio,
+  medal or fail reason) and chases of 2+ stars (peak, seconds at five
+  stars, duration, lost / busted / wasted / respray / reset), each stamped
+  with build, device (touch / keys / pad) and quality tier. It listens to
+  `wanted` and `activityEnd` (emitted by RaceMode and ChaosRunMode) and
+  writes only when an entry is added. `__ub.playLog.export()` / `clear()`.
 - **Save** (`game/progressSave.ts`): one versioned JSON record,
   `curbside.save`: cash, lifetime stats, best score per mode, medals, race
   times, packages found, frenzies beaten, export orders, taxi streak,

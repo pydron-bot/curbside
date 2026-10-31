@@ -122,7 +122,27 @@ export type GameEvent =
    * Chaos Run with a medal. Whoever is on foot there (the player, the story
    * characters) cheers.
    */
-  | { type: 'celebrate'; x: number; z: number };
+  | { type: 'celebrate'; x: number; z: number }
+  /**
+   * A race or a Chaos Run ended (finished or failed), for the play log.
+   * time: the race time or the run's elapsed seconds; end: 'finish', the
+   * Chaos Run's ChaosEnd ('time' / 'wasted' / 'busted'), or the race's fail
+   * reason ('WASTED', 'TOO SLOW', ...).
+   */
+  | {
+      type: 'activityEnd';
+      kind: 'race' | 'chaosRun';
+      id: string;
+      time: number;
+      medal: 'bronze' | 'silver' | 'gold' | null;
+      end: string;
+      /** Race: the dev (par) time, s. */
+      dev?: number;
+      /** Chaos Run: the final score. */
+      score?: number;
+      /** Chaos Run: seconds of bonus time earned. */
+      bonusTime?: number;
+    };
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;

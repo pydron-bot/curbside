@@ -514,6 +514,8 @@ export class GameAudio {
         return this.oneShot('door', e, FALLOFF.near, 0.8, 0.2, sfx.spray);
       case 'celebrate':
         return; // the mission / Chaos Run card plays its own sting
+      case 'activityEnd':
+        return; // the race banner / results card play their own stings
       default: {
         const unhandled: never = e;
         return unhandled;

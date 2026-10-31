@@ -1,6 +1,8 @@
 import { Scene, type ColorRepresentation } from 'three';
 import { registerSW } from 'virtual:pwa-register';
 import { events } from './core/events';
+import { BUILD_ID } from './core/build';
+import { PlayLog, browserStorage } from './game/playLog';
 import { Input } from './core/input';
 import { FixedStep } from './core/loop';
 import { UpdateGate } from './core/updateGate';
@@ -393,6 +395,9 @@ const streetLife = new StreetLife({
 
 // --- Input ---
 const input = new Input();
+// Results, races and chases kept locally for tuning (localStorage 'curbside.playlog').
+const playLog = new PlayLog({ storage: browserStorage(), build: BUILD_ID, device: () => input.lastDevice, tier: () => getQuality().name, now: () => simTime });
+playLog.attach(events);
 input.attachMouse(renderer.domElement);
 const haptics = new Haptics(input, events);
 // Screen on while a run is played and not paused (controller-only play never touches it).
@@ -1288,6 +1293,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
     return paused;
   },
   setPaused,
+  playLog,
   get simTime() {
     return simTime;
   },
