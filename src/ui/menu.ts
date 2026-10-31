@@ -3,18 +3,22 @@
  * screens: MenuNav moves a focus highlight between items with the keyboard or
  * a gamepad (spatially, so grids and two-column layouts just work), and
  * left/right adjust sliders and choices. Pointer input goes straight to the
- * DOM (click); keyboard and pad arrive as NavCommands from Input, never as
+ * DOM (onTap: a touch tap acts even with a thumb on the stick, a mouse
+ * clicks); keyboard and pad arrive as NavCommands from Input, never as
  * native focus, so Enter can't double-activate a focused button.
  */
 import './tokens.css';
 import './menu.css';
 import type { NavCommand } from '../core/input';
 import { ICONS, type IconName } from './icons';
+import { onTap } from './tap';
 
 export interface NavItem {
   el: HTMLElement;
-  /** Enter / A / click. */
+  /** Enter / A / tap / click. */
   activate?(): void;
+  /** Activate on the browser's click only, never a pointer tap (a probe that measures click). */
+  clickOnly?: boolean;
   /** Left / right on an adjustable item (slider, choice, toggle). */
   adjust?(dir: -1 | 1): void;
 }
@@ -30,17 +34,19 @@ export class MenuNav {
     });
   }
 
-  /** Register an item; a click on it activates it, hovering it with a mouse focuses it. */
+  /** Register an item; a tap or click on it activates it, hovering it with a mouse focuses it. */
   add(item: NavItem): NavItem {
     this.items.push(item);
     item.el.classList.add('nav-item');
     if (item.activate) {
-      item.el.addEventListener('click', (e) => {
-        e.preventDefault();
-        (document.activeElement as HTMLElement | null)?.blur?.();
-        this.focus(item);
-        item.activate?.();
-      });
+      onTap(
+        item.el,
+        () => {
+          this.focus(item);
+          item.activate?.();
+        },
+        { clickOnly: item.clickOnly },
+      );
     }
     item.el.addEventListener('pointermove', (e) => {
       if (e.pointerType === 'mouse' && this.current !== item) this.focus(item);

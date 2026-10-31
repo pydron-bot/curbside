@@ -12,6 +12,7 @@ import { pickupLabel } from '../world/pickups';
 import { hiddenSetter, styleSetter, textSetter } from './domWrite';
 import { ICONS } from './icons';
 import { ScoreHud } from './scoreHud';
+import { onTap } from './tap';
 import { WastedScreen } from './wastedScreen';
 
 /** What the HUD shows this frame. main.ts fills one of these and reuses it. */
@@ -182,10 +183,7 @@ export class Hud {
     this.setGhostScale = styleSetter(this.hpGhost, 'transform');
     drawTicks(q('.sp-ticks'));
 
-    q('.hud-pause').addEventListener('click', (e) => {
-      (e.currentTarget as HTMLElement).blur();
-      opts.onPause();
-    });
+    onTap(q('.hud-pause'), () => opts.onPause());
     const showDebug = () => {
       // ?debug forces the full overlay for this session without saving it.
       const mode = this.debugFromUrl ? 'full' : settings.perfOverlay;

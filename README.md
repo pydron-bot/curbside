@@ -1293,6 +1293,21 @@ screen is on top; `main.ts` hands it a few hooks. The HUD only writes to
 the DOM what changed since the last frame; nothing in the per-frame paths
 allocates.
 
+Buttons act on taps, not clicks. A browser only makes a click from a lone
+finger, and in play a thumb is nearly always on the stick or the pedals, so
+`onTap(el, fn)` (`src/ui/tap.ts`; the decision, `tapTracker.ts`, is
+unit-tested) judges touch and pen presses from pointer events: lifted within
+14 px of where it landed, within 1.5 s, still over the button, its list not
+scrolling (nor flung just before). `fn` runs in the touchend that follows (a
+user gesture on every engine) and that touchend is cancelled, so no click
+acts twice or lands on whatever the tap uncovered. With several fingers on
+buttons the first to lift as a tap acts and the rest lift as nothing; a lone
+finger held longer than 1.5 s is left to the browser's click, as before.
+Mouse, keyboard and VoiceOver still arrive as click. `onTap` drops focus
+before `fn` (so Enter can't click a mouse-focused button as well).
+`MenuNav.add` uses it for every item; a new one-off button should too, never
+a bare `click` listener.
+
 Safe areas come from `env(safe-area-inset-*)` through `--safe-t/r/b/l` on
 `:root`; a test can override those to emulate a notched phone
 (`safeArea.ts` reads them back for JS layout). The touch layout is checked
@@ -1315,6 +1330,7 @@ frontDoor.title.addMode({ id, label, sub?, onSelect })   // a mode under PLAY (e
                                                          // Picking it starts a fresh run like PLAY, then calls
                                                          // onSelect() to set the mode up on top of it.
 frontDoor.play(mode?)                                    // the PLAY path itself (closes the title, fresh run)
+onTap(el, fn, { clickOnly? })                            // a button that works with a thumb on the stick (tap.ts)
 radar.setBlip(id, { x, z, kind?, colour?, icon?, pulse?, edgeArrow?, size? })
 radar.removeBlip(id)
 radar.setWaypoint(x, z) / radar.clearWaypoint()          // route along the roads + rim arrow when off-radar

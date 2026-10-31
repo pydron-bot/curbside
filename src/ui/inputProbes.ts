@@ -9,7 +9,7 @@ import type { MenuNav } from './menu';
 
 /** The pad readout refreshes this often while the sheet is open, ms. */
 const PAD_POLL_MS = 100;
-/** A pointer press this recent means a click on a down/up pad isn't a keyboard press, ms. */
+/** A pointer that pressed or lifted this recently means a down/up pad's activation isn't a keyboard press, ms. */
 const POINTER_RECENT_MS = 1000;
 
 type Trigger = 'down' | 'up' | 'click' | 'timeout';
@@ -62,29 +62,36 @@ export class InputProbes {
     this.hapticEl = this.el.querySelector('.diag-haptic-out')!;
     this.rumbleEl = this.el.querySelector('.diag-rumble-out')!;
     this.padEl = this.el.querySelector('.diag-pad-out')!;
-    const pad = (parent: Element, label: string, activate: () => void) => {
+    const pad = (parent: Element, label: string, activate: () => void, clickOnly = false) => {
       const b = document.createElement('button');
       b.type = 'button';
       b.tabIndex = -1;
       b.className = 'tab diag-pad';
       b.textContent = label;
       parent.append(b);
-      nav.add({ el: b, activate });
+      nav.add({ el: b, activate, clickOnly });
       return b;
     };
     // Enter / A on the down or up pad (no pointer involved) still fires, as a click.
     const keyOnly = () => {
       if (performance.now() - this.lastPointer >= POINTER_RECENT_MS) this.fire('click');
     };
+    // From the lift as well: a tap acts in its touchend however long it was held.
+    const pointer = () => (this.lastPointer = performance.now());
     const down = pad(pads, 'ON DOWN', keyOnly);
     down.addEventListener('pointerdown', () => {
-      this.lastPointer = performance.now();
+      pointer();
       this.fire('down');
     });
+    down.addEventListener('pointerup', pointer);
     const up = pad(pads, 'ON UP', keyOnly);
-    up.addEventListener('pointerdown', () => (this.lastPointer = performance.now()));
-    up.addEventListener('pointerup', () => this.fire('up'));
-    pad(pads, 'ON CLICK', () => this.fire('click'));
+    up.addEventListener('pointerdown', pointer);
+    up.addEventListener('pointerup', () => {
+      pointer();
+      this.fire('up');
+    });
+    // The browser's own click (menu buttons act on the tap, see tap.ts).
+    pad(pads, 'ON CLICK', () => this.fire('click'), true);
     pad(pads, 'AFTER 500 MS', () => {
       this.hapticEl.textContent = 'waiting 500 ms…';
       window.setTimeout(() => this.fire('timeout'), 500);
