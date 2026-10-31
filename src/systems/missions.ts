@@ -268,6 +268,23 @@ export class MissionRun {
   }
 }
 
+/** A repeat job pays this share of the story reward (rounded to $50). */
+export const REPLAY_PAY = 0.5;
+
+export function replayReward(def: MissionDef): number {
+  return Math.max(50, Math.round((def.reward * REPLAY_PAY) / 50) * 50);
+}
+
+/**
+ * Once every story job is passed the phones ring with them again, in story
+ * order, as REPEAT JOBs: `replays` is how many have been done (saved, so the
+ * rotation carries on across sessions). Null while the story isn't done.
+ */
+export function replayJob(missions: readonly MissionDef[], passed: readonly string[], replays: number): MissionDef | null {
+  if (missions.length === 0 || missions.some((m) => !passed.includes(m.id))) return null;
+  return missions[Math.max(0, Math.floor(replays)) % missions.length];
+}
+
 /** Every tag a mission spawns (cars and people), for clean-up. */
 export function missionTags(def: MissionDef): { cars: string[]; peds: string[] } {
   const cars = new Set<string>();

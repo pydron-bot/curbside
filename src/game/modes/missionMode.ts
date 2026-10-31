@@ -5,7 +5,9 @@
  * beside it) to answer: the call plays as a card, then the job runs on the
  * mission engine (systems/missions.ts) with its objective on the activity
  * card, its targets on the radar and marked in the street. Pass it for the
- * pay and the next call; fail it and the phone rings again.
+ * pay and the next call; fail it and the phone rings again. Once the story
+ * is done the phones ring with its jobs again, in order, as REPEAT JOBs (for
+ * part of the pay, no completion).
  *
  * People a job needs are only put on the street when you're near their spot
  * (the crowd recycles anyone far from the player), and again if they get
@@ -15,11 +17,12 @@ import { driverDoorPosition, speed, type VehicleArchetype } from '../../entities
 import type { GlowSprites } from '../../render/glowSprites';
 import { MARK, beacon, gate, groundRing, nearView, type ProgressProps } from '../../render/progressLook';
 import { provoke, resumeWalking, spawnPed } from '../../systems/crowd';
-import { MissionRun, type MissionAction, type MissionDef, type MissionSignal, type MissionStep, type MissionView } from '../../systems/missions';
+import { MissionRun, replayJob, replayReward, type MissionAction, type MissionDef, type MissionSignal, type MissionStep, type MissionView } from '../../systems/missions';
 import { buildMissions } from '../../systems/missionsData';
 import type { DialogueCard } from '../../ui/progressScreens';
 import type { BlipOptions } from '../../ui/radar';
 import { fmt } from '../../ui/scoreHud';
+import { driverFor } from '../../systems/traffic';
 import { BLOCK_SIZE, type Rect } from '../../world/city';
 import { STORY_BODIES, type BodyKind } from '../bodies';
 import type { CrowdPed, Vehicle } from '../population';
@@ -99,6 +102,10 @@ export class MissionMode implements Mode {
   private readonly phoneById: Map<string, Spot>;
   /** The next job, worked out again when one is passed (undefined: stale). */
   private nextJob: MissionDef | null | undefined = undefined;
+  /** It's a REPEAT JOB (the story is done). */
+  private nextIsReplay = false;
+  /** The job running (or being called about) is a repeat. */
+  private replaying = false;
   private ringIn = 0;
   private armed = true;
   private near: Spot | null = null;
@@ -156,11 +163,13 @@ export class MissionMode implements Mode {
     bus.on('busted', () => this.run && this.signal(this.run.fail('BUSTED')));
   }
 
-  /** The next job (null when the story is done). Cached: it's asked every step and frame. */
+  /** The next job: the story's, or a repeat once it's done. Cached: it's asked every step and frame. */
   get next(): MissionDef | null {
     if (this.nextJob === undefined) {
-      const done = this.ctx.progress.data.missions;
-      this.nextJob = this.missions.find((m) => !done.includes(m.id)) ?? null;
+      const save = this.ctx.progress.data;
+      const story = this.missions.find((m) => !save.missions.includes(m.id)) ?? null;
+      this.nextIsReplay = story === null;
+      this.nextJob = story ?? replayJob(this.missions, save.missions, save.stats.jobsReplayed);
     }
     return this.nextJob;
   }
@@ -216,12 +225,14 @@ export class MissionMode implements Mode {
   private answer(m: MissionDef): void {
     const ctx = this.ctx;
     this.calling = true;
+    this.replaying = this.nextIsReplay;
     ctx.busy = 'mission';
     ctx.deps.audio.ui('confirm');
     // Nothing left over (a frenzy's PASSED) showing round the card.
     ctx.ui.clearBanner();
     ctx.openModal(this.card);
-    this.card.show('INCOMING CALL', m.title, m.intro, `PAYS $${fmt(m.reward)}`, "LET'S GO", ctx.focusRing, () => {
+    const head = this.replaying ? 'REPEAT JOB' : 'INCOMING CALL';
+    this.card.show(head, m.title, m.intro, `PAYS $${fmt(this.reward(m))}`, "LET'S GO", ctx.focusRing, () => {
       ctx.closeModal(this.card);
       this.calling = false;
       this.begin(m);
@@ -261,21 +272,26 @@ export class MissionMode implements Mode {
       case 'passed': {
         this.act(s.prev.done);
         const m = run.def;
+        const replay = this.replaying;
         this.finish(true);
-        ctx.progress.complete('missions', m.id);
+        // A repeat counts toward the rotation, not completion.
+        if (replay) ctx.progress.data.stats.jobsReplayed++;
+        else ctx.progress.complete('missions', m.id);
+        ctx.progress.markDirty();
         this.nextJob = undefined;
-        const paid = ctx.pay(m.reward, 'mission', 'MISSION');
+        const paid = ctx.pay(this.reward(m, replay), 'mission', replay ? 'REPEAT JOB' : 'MISSION');
         // Whoever's on foot at the finish (you, Vex, Tuna) cheers.
         const at = ctx.deps.player.position;
         ctx.deps.bus.emit({ type: 'celebrate', x: at.x, z: at.z });
         // The debrief card says MISSION PASSED and the pay (no banner under it).
         ctx.deps.audio.ui('success');
         ctx.progress.flush();
-        const last = this.next === null;
+        // Just passed the last story job: what rings next is a repeat.
+        const last = !replay && this.next !== null && this.nextIsReplay;
         // A step's objective line can still be up (a quick last step): not behind the debrief.
         ctx.ui.clearBanner();
         ctx.openModal(this.card);
-        this.card.show(last ? 'STORY COMPLETE' : 'MISSION PASSED', m.title, m.outro, `+$${fmt(paid)}`, 'CONTINUE', ctx.focusRing, () => ctx.closeModal(this.card));
+        this.card.show(replay ? 'JOB DONE' : last ? 'STORY COMPLETE' : 'MISSION PASSED', m.title, m.outro, `+$${fmt(paid)}`, 'CONTINUE', ctx.focusRing, () => ctx.closeModal(this.card));
         return;
       }
       case 'failed':
@@ -297,6 +313,7 @@ export class MissionMode implements Mode {
     const ctx = this.ctx;
     this.run = null;
     this.calling = false;
+    this.replaying = false;
     if (ctx.busy === 'mission') ctx.busy = null;
     this.clearBlips();
     this.matches.length = 0;
@@ -327,6 +344,8 @@ export class MissionMode implements Mode {
       switch (a.do) {
         case 'spawnCar': {
           const v = ctx.spawnCar(a.archetype, a.paint, a.x, a.z, a.heading);
+          // A driven target pulls out into traffic (it stays pinned, so upkeep never recycles it).
+          if (a.drive) v.ai = driverFor(v.sim, ctx.deps.rand);
           const car: MissionCar = { tag: a.tag, blipId: `m-${a.tag}`, v, view: { x: a.x, z: a.z, wrecked: false } };
           this.cars.set(a.tag, car);
           this.carList.push(car);
@@ -452,6 +471,11 @@ export class MissionMode implements Mode {
         a.s.heading = Math.atan2(at.x - a.s.x, at.z - a.s.z);
       }
     }
+  }
+
+  /** What a job pays: the story reward, or a repeat's share. */
+  private reward(m: MissionDef, replay = this.replaying): number {
+    return replay ? replayReward(m) : m.reward;
   }
 
   /** Radar: the step's targets (and a route to a place). */
