@@ -114,7 +114,8 @@ function onTouchEnd(e: TouchEvent): void {
     if (t instanceof Node && ending.contains(t)) {
       // A lone finger held past TAP_MAX_MS: iOS clicks that itself, as it did before onTap.
       if (slow && e.touches.length === 0) tracker.releaseClick();
-      else e.preventDefault();
+      // A press that turned into a scroll lifts uncancelable (Chrome logs an intervention); no click follows it anyway.
+      else if (e.cancelable) e.preventDefault();
       settle();
       return;
     }
