@@ -4,13 +4,14 @@
  * times a second per unit).
  */
 import type { StaticGrid } from '../world/collision';
+import { len2 } from '../core/len';
 
 /**
  * Can someone at (ax, az) see (bx, bz)? Always within `near`; within `far`
  * if no building (or tree) blocks the straight line between them.
  */
 export function sees(grid: StaticGrid, ax: number, az: number, bx: number, bz: number, near: number, far: number): boolean {
-  const d = Math.hypot(bx - ax, bz - az);
+  const d = len2(bx - ax, bz - az);
   if (d < near) return true;
   if (d > far) return false;
   return lineOfSight(grid, ax, az, bx, bz);
@@ -20,7 +21,7 @@ export function sees(grid: StaticGrid, ax: number, az: number, bx: number, bz: n
 export function lineOfSight(grid: StaticGrid, ax: number, az: number, bx: number, bz: number): boolean {
   const dx = bx - ax;
   const dz = bz - az;
-  const len = Math.hypot(dx, dz);
+  const len = len2(dx, dz);
   if (len < 1e-6) return true;
   const rects = grid.near((ax + bx) / 2, (az + bz) / 2, len / 2 + 1);
   for (let i = 0; i < rects.length; i++) {

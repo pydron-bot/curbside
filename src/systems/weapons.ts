@@ -9,6 +9,7 @@
  * sprays and tapped shots land.
  */
 import type { Rect } from '../world/city';
+import { len2 } from '../core/len';
 
 export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'grenade' | 'molotov' | 'rocket';
 
@@ -337,7 +338,7 @@ export function autoAim(
     const t = targets[i];
     const dx = t.x - ox;
     const dz = t.z - oz;
-    const d = Math.hypot(dx, dz);
+    const d = len2(dx, dz);
     if (d < 0.3 || d > range) continue;
     const cos = (dx * fx + dz * fz) / d;
     if (cos < coneCos) continue;
@@ -389,7 +390,7 @@ export function lockTarget(
     const t = targets[i];
     const dx = t.x - ox;
     const dz = t.z - oz;
-    const d = Math.hypot(dx, dz);
+    const d = len2(dx, dz);
     if (d < 0.3 || d > range) continue;
     const cos = (dx * fx + dz * fz) / d;
     const anyAngle = t.hostile && aimCone <= 0;
@@ -435,7 +436,7 @@ export function driveByAim(
     const t = targets[i];
     const dx = t.x - x;
     const dz = t.z - z;
-    const d = Math.hypot(dx, dz);
+    const d = len2(dx, dz);
     if (d < 1.5 || d > range) continue;
     const across = (dx * lx + dz * lz) / d; // +1 straight out of the left window, -1 the right
     if (side !== 0 && across * side <= 0) continue;

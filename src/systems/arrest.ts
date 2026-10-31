@@ -8,6 +8,7 @@
  */
 import { bodyOf, carCircles, type Point } from './physics';
 import type { VehicleState } from '../entities/vehicle';
+import { len2 } from '../core/len';
 
 export interface ArrestSituation {
   /** Wanted level: nobody arrests a clean player. */
@@ -92,7 +93,7 @@ export function carsTouching(a: VehicleState, b: VehicleState): boolean {
   const reach = ba.radius + bb.radius + TOUCH_SLOP;
   for (const p of carCircles(a, circlesA)) {
     for (const q of carCircles(b, circlesB)) {
-      if (Math.hypot(p.x - q.x, p.z - q.z) < reach) return true;
+      if (len2(p.x - q.x, p.z - q.z) < reach) return true;
     }
   }
   return false;

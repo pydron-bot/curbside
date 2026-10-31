@@ -9,6 +9,7 @@
  */
 import type { StaticGrid } from '../world/collision';
 import { rayRect } from './weapons';
+import { len2 } from '../core/len';
 
 export type ProjectileKind = 'grenade' | 'molotov' | 'rocket';
 
@@ -101,7 +102,7 @@ export function throwVelocity(
 ): void {
   const dx = tx - x;
   const dz = tz - z;
-  const d = Math.hypot(dx, dz);
+  const d = len2(dx, dz);
   // Longer throws loft higher: flight time grows with distance.
   const t = 0.45 + d * 0.03;
   out.time = t;
@@ -117,7 +118,7 @@ export function throwVelocity(
 export function throwTarget(x: number, z: number, aimX: number, aimZ: number, range: number, out: { x: number; z: number }): void {
   const dx = aimX - x;
   const dz = aimZ - z;
-  const d = Math.hypot(dx, dz);
+  const d = len2(dx, dz);
   const k = d < 1e-6 ? 0 : Math.min(range, Math.max(MIN_THROW, d)) / d;
   out.x = x + (d < 1e-6 ? 0 : dx * k);
   out.z = z + (d < 1e-6 ? MIN_THROW : dz * k);
@@ -135,7 +136,7 @@ export const WALL_CLEARANCE = 1;
 export function clampThrowToWalls(x: number, z: number, out: { x: number; z: number }, grid: StaticGrid): boolean {
   const dx = out.x - x;
   const dz = out.z - z;
-  const d = Math.hypot(dx, dz);
+  const d = len2(dx, dz);
   if (d < 1e-6) return false;
   const ux = dx / d;
   const uz = dz / d;
@@ -258,7 +259,7 @@ export class Projectiles {
     p.y += p.vy * dt;
     p.z += p.vz * dt;
     const airborne = p.y > GRENADE_RADIUS + 0.01 || p.vy > 0;
-    p.spin += dt * (airborne ? 12 : Math.hypot(p.vx, p.vz) * 4);
+    p.spin += dt * (airborne ? 12 : len2(p.vx, p.vz) * 4);
     // Walls: a bottle shatters, a grenade bounces off.
     scratchPos.x = p.x;
     scratchPos.z = p.z;
@@ -285,7 +286,7 @@ export class Projectiles {
       } else {
         // Rolling to a stop.
         p.vy = 0;
-        const sp = Math.hypot(p.vx, p.vz);
+        const sp = len2(p.vx, p.vz);
         const k = sp > 1e-6 ? Math.max(0, sp - ROLL_FRICTION * dt) / sp : 0;
         p.vx *= k;
         p.vz *= k;

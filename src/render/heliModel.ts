@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SURF, tagged } from './propModels';
 import { UB_COMMON, after, replace, useWorldUniforms } from './shaderLib';
 import { publicUrl } from '../core/paths';
+import { len2 } from '../core/len';
 
 /** Rotor speeds, rad/s: the main rotor's blur and the tail rotor's. */
 const MAIN_SPIN = 26;
@@ -93,7 +94,7 @@ export class HeliModel {
     this.altitude += (want - this.altitude) * Math.min(1, dt * 1.5);
     // On the camera's ray through (h.x, 0, h.z), at the altitude.
     const t = cy > this.altitude + 1 ? this.altitude / cy : 0;
-    const speed = Math.hypot(h.vx, h.vz);
+    const speed = len2(h.vx, h.vz);
     let turn = h.heading - this.lastHeading;
     turn = Math.atan2(Math.sin(turn), Math.cos(turn));
     this.lastHeading = h.heading;

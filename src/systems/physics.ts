@@ -10,6 +10,7 @@
 import type { PedState } from '../entities/pedestrian';
 import { CAR_BODY, type CarBody, type VehicleState } from '../entities/vehicle';
 import type { StaticGrid } from '../world/collision';
+import { len2 } from '../core/len';
 
 /** The standard car's circles (most cars); long vehicles and bikes carry their own (VehicleState.body). */
 export const CAR_CIRCLE_RADIUS = CAR_BODY.radius;
@@ -91,7 +92,7 @@ export function bodyDistance(s: VehicleState, x: number, z: number): number {
   const fz = Math.cos(s.heading);
   let best = Infinity;
   for (const o of body.offsets) {
-    const d = Math.hypot(s.x + fx * o - x, s.z + fz * o - z);
+    const d = len2(s.x + fx * o - x, s.z + fz * o - z);
     if (d < best) best = d;
   }
   return Math.max(0, best - body.radius);
@@ -123,7 +124,7 @@ export function collideVehicleStatic(s: VehicleState, grid: StaticGrid, contact?
   if (from) {
     const dx = s.x - from.x;
     const dz = s.z - from.z;
-    const travel = Math.hypot(dx, dz);
+    const travel = len2(dx, dz);
     const span = SWEEP_SHARE * (THIN_HALF + bodyOf(s).radius);
     if (travel > span && travel < SWEEP_MAX) {
       // Re-run the move in short hops, each from where the last was pushed to:
@@ -215,7 +216,7 @@ export function collideVehicles(a: VehicleState, b: VehicleState, contact?: Poin
     for (const q of cb) {
       let dx = p.x - q.x;
       let dz = p.z - q.z;
-      const d = Math.hypot(dx, dz);
+      const d = len2(dx, dz);
       const overlap = touch - d;
       if (overlap <= 0) continue;
       if (d > 1e-6) {
@@ -274,7 +275,7 @@ export function collidePedVehicle(p: PedState, v: VehicleState): number {
   for (const q of carCircles(v, scratchA)) {
     let dx = p.x - q.x;
     let dz = p.z - q.z;
-    const d = Math.hypot(dx, dz);
+    const d = len2(dx, dz);
     const overlap = body.radius + PED_RADIUS - d;
     if (overlap <= 0) continue;
     if (d > 1e-6) {

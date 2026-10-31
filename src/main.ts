@@ -67,6 +67,7 @@ import { enteringRamp, placeKickers, placeRamps, rampSolids, rideRamps } from '.
 import { RampMesh } from './render/rampMesh';
 import {
   bodyDistance,
+  bodyOf,
   collidePedStatic,
   collidePedVehicle,
   collideVehicleStatic,
@@ -108,6 +109,7 @@ import { publicUrl } from './core/paths';
 import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
 import { Destruction } from './render/destruction';
 import { BlowWall } from './ui/blowWall';
+import { len2 } from './core/len';
 
 const app = document.getElementById('app')!;
 
@@ -508,9 +510,13 @@ function nearestEnterable(): Vehicle | null {
   for (const v of vehicles) {
     const dx = v.sim.x - player.ped.x;
     const dz = v.sim.z - player.ped.z;
+    // Runs every frame over every car: skip the far ones before the body scan.
+    const far = ENTER_RANGE + bodyOf(v.sim).reach;
+    if (dx * dx + dz * dz > far * far) continue;
     // Long vehicles: anywhere along the body counts (the bus's door is 4 m from its middle).
     const d2 = Math.min(dx * dx + dz * dz, (bodyDistance(v.sim, player.ped.x, player.ped.z) + ENTER_BODY_SLACK) ** 2);
-    if (d2 < bestD2 && speed(v.sim) < ENTER_MAX_SPEED && !v.damage.wrecked && !v.exported) {
+    const sv = v.sim;
+    if (d2 < bestD2 && sv.vx * sv.vx + sv.vz * sv.vz < ENTER_MAX_SPEED * ENTER_MAX_SPEED && !v.damage.wrecked && !v.exported) {
       best = v;
       bestD2 = d2;
     }
@@ -523,7 +529,7 @@ function ejectDriver(v: Vehicle, fromX: number, fromZ: number) {
   v.ai = null;
   // Far from the player nobody would see them, and Population would just recycle them.
   const at = player.position;
-  if (Math.hypot(v.sim.x - at.x, v.sim.z - at.z) > CROWD_DESPAWN) return;
+  if (len2(v.sim.x - at.x, v.sim.z - at.z) > CROWD_DESPAWN) return;
   const door = driverDoorPosition(v.sim);
   const agent = spawnPed(0, 0, 0, 0, rand);
   Object.assign(agent.s, { x: door.x, z: door.z, vx: 0, vz: 0, heading: v.sim.heading });
@@ -740,7 +746,7 @@ function simulate(dt: number) {
         const dz = v.sim.z - ds.z;
         const d2 = dx * dx + dz * dz;
         if (d2 > NEAR_MISS_DIST * NEAR_MISS_DIST || d2 < 2.05 * 2.05) continue;
-        if (Math.hypot(v.sim.vx - ds.vx, v.sim.vz - ds.vz) < NEAR_MISS_SPEED) continue;
+        if (len2(v.sim.vx - ds.vx, v.sim.vz - ds.vz) < NEAR_MISS_SPEED) continue;
         if (simTime - (nearMissAt.get(v) ?? -99) < 2.5) continue;
         nearMissAt.set(v, simTime);
         award(score.award('nearMiss'));
@@ -829,7 +835,7 @@ function throwRider(v: Vehicle, impact: number, byPlayer = false) {
   if (!v.ai) return;
   v.ai = null;
   const at = player.position;
-  if (Math.hypot(s.x - at.x, s.z - at.z) > CROWD_DESPAWN) return;
+  if (len2(s.x - at.x, s.z - at.z) > CROWD_DESPAWN) return;
   const door = driverDoorPosition(s);
   const agent = spawnPed(0, 0, 0, 0, rand);
   Object.assign(agent.s, { x: door.x, z: door.z, vx: 0, vz: 0, heading: s.heading });
@@ -932,7 +938,7 @@ function frame(now: number) {
   if (playing && !player.driving && mouseGround.valid) {
     const dx = (mouseGround.x - me.x) * MOUSE_LEAD;
     const dz = (mouseGround.z - me.z) * MOUSE_LEAD;
-    const k = Math.min(1, MOUSE_LEAD_MAX / (Math.hypot(dx, dz) || 1));
+    const k = Math.min(1, MOUSE_LEAD_MAX / (len2(dx, dz) || 1));
     rig.aimAt(dx * k, dz * k);
   } else rig.aimAt(0, 0);
   // A card over the game (results, a phone call, the shop) takes the input.
@@ -952,7 +958,7 @@ function frame(now: number) {
       combat.updateAim(false, aimInput);
     } else if (player.ready) {
       aimInput.heading = aimHeadingNow;
-      aimInput.reach = aim.active ? Math.min(1, Math.hypot(aim.x, aim.y)) : 0;
+      aimInput.reach = aim.active ? Math.min(1, len2(aim.x, aim.y)) : 0;
       aimInput.ground = input.mouseAimLive() && mouseGround.valid ? mouseGround : null;
       combat.updateAim(pressed || aim.fire || input.fireHeld, aimInput);
       if (gun) {
@@ -1025,12 +1031,12 @@ function frame(now: number) {
   audioFrame.x = focus.x;
   audioFrame.z = focus.z;
   audioFrame.car = player.driving && controls ? describeCar(audioCar, player.driving.sim, controls, player.driving.archetype) : null;
-  audioFrame.footSpeed = player.driving || attract.active ? 0 : Math.hypot(ped.vx, ped.vz);
+  audioFrame.footSpeed = player.driving || attract.active ? 0 : len2(ped.vx, ped.vz);
   audioFrame.health = player.health;
   audio.update(frameSeconds, audioFrame);
 
   const at = player.position;
-  radar.update(frameSeconds, at.x, at.z, player.driving ? player.driving.sim.heading : ped.heading, Math.hypot(at.vx, at.vz), player.driving);
+  radar.update(frameSeconds, at.x, at.z, player.driving ? player.driving.sim.heading : ped.heading, len2(at.vx, at.vz), player.driving);
   threats.update(rig.camera, population.crowd, at.x, at.z, viewW, viewH, playing && player.alive);
 
   look.update(frameSeconds, viewOfPlayer());
@@ -1052,7 +1058,7 @@ function viewOfPlayer(): PlayerView {
   playerView.z = o.position.z;
   playerView.heading = o.rotation.y;
   playerView.driving = v !== null;
-  playerView.speed = v ? speed(v.sim) : Math.hypot(player.ped.vx, player.ped.vz);
+  playerView.speed = v ? speed(v.sim) : len2(player.ped.vx, player.ped.vz);
   playerView.alive = player.alive && !attract.active; // no marker over the title
   playerView.reach = v ? (v.sim.body ?? CAR_BODY).reach : 0;
   return playerView;

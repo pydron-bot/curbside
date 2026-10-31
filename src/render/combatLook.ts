@@ -19,6 +19,7 @@ import type { Effects } from './effects';
 import { GLOW, uploadRange, type GlowSprites } from './glowSprites';
 import type { Look } from './look';
 import { worldUniforms } from './shaderLib';
+import { len2 } from '../core/len';
 
 const CAPACITY = 24;
 /** Dots in the throw arc preview. */
@@ -78,7 +79,7 @@ export class CombatLook {
       this.place(p, n++);
       if (dt <= 0) continue;
       if (p.kind === 'rocket') {
-        const sp = Math.hypot(p.vx, p.vz) || 1;
+        const sp = len2(p.vx, p.vz) || 1;
         const bx = p.x - (p.vx / sp) * 0.6;
         const bz = p.z - (p.vz / sp) * 0.6;
         // A hot tail flame every frame, a smoke trail at a rate.
@@ -131,7 +132,7 @@ export class CombatLook {
 
   /** Write one projectile's transform and colour into instance `i`. */
   private place(p: Projectile, i: number): void {
-    const sp = Math.hypot(p.vx, p.vz);
+    const sp = len2(p.vx, p.vz);
     const yaw = sp > 0.01 ? Math.atan2(p.vx, p.vz) : 0;
     if (p.kind === 'rocket') {
       this.e.set(0, yaw, p.spin);

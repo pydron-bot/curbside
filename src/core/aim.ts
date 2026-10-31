@@ -5,6 +5,7 @@
  */
 import { wrapAngle } from '../entities/vehicle';
 import { screenHeading } from './steering';
+import { len2 } from './len';
 
 /**
  * A deliberate aim (stick, mouse) snaps onto a target within this half-angle,
@@ -50,7 +51,7 @@ export function approachAngle(from: number, to: number, maxStep: number): number
 export function aimToward(px: number, pz: number, wx: number, wz: number, out: { x: number; y: number }): void {
   const dx = wx - px;
   const dy = -(wz - pz); // screen-up is world -Z
-  const d = Math.hypot(dx, dy);
+  const d = len2(dx, dy);
   if (d < 0.25) {
     out.x = out.y = 0;
     return;

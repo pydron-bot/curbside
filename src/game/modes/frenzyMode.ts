@@ -13,6 +13,7 @@ import type { Rect } from '../../world/city';
 import { KeyedText, type Mode, type ModeCtx } from './context';
 import { FRENZIES, FRENZY_PAY, FRENZY_REPLAY, FrenzyRun, type FrenzyDef } from './frenzies';
 import { placeFrenzyTokens, type Spot } from './places';
+import { len2 } from '../../core/len';
 
 /** Touching distance, m: on foot, and in a car. */
 const REACH_FOOT = 1.8;
@@ -94,7 +95,7 @@ export class FrenzyMode implements Mode {
     const at = p.position;
     const car = p.driving;
     for (const t of this.tokens) {
-      const d = Math.hypot(at.x - t.spot.x, at.z - t.spot.z);
+      const d = len2(at.x - t.spot.x, at.z - t.spot.z);
       if (d > REARM) t.armed = true;
       if (d < PROMPT_RANGE) this.near = t;
       if (!t.armed || ctx.busy) continue;

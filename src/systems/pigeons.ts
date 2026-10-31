@@ -7,6 +7,7 @@
  * the game reacts to them. No three.js (render/pigeonMesh.ts draws them).
  */
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type BlockKind, type Rect } from '../world/city';
+import { len2 } from '../core/len';
 
 export type PigeonState = 'ground' | 'fly';
 
@@ -130,7 +131,7 @@ export class Pigeons {
   /** Scare every flock within `radius` of (x, z) (a gunshot, a blast). */
   startle(x: number, z: number, radius: number): void {
     for (const f of this.flocks) {
-      if (!f.spooked && Math.hypot(f.x - x, f.z - z) < radius) this.spook(f, x, z);
+      if (!f.spooked && len2(f.x - x, f.z - z) < radius) this.spook(f, x, z);
     }
   }
 
@@ -148,7 +149,7 @@ export class Pigeons {
     for (const f of this.flocks) {
       if (f.spooked) continue;
       for (const t of w.threats) {
-        const d = Math.hypot(t.x - f.x, t.z - f.z);
+        const d = len2(t.x - f.x, t.z - f.z);
         const scared =
           (t.car && t.speed > CAR_SPOOK_SPEED && d < CAR_REACH) ||
           (!t.car && t.speed > RUN_SPOOK_SPEED && d < RUN_REACH) ||
@@ -171,7 +172,7 @@ export class Pigeons {
     // A spooked flock is gone once its last bird has taken off; far ones are dropped.
     for (let i = this.flocks.length - 1; i >= 0; i--) {
       const f = this.flocks[i];
-      const far = Math.hypot(f.x - w.x, f.z - w.z) > FLOCK_DROP && !inRect(f.x, f.z, w.view, 4);
+      const far = len2(f.x - w.x, f.z - w.z) > FLOCK_DROP && !inRect(f.x, f.z, w.view, 4);
       if (f.spooked && allFlying(f)) {
         for (const b of f.birds) this.leaving.push(b);
         this.flocks.splice(i, 1);
@@ -246,7 +247,7 @@ export class Pigeons {
     b.y += b.vy * dt;
     b.z += b.vz * dt;
     b.heading = Math.atan2(b.vx, b.vz);
-    b.pitch = -Math.atan2(b.vy, Math.hypot(b.vx, b.vz)) * 0.6;
+    b.pitch = -Math.atan2(b.vy, len2(b.vx, b.vz)) * 0.6;
     // Beat faster climbing out, then a little slower.
     b.flap = (b.flap + (dt / FLAP_SECONDS) * (b.vy > 1 ? 1.15 : 0.85)) % 1;
     if (b.airborne > FLIGHT) b.scale = Math.max(0, b.scale - dt / FADE);
@@ -262,7 +263,7 @@ export class Pigeons {
       const tz = w.z + Math.cos(a) * d;
       const spot = this.spotNear(tx, tz);
       if (!spot || inRect(spot.x, spot.z, w.view, 4)) continue;
-      if (this.flocks.some((f) => Math.hypot(f.x - spot.x, f.z - spot.z) < 15)) continue;
+      if (this.flocks.some((f) => len2(f.x - spot.x, f.z - spot.z) < 15)) continue;
       const flock: Flock = { x: spot.x, z: spot.z, birds: [], spooked: false };
       const n = FLOCK_SIZE[0] + Math.floor(r() * (FLOCK_SIZE[1] - FLOCK_SIZE[0] + 1));
       for (let i = 0; i < n; i++) {

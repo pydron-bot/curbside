@@ -26,6 +26,7 @@ import type { SignalView } from '../world/signals';
 import { inShop, placeSprayShops, placeStation, type SprayShop, type Station } from '../world/landmarks';
 import type { Player } from './player';
 import type { Population, Vehicle } from './population';
+import { len2 } from '../core/len';
 
 /** Share of the run score a bust costs. */
 export const BUST_FINE = 0.25;
@@ -354,7 +355,7 @@ export class Heat {
       const dz = c.z - Math.sin(c.heading) * 1.6 + Math.cos(c.heading) * 0.3;
       sit.copAtDoor = this.police.officerWithin(dx, dz, DOOR_RANGE);
     } else {
-      sit.speed = Math.hypot(p.ped.vx, p.ped.vz);
+      sit.speed = len2(p.ped.vx, p.ped.vz);
       sit.copDistance = this.police.nearestOfficer(p.ped.x, p.ped.z);
       sit.copCarTouching = false;
       sit.copAtDoor = false;
@@ -465,7 +466,7 @@ export function rammedBy(rammer: Vehicle, other: Vehicle, margin = RAM_MARGIN, o
   const b = other.prev;
   const dx = b.x - a.x;
   const dz = b.z - a.z;
-  const d = Math.hypot(dx, dz) || 1;
+  const d = len2(dx, dz) || 1;
   const aCloses = (a.vx * dx + a.vz * dz) / d;
   const bCloses = -(b.vx * dx + b.vz * dz) / d;
   return aCloses > bCloses + margin && bCloses <= otherMax;

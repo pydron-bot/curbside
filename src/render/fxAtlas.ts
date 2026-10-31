@@ -1,5 +1,6 @@
 import { CanvasTexture, DataTexture, LinearMipmapLinearFilter, RGBAFormat, type Texture } from 'three';
 import { FRAME } from './fxParticles';
+import { len2 } from '../core/len';
 
 /** Cells per side of the atlas (FRAME indexes them row by row from the top-left). */
 export const ATLAS_CELLS = 4;
@@ -113,7 +114,7 @@ function fbm(x: number, y: number, seed: number): number {
 /** A billowy smoke puff: fbm-eroded disc, lit from the top-left. */
 function puff(seed: number, fill: number): Shade {
   return (u, v, out) => {
-    const r = Math.hypot(u, v);
+    const r = len2(u, v);
     const n = fbm(u * 2.6 + 5, v * 2.6 + 5, seed);
     const body = 1 - smooth(0.35, 1, r + (n - 0.5) * 0.75);
     out.a = body * (0.55 + 0.45 * fill * smooth(0.15, 0.7, n + 0.2));
@@ -123,14 +124,14 @@ function puff(seed: number, fill: number): Shade {
 }
 
 function flame(u: number, v: number, out: { l: number; a: number }): void {
-  const r = Math.hypot(u * 1.1, v * 0.95 + 0.08);
+  const r = len2(u * 1.1, v * 0.95 + 0.08);
   const n = fbm(u * 3 + 2, v * 3 + 9, 5);
   out.a = 1 - smooth(0.25, 0.95, r + (n - 0.5) * 0.6);
   out.l = 0.55 + 0.45 * (1 - smooth(0, 0.6, r)) + (n - 0.5) * 0.3;
 }
 
 function dot(u: number, v: number, out: { l: number; a: number }): void {
-  const r = Math.hypot(u, v);
+  const r = len2(u, v);
   out.a = Math.max(0, 1 - r) ** 2 + (1 - smooth(0.1, 0.3, r)) * 0.6;
   out.l = 1;
 }
@@ -144,7 +145,7 @@ function spark(u: number, v: number, out: { l: number; a: number }): void {
 }
 
 function star(u: number, v: number, out: { l: number; a: number }): void {
-  const r = Math.hypot(u, v);
+  const r = len2(u, v);
   const ax = Math.abs(u);
   const ay = Math.abs(v);
   const rays = Math.exp(-ax * 18) * (1 - smooth(0.2, 1, ay)) + Math.exp(-ay * 18) * (1 - smooth(0.2, 1, ax));
@@ -154,7 +155,7 @@ function star(u: number, v: number, out: { l: number; a: number }): void {
 }
 
 function ring(u: number, v: number, out: { l: number; a: number }): void {
-  const r = Math.hypot(u, v);
+  const r = len2(u, v);
   out.a = Math.exp(-((r - 0.78) ** 2) * 220) + Math.exp(-((r - 0.78) ** 2) * 30) * 0.25;
   out.l = 1;
 }
@@ -181,14 +182,14 @@ function muzzle(u: number, v: number, out: { l: number; a: number }): void {
 }
 
 function soft(u: number, v: number, out: { l: number; a: number }): void {
-  const r = Math.hypot(u, v);
+  const r = len2(u, v);
   out.a = Math.exp(-r * r * 4) * (1 - smooth(0.8, 1, r));
   out.l = 1;
 }
 
 /** Dust: a flatter, grainier puff. */
 function dust(u: number, v: number, out: { l: number; a: number }): void {
-  const r = Math.hypot(u, v);
+  const r = len2(u, v);
   const n = fbm(u * 3.5 + 1, v * 3.5 + 3, 211);
   const grain = hash(Math.floor((u + 1) * 40), Math.floor((v + 1) * 40), 3);
   out.a = (1 - smooth(0.3, 1, r + (n - 0.5) * 0.6)) * (0.75 + 0.25 * grain);

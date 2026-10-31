@@ -27,6 +27,7 @@ import { GLOW, type GlowSprites } from './glowSprites';
 import type { Look } from './look';
 import { getDevice, getQuality } from './quality';
 import { worldUniforms } from './shaderLib';
+import { len2 } from '../core/len';
 
 /** Matches main.ts: cars and people inside this take blast damage. */
 const BLAST_RADIUS = 9;
@@ -345,7 +346,7 @@ export class FxDirector {
         rig.addTrauma(shell ? 0.14 : 0.045);
         rig.kick(-e.dirX, -e.dirZ, shell ? 0.4 : 0.14);
       }
-    } else if (!p.driving && Math.hypot(p.ped.x - e.x, p.ped.z - e.z) < 26) {
+    } else if (!p.driving && len2(p.ped.x - e.x, p.ped.z - e.z) < 26) {
       this.lastCombat = this.realTime;
     }
   }
@@ -458,7 +459,7 @@ export class FxDirector {
       fx.emitFire(e.x + Math.cos(a) * d, e.z + Math.sin(a) * d, 0.2);
     }
     fx.glass(e.x, 0.4, e.z, Math.round(6 * fx.scale), 4);
-    if (this.playing && Math.hypot(this.d.rig.focusX - e.x, this.d.rig.focusZ - e.z) < 30) this.d.rig.addTrauma(0.15);
+    if (this.playing && len2(this.d.rig.focusX - e.x, this.d.rig.focusZ - e.z) < 30) this.d.rig.addTrauma(0.15);
   }
 
   private onAward(e: EventOf<'award'>): void {
@@ -469,7 +470,7 @@ export class FxDirector {
     if (a.kind === 'nearMiss' && car) {
       // A whoosh: streaks along both flanks, a quick widen of the view.
       const s = car.sim;
-      const sp = Math.hypot(s.vx, s.vz) || 1;
+      const sp = len2(s.vx, s.vz) || 1;
       const dx = s.vx / sp;
       const dz = s.vz / sp;
       for (let k = 0; k < 10; k++) {
@@ -514,7 +515,7 @@ export class FxDirector {
     let best: Vehicle | null = null;
     let bestD = 3;
     for (const v of this.d.vehicles) {
-      const d = Math.hypot(v.sim.x - x, v.sim.z - z);
+      const d = len2(v.sim.x - x, v.sim.z - z);
       if (d < bestD) {
         bestD = d;
         best = v;
@@ -538,7 +539,7 @@ export class FxDirector {
     const list = this.d.crowd;
     for (let i = 0; i < list.length; i++) {
       const s = list[i].agent.s;
-      const dd = Math.hypot(s.x - x, s.z - z);
+      const dd = len2(s.x - x, s.z - z);
       if (dd < bestD) {
         bestD = dd;
         best = list[i];

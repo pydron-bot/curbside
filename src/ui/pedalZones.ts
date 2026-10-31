@@ -5,6 +5,7 @@
  * GAS and HAND presses both (drift with one thumb). Pure geometry, no DOM.
  */
 import { TUNE_DEFAULTS, tune } from '../core/touchTuning';
+import { len2 } from '../core/len';
 export interface PedalCircle {
   x: number;
   y: number;
@@ -69,5 +70,5 @@ export function chordBetween(hand: PedalCircle, gas: PedalCircle): PedalLayout['
 }
 
 function norm(x: number, y: number, c: PedalCircle): number {
-  return Math.hypot(x - c.x, y - c.y) / c.r;
+  return len2(x - c.x, y - c.y) / c.r;
 }

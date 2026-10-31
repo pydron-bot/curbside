@@ -29,6 +29,7 @@ import type { StaticGrid } from '../world/collision';
 import { uploadRange } from './glowSprites';
 import type { Look } from './look';
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms } from './shaderLib';
+import { len2 } from '../core/len';
 
 /** Birds drawn at most (three flocks and the stragglers flying off). */
 const CAPACITY = 64;
@@ -155,15 +156,15 @@ export class PigeonLook {
     threats.length = 0;
     const r2 = THREAT_RANGE * THREAT_RANGE;
     for (const v of vehicles) {
-      const sp = Math.hypot(v.sim.vx, v.sim.vz);
+      const sp = len2(v.sim.vx, v.sim.vz);
       if (sp > 2 && (v.sim.x - x) ** 2 + (v.sim.z - z) ** 2 < r2) this.threat(v.sim.x, v.sim.z, sp, true, false);
     }
     for (const c of crowd) {
       const a = c.agent.s;
-      const sp = Math.hypot(a.vx, a.vz);
+      const sp = len2(a.vx, a.vz);
       if (sp > 3 && (a.x - x) ** 2 + (a.z - z) ** 2 < r2) this.threat(a.x, a.z, sp, false, false);
     }
-    if (player && !player.driving) this.threat(player.ped.x, player.ped.z, Math.hypot(player.ped.vx, player.ped.vz), false, true);
+    if (player && !player.driving) this.threat(player.ped.x, player.ped.z, len2(player.ped.vx, player.ped.vz), false, true);
     rig.visibleGround(this.view);
     this.world.x = x;
     this.world.z = z;

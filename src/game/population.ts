@@ -22,6 +22,7 @@ import type { WeaponKind } from '../systems/weapons';
 import { isHopeless, spawnAi, type AiDriver } from '../systems/traffic';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type Rect } from '../world/city';
 import { DIRS, MAX_NODE } from '../world/roads';
+import { len2 } from '../core/len';
 
 export interface Vehicle {
   archetype: VehicleArchetype;
@@ -341,7 +342,7 @@ export class Population {
       }
       if (ctx.keep.includes(v)) continue;
       const visible = inRect(v.sim.x, v.sim.z, ctx.view, 2);
-      const far = Math.hypot(v.sim.x - ctx.x, v.sim.z - ctx.z) > TRAFFIC_DESPAWN;
+      const far = len2(v.sim.x - ctx.x, v.sim.z - ctx.z) > TRAFFIC_DESPAWN;
       if (!visible && (far || (v.ai !== null && isHopeless(v.ai)))) {
         this.retire(i);
         continue;
@@ -458,7 +459,7 @@ export class Population {
 
   private placeAi(v: Vehicle, ctx: MaintainContext): boolean {
     const [lo, hi] = ctx.seed ? TRAFFIC_SEED_SPAWN : TRAFFIC_SPAWN;
-    const speed = Math.hypot(ctx.vx, ctx.vz);
+    const speed = len2(ctx.vx, ctx.vz);
     const heading = Math.atan2(ctx.vz, ctx.vx);
     for (let attempt = 0; attempt < 25; attempt++) {
       const ahead = speed > 3 && this.rand() < TRAFFIC_AHEAD_BIAS;
@@ -469,7 +470,7 @@ export class Population {
       if (Math.abs(ix) > MAX_NODE || Math.abs(iz) > MAX_NODE) continue;
       const spawned = spawnAi(ix, iz, pick(DIRS, this.rand), this.rand(), this.rand);
       if (!spawned) continue;
-      const d = Math.hypot(spawned.x - ctx.x, spawned.z - ctx.z);
+      const d = len2(spawned.x - ctx.x, spawned.z - ctx.z);
       if (d < lo || d > hi) continue;
       if (inRect(spawned.x, spawned.z, ctx.view, VIEW_MARGIN)) continue;
       if (this.crowded(spawned.x, spawned.z, v)) continue;
@@ -507,7 +508,7 @@ export class Population {
         cops++;
         continue;
       }
-      if (Math.hypot(a.s.x - ctx.x, a.s.z - ctx.z) > CROWD_DESPAWN && !inRect(a.s.x, a.s.z, ctx.view, 2)) this.removePedAt(i);
+      if (len2(a.s.x - ctx.x, a.s.z - ctx.z) > CROWD_DESPAWN && !inRect(a.s.x, a.s.z, ctx.view, 2)) this.removePedAt(i);
     }
     const target = Math.round(CROWD_COUNT * (ctx.crowdScale ?? 1)) + cops;
     const tries = ctx.seed ? 200 : CROWD_TRIES_PER_CALL;
@@ -555,7 +556,7 @@ export class Population {
     const to = cornerPoint(bx, bz, edge + 1);
     const ax = from.x + (to.x - from.x) * t;
     const az = from.z + (to.z - from.z) * t;
-    const d = Math.hypot(ax - ctx.x, az - ctx.z);
+    const d = len2(ax - ctx.x, az - ctx.z);
     if (d < lo - 2 || d > hi + 4) return;
     // The group spreads up to ~2.5 m either way.
     if (inRect(ax, az, ctx.view, VIEW_MARGIN + 3)) return;

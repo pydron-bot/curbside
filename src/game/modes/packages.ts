@@ -7,6 +7,7 @@
  */
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type City, type Rect } from '../../world/city';
 import { mulberry32 } from '../../world/random';
+import { len2 } from '../../core/len';
 
 export interface HiddenPackage {
   index: number;
@@ -85,7 +86,7 @@ export function generatePackages(city: City, count = PACKAGE_COUNT, seed = 0x9ac
     for (const c of candidates) {
       if (out.length >= count) break;
       if (out.includes(c) || (pass < 2 && taken[c.where] >= quota[c.where])) continue;
-      if (out.some((o) => Math.hypot(o.x - c.x, o.z - c.z) < spacing)) continue;
+      if (out.some((o) => len2(o.x - c.x, o.z - c.z) < spacing)) continue;
       out.push(c);
       taken[c.where]++;
     }

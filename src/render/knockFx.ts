@@ -4,6 +4,7 @@ import type { Effects } from './effects';
 import type { PropBatch } from './propBatch';
 import { worldUniforms } from './shaderLib';
 import type { WorldProps } from './worldProps';
+import { len2 } from '../core/len';
 
 /** Flying props at once (the oldest is dropped past this). */
 const MAX_FLYERS = 24;
@@ -59,7 +60,7 @@ export class KnockFx {
 
   /** `kind` at (x, z) was hit by a car moving at (vx, vz). */
   hit(kind: string, x: number, z: number, vx: number, vz: number): void {
-    const sp = Math.hypot(vx, vz);
+    const sp = len2(vx, vz);
     if (this.flyers.length >= MAX_FLYERS) this.flyers.shift();
     const light = kind === 'traffic_cone' || kind === 'trash_bin' || kind === 'newspaper_box';
     const k = light ? 0.95 : 0.7;

@@ -17,6 +17,7 @@ import type { Vehicle } from '../population';
 import { KeyedText, type Mode, type ModeCtx } from './context';
 import { EXPORT_MIN_HEALTH, LIST_BONUS, exportList, exportPayout, openOrderFor, type ExportOrder } from './exports';
 import { placeDocks } from './places';
+import { len2 } from '../../core/len';
 
 /** Stopped in the bay this long to deliver, s. */
 const HOLD = 0.6;
@@ -150,7 +151,7 @@ export class ExportMode implements Mode {
     const ctx = this.ctx;
     if (!ctx.freeRoam || ctx.busy === 'mission') return null;
     const at = ctx.deps.player.position;
-    if (!this.refused && Math.hypot(at.x - this.docks.x, at.z - this.docks.z) > PROMPT_RANGE) return null;
+    if (!this.refused && len2(at.x - this.docks.x, at.z - this.docks.z) > PROMPT_RANGE) return null;
     // Rebuilt only when what it says changes.
     const done = ctx.progress.data.exports.done;
     const key = (this.refused ? 1 + REFUSALS.indexOf(this.refused) : 0) * 1000 + (this.wanted ? 1 + this.list.indexOf(this.wanted) : 0) * 100 + done.length + this.listNo * 10000;

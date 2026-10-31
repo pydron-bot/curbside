@@ -12,6 +12,7 @@
  */
 import { forwardSpeed, wrapAngle, type VehicleControls, type VehicleState } from '../entities/vehicle';
 import { tune } from './touchTuning';
+import { len2 } from './len';
 
 export interface DirectionalInput {
   /** Stick, screen-relative, already shaped: x = screen-right, y = screen-up, length 0..1. */
@@ -109,7 +110,7 @@ export function directionalControls(
 ): VehicleControls {
   const d = DIRECTIONAL;
   out.handbrake = input.handbrake;
-  const mag = Math.min(1, Math.hypot(input.x, input.y));
+  const mag = Math.min(1, len2(input.x, input.y));
   const vF = forwardSpeed(car);
   if (mag < tune.dirDeadzone) {
     resetDirectionalState(state);

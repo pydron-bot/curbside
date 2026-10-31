@@ -16,6 +16,7 @@ import type { Effects } from './effects';
 import { RAMP_HEIGHT, RAMP_LENGTH } from '../world/ramps';
 import { CarBody, applyBody } from './fxCarBody';
 import { DECAL, type GroundDecals } from './fxDecals';
+import { len2 } from '../core/len';
 
 /** Rear axle (m behind the root, along the car) and half the track width, per model. */
 const WHEELS: Record<VehicleArchetype, { rear: number; track: number }> = {
@@ -160,7 +161,7 @@ export class SkidTrail {
     }
     const dx = x - this.lx;
     const dz = z - this.lz;
-    const d = Math.hypot(dx, dz);
+    const d = len2(dx, dz);
     if (d < SEGMENT) return;
     if (d > 5) {
       // Teleported or thrown by a blast: start a new ribbon.
@@ -350,7 +351,7 @@ export class DrivingFx {
     let best = 3.6;
     for (let i = 0; i < vehicles.length; i++) {
       const v = vehicles[i];
-      const d = Math.hypot(v.sim.x - x, v.sim.z - z);
+      const d = len2(v.sim.x - x, v.sim.z - z);
       if (d > 3.6) continue;
       this.record(v).body.impact(v.sim, x, z, impact);
       if (d < best) {
@@ -374,7 +375,7 @@ export class DrivingFx {
   blast(vehicles: ReadonlyArray<Vehicle>, x: number, z: number, r: number): void {
     for (let i = 0; i < vehicles.length; i++) {
       const v = vehicles[i];
-      const d = Math.hypot(v.sim.x - x, v.sim.z - z);
+      const d = len2(v.sim.x - x, v.sim.z - z);
       if (d > r) continue;
       this.record(v).body.blast(v.sim, x, z, d < 0.5 ? 1 : 0.85 * (1 - d / r));
     }

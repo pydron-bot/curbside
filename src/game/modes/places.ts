@@ -9,6 +9,7 @@
 import { cornerPoint } from '../../systems/crowd';
 import { BLOCKS_PER_SIDE, type City } from '../../world/city';
 import { bayFor, placeSprayShops, type SprayShop } from '../../world/landmarks';
+import { len2 } from '../../core/len';
 
 export interface Spot {
   id: string;
@@ -69,7 +70,7 @@ export function placeDocks(city: City): SprayShop {
   const taken = new Set(placeSprayShops(city).map((s) => s.id));
   const blocks = city.blocks
     .filter((b) => b.kind !== 'buildings')
-    .sort((a, b) => Math.hypot(a.bx - DOCKS_TARGET[0], a.bz - DOCKS_TARGET[1]) - Math.hypot(b.bx - DOCKS_TARGET[0], b.bz - DOCKS_TARGET[1]));
+    .sort((a, b) => len2(a.bx - DOCKS_TARGET[0], a.bz - DOCKS_TARGET[1]) - len2(b.bx - DOCKS_TARGET[0], b.bz - DOCKS_TARGET[1]));
   for (const b of blocks) {
     const bay = bayFor(b.bx, b.bz, city);
     if (bay && !taken.has(bay.id)) return { ...bay, id: 'docks' };

@@ -53,6 +53,7 @@ import type { StaticGrid } from '../world/collision';
 import { ARMOUR_PICKUP, HEALTH_PICKUP, type PickupKind } from '../world/pickups';
 import type { Player } from './player';
 import type { CrowdPed, Vehicle } from './population';
+import { len2 } from '../core/len';
 
 /** Punches: reach (m), damage per combo step (jab, jab, hook), cooldowns (s). */
 export const PUNCH_RANGE = 1.5;
@@ -259,7 +260,7 @@ export class Combat {
     const p = this.d.player.ped;
     const dx = l.agent.s.x - p.x;
     const dz = l.agent.s.z - p.z;
-    const dist = Math.hypot(dx, dz);
+    const dist = len2(dx, dz);
     if (dist > range || dist < near) return false;
     if (aimHeading === null || dist < 0.5) return true;
     const cos = (dx * Math.sin(aimHeading) + dz * Math.cos(aimHeading)) / dist;
@@ -283,7 +284,7 @@ export class Combat {
     const spec = WEAPONS[kind];
     if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov', aim);
     // Spread before this shot's bloom; running sprays more.
-    const moving = Math.hypot(p.ped.vx, p.ped.vz) > 3.5;
+    const moving = len2(p.ped.vx, p.ped.vz) > 3.5;
     const spread = p.arsenal.spread * (moving ? RUN_SPREAD : 1);
     if (!p.arsenal.tryFire()) return false;
     this.sinceShot = 0;
@@ -312,7 +313,7 @@ export class Combat {
     if (l) {
       const dx = l.agent.s.x - p.x;
       const dz = l.agent.s.z - p.z;
-      const d = Math.hypot(dx, dz) || 1;
+      const d = len2(dx, dz) || 1;
       out.x = dx / d;
       out.z = dz / d;
       return;
@@ -330,7 +331,7 @@ export class Combat {
     const { x, z } = p.ped;
     const blocked = this.throwPoint(WEAPONS[kind].range, aim, this.target);
     // Hugging a wall and throwing into it would drop it at your own feet: no throw (the ring shows red there).
-    if (blocked && Math.hypot(this.target.x - x, this.target.z - z) < MIN_THROW) return false;
+    if (blocked && len2(this.target.x - x, this.target.z - z) < MIN_THROW) return false;
     if (!p.arsenal.tryFire()) return false;
     this.sinceShot = 0;
     p.ped.heading = Math.atan2(this.target.x - x, this.target.z - z);
@@ -434,7 +435,7 @@ export class Combat {
       const a = c.agent;
       const dx = a.s.x - x;
       const dz = a.s.z - z;
-      const d = Math.hypot(dx, dz);
+      const d = len2(dx, dz);
       if (d < PUNCH_RANGE && (dx * fx + dz * fz) / (d || 1) > 0.4 && a.mode !== 'down') {
         landed = true;
         const res = hurtPed(a, PUNCH_DAMAGE[step], x, z, step === 2 ? HOOK_KNOCK : 0);
@@ -456,7 +457,7 @@ export class Combat {
       if (a.mode === 'down') continue;
       const dx = a.s.x - p.x;
       const dz = a.s.z - p.z;
-      const d = Math.hypot(dx, dz);
+      const d = len2(dx, dz);
       if (d < bestD && (dx * fx + dz * fz) / (d || 1) > PUNCH_ASSIST_COS) {
         bestD = d;
         best = a;
@@ -471,7 +472,7 @@ export class Combat {
   npcPunch(c: CrowdPed): void {
     const p = this.d.player;
     if (p.driving || !p.alive || !this.d.playing()) return;
-    const hit = Math.hypot(p.ped.x - c.agent.s.x, p.ped.z - c.agent.s.z) < PUNCH_RANGE + 0.2;
+    const hit = len2(p.ped.x - c.agent.s.x, p.ped.z - c.agent.s.z) < PUNCH_RANGE + 0.2;
     this.d.bus.emit({ type: 'punch', x: c.agent.s.x, z: c.agent.s.z, hit, byPlayer: false });
     c.model.punch();
     if (hit) p.hurt(NPC_PUNCH_DAMAGE);
@@ -482,7 +483,7 @@ export class Combat {
     const p = this.d.player;
     // A target on the move is harder to hit.
     const at = p.position;
-    const moving = Math.min(1, Math.hypot(at.vx, at.vz) / 6);
+    const moving = Math.min(1, len2(at.vx, at.vz) / 6);
     const a = Math.atan2(dirX, dirZ) + (this.d.rand() * 2 - 1) * NPC_SPREAD * (1 + NPC_SPREAD_MOVING * moving);
     const dx = Math.sin(a);
     const dz = Math.cos(a);
@@ -491,7 +492,7 @@ export class Combat {
     this.d.bus.emit({ type: 'shot', x: ox, z: oz, dirX: dx, dirZ: dz, weapon: null, byPlayer: false });
     const hit = this.traceBullet(ox, oz, dx, dz, NPC_SHOT_RANGE, false);
     if (hit.kind === 'player') {
-      const far = Math.hypot(p.ped.x - sx, p.ped.z - sz) > NPC_FAR;
+      const far = len2(p.ped.x - sx, p.ped.z - sz) > NPC_FAR;
       p.hurt(far ? NPC_FAR_DAMAGE : NPC_SHOT_DAMAGE);
     } else if (hit.v) applyDamage(hit.v.damage, NPC_SHOT_DAMAGE * NPC_VEHICLE_SHARE);
     else if (hit.ped) {
@@ -519,7 +520,7 @@ export class Combat {
     // WASTED or BUSTED (fires you started can still go up after).
     if (this.d.playing() && !ownCar && p.alive && !p.arrested) {
       const at = p.position;
-      if (Math.hypot(at.x - v.sim.x, at.z - v.sim.z) < BOOM_SCORE_RANGE) this.d.award(this.d.score.award('boom'));
+      if (len2(at.x - v.sim.x, at.z - v.sim.z) < BOOM_SCORE_RANGE) this.d.award(this.d.score.award('boom'));
     }
     if (inside) {
       // The slide (if any) dies with the car; you're thrown clear and hurt once.
@@ -537,7 +538,7 @@ export class Combat {
       type: 'explosion',
       x,
       z,
-      distance: Math.hypot(f.x - x, f.z - z),
+      distance: len2(f.x - x, f.z - z),
       byPlayer,
       ownCar,
       police: source !== null && (isPoliceArchetype(source.archetype) || source.police === true),
@@ -546,7 +547,7 @@ export class Combat {
     const p = d.player;
     // On foot (the car you're in throws you clear itself: ownCarExploded).
     if (!p.driving && d.playing()) {
-      const dist = Math.hypot(p.ped.x - x, p.ped.z - z);
+      const dist = len2(p.ped.x - x, p.ped.z - z);
       if (dist < b.radius) {
         p.hurt(blastDamage(dist, b.radius, b.playerDamage));
         p.knockDown(x, z, 6, 2, 'blast', byPlayer);
@@ -566,13 +567,13 @@ export class Combat {
       // A chain reaction is still the player's doing.
       if (byPlayer) markPlayerHit(v.damage, now);
       const push = (dmg / b.carDamage) * b.push / VEHICLE_SPECS[v.archetype].mass;
-      const cd = Math.hypot(v.sim.x - x, v.sim.z - z) || 1;
+      const cd = len2(v.sim.x - x, v.sim.z - z) || 1;
       v.sim.vx += ((v.sim.x - x) / cd) * push;
       v.sim.vz += ((v.sim.z - z) / cd) * push;
     }
     for (const c of d.crowd) {
       const a = c.agent;
-      const dist = Math.hypot(a.s.x - x, a.s.z - z);
+      const dist = len2(a.s.x - x, a.s.z - z);
       if (dist < b.radius) {
         const res = hurtPed(a, blastDamage(dist, b.radius, b.pedDamage), x, z, 6);
         this.resolve(c, res, 'blast', x, z, byPlayer);
@@ -591,7 +592,7 @@ export class Combat {
       for (const c of d.crowd) {
         const a = c.agent;
         if (a.mode === 'down' && a.burning <= 0) continue;
-        if (Math.hypot(a.s.x - f.x, a.s.z - f.z) < r) {
+        if (len2(a.s.x - f.x, a.s.z - f.z) < r) {
           if (a.burning <= 0 && a.mode !== 'down') scare(a, f.x, f.z, 2);
           setAlight(a, BURN_SECONDS);
           if (f.byPlayer) this.playerLit.add(a);
@@ -602,7 +603,7 @@ export class Combat {
         applyDamage(v.damage, FIRE_CAR_DPS * dt);
         if (f.byPlayer) markPlayerHit(v.damage, d.now());
       }
-      if (!p.driving && p.alive && Math.hypot(p.ped.x - f.x, p.ped.z - f.z) < r) playerInFire = true;
+      if (!p.driving && p.alive && len2(p.ped.x - f.x, p.ped.z - f.z) < r) playerInFire = true;
     }
     // The player: hurt in ticks, not every step (one flash and sound per tick).
     if (playerInFire && d.playing()) {
@@ -692,7 +693,7 @@ export class Combat {
     const d = this.d;
     for (const c of d.crowd) {
       const a = c.agent;
-      const dist = Math.hypot(a.s.x - x, a.s.z - z);
+      const dist = len2(a.s.x - x, a.s.z - z);
       if (dist > SCARE_RANGE) continue;
       if (a.temper === 'armed' && dist < ARMED_JOIN && d.rand() < 0.5) provoke(a, x, z);
       else if (a.temper === 'calm' && dist < COWER_RANGE && a.pace < COWER_PACE && a.mode !== 'flee') cower(a, x, z, COWER_SECONDS);
@@ -776,7 +777,7 @@ export class Combat {
   private rocketHits(x: number, z: number, r: number, byPlayer: boolean): boolean {
     const d = this.d;
     for (const c of d.crowd) {
-      if (c.agent.mode !== 'down' && Math.hypot(c.agent.s.x - x, c.agent.s.z - z) < r + 0.35) return true;
+      if (c.agent.mode !== 'down' && len2(c.agent.s.x - x, c.agent.s.z - z) < r + 0.35) return true;
     }
     const own = d.player.driving;
     for (const v of d.vehicles) {
@@ -784,7 +785,7 @@ export class Combat {
       if (this.nearestPart(v, x, z) < r * 0.8) return true;
     }
     const p = d.player;
-    return !byPlayer && !p.driving && p.alive && Math.hypot(p.ped.x - x, p.ped.z - z) < r + 0.35;
+    return !byPlayer && !p.driving && p.alive && len2(p.ped.x - x, p.ped.z - z) < r + 0.35;
   }
 
   /** A car whose body covers (x, z) (within `pad` m), or null. */
@@ -796,7 +797,7 @@ export class Combat {
   /** Distance from (x, z) to the surface of the car's body (0 inside), m. */
   private nearestPart(v: Vehicle, x: number, z: number): number {
     const s = v.sim;
-    if (Math.abs(s.x - x) > 12 || Math.abs(s.z - z) > 12) return Math.max(0, Math.hypot(s.x - x, s.z - z) - bodyOf(s).reach);
+    if (Math.abs(s.x - x) > 12 || Math.abs(s.z - z) > 12) return Math.max(0, len2(s.x - x, s.z - z) - bodyOf(s).reach);
     return bodyDistance(s, x, z);
   }
 
@@ -807,7 +808,7 @@ export class Combat {
     const me = this.d.player.ped;
     for (const c of this.d.crowd) {
       const a = c.agent;
-      if (a.mode === 'down' || (near > 0 && Math.hypot(a.s.x - me.x, a.s.z - me.z) < near)) continue;
+      if (a.mode === 'down' || (near > 0 && len2(a.s.x - me.x, a.s.z - me.z) < near)) continue;
       const hostile = a.mode === 'fight' || a.mode === 'shoot' || (a.role === 'cop' && wanted);
       this.push(a.s.x, a.s.z, hostile, c, null);
     }
@@ -820,7 +821,7 @@ export class Combat {
     const me = this.d.player.ped;
     for (const v of this.d.vehicles) {
       if (v === except || v.damage.wrecked) continue;
-      if (near > 0 && Math.hypot(v.sim.x - me.x, v.sim.z - me.z) < near) continue;
+      if (near > 0 && len2(v.sim.x - me.x, v.sim.z - me.z) < near) continue;
       this.push(v.sim.x, v.sim.z, wanted && (isPoliceArchetype(v.archetype) || v.police === true), null, v);
     }
   }

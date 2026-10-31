@@ -5,6 +5,7 @@ import type { Pickup } from '../world/pickups';
 import type { City } from '../world/city';
 import { MAP_EXTENT, MAP_PX_PER_M, renderCityMap } from './cityMap';
 import { roadRoute } from './radarRoute';
+import { len2 } from '../core/len';
 
 /** What a blip stands for; each kind has a default colour. */
 export type BlipKind = 'objective' | 'enemy' | 'police' | 'pickup' | 'friend' | 'shop' | 'race' | 'marker';
@@ -223,13 +224,13 @@ export class Radar {
       const b = blips[i];
       const bx = R + (b.x - px) * k;
       const by = R + (b.z - pz) * k;
-      if (Math.hypot(bx - R, by - R) > R - 6 * d) continue;
+      if (len2(bx - R, by - R) > R - 6 * d) continue;
       this.drawBlip(ctx, b, bx, by, d);
     }
     if (this.waypoint) {
       const wx = R + (this.waypoint.x - px) * k;
       const wy = R + (this.waypoint.z - pz) * k;
-      if (Math.hypot(wx - R, wy - R) <= R - 6 * d) flag(ctx, wx, wy, d);
+      if (len2(wx - R, wy - R) <= R - 6 * d) flag(ctx, wx, wy, d);
     }
 
     // The player: an arrow pointing along their heading.
@@ -254,12 +255,12 @@ export class Radar {
       if (!b.edgeArrow) continue;
       const bx = (b.x - px) * k;
       const by = (b.z - pz) * k;
-      if (Math.hypot(bx, by) > R - 6 * d) edgeArrow(ctx, R, bx, by, b.colour, d);
+      if (len2(bx, by) > R - 6 * d) edgeArrow(ctx, R, bx, by, b.colour, d);
     }
     if (this.waypoint) {
       const wx = (this.waypoint.x - px) * k;
       const wy = (this.waypoint.z - pz) * k;
-      if (Math.hypot(wx, wy) > R - 6 * d) edgeArrow(ctx, R, wx, wy, WAYPOINT, d);
+      if (len2(wx, wy) > R - 6 * d) edgeArrow(ctx, R, wx, wy, WAYPOINT, d);
     }
   }
 
@@ -358,7 +359,7 @@ function flag(ctx: CanvasRenderingContext2D, x: number, y: number, d: number): v
 
 /** A triangle on the rim pointing outward along (dx, dy) from the centre. */
 function edgeArrow(ctx: CanvasRenderingContext2D, R: number, dx: number, dy: number, colour: string, d: number): void {
-  const len = Math.hypot(dx, dy) || 1;
+  const len = len2(dx, dy) || 1;
   const ux = dx / len;
   const uy = dy / len;
   const at = R - 7 * d;

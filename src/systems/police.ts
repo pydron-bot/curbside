@@ -27,6 +27,7 @@ import { lineOfSight, sees } from './sight';
 import { knockDown, resumeWalking, spawnPed } from './crowd';
 import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from './pursuit';
 import { CRUISE_SPEED, TURN_SPEED, createDriver, rerouteAi, spawnAi, type AiDriver, type Obstacle } from './traffic';
+import { len2 } from '../core/len';
 
 // --- Tunables -------------------------------------------------------------
 /** Units chasing at each wanted level (index = stars). */
@@ -273,9 +274,9 @@ export class PoliceForce {
   copWithin(x: number, z: number, range: number): boolean {
     for (const u of this.units) {
       const v = u.vehicle;
-      if (v && Math.abs(v.sim.x - x) < range && Math.abs(v.sim.z - z) < range && Math.hypot(v.sim.x - x, v.sim.z - z) < range) return true;
+      if (v && Math.abs(v.sim.x - x) < range && Math.abs(v.sim.z - z) < range && len2(v.sim.x - x, v.sim.z - z) < range) return true;
     }
-    if (this.heli.active && Math.hypot(this.heli.x - x, this.heli.z - z) < range) return true;
+    if (this.heli.active && len2(this.heli.x - x, this.heli.z - z) < range) return true;
     return this.officerWithin(x, z, range);
   }
 
@@ -354,7 +355,7 @@ export class PoliceForce {
       for (const u of this.units) {
         if (u.dismissed || u.role !== 'pursuit') continue;
         const at = u.vehicle?.sim ?? u.officers[0]?.agent.s;
-        const d = at ? Math.hypot(at.x - s.x, at.z - s.z) : Infinity;
+        const d = at ? len2(at.x - s.x, at.z - s.z) : Infinity;
         const score = d + (u.seesPlayer ? 0 : 1000);
         if (score > pickScore) {
           pickScore = score;
@@ -502,7 +503,7 @@ export class PoliceForce {
       this.removeUnit(u, false);
       return;
     }
-    const d = Math.hypot(v.sim.x - s.x, v.sim.z - s.z);
+    const d = len2(v.sim.x - s.x, v.sim.z - s.z);
     const onScreen = inView(v.sim.x, v.sim.z, ctx.view, 4);
 
     if (u.dismissed) {
@@ -540,13 +541,13 @@ export class PoliceForce {
     // spawns closer). Behind whom: where the police think the player is, so
     // units searching the last sighting aren't swapped out while they look.
     const t = this.target;
-    const behind = Math.hypot(v.sim.x - t.x, v.sim.z - t.z);
+    const behind = len2(v.sim.x - t.x, v.sim.z - t.z);
     if (!onScreen && !u.seesPlayer && (behind > DESPAWN_RANGE || isPursuitHopeless(u.driver))) {
       this.removeUnit(u, true);
       return;
     }
     // Stopped near the player: the crew gets out.
-    if (u.aboard > 0 && s.active && d < DEPLOY_RANGE && speed(v.sim) < 2.5 && (!s.inCar || Math.hypot(s.vx, s.vz) < 3)) {
+    if (u.aboard > 0 && s.active && d < DEPLOY_RANGE && speed(v.sim) < 2.5 && (!s.inCar || len2(s.vx, s.vz) < 3)) {
       this.deploy(u, ctx.rand, this.stars >= 2 || u.kind === 'swat' ? u.aboard : 1);
     }
     // From 4 stars, passengers shoot at the player's car.
@@ -620,12 +621,12 @@ export class PoliceForce {
     const a = p.agent;
     const s = ctx.suspect;
     const v = u.vehicle;
-    const d = Math.hypot(s.x - a.s.x, s.z - a.s.z);
-    const carD = v ? Math.hypot(v.sim.x - a.s.x, v.sim.z - a.s.z) : Infinity;
+    const d = len2(s.x - a.s.x, s.z - a.s.z);
+    const carD = v ? len2(v.sim.x - a.s.x, v.sim.z - a.s.z) : Infinity;
     if (a.mode === 'down' || (a.mode === 'flee' && a.timer > 0)) return;
     a.timer = 5; // keeps 'shoot' from timing out on its own
 
-    const playerFast = s.inCar && Math.hypot(s.vx, s.vz) > 4;
+    const playerFast = s.inCar && len2(s.vx, s.vz) > 4;
     const goHome = u.dismissed || u.role === 'roadblock' ? false : playerFast && d > RECALL_RANGE;
     if (u.dismissed || goHome || this.stars === 0 || !s.active) {
       if (!v || carD > ABANDON_RANGE) {
@@ -646,7 +647,7 @@ export class PoliceForce {
       a.goalZ = v.sim.z - Math.sin(v.sim.heading) * 1.6;
       return;
     }
-    if (u.role === 'roadblock' && s.inCar && Math.hypot(s.vx, s.vz) > 4) {
+    if (u.role === 'roadblock' && s.inCar && len2(s.vx, s.vz) > 4) {
       // Holding the line behind the cars: guns up as the car comes.
       a.mode = this.stars >= ROADBLOCK_FROM && d < CAR_SHOT_RANGE ? 'shoot' : 'arrest';
       a.goalX = a.s.x;
@@ -660,7 +661,7 @@ export class PoliceForce {
   private orders(p: CrowdPed, d: number, s: Suspect): void {
     const a = p.agent;
     if (s.inCar) {
-      const fast = Math.hypot(s.vx, s.vz) > 4;
+      const fast = len2(s.vx, s.vz) > 4;
       if (fast) {
         a.mode = this.stars >= 4 && d < CAR_SHOT_RANGE ? 'shoot' : 'arrest';
         a.goalX = s.x;
@@ -676,7 +677,7 @@ export class PoliceForce {
     // On foot: from 3 stars they shoot on sight; at 2 only at someone armed or running.
     // Someone who stops with empty hands and gives up (or is lying on the
     // ground) just gets cuffed: giving up is always a way out that keeps you alive.
-    const moving = Math.hypot(s.vx, s.vz);
+    const moving = len2(s.vx, s.vz);
     const surrendering = !s.armed && moving < SURRENDER_SPEED;
     const shoot = !s.down && !surrendering && d > SHOOT_FROM && (this.stars >= 3 || (this.stars >= 2 && (s.armed || moving > 3.5)));
     a.mode = shoot ? 'shoot' : 'arrest';
@@ -689,7 +690,7 @@ export class PoliceForce {
     const p = this.strays[i];
     const a = p.agent;
     const s = ctx.suspect;
-    const d = Math.hypot(s.x - a.s.x, s.z - a.s.z);
+    const d = len2(s.x - a.s.x, s.z - a.s.z);
     if (d > OFFICER_DESPAWN && !inView(a.s.x, a.s.z, ctx.view, 2)) {
       this.depot.removePed(p);
       this.strays.splice(i, 1);
@@ -721,7 +722,7 @@ export class PoliceForce {
           if (!u.dismissed && v) {
             // One ray per car: a clear line within CAR_SIGHT both sees and
             // lets it drive straight there; up close it sees regardless.
-            const d = Math.hypot(v.sim.x - s.x, v.sim.z - s.z);
+            const d = len2(v.sim.x - s.x, v.sim.z - s.z);
             direct = d < 6 || (d <= CAR_SIGHT && lineOfSight(ctx.grid, v.sim.x, v.sim.z, s.x, s.z));
             carSees = direct || d < CAR_PROXIMITY;
           }
@@ -731,7 +732,7 @@ export class PoliceForce {
         if (u.seesPlayer) seen = true;
       }
       for (const p of this.strays) {
-        const d = Math.hypot(p.agent.s.x - s.x, p.agent.s.z - s.z);
+        const d = len2(p.agent.s.x - s.x, p.agent.s.z - s.z);
         if (p.agent.mode !== 'down' && d < OFFICER_PROXIMITY) seen = true;
       }
       if (this.heli.active && !this.heli.leaving && this.heli.sees) seen = true;
@@ -829,7 +830,7 @@ export class PoliceForce {
     stepHelicopter(h, this.target.x, this.target.z, this.target.vx, this.target.vz, s.x, s.z, dt);
     if (h.leaving) {
       h.sees = false;
-      if (Math.hypot(h.x - s.x, h.z - s.z) > HELI_GONE) h.active = h.leaving = false;
+      if (len2(h.x - s.x, h.z - s.z) > HELI_GONE) h.active = h.leaving = false;
     }
   }
 }
@@ -846,7 +847,7 @@ export function policeSpawnPoint(
   aheadShare = 0.65,
 ): { x: number; z: number; heading: number; driver: AiDriver } | null {
   const [lo, hi] = SPAWN_RANGE;
-  const sp = Math.hypot(vx, vz);
+  const sp = len2(vx, vz);
   const heading = Math.atan2(vz, vx);
   for (let attempt = 0; attempt < 30; attempt++) {
     // Mostly ahead of a moving player, so they come at you rather than trail behind.
@@ -864,7 +865,7 @@ export function policeSpawnPoint(
     if (Math.abs(ix) > MAX_NODE || Math.abs(iz) > MAX_NODE) continue;
     const spawned = spawnAi(ix, iz, dir, 0.2 + rand() * 0.6, rand);
     if (!spawned) continue;
-    const d = Math.hypot(spawned.x - px, spawned.z - pz);
+    const d = len2(spawned.x - px, spawned.z - pz);
     if (d < lo * 0.85 || d > hi * 1.15) continue;
     if (inView(spawned.x, spawned.z, view, VIEW_MARGIN)) continue;
     if (crowded(spawned.x, spawned.z)) continue;
@@ -886,7 +887,7 @@ export interface RoadblockSpot {
  * they're slow, not clearly on a road along an axis, or near the city edge.
  */
 export function roadblockSpot(px: number, pz: number, vx: number, vz: number, view: Rect): RoadblockSpot | null {
-  const sp = Math.hypot(vx, vz);
+  const sp = len2(vx, vz);
   if (sp < 10) return null;
   const alongX = Math.abs(vx) > 2 * Math.abs(vz);
   const alongZ = Math.abs(vz) > 2 * Math.abs(vx);
@@ -928,7 +929,7 @@ function dismiss(u: PoliceUnit): void {
 function nearestIn(list: readonly CrowdPed[], x: number, z: number, best: number): number {
   for (const p of list) {
     if (p.agent.mode === 'down') continue;
-    const d = Math.hypot(p.agent.s.x - x, p.agent.s.z - z);
+    const d = len2(p.agent.s.x - x, p.agent.s.z - z);
     if (d < best) best = d;
   }
   return best;

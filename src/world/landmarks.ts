@@ -9,6 +9,7 @@
  * across the pavement and straight in.
  */
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, blockInterior, type City, type Rect } from './city';
+import { len2 } from '../core/len';
 
 export interface SprayShop {
   id: string;
@@ -51,7 +52,7 @@ export function placeSprayShops(city: City): SprayShop[] {
   for (const [tx, tz] of SHOP_TARGETS) {
     const blocks = [...city.blocks]
       .filter((b) => b.kind !== 'buildings' && !used.has(`${b.bx},${b.bz}`))
-      .sort((a, b) => Math.hypot(a.bx - tx, a.bz - tz) - Math.hypot(b.bx - tx, b.bz - tz));
+      .sort((a, b) => len2(a.bx - tx, a.bz - tz) - len2(b.bx - tx, b.bz - tz));
     for (const b of blocks) {
       const shop = bayFor(b.bx, b.bz, city);
       if (!shop) continue;
@@ -129,7 +130,7 @@ export function placeStation(city: City): Station {
   let bestD = Infinity;
   for (const b of city.blocks) {
     if (b.kind !== 'buildings') continue;
-    const d = Math.hypot(b.bx - tx, b.bz - tz);
+    const d = len2(b.bx - tx, b.bz - tz);
     if (d < bestD) {
       bestD = d;
       best = b;

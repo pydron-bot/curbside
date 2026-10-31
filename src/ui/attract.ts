@@ -5,6 +5,7 @@
  * player as the point Population keeps the streets busy around.
  */
 import type { Vehicle } from '../game/population';
+import { len2 } from '../core/len';
 
 /** Seconds on one car before looking for another. */
 const HOLD = [7, 11] as const;
@@ -49,7 +50,7 @@ export class AttractCamera {
     this.hold -= dt;
     const t = this.target;
     const lost =
-      !t || !t.ai || t.damage.wrecked || !vehicles.includes(t) || Math.hypot(t.sim.x - this.x, t.sim.z - this.z) > LOSE_RANGE;
+      !t || !t.ai || t.damage.wrecked || !vehicles.includes(t) || len2(t.sim.x - this.x, t.sim.z - this.z) > LOSE_RANGE;
     if (lost || this.hold <= 0) this.pick(vehicles);
 
     let wantVx = 4; // nobody to follow: drift east
@@ -60,7 +61,7 @@ export class AttractCamera {
       const gz = tgt.sim.z + tgt.sim.vz * LEAD - this.z;
       wantVx = gx * CHASE;
       wantVz = gz * CHASE;
-      const sp = Math.hypot(wantVx, wantVz);
+      const sp = len2(wantVx, wantVz);
       if (sp > MAX_SPEED) {
         wantVx *= MAX_SPEED / sp;
         wantVz *= MAX_SPEED / sp;
@@ -80,9 +81,9 @@ export class AttractCamera {
     let bestScore = -Infinity;
     for (const v of vehicles) {
       if (!v.ai || v.damage.wrecked) continue;
-      const d = Math.hypot(v.sim.x - this.x, v.sim.z - this.z);
+      const d = len2(v.sim.x - this.x, v.sim.z - this.z);
       if (d > PICK_RANGE) continue;
-      const sp = Math.hypot(v.sim.vx, v.sim.vz);
+      const sp = len2(v.sim.vx, v.sim.vz);
       // Moving cars a little way off make the nicest glide; add some chance.
       const score = Math.min(sp, 12) - Math.abs(d - 45) * 0.08 + this.rand() * 6 - (v === this.target ? 8 : 0);
       if (score > bestScore) {

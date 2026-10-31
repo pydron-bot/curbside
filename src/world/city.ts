@@ -9,6 +9,7 @@
  */
 import { buildingHeight, districtOf, type District } from './districts';
 import { mulberry32 } from './random';
+import { len2 } from '../core/len';
 
 export const BLOCK_SIZE = 64;
 export const ROAD_WIDTH = 16;
@@ -162,7 +163,7 @@ function plantTrees(r: Rect, rand: () => number, out: Tree[]): void {
     const radius = 1.6 + rand() * 1.4;
     const x = r.minX + radius + rand() * (r.maxX - r.minX - 2 * radius);
     const z = r.minZ + radius + rand() * (r.maxZ - r.minZ - 2 * radius);
-    if (placed.every((t) => Math.hypot(t.x - x, t.z - z) > t.radius + radius)) {
+    if (placed.every((t) => len2(t.x - x, t.z - z) > t.radius + radius)) {
       placed.push({ x, z, radius });
     }
   }

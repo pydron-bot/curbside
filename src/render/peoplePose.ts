@@ -14,6 +14,7 @@ import type { CrowdPed, Vehicle } from '../game/population';
 import { WEAPONS } from '../systems/weapons';
 import type { Rect } from '../world/city';
 import { CULL_MARGIN, type CharacterModel } from './characterModel';
+import { len2 } from '../core/len';
 
 /** Share of the EnterCar clip spent stepping up to the door. */
 const BOARD_STEP = 0.4;
@@ -106,7 +107,7 @@ export class PeoplePose {
       m.root.rotation.y = lerpAngle(p.prev.heading, ped.heading, alpha);
     }
     const held = this.boardCar ? null : p.arsenal.current;
-    const moving = this.boardCar ? 0 : Math.hypot(ped.vx, ped.vz);
+    const moving = this.boardCar ? 0 : len2(ped.vx, ped.vz);
     // Guns are up while aiming, locked on, just fired or not sprinting; throwables are held low.
     const raised = held !== null && WEAPONS[held].mode !== 'throw' && (aimHeading !== null || this.d.locked() || this.sinceShot < AIM_LINGER || moving < SPRINT_LOWER);
     m.hold(held, raised);
@@ -120,7 +121,7 @@ export class PeoplePose {
     const m = this.d.model;
     const car = p.driving;
     const shown = m.root.visible && this.d.playing() && car !== null;
-    const near = shown && Math.hypot(m.root.position.x - doorX(car.sim), m.root.position.z - doorZ(car.sim)) < BOARD_REACH;
+    const near = shown && len2(m.root.position.x - doorX(car.sim), m.root.position.z - doorZ(car.sim)) < BOARD_REACH;
     const takes = near ? m.enterCar() : 0;
     if (!near || takes <= 0 || speed(car.sim) > BOARD_FAST) {
       m.root.visible = false;
@@ -160,7 +161,7 @@ export class PeoplePose {
     for (const c of this.d.crowd) {
       // Friends only: Deacon Pike (or his Collector) doesn't cheer you taking him down.
       if (!STORY_BODIES.includes(c.model.bodyKind) || c.agent.temper !== 'calm' || c.agent.mode === 'down') continue;
-      if (Math.hypot(c.agent.s.x - x, c.agent.s.z - z) < CHEER_RANGE) c.model.cheer(STORY_CHEER);
+      if (len2(c.agent.s.x - x, c.agent.s.z - z) < CHEER_RANGE) c.model.cheer(STORY_CHEER);
     }
   }
 }
@@ -179,7 +180,7 @@ function poseCrowdPed(c: CrowdPed, dt: number, alpha: number, view: Rect | null)
   m.followStagger(a.stagger);
   const down = a.mode === 'down';
   const shown = !view || nearView(view, m.root.position.x, m.root.position.z, POSE_MARGIN);
-  m.update(dt, Math.hypot(s.vx, s.vz), down, down ? a.timer : Infinity, shown);
+  m.update(dt, len2(s.vx, s.vz), down, down ? a.timer : Infinity, shown);
 }
 
 /** Is (x, z) within `margin` of the `view` rectangle? */

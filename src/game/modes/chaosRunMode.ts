@@ -17,6 +17,7 @@ import type { TitleMode } from '../../ui/titleScreen';
 import type { Vehicle } from '../population';
 import { CHAOS_CAR_HEALTH, CHAOS_CATEGORIES, CHAOS_MEDALS, CHAOS_RUN_ID, CHAOS_RUN_SECONDS, ChaosRun, FINAL_COUNT, armForRun, chaosMedal, nextMedal, type ChaosEnd } from './chaosRun';
 import type { Mode, ModeCtx } from './context';
+import { len2 } from '../../core/len';
 
 const PAINTS = ['#e8b923', '#ff2e88', '#2ee6ff', '#ff6a3d', '#3ddc84', '#f6f1e4'];
 const COUNTDOWN = 3;
@@ -98,7 +99,7 @@ export class ChaosRunMode implements Mode {
       const p = lanePoint(ix, iz, d, 12);
       spot = { x: p.x, z: p.z, heading: dirHeading(d) };
       // Not on top of another car.
-      if (!deps.vehicles.some((v) => Math.hypot(v.sim.x - p.x, v.sim.z - p.z) < 9)) break;
+      if (!deps.vehicles.some((v) => len2(v.sim.x - p.x, v.sim.z - p.z) < 9)) break;
     }
     const paint = PAINTS[Math.floor(rand() * PAINTS.length)];
     this.car = this.ctx.spawnCar('sports', paint, spot.x, spot.z, spot.heading);
