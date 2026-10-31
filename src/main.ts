@@ -84,6 +84,7 @@ import { AIM_TURN_RATE, aimHeading, approachAngle } from './core/aim';
 import { getDevice } from './render/quality';
 import { AttractCamera } from './ui/attract';
 import { FrontDoor } from './ui/frontDoor';
+import { addDiagnosticsButton, Diagnostics } from './ui/diagnostics';
 import { blockBrowserGestures } from './ui/gestures';
 import { Haptics } from './ui/haptics';
 import { Hud, createHudFrame, gaugeTopSpeed, type CarHud } from './ui/hud';
@@ -1219,6 +1220,17 @@ document.addEventListener('visibilitychange', () => {
   setPaused(true);
 });
 
+// Session perf log and the Diagnostics sheet (pause card, Perf overlay on).
+const diagnostics = new Diagnostics(document.body, {
+  frame: (out) => frameStats.summarize(out),
+  ratio: () => resolution.pixelRatio,
+  drawCalls: () => renderer.info.render.calls,
+  audioState: () => audio.state,
+  paused: () => paused,
+  canvas: renderer.domElement,
+});
+addDiagnosticsButton(diagnostics, frontDoor, () => input.lastDevice !== 'touch');
+
 // iOS drops the GL context of backgrounded or memory-starved pages. Say so,
 // hold the game, and carry on once three.js has rebuilt its GPU resources.
 renderer.domElement.addEventListener('webglcontextlost', (e) => {
@@ -1284,6 +1296,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   hud,
   radar,
   frontDoor,
+  diagnostics,
   attract,
   touch,
   haptics,
