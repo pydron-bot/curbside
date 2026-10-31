@@ -61,8 +61,8 @@ export class ContactShadows {
   /**
    * add() with its seven numbers (x, z, heading, halfWidth, halfLength,
    * soft, opacity) read from `src` at `o`: V8 boxes doubles passed to a call
-   * it doesn't inline, and the rubble adds up to 36 a frame. Writes the
-   * buffers directly (no Matrix4).
+   * it doesn't inline, and the rubble adds up to 36 a frame (more for a
+   * desktop pile on 'low'). Writes the buffers directly (no Matrix4).
    */
   addFrom(src: Float32Array, o: number): void {
     if (this.count >= this.capacity) return;

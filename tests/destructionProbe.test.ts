@@ -72,7 +72,7 @@ describe('BLOW A WALL', () => {
     const loading = { ...desktop, rapier: 'loading' as const };
     expect(blowWallBlocker(loading, 'high')).toMatch(/Loading physics/);
     expect(blowWallBlocker({ ...loading, mode: 'phone' }, 'low')).toMatch(/Loading physics/);
-    // auto on a phone's 'medium' is the desktop style: it waits for Rapier too.
+    // auto on a phone's 'medium' throws bodies, so it waits for Rapier (which style: destructionStyle.test.ts).
     expect(blowWallBlocker(loading, 'medium')).toMatch(/Loading physics/);
     // auto on 'low' throws no bodies: nothing to wait for.
     expect(blowWallBlocker(loading, 'low')).toBeNull();

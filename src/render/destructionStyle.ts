@@ -15,8 +15,9 @@ export type DestructionStyle = 'off' | 'low' | 'phone' | 'desktop';
 /**
  * Mode × tier → style. 'auto' is desktop on 'high' and 'medium' (an iPhone
  * 15 Pro on 'medium' held 60 fps with it) and scar-only on 'low', the tier
- * DynamicResolution drops a struggling device to. 'phone' / 'desktop' are
- * forced on any tier.
+ * DynamicResolution drops a struggling device to with Graphics on Auto (the
+ * default; a fixed Med / High never steps the tier, only resolution).
+ * 'phone' / 'desktop' are forced on any tier.
  */
 export function resolveStyle(mode: DestructionMode, tier: QualityTierName): DestructionStyle {
   if (mode === 'off') return 'off';

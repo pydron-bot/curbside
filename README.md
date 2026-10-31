@@ -1191,7 +1191,7 @@ clean boxes (`docs/HANDOFF.md`).
 | Life | 120 s, then removed once out of view | 7 s, then crumbles away (0.6 s: settles 4 cm and darkens, then flattens and shrinks into the pavement) | chips ~3 s |
 | Settling | Rapier sleep; forced after 10 s unless a moving car is within 6 m | gone at 7.6 s | – |
 | Car proxies | 6 | 3 | – |
-| Rubble shadows | sun shadows (+1 call) | contact shadows (no call) | – |
+| Rubble shadows | sun shadows (+1 call); contact shadows on the `low` tier, which has no shadow map | contact shadows (no call) | – |
 | Dust (tinted by the wall) | a cloud of 26 puffs (to 3.8 m, 2.5–4.5 s), a ring at the foot and a haze over the pile (6–9 s) | a puff of 7 (to 2.2 m, 1–1.6 s) | a puff of 5 |
 | Scar | rich: looks into the cavity (view-ray depth), shaded darker than the wall, cut floor slabs, rebar, a faint room light deep inside at full night only, a rim glowing hot for 3 s and embers along it for ~7 s, a wide chunky pale lower lip, wider darker soot | flat bowl, its lower half lit core, dark only at the upper back; broken chipped lip, chunky below; soot | flat |
 | Scars drawn at once | 32 | 16 | 16 |
@@ -1199,15 +1199,18 @@ clean boxes (`docs/HANDOFF.md`).
 A breach beyond the last view + 20 m gets its scar but no rubble or dust.
 `auto` is the desktop style on `high` and `medium`, so phones get it too
 (an iPhone 15 Pro held 60 fps with it: *Measured on the device* below),
-and scar-only on `low`. It follows the **live** tier per breach:
-DynamicResolution stepping a struggling device down to `low` makes later
-breaches scar-only (the safety valve) and restyles and re-caps the scars
-already on the walls, climbing back undoes that, and `medium` ↔ `high`
-changes nothing. Rubble from before a drop to `low` lives out its life.
-PHONE and DESKTOP force a style on any device; PHONE stays for
-comparison. Switched from DESKTOP to PHONE, a phone breach evicts at most
-its own chunk count, so the old pile thins out breach by breach, and the
-batch keeps sun shadows while any desktop chunk is alive.
+and scar-only on `low`. It follows the **live** tier per breach: with
+Settings → Graphics on Auto (the default), DynamicResolution stepping a
+struggling device down to `low` makes later breaches scar-only (the safety
+valve) and restyles and re-caps the scars already on the walls, climbing
+back undoes that, and `medium` ↔ `high` changes nothing. A fixed Med or
+High never steps the tier (only the resolution), so it keeps the desktop
+style. Rubble from before a drop to `low` lives out its life, on contact
+shadows (`low` has no shadow map). PHONE and DESKTOP force a style on any
+device; PHONE stays for comparison. Switched from the desktop style
+(DESKTOP, or AUTO on `high` / `medium`) to PHONE, a phone breach evicts at
+most its own chunk count, so the old pile thins out breach by breach, and
+the batch keeps sun shadows while any desktop chunk is alive.
 
 - **Switch.** `settings.destruction`: `off` / `auto` / `phone` /
   `desktop`, sanitised at boot. There is no Settings row: pause →
@@ -1269,23 +1272,24 @@ batch keeps sun shadows while any desktop chunk is alive.
   boot with it on +1 (the plain program, behind the card), then nothing
   more compiles (breaches, merges, night, tier changes). Rapier's import
   (from cache) ~70 ms and warm-up 150–360 ms behind the card; the
-  download, 4.1 s at 4 Mbit/s for the uncompressed 2 MB wasm, happens
-  during play if need be. Physics per stepped frame while a breach
-  settles: desktop 34 bodies avg 0.17 / p95 0.5 ms, phone 7 bodies avg
-  0.10 / p95 0.3 ms; a desktop breach spawns in 1–6 ms, a phone one in
-  0.7 ms (BLOW A WALL, from 1.4 m, now throws 31 and 6). A settled pile
-  costs no steps and no uploads, with or without a parked car by it. The
-  device is what counts:
+  download, ~1.6 s at 4 Mbit/s for the ~770 KB wasm Pages sends (4.1 s
+  served uncompressed), happens during play if need be. Physics per
+  stepped frame while a breach settles: desktop 34 bodies avg 0.17 / p95
+  0.5 ms, phone 7 bodies avg 0.10 / p95 0.3 ms; a desktop breach spawns
+  in 1–6 ms, a phone one in 0.7 ms (BLOW A WALL, from 1.4 m, now throws 31
+  and 6). A settled pile costs no steps and no uploads, with or without a
+  parked car by it. The device is what counts:
 - **Measured on the device** (one 2.5-minute session, build `0e8bf2c`:
   iPhone 15 Pro, home-screen app, iOS 18.7, tier `medium` at 1.50x,
   DESKTOP forced): 59.9 fps, frame p50 17 / p95 17 / p99 18 ms, JS p95
-  4 ms, no hitches overall; 145 rubble bodies alive, none awake once
-  settled; physics avg 0.28 ms, worst one-second average 0.58 ms (p95
-  reads 1.00 ms only because iOS timers have 1 ms resolution, the `(q)`
-  flag); 46–59 draw calls with rubble (budget 150). Rapier load 880 +
-  import 33 + warm 34 ms; Pages serves the wasm compressed (770 KB
-  transferred for 2.02 MB decoded, ~222 ms), and the second load came from
-  the runtime cache; switching modes warmed in 3 ms (no shader compile).
+  4 ms, 0 hitches/min overall (one hitch in the session, below); 145
+  rubble bodies alive, none awake once settled; physics avg 0.28 ms,
+  worst one-second average 0.58 ms (p95 reads 1.00 ms only because iOS
+  timers have 1 ms resolution, the `(q)` flag); 46–59 draw calls with
+  rubble (budget 150). Rapier load 880 + import 33 + warm 34 ms; Pages
+  serves the wasm compressed (770 KB transferred for 2.02 MB decoded,
+  ~222 ms), and the second load came from the runtime cache; switching
+  modes warmed in 3 ms (no shader compile).
   One 10 s window after the second DESKTOP blast dipped to 57 fps, p99
   26 ms (one hitch), then recovered. Not measured yet: thermal throttling
   over 10+ minutes.

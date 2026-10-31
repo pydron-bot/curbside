@@ -156,7 +156,7 @@ export interface DestructionDeps {
   quiet(): boolean;
   /** Diagnostics session events (optional). */
   log?(kind: string, detail?: string): void;
-  /** Look.contactShadows: seats the phone style's chunks, which cast no sun shadow. */
+  /** Look.contactShadows: seats chunks with no sun shadow (the phone style's, or any on 'low'). */
   contactShadows?: { addFrom(src: Float32Array, o: number): void };
   /** A car model's size and top silhouette (vehicles.glb), for its rubble proxy; undefined before the models load. */
   carDims?(archetype: VehicleArchetype): CarDims | undefined;
@@ -415,7 +415,8 @@ export class Destruction {
         dirty = true;
       }
     }
-    const pools = batch.mesh.castShadow ? undefined : this.d.contactShadows;
+    // Contact pools wherever the rubble gets no sun shadow: the phone style, or any pile on 'low' (no shadow map).
+    const pools = batch.mesh.castShadow && getQuality().shadowMapSize > 0 ? undefined : this.d.contactShadows;
     if (!dirty && !pools) {
       batch.hold();
       return;
@@ -605,7 +606,7 @@ export class Destruction {
     this.scars.setCap(b.scarCap);
   }
 
-  /** Sun shadows while any desktop chunk is alive (a phone breach after switching from DESKTOP doesn't flip the pile's). */
+  /** Sun shadows while any desktop chunk is alive (a phone breach after switching from the desktop style doesn't flip the pile's). */
   private updateShadows(): void {
     let desk = false;
     const st = this.slots.state;

@@ -110,12 +110,13 @@ had its first device run: DESKTOP forced on the iPhone 15 Pro (home-screen
 app, iOS 18.7, `medium` at 1.50x, build `0e8bf2c`, one 151 s session) held
 59.9 fps, frame p99 18 ms, 0 hitches/min overall, with 145 bodies (none
 awake once settled), physics avg 0.28 ms (worst second 0.58 ms) and 46–59
-draw calls; Pages gzips the wasm (770 KB for 2.02 MB) and the second load
-came from the runtime cache; switching modes warmed in 3 ms. One 10 s
-window after the second DESKTOP blast dipped to 57 fps / p99 26 ms (one
-hitch), then recovered. So `auto` now gives phones the desktop style:
-`high` and `medium` are desktop, `low` stays scar-only (the safety valve
-when DynamicResolution drops a tier), and PHONE stays on the switch to
+draw calls; Pages serves the wasm compressed (770 KB for 2.02 MB) and the
+second load came from the runtime cache; switching modes warmed in 3 ms.
+One 10 s window after the second DESKTOP blast dipped to 57 fps / p99
+26 ms (one hitch), then recovered. So `auto` now gives phones the
+desktop style: `high` and `medium` are desktop, `low` stays scar-only (the
+safety valve when DynamicResolution drops a tier, which it only does with
+Settings → Graphics on Auto, the default), and PHONE stays on the switch to
 compare against. Full numbers in README *Destruction test*.
 
 1. **Optional before the device pass:** live touch tuning
@@ -128,16 +129,23 @@ compare against. Full numbers in README *Destruction test*.
    new silver cap band on a phone yet.
    **The destruction test stays a test (off by default) until:**
    (a) **a 15+ minute soak on the phone** shows no throttling: Perf
-   overlay on Full, pause → DIAGNOSTICS → DESTRUCTION (TEST) → AUTO (now
+   overlay on Full and Settings → Graphics on Auto (a fixed Med never
+   drops to `low`), pause → DIAGNOSTICS → DESTRUCTION (TEST) → AUTO (now
    the desktop style on the phone), wait for `rapier … ready`, then play
    normally for 15+ minutes, BLOW A WALL every minute or two (3–4 m from
    the wall, facing it), drive through the piles and blow up a car chain
    beside a wall; watch the overlay for a tier drop to `low` (breaches go
    scar-only) or a resolution step, and for fps / p99 creeping as the
    phone warms; SHARE the report at the end (its samples are the
-   timeline). (b) **Rubble look polish** (cloud): reviewers said the
-   chunks read as clean boxes rather than broken masonry; make them read
-   as broken brick and concrete, still one batch and no new program.
+   timeline). Still open from the first run: with a Mac at hand, any GC
+   sawtooth in the Safari timeline while a pile settles; and the boot
+   `warm` event with the test on at boot (relaunch the app with AUTO
+   saved) against one from an `off` session. On a desktop machine the
+   same with DESKTOP (or `?destruction=desktop`), against the estimate of
+   ≤ 1.3 ms physics p95. (b) **Rubble look polish** (cloud): reviewers
+   said the chunks read as clean boxes rather than broken masonry; make
+   them read as broken brick and concrete, still one batch and no new
+   program.
    (c) Then decide whether the test goes on by default.
 3. **Races and tuning** (cloud): the bot-vs-dev-time test [`tune-race-dev-times`]; commit
    the `__ub` bot harnesses [`tune-chaos-medals`, `tune-five-star-escape`].
