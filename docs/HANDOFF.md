@@ -92,31 +92,40 @@ with `?debug`) whose SHARE / COPY report includes the play log
 updates no longer reload mid-run on an app switch or after a bust, only on
 the title, after WASTED, or after 10+ minutes away [`update-reloads-midrun`];
 a local play log of Chaos Runs, races and chases (`curbside.playlog`, via a
-new `activityEnd` event) [`tune-telemetry`, core fields only].
+new `activityEnd` event) [`tune-telemetry`, core fields only]. Then:
+haptics / rumble / live gamepad probes in the Diagnostics sheet
+[`input-probes`]; fast vehicles are swept against static obstacles (no
+more tunnelling through posts and bollards) and standing street furniture
+is solid to people [`minor-props`]; races start with nitro at
+`NITRO_START`; a timed-out Chaos Run is scored at the freeze, never below
+the HUD; the radar tints by the real districts; muzzle flashes start at the
+bore; Blender pass round 1: rooftop hut/tank tops in the GLB (no more
+`PART_COLOURS`), paler pigeons with near-white wings, a silver cop cap band
+and chest badge (SWAT too) [part of `characters-looks` / `props-world`].
 
-1. **Last device-pass prep** (cloud, small): haptics / rumble / pad probes
-   in the Diagnostics sheet [`input-probes`]; optionally live touch tuning
+1. **Optional before the device pass:** live touch tuning
    [`touch-tuning`].
 2. **Real-device pass on an iPhone 15 Pro** (the user, ~1.5–2 h): turn on
-   Settings → Perf overlay, follow [`device-checklist`], then pause →
-   DIAGNOSTICS → SHARE and send back the report (it carries the play log).
-3. **Races and tuning** (cloud): the bot-vs-dev-time test [`tune-race-dev-times`]; reset nitro at a race
-   start (needs `nitro` in ProgressDeps and a call: empty or `NITRO_START`); commit
+   Settings → Perf overlay, follow [`device-checklist`] (the haptics /
+   rumble / pad questions are answered by the probes in the Diagnostics
+   sheet), then pause → DIAGNOSTICS → SHARE and send back the report (it
+   carries the play log). Also look at cops at night: nobody has seen the
+   new silver cap band on a phone yet.
+3. **Races and tuning** (cloud): the bot-vs-dev-time test [`tune-race-dev-times`]; commit
    the `__ub` bot harnesses [`tune-chaos-medals`, `tune-five-star-escape`].
    Re-tune medals and 5-star escape only from logged real play.
 4. **Blender adjustment pass** (cloud): the pip `bpy` 5.2.3 module rebuilds
    every committed GLB headless (recipe in `docs/BLENDER_TODO.md`). Then: fly the `rocket` model
    [`rocket-projectile`], GetUp/Throw timing [`clips-getup-throw`], held
-   weapons [`weapons-held`], cop badge / backpack / Pike / pigeons
-   [`characters-looks`], rooftop tops, lamp and signal heads, police sign,
-   gantry span [`props-world`].
+   weapons [`weapons-held`], slim backpack / Pike's collar
+   [`characters-looks`], lamp and signal heads, police sign, safehouse door,
+   booth roof, gantry span [`props-world`].
 5. **deeek.org landing page** (cloud, after the user picks branding, the
    project list and the image): [`hub-screenshots`], [`hub-page`],
    [`hub-social-meta`], [`curbside-og-meta`], [`curbside-linkback`];
    same-origin rules [`shared-origin-landing`]; live HTTPS/domain check is
    the user's [`pages-domain-check`].
-6. **Remaining minor issues:** furniture solid to people and substepped
-   static collision so fast bikes stop tunnelling [`minor-props`]; left
+6. **Remaining minor issues:** left
    turns give way to the opposite queue (the real cause of the junction
    clipping) [`minor-junction-turns`]; animation sampling garbage
    [`anim-bake`], `Math.hypot` and call boxing in the sim
@@ -131,11 +140,9 @@ new `activityEnd` event) [`tune-telemetry`, core fields only].
    gangs [`gangs-respect`]; leaderboard needs a decision on any backend
    [`online-leaderboard`].
 
-Smaller bugs found on the way (details in BACKLOG.md): the Chaos Run result
-can show less than the HUD did in its last second;
-the radar's district tint doesn't match the real districts; README still
-describes an `AnimationMixer` that's gone; muzzle flashes sit at grip
-height.
+Smaller things found on the way (details in BACKLOG.md): README still
+describes an `AnimationMixer` that's gone; the Old Town race's leg 1 has a
+launch ramp landing at a corner checkpoint (is that a feature?).
 
 ## Working conventions that worked
 
