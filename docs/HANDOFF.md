@@ -85,19 +85,22 @@ instance buffers upload whole and empty car batches not at all
 [`upload-ranges`]; car batches share one precompiled shadow-depth material
 [`shadow-depth-flip`]; the Old Town race no longer runs into the back of a
 stunt ramp, with a test for every course; asset builds run under pip `bpy`
-[`toolchain-bpy`].
+[`toolchain-bpy`]. Then: a session perf log (`curbside.diag`) and a
+DIAGNOSTICS sheet on the pause card (shown while the Perf overlay is on, or
+with `?debug`) whose SHARE / COPY report includes the play log
+[`diag-report`, minus an alive marker and event-driven audio state]; app
+updates no longer reload mid-run on an app switch or after a bust, only on
+the title, after WASTED, or after 10+ minutes away [`update-reloads-midrun`];
+a local play log of Chaos Runs, races and chases (`curbside.playlog`, via a
+new `activityEnd` event) [`tune-telemetry`, core fields only].
 
-1. **Diagnostics for the device pass** (cloud, ~half a session): a
-   persisted session log with a Share/Copy diagnostics report and a
-   DIAGNOSTICS button on the pause card [`diag-report`]; haptics / rumble /
-   pad probes [`input-probes`]; optionally live touch tuning
+1. **Last device-pass prep** (cloud, small): haptics / rumble / pad probes
+   in the Diagnostics sheet [`input-probes`]; optionally live touch tuning
    [`touch-tuning`].
-2. **Real-device pass on an iPhone 15 Pro** (the user, ~1.5–2 h): follow
-   [`device-checklist`] and send back the diagnostics report. Decide on
-   [`update-reloads-midrun`] first (an update can reload mid-run on any app
-   switch, which will bite during the session).
-3. **Play telemetry and races** (cloud): local play log [`tune-telemetry`];
-   the bot-vs-dev-time test [`tune-race-dev-times`]; reset nitro at a race
+2. **Real-device pass on an iPhone 15 Pro** (the user, ~1.5–2 h): turn on
+   Settings → Perf overlay, follow [`device-checklist`], then pause →
+   DIAGNOSTICS → SHARE and send back the report (it carries the play log).
+3. **Races and tuning** (cloud): the bot-vs-dev-time test [`tune-race-dev-times`]; reset nitro at a race
    start (needs `nitro` in ProgressDeps and a call: empty or `NITRO_START`); commit
    the `__ub` bot harnesses [`tune-chaos-medals`, `tune-five-star-escape`].
    Re-tune medals and 5-star escape only from logged real play.
