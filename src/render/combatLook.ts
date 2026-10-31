@@ -1,7 +1,8 @@
 /**
  * What combat looks like beyond the shots and blasts FxDirector already
- * handles: grenades, molotov bottles and rockets in flight (one instanced
- * box mesh, one draw call only while something flies), the rocket's smoke
+ * handles: grenades, molotov bottles and rockets in flight (weapons.glb's
+ * `rocket`, `grenade` and `molotov` in one instanced mesh, boxes until it
+ * arrives; one draw call only while something flies), the rocket's smoke
  * trail and flame, a grenade's blinking fuse light, the throw marker (a
  * landing ring and a dotted arc from the hand), the red lock-on ring under
  * the target, molotov fire patches and people on fire.
@@ -10,7 +11,26 @@
  * projectiles' contact shadows go into the shared glow and shadow meshes
  * (no draw calls of their own). Nothing allocates per frame.
  */
-import { BoxGeometry, Color, DynamicDrawUsage, Euler, InstancedMesh, Matrix4, MeshLambertMaterial, Quaternion, Vector3, type Scene } from 'three';
+import {
+  BoxGeometry,
+  BufferAttribute,
+  BufferGeometry,
+  Color,
+  DynamicDrawUsage,
+  Euler,
+  InstancedBufferAttribute,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+  MeshLambertMaterial,
+  Quaternion,
+  Vector3,
+  type MeshStandardMaterial,
+  type Object3D,
+  type Scene,
+} from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { publicUrl } from '../core/paths';
 import type { Combat } from '../game/combat';
 import type { CrowdPed } from '../game/population';
 import { GRENADE_FUSE, THROW_GRAVITY, THROW_HEIGHT, throwVelocity, type Projectile } from '../systems/projectiles';
@@ -18,7 +38,8 @@ import type { Rect } from '../world/city';
 import type { Effects } from './effects';
 import { GLOW, uploadRange, type GlowSprites } from './glowSprites';
 import type { Look } from './look';
-import { worldUniforms } from './shaderLib';
+import { after, worldUniforms } from './shaderLib';
+import { loadWeaponsModel } from './weaponsModel';
 import { len2 } from '../core/len';
 
 const CAPACITY = 24;
@@ -28,6 +49,21 @@ const ARC_DOTS = 9;
 const GRENADE_COLOUR = new Color('#4b5a2a');
 const BOTTLE_COLOUR = new Color('#c9822b');
 const ROCKET_COLOUR = new Color('#6f7a4a');
+const WHITE = new Color(1, 1, 1);
+
+/** The models in flight, in weapons.glb, by the index the shader selects them with. */
+const MODELS = ['rocket', 'grenade', 'molotov'] as const;
+type Flying = (typeof MODELS)[number];
+/**
+ * Drawn above life size, like the guns in hands (a life-size rocket is 10 cm
+ * across at 20 m): about the box stand-ins' size.
+ */
+const MODEL_SCALE: Record<Flying, number> = { rocket: 1.7, grenade: 2.4, molotov: 1.5 };
+const STAND_IN: Record<Flying, readonly [number, number, number]> = {
+  rocket: [0.22, 0.22, 0.95],
+  grenade: [0.3, 0.3, 0.36],
+  molotov: [0.17, 0.17, 0.42],
+};
 
 export class CombatLook {
   readonly mesh: InstancedMesh;
@@ -41,6 +77,10 @@ export class CombatLook {
   private readonly fireDebt = new Float32Array(16);
   private time = 0;
   private readonly arc = { vx: 0, vy: 0, vz: 0, time: 0 };
+  /** Which model each instance shows (MODELS index). */
+  private readonly sel: InstancedBufferAttribute;
+  /** weapons.glb's models are in (otherwise the box stand-ins). */
+  private modelled = false;
 
   constructor(
     scene: Scene,
@@ -49,9 +89,25 @@ export class CombatLook {
     private readonly combat: Combat,
     private readonly crowd: readonly CrowdPed[],
     private readonly player: { readonly ped: { x: number; z: number }; driving: unknown },
+    url = publicUrl('assets/weapons.glb'),
   ) {
-    const material = new MeshLambertMaterial();
-    this.mesh = new InstancedMesh(new BoxGeometry(1, 1, 1), material, CAPACITY);
+    // The same program before and after weapons.glb: vertex colours (white
+    // on the box) times the instance colour, and a per-instance model
+    // selector (the box's vertices belong to every model).
+    const material = new MeshLambertMaterial({ vertexColors: true });
+    material.onBeforeCompile = (shader) => {
+      shader.vertexShader = after(shader.vertexShader, '#include <common>', 'attribute float aModel;\nattribute float aSel;');
+      shader.vertexShader = after(shader.vertexShader, '#include <begin_vertex>', 'if (aModel >= 0.0 && abs(aModel - aSel) > 0.5) transformed = vec3(0.0);');
+    };
+    material.customProgramCacheKey = () => 'curbside-projectiles';
+    const box = new BoxGeometry(1, 1, 1);
+    const count = box.getAttribute('position').count;
+    box.setAttribute('color', new BufferAttribute(new Float32Array(count * 3).fill(1), 3));
+    box.setAttribute('aModel', new BufferAttribute(new Float32Array(count).fill(-1), 1));
+    this.sel = new InstancedBufferAttribute(new Float32Array(CAPACITY), 1);
+    this.sel.setUsage(DynamicDrawUsage);
+    box.setAttribute('aSel', this.sel);
+    this.mesh = new InstancedMesh(box, material, CAPACITY);
     // Colour every slot now so the instance-colour attribute (and its shader
     // variant) exists from the first compile, not from the first throw.
     for (let i = 0; i < CAPACITY; i++) this.mesh.setColorAt(i, GRENADE_COLOUR);
@@ -61,6 +117,50 @@ export class CombatLook {
     this.mesh.name = 'projectiles';
     scene.add(this.mesh);
     look.addGlowSource((glows, view) => this.drawGlows(glows, view, look));
+    if (url) {
+      loadWeaponsModel(url).then(
+        (model) => this.useModel(model),
+        (err) => console.error(`Failed to load ${url}`, err),
+      );
+    }
+  }
+
+  /** weapons.glb arrived: its three flying models in one geometry, each vertex tagged with its model. */
+  private useModel(scene: Object3D): void {
+    const parts: BufferGeometry[] = [];
+    const colour = new Color();
+    const inv = new Matrix4();
+    const rel = new Matrix4();
+    for (let k = 0; k < MODELS.length; k++) {
+      const root = scene.getObjectByName(MODELS[k]);
+      if (!root) return; // all or none: the stand-ins stay
+      root.updateMatrixWorld(true);
+      inv.copy(root.matrixWorld).invert();
+      root.traverse((o) => {
+        if (!(o instanceof Mesh)) return;
+        const src = o.geometry as BufferGeometry;
+        const geo = new BufferGeometry();
+        geo.setAttribute('position', src.getAttribute('position').clone());
+        geo.setAttribute('normal', src.getAttribute('normal').clone());
+        if (src.index) geo.setIndex(src.index.clone());
+        geo.applyMatrix4(rel.multiplyMatrices(inv, o.matrixWorld));
+        const flat = geo.index ? geo.toNonIndexed() : geo;
+        const count = flat.getAttribute('position').count;
+        colour.copy((o.material as MeshStandardMaterial).color);
+        const rgb = new Float32Array(count * 3);
+        for (let i = 0; i < count; i++) rgb.set([colour.r, colour.g, colour.b], i * 3);
+        flat.setAttribute('color', new BufferAttribute(rgb, 3));
+        flat.setAttribute('aModel', new BufferAttribute(new Float32Array(count).fill(k), 1));
+        parts.push(flat);
+      });
+    }
+    const merged = mergeGeometries(parts);
+    if (!merged) return;
+    merged.setAttribute('aSel', this.sel);
+    const old = this.mesh.geometry;
+    this.mesh.geometry = merged;
+    old.dispose();
+    this.modelled = true;
   }
 
   /** Per frame (effect time): place what flies, and emit trails and flames. */
@@ -100,6 +200,7 @@ export class CombatLook {
     this.mesh.count = n;
     if (n > 0) {
       uploadRange(this.mesh.instanceMatrix, n);
+      uploadRange(this.sel, n);
       if (this.mesh.instanceColor) uploadRange(this.mesh.instanceColor, n);
     }
     if (dt <= 0) return;
@@ -134,20 +235,21 @@ export class CombatLook {
   private place(p: Projectile, i: number): void {
     const sp = len2(p.vx, p.vz);
     const yaw = sp > 0.01 ? Math.atan2(p.vx, p.vz) : 0;
-    if (p.kind === 'rocket') {
-      this.e.set(0, yaw, p.spin);
-      this.scale.set(0.22, 0.22, 0.95);
-      this.mesh.setColorAt(i, ROCKET_COLOUR);
-    } else if (p.kind === 'molotov') {
-      // Tumbling end over end.
-      this.e.set(p.spin, yaw, 0);
-      this.scale.set(0.17, 0.17, 0.42);
-      this.mesh.setColorAt(i, BOTTLE_COLOUR);
+    const kind: Flying = p.kind === 'rocket' ? 'rocket' : p.kind === 'molotov' ? 'molotov' : 'grenade';
+    // Rockets fly nose first (+Z) and roll; bottles tumble end over end; grenades tumble.
+    if (kind === 'rocket') this.e.set(0, yaw, p.spin);
+    else if (kind === 'molotov') this.e.set(p.spin, yaw, 0);
+    else this.e.set(p.spin, yaw, p.spin * 0.6);
+    if (this.modelled) {
+      const s = MODEL_SCALE[kind];
+      this.scale.set(s, s, s);
+      this.mesh.setColorAt(i, WHITE);
     } else {
-      this.e.set(p.spin, yaw, p.spin * 0.6);
-      this.scale.set(0.3, 0.3, 0.36);
-      this.mesh.setColorAt(i, GRENADE_COLOUR);
+      const [sx, sy, sz] = STAND_IN[kind];
+      this.scale.set(sx, sy, sz);
+      this.mesh.setColorAt(i, kind === 'rocket' ? ROCKET_COLOUR : kind === 'molotov' ? BOTTLE_COLOUR : GRENADE_COLOUR);
     }
+    this.sel.array[i] = MODELS.indexOf(kind);
     this.q.setFromEuler(this.e);
     this.pos.set(p.x, p.y, p.z);
     this.m.compose(this.pos, this.q, this.scale);

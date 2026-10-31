@@ -340,7 +340,8 @@ weapon (pistol `Aim`, SMG/shotgun `AimBoth`, launcher `AimRocket`; a gun is
 lowered while sprinting unaimed) with its `Shoot*` kick per shot; the jab,
 left hook and uppercut of the combo (`Punch`, `Punch2`, `Uppercut`);
 `Throw` for grenades and molotovs; `Stagger` on a hit; knocked down
-`Fall` → `Down` → `GetUp`, the get-up timed to end as they're allowed up;
+`Fall` → `Down` → `GetUp`, the get-up timed to end as they're allowed up
+(`GetUpFast` after a short knock-down);
 `Arrested` when BUSTED; `EnterCar` at the driver's door before the body
 vanishes; `Hail`, `Cower`, `Cheer`, `Ride`. See *Look → People*.
 
@@ -906,12 +907,12 @@ Everyone in the city is drawn from the Blender bodies in `public/assets/`
   at the docks yard for every delivery there; Deacon Pike guards his car in
   LAST CALL; the Collector wears Pike's coat in white. Story characters
   keep their own colours; only the friendly ones cheer.
-- **Clips** (`characterAnim.ts`): the 22 clips are baked at load into
+- **Clips** (`characterAnim.ts`): the 23 clips are baked at load into
   Float32Arrays per body (each track's own 24 fps keys; anything not evenly
   keyed and linear is resampled at 30 fps) and sampled by hand with inline
   nlerp/slerp (no `AnimationMixer` per person, no three.js interpolants, no
   garbage per frame) into three layers: legs (Idle/Walk/Run on one gait phase at the
-  authored `walkSpeed` / `runSpeed`), a whole-body layer (Fall, Down, GetUp,
+  authored `walkSpeed` / `runSpeed`), a whole-body layer (Fall, Down, GetUp / GetUpFast,
   Arrested, Cower, Cheer, EnterCar, Ride, Stagger: these move the root
   bone, so the instance is never tipped while they play) and the arms,
   chest and head (aims, shots, punches, Throw, Hail), crossfaded by weight.

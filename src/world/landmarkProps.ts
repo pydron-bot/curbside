@@ -59,8 +59,8 @@ const EXPORT_WALLS: readonly Rect[] = [
 ];
 /** The gantry spans the road: its pillars stand on the kerb lines either side, m from the middle. */
 const GANTRY_HALF_SPAN = ROAD_WIDTH / 2 + 0.6;
-/** The model's pillars are 6.25 m from its middle. */
-const GANTRY_MODEL_HALF = 6.25;
+/** The model's pillars are 8.6 m from its middle (built to span the road, so drawn at 1:1). */
+const GANTRY_MODEL_HALF = 8.6;
 /** Down the race's first leg from the start crossing, clear of the junction, its signals and lamps, m. */
 const GANTRY_ALONG = 21;
 

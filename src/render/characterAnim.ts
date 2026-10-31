@@ -16,8 +16,9 @@
  * dropped at load (they are the rest pose anyway).
  *
  * Each track is baked at load into evenly spaced frames in a Float32Array
- * (its own keys when they're even and linear, as Blender exports them;
- * constant tracks into one frame) and sampled with the math written inline:
+ * (its own keys when they're even and linear, as Blender exports them,
+ * subdivided where a rotation turns fast; constant tracks into one frame)
+ * and sampled with the math written inline:
  * three's interpolants box every keyframe read and blend through calls V8
  * doesn't inline, which made them ~10 KB of garbage a frame.
  */
@@ -385,17 +386,39 @@ export function bake(t: KeyframeTrack, duration: number, dim: number): BakedTrac
   // (resampling them would cut the corners between keys); anything else is
   // resampled at BAKE_FPS. Either way the last frame lands exactly on
   // `duration` (GetUp, Throw and EnterCar time off it).
-  const frames = evenKeys(t, duration) ? t.times.length : Math.max(2, Math.ceil(duration * BAKE_FPS) + 1);
-  const step = duration / (frames - 1);
-  const values = new Float32Array(frames * dim);
-  for (let f = 0; f < frames; f++) {
-    const v = sampler.evaluate(Math.min(duration, f * step)) as unknown as ArrayLike<number>;
-    for (let c = 0; c < dim; c++) values[f * dim + c] = v[c];
+  let frames = evenKeys(t, duration) ? t.times.length : Math.max(2, Math.ceil(duration * BAKE_FPS) + 1);
+  let step = 0;
+  let values: Float32Array;
+  // Rotations are blended between frames by nlerp, which drifts from slerp
+  // on big steps (a throw swings the arm ~130° a frame): halve the step
+  // (the keys stay on it) until neighbouring frames are within MAX_STEP_ANGLE.
+  for (let tries = 0; ; tries++) {
+    step = duration / (frames - 1);
+    values = new Float32Array(frames * dim);
+    for (let f = 0; f < frames; f++) {
+      const v = sampler.evaluate(Math.min(duration, f * step)) as unknown as ArrayLike<number>;
+      for (let c = 0; c < dim; c++) values[f * dim + c] = v[c];
+    }
+    if (dim !== 4 || tries >= 4 || maxStepCos(values) >= Math.cos(MAX_STEP_ANGLE / 2)) break;
+    frames = frames * 2 - 1;
   }
   for (let i = dim; i < values.length; i++) {
     if (Math.abs(values[i] - values[i % dim]) > 1e-6) return { dim, frames, step, values };
   }
   return { dim, frames: 1, step, values: values.slice(0, dim) };
+}
+
+/** Largest rotation between two neighbouring baked frames before the bake subdivides, radians. */
+const MAX_STEP_ANGLE = (10 * Math.PI) / 180;
+
+/** The smallest |cos(half angle)| between neighbouring quaternion frames. */
+function maxStepCos(v: Float32Array): number {
+  let worst = 1;
+  for (let i = 4; i < v.length; i += 4) {
+    const d = Math.abs(v[i] * v[i - 4] + v[i + 1] * v[i - 3] + v[i + 2] * v[i - 2] + v[i + 3] * v[i - 1]);
+    if (d < worst) worst = d;
+  }
+  return worst;
 }
 
 /** Linear keys from 0 to `duration`, evenly spaced. */

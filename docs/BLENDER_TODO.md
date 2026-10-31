@@ -196,7 +196,8 @@ forward). In priority order:
 
 | Clip | Length | Notes |
 |---|---|---|
-| `Throw` | 0.4 s one-shot | overhand throw (grenade, molotov); release at ~55% |
+| `Throw` | 0.4 s one-shot | overhand throw (grenade, molotov); release at ~25% (the game throws on the press) |
+| `GetUpFast` | 0.5 s one-shot | GetUp compressed, for short knock-downs (the game picks it when GetUp would be rushed past 1.2×) |
 | `AimRocket` / `ShootRocket` | 0.3 s loop / 0.2 s | launcher on the right shoulder; a bigger kick |
 | `Punch2`, `Uppercut` | 0.33 s / 0.4 s | the second (left hook) and third hit of the 3-punch combo (`Punch` is the first) |
 | `Stagger` | 0.3 s one-shot | rocked back by a hit, back to neutral |
@@ -393,7 +394,8 @@ only `paint` / `trim` / `tyre`.
    - `armour` (a folded vest) and `ammo_box` (olive, with a yellow stencil
      band).
 3. **Clips** in every character GLB (22 clips now):
-   - `Throw` is 0.417 s, releasing at frame 5.5 (0.229 s, 55%).
+   - `Throw` is 0.417 s, releasing at frame 2.5 (0.104 s, 25%; was 5.5 / 55% until 2026-10-31).
+   - `GetUpFast` (0.5 s, added 2026-10-31) is GetUp compressed.
    - `AimRocket` is a 0.292 s hold with the right hand at the tube's grip
      below the shoulder and the left hand forward on the tube.
      `ShootRocket` (0.208 s) is a full pose with a heavy kick that pushes
@@ -518,29 +520,41 @@ on the iPhone profile and 27 m on desktop, by day and at night):
 
 1. **Weapons read as thin dark slivers.** From 20–27 m the pistol and
    SMG are a few dark pixels against the arm; the grenade and molotov
-   vanish in the fist. Chunkier silhouettes (+30–50% across) or a light
+   vanish in the fist. **Done 2026-10-31:** held (weapons.glb) guns are
+   1.35–1.45× across about the grip with a top accent in the crate's stripe
+   colour, the grenade 1.7× and the molotov 1.25× (`held()` in
+   pickups.py; crates keep the life-size builds). Chunkier silhouettes (+30–50% across) or a light
    accent (the crate stripe colours: pistol yellow, SMG orange, shotgun
    red) on the top of each gun would make the held weapon readable.
 2. **AimRocket holds the tube low.** The right hand sits ~0.33 m below the
    shoulder and the tube only 0.11 m above the grip, so the launcher reads
    as hip-held rather than on the shoulder. Raise arm.R in AimRocket /
    ShootRocket, or move the tube higher over the grip in `rocket_launcher`.
+   **Done 2026-10-31:** arm.R −75° (hand ~0.14 m under the shoulder), the
+   held tube 0.2 m over the grip and 0.15 m further back (`muzzle` 0.61);
+   the game flies rockets at 1.45 m (`ROCKET_HEIGHT`), measured at the tube.
 3. ~~**Cops from above.**~~ Done: a silver `cop_badge` cap band and chest
    badge (cop.glb 568 → 580 tris).
 4. **Street bodies from 27 m.** The stocky ball cap (the game gives it cap
    colours) and the coat's hem read; the slim body's backpack barely shows
-   from above. A bigger, boxier backpack would help.
+   from above. A bigger, boxier backpack would help. **Done 2026-10-31:**
+   an unbevelled 0.42 × 0.24 × 0.46 box (ped_slim 592 → 560 tris).
 5. **GetUp is often rushed.** Ordinary knock-downs last 2.5 s and the game
    starts GetUp 0.7 s before the ped may move, playing it up to 2.2× to
    fit. A second, quicker `GetUpFast` (~0.5 s) would look less sped up.
+   **Done 2026-10-31:** `GetUpFast` in every body; the game's lead is now
+   0.92 s (GetUp at 1× after a full knock-down) and short ones take
+   GetUpFast.
 6. **Throw releases late for the game.** The game throws on the press (the
    grenade leaves at once), so the clip starts 0.1 s in at 1.6× (release
    ~0.08 s after the press). A clip with its release at ~25% would line up
-   without speeding it up.
+   without speeding it up. **Done 2026-10-31:** released at frame 2.5; the
+   game plays it from 0 at 1×.
 7. ~~**Pigeons are hard to see at night.**~~ Done: a paler body and
    near-white `pigeon_wing` wings (still 34 tris, same rig and `Flap`).
 8. **Pike at night:** the black coat on dark asphalt nearly disappears; a
-   lighter collar or lapels (`badge` or `hair` slot) would help. Vex's
+   lighter collar or lapels (`badge` or `hair` slot) would help. **Done
+   2026-10-31:** the raised collar is `pike_badge`, pale grey. Vex's
    orange hair and Tuna's teal headphones read well from above.
 
 ## Code side integrated: world, props and vehicles (stage 6)
@@ -561,21 +575,30 @@ future Blender pass. The code works round each one for now:
   is `tar_roof` (tar grey, about 0.12 linear) and `water_tank_roof` is
   `tank_lid` (weathered boards), so the code's `PART_COLOURS` recolour
   is gone.
-- **Lamp and signal heads are tiny from above.** The `streetlamp` head and
+- ~~**Lamp and signal heads are tiny from above.**~~ Done 2026-10-31: a
+  bigger streetlamp head with a `lamp` lens on top too, and three
+  top-facing `light_red/amber/green` plates on the traffic light's head
+  (lit by the cycle like the lenses; 164 → 200 tris). Was: The `streetlamp` head and
   the `traffic_light` lenses are a few pixels on a phone, and the lenses
   face along the road, so from above you can't see which one is lit. The
   code draws a coloured glow beside the lit lens and a pool on the lanes
   at night. A top-visible hood or backplate in the signal's colour (or a
   slightly bigger head) would help.
-- **The police sign and the safehouse door are hard to spot.** They're flat
+- ~~**The police sign and the safehouse door are hard to spot.**~~ Done
+  2026-10-31 for the lamps: the dark cap over the police lamp is
+  `police_lamp` and the safehouse shade is `lamp`, so both lamps show from
+  above (same positions, so the code's halo offsets hold). Was: They're flat
   on a wall and often sit under the building's awnings, so from above the
   door is mostly hidden and the sign is a thin blue line. The code adds a
   night halo for each lamp. A small canopy, or a lamp box that pokes out
   over the pavement, would show from above.
-- **The spray booth roof (`booth_roof`, 0.08) is very dark at night,** so
+- ~~**The spray booth roof**~~ Done 2026-10-31: `booth_roof` is (140, 144,
+  152), shared with the export bay. Was: **(`booth_roof`, 0.08) very dark at night,** so
   only the sign reads. Try a lighter roof or a painted stripe. (The code
   cuts the roof away while the player is inside.)
-- **`start_gantry` is 12.5 m between pillars, but roads are 16 m wide,** so
+- ~~**`start_gantry`**~~ Done 2026-10-31: built at 17.2 m (11 squares, a
+  white beam with black blocks over it, 192 tris) and drawn at 1:1
+  (`GANTRY_MODEL_HALF` 8.6). Was: **12.5 m between pillars, but roads are 16 m wide,** so
   the code stretches it ×1.376 across to put the pillars on the kerbs
   (±8.6 m). Building it at that span would keep the chequers square.
 - **The pickups are life-size** (0.3–0.6 m), which is too small at the

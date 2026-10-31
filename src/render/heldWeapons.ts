@@ -12,13 +12,13 @@ import {
   type MeshStandardMaterial,
   type Object3D,
 } from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { publicUrl } from '../core/paths';
 import type { WeaponKind } from '../systems/weapons';
 import type { CharacterModel } from './characterModel';
 import { uploadRange } from './glowSprites';
 import { after } from './shaderLib';
+import { loadWeaponsModel } from './weaponsModel';
 
 /** Every weapon that can be in a hand, and its root in weapons.glb. */
 const HELD: readonly WeaponKind[] = ['pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket'];
@@ -85,8 +85,8 @@ export class HeldWeapons {
     this.mesh.frustumCulled = false;
     this.mesh.name = 'held-weapons';
     if (url) {
-      new GLTFLoader().loadAsync(url).then(
-        (gltf) => this.useModel(gltf.scene),
+      loadWeaponsModel(url).then(
+        (scene) => this.useModel(scene),
         (err) => console.error(`Failed to load ${url}`, err),
       );
     }
@@ -180,8 +180,7 @@ export class HeldWeapons {
       // The extra is only the distance; the barrel sits above the grip.
       const bore = root.getObjectByName(`${ROOT[kind]}_muzzle`) ?? root.getObjectByName(`${ROOT[kind]}_barrel`);
       if (bore?.parent === root) this.muzzleHeight[kind] = bore.position.y;
-      // Roots are laid out side by side in the file: each at its own origin.
-      root.position.set(0, 0, 0);
+      // Roots are laid out side by side in the file: each taken about its own origin.
       root.updateMatrixWorld(true);
       inv.copy(root.matrixWorld).invert();
       root.traverse((o) => {

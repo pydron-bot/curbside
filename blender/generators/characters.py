@@ -15,7 +15,7 @@ one person, so each body is one more batch / draw call):
 All share the same bone names and clips (glTF animation names):
   Idle 2 s loop, Walk 1 s loop, Run 0.625 s loop, Punch 0.333 s, Aim 0.292 s
   hold, AimBoth (two-handed), Shoot 0.125 s, ShootBoth, Fall 0.5 s, Down 1 s
-  loop, GetUp 0.917 s, EnterCar 0.5 s, Arrested 1 s loop (kneeling, hands on head),
+  loop, GetUp 0.917 s, GetUpFast 0.5 s, EnterCar 0.5 s, Arrested 1 s loop (kneeling, hands on head),
   Throw 0.417 s, AimRocket 0.292 s hold, ShootRocket 0.208 s, Punch2 0.333 s (left hook),
   Uppercut 0.417 s, Stagger 0.292 s, Hail / Cower / Cheer 1 s loops, Ride 1 s loop (hips at 0.75 m).
 Story bodies for the payphone missions: vex.glb, tuna.glb, pike.glb.
@@ -230,7 +230,8 @@ def build_body(rig, spec, name, d):
         attach(box(f"{name}_hairback", (0.26, 0.1, 0.3), (0, 0.1, d.neck_z + 0.02), hair), "head")
 
     if spec.get("backpack"):
-        attach(box(f"{name}_backpack", (0.34 * sw, 0.16, 0.4), (0, 0.14 * dp + 0.08, torso_mid + 0.04), pants, 0.04),
+        # Big and boxy (no bevel: 12 tris) so it reads from 20 m up.
+        attach(box(f"{name}_backpack", (0.42 * sw, 0.24, 0.46), (0, 0.14 * dp + 0.12, torso_mid + 0.04), pants),
                "chest")
     if spec.get("coat"):
         # Long coat / dress: an A-line skirt off the hips down to the knees.
@@ -258,7 +259,9 @@ def build_body(rig, spec, name, d):
         # Ankle-length coat flaring out below the hips, and a raised collar.
         attach(frustum(f"{name}_coat", (0.32 * sw, 0.22 * dp), (0.23 * sw, 0.155 * dp),
                        0.14, d.hip_z + 0.11, shirt, sides=8), "hips")
-        attach(box(f"{name}_collar", (0.4 * sw, 0.1, 0.16), (0, 0.11 * dp, d.shoulder_z + 0.06), shirt), "chest")
+        # The collar pale (fixed-colour badge slot): a dark coat's outline from above.
+        collar = material(f"{name}_badge", (178, 180, 188), 0.6)
+        attach(box(f"{name}_collar", (0.4 * sw, 0.1, 0.16), (0, 0.11 * dp, d.shoulder_z + 0.06), collar), "chest")
     if spec.get("police"):
         attach(box(f"{name}_belt", (0.38 * sw, 0.26 * dp, 0.07), (0, 0, d.hip_z + 0.1), shoes), "hips")
         attach(box(f"{name}_holster", (0.07, 0.12, 0.2), (-0.22 * sw, 0, d.hip_z - 0.02), shoes), "hips")
@@ -411,6 +414,18 @@ def animate(rig, d):
                        "arm.L": (-25, 0, -8), "arm.R": (-25, 0, 8)}, (0, 0.0, 0))
     key_pose(rig, 22, STAND)
 
+    # --- GetUpFast: 0.5 s, GetUp compressed, for short knock-downs (the game picks it
+    # when GetUp would have to be rushed to fit the time left down). ---
+    new_action(rig, "GetUpFast")
+    key_pose(rig, 0, DOWN, (0, DOWN_LIFT, 0))
+    key_pose(rig, 3, {"root": (-90, 0, 0), "chest": (75, 0, 0), "head": (5, 0, 0),
+                      "arm.L": (-10, 0, -25), "arm.R": (-10, 0, 25)}, (0, DOWN_LIFT, 0))
+    key_pose(rig, 6.5, {"root": (-55, 0, 0), "chest": (70, 0, 0), "head": (-10, 0, 0),
+                        "arm.L": (-50, 0, -15), "arm.R": (-50, 0, 15)}, (0, 0.08, 0))
+    key_pose(rig, 9.5, {"root": (-18, 0, 0), "chest": (30, 0, 0), "head": (-5, 0, 0),
+                        "arm.L": (-25, 0, -8), "arm.R": (-25, 0, 8)}, (0, 0.0, 0))
+    key_pose(rig, 12, STAND)
+
     # --- EnterCar: 0.5 s reach for the door and duck in (the game hides the body at the end). ---
     new_action(rig, "EnterCar")
     key_pose(rig, 0, STAND)
@@ -430,25 +445,27 @@ def animate(rig, d):
     key_pose(rig, 24, kneel, (0, -0.56, 0))
 
     # ---------------- second round (§8) ----------------
-    # --- Throw: 0.417 s overhand (grenade, molotov); release at frame 5.5 (~55%). ---
+    # --- Throw: 0.417 s overhand (grenade, molotov); release at frame 2.5 (~25%), since the
+    # game throws on the press: a quick wind-up, then a long follow-through. ---
     new_action(rig, "Throw")
     key_pose(rig, 0, STAND)
-    key_pose(rig, 3, {"arm.R": (-200, 0, 20), "arm.L": (-60, 0, 0), "chest": (-8, -25, 0), "head": (0, 20, 0)},
+    key_pose(rig, 1.5, {"arm.R": (-200, 0, 20), "arm.L": (-60, 0, 0), "chest": (-8, -25, 0), "head": (0, 20, 0)},
              (0, 0, -0.05))
-    key_pose(rig, 5.5, {"arm.R": (-110, 0, 0), "arm.L": (-10, 0, 0), "chest": (12, 25, 0), "head": (0, -18, 0)},
+    key_pose(rig, 2.5, {"arm.R": (-110, 0, 0), "arm.L": (-10, 0, 0), "chest": (12, 25, 0), "head": (0, -18, 0)},
              (0, 0, 0.05))
-    key_pose(rig, 8, {"arm.R": (-40, 0, -10), "chest": (15, 20, 0), "head": (0, -12, 0)}, (0, 0, 0.05))
+    key_pose(rig, 6, {"arm.R": (-40, 0, -10), "chest": (15, 20, 0), "head": (0, -12, 0)}, (0, 0, 0.05))
     key_pose(rig, 10, STAND)
 
-    # --- AimRocket: 0.292 s hold, launcher on the right shoulder. ShootRocket: 0.208 s heavy kick. ---
-    aim_rocket = {"arm.R": (-55, 0, -18), "arm.L": (-80, 0, 22), "chest": (0, 18, 0), "head": (8, -18, 10)}
+    # --- AimRocket: 0.292 s hold, launcher on the right shoulder (the hand ~0.14 m under it, the
+    # tube 0.2 m over the grip). ShootRocket: 0.208 s heavy kick. ---
+    aim_rocket = {"arm.R": (-75, 0, -18), "arm.L": (-95, 0, 22), "chest": (0, 18, 0), "head": (8, -18, 10)}
     new_action(rig, "AimRocket")
     key_pose(rig, 0, aim_rocket)
     key_pose(rig, 3.5, {**aim_rocket, "chest": (1, 18, 0)})
     key_pose(rig, 7, aim_rocket)
     new_action(rig, "ShootRocket")
     key_pose(rig, 0, aim_rocket)
-    key_pose(rig, 1, {"arm.R": (-43, 0, -18), "arm.L": (-68, 0, 22), "chest": (-14, 18, 0), "head": (-5, -18, 10),
+    key_pose(rig, 1, {"arm.R": (-63, 0, -18), "arm.L": (-83, 0, 22), "chest": (-14, 18, 0), "head": (-5, -18, 10),
                       "leg.L": (10, 0, 0)}, (0, 0, -0.12))
     key_pose(rig, 5, aim_rocket)
 

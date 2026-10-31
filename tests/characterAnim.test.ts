@@ -44,9 +44,9 @@ const batch = { kind: 'player', defaultColour: (_i: number, out: Color) => out, 
 const ALL = ['Idle', 'Walk', 'Run', 'Punch', 'Punch2', 'Uppercut', 'Aim', 'AimBoth', 'AimRocket', 'Shoot', 'ShootBoth', 'ShootRocket', 'Throw', 'Stagger', 'Fall', 'Down', 'GetUp', 'Arrested', 'EnterCar', 'Hail', 'Cower', 'Cheer', 'Ride'];
 const SHORT: Record<string, number> = { Punch: 0.333, Punch2: 0.333, Uppercut: 0.417, Shoot: 0.125, ShootBoth: 0.125, ShootRocket: 0.208, Throw: 0.417, Stagger: 0.292, Fall: 0.5, GetUp: 0.917, EnterCar: 0.5 };
 
-function model(clips: string[]) {
+function model(clips: string[], durations: Record<string, number> = SHORT) {
   const m = new CharacterModel(batch, {});
-  const { t, angle } = template(clips, SHORT);
+  const { t, angle } = template(clips, durations);
   m.attach(t as unknown as Parameters<CharacterModel['attach']>[0]);
   const bone = (name: string) => (m as unknown as { rig: Group }).rig.getObjectByName(name)!;
   /** Rotation about Z of a bone (what the fake clips animate). */
@@ -193,6 +193,23 @@ describe('character animation: whole body', () => {
     expect(zAngle('hips')).toBeCloseTo(angle('Walk'), 2);
     expect(m.lying).toBe(false);
     expect(m.body.rotation.x).toBe(0);
+  });
+
+  it('a full knock-down gets up with GetUp at its own pace, a short one with GetUpFast', () => {
+    const clips = [...ALL, 'GetUpFast'];
+    const SPEEDS = { ...SHORT, GetUpFast: 0.5 };
+    const full = model(clips, SPEEDS);
+    full.run(5);
+    full.run(60, 0, true, 2);
+    full.run(6, 0, true, 0.9);
+    expect(full.zAngle('hips')).toBeCloseTo(full.angle('GetUp'), 2);
+    // Knocked down for a moment: no time for GetUp at a sane speed.
+    const short = model(clips, SPEEDS);
+    short.run(5);
+    short.run(30, 0, true, 0.4);
+    expect(short.zAngle('hips')).toBeCloseTo(short.angle('GetUpFast'), 2);
+    short.run(40, 3);
+    expect(short.zAngle('hips')).toBeCloseTo(short.angle('Walk'), 2);
   });
 
   it('without the clips a knock-down tips the whole body over (and back)', () => {

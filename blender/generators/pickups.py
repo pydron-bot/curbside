@@ -15,6 +15,8 @@ collectible) and `cash`. Origin at ground centre. Budget <= 300 tris each.
 """
 from pathlib import Path
 
+from mathutils import Matrix
+
 from lib.common import box, cylinder, export_glb, group, hull, material, render_thumbnail, reset_scene, rotate
 
 THUMBS = Path(__file__).resolve().parents[1] / "thumbs"
@@ -103,17 +105,19 @@ def molotov(m, p="molotov"):
     ], 0.0
 
 
-def rocket_launcher(m, p="rocket_launcher"):
-    # Shoulder tube: origin at the pistol grip under it; the tube runs 1.1 m, 0.75 m of it ahead of the grip.
+def rocket_launcher(m, p="rocket_launcher", lift=0.11, back=0.0):
+    # Shoulder tube: origin at the pistol grip under it; the tube runs 1.1 m, 0.75 m of it ahead of the
+    # grip, `lift` above it. Held (weapons.glb) it sits higher and further back, over the shoulder.
+    z = lift
     return [
-        cylinder(f"{p}_tube", 0.065, 1.1, (0, -0.2, 0.11), m["olive"], verts=8, rotation=(90, 0, 0)),
-        cylinder(f"{p}_flare", 0.065, 0.12, (0, 0.4, 0.11), m["gunmetal"], verts=8, radius2=0.09,
+        cylinder(f"{p}_tube", 0.065, 1.1, (0, -0.2 + back, z), m["olive"], verts=8, rotation=(90, 0, 0)),
+        cylinder(f"{p}_flare", 0.065, 0.12, (0, 0.4 + back, z), m["gunmetal"], verts=8, radius2=0.09,
                  rotation=(-90, 0, 0)),
-        cylinder(f"{p}_muzzle", 0.075, 0.06, (0, -0.73, 0.11), m["gunmetal"], verts=8, rotation=(90, 0, 0)),
-        box(f"{p}_grip", (0.03, 0.05, 0.11), (0, 0, 0.0), m["grip"]),
-        box(f"{p}_fore", (0.03, 0.05, 0.09), (0, -0.35, 0.01), m["grip"]),
-        box(f"{p}_sight", (0.05, 0.08, 0.06), (-0.07, -0.25, 0.17), m["gunmetal"]),
-    ], 0.76
+        cylinder(f"{p}_muzzle", 0.075, 0.06, (0, -0.73 + back, z), m["gunmetal"], verts=8, rotation=(90, 0, 0)),
+        box(f"{p}_grip", (0.03, 0.05, 0.11 + (lift - 0.11)), (0, 0, (lift - 0.11) / 2), m["grip"]),
+        box(f"{p}_fore", (0.03, 0.05, 0.09 + (lift - 0.11)), (0, -0.35 + back, 0.01 + (lift - 0.11) / 2), m["grip"]),
+        box(f"{p}_sight", (0.05, 0.08, 0.06), (-0.07, -0.25 + back, z + 0.06), m["gunmetal"]),
+    ], 0.76 - back
 
 
 def rocket(m, p="rocket"):
@@ -124,6 +128,36 @@ def rocket(m, p="rocket"):
         box(f"{p}_fin_a", (0.2, 0.08, 0.01), (0, 0.2, 0), m["gunmetal"]),
         box(f"{p}_fin_b", (0.01, 0.08, 0.2), (0, 0.2, 0), m["gunmetal"]),
     ], 0.0
+
+
+# Held in a hand the guns are drawn at 20-27 m: wider and taller than life (lengths kept), with
+# a stripe on top in the crate's colour; the thrown ones bigger than the fist that holds them.
+# Crates build the life-size models (their own scale table below).
+HELD_WIDEN = {"pistol": 1.45, "smg": 1.4, "shotgun": 1.35}
+HELD_SCALE = {"grenade": 1.7, "molotov": 1.25}
+HELD_ACCENT = {  # top stripe: size, centre (before widening)
+    "pistol": ((0.022, 0.15, 0.008), (0, -0.08, 0.072)),
+    "smg": ((0.028, 0.2, 0.008), (0, -0.03, 0.097)),
+    "shotgun": ((0.028, 0.16, 0.008), (0, -0.04, 0.097)),
+}
+
+
+def held(m, name):
+    """A weapon as it's held (weapons.glb): the crate's model enlarged about the grip, with its accent."""
+    if name == "rocket_launcher":
+        return rocket_launcher(m, lift=0.2, back=0.15)
+    parts, muzzle = GUNS[name](m)
+    if name in HELD_ACCENT:
+        size, at = HELD_ACCENT[name]
+        parts.append(box(f"{name}_accent", size, at, m[f"stripe_{name}"]))
+    kx = HELD_WIDEN.get(name) or HELD_SCALE.get(name, 1.0)
+    ky = HELD_SCALE.get(name, 1.0)
+    if kx != 1.0:
+        for obj in parts:
+            # Meshes are in world axes about each object's origin: scale both about the grip.
+            obj.data.transform(Matrix.Diagonal((kx, ky, kx, 1.0)))
+            obj.location = (obj.location.x * kx, obj.location.y * ky, obj.location.z * kx)
+    return parts, muzzle
 
 
 GUNS = {"pistol": pistol, "smg": smg, "shotgun": shotgun, "grenade": grenade, "molotov": molotov,
@@ -221,8 +255,8 @@ def build(out_dir: Path, thumbs: bool = False):
     reset_scene()
     m = mats()
     objects = []
-    for i, (name, make) in enumerate(GUNS.items()):
-        parts, muzzle = make(m)
+    for i, name in enumerate(GUNS):
+        parts, muzzle = held(m, name)
         root = group(name, parts, location=(i * 1.0, 0, 0))
         root["muzzle"] = muzzle
         objects += [root, *parts]
