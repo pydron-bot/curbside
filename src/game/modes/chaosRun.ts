@@ -102,12 +102,13 @@ export class ChaosRun {
 
   /** An award was scored. */
   award(a: Award): void {
-    if (!this.running) return;
+    // Time up still tallies through the slow-mo (the results count those points).
+    if (!this.running && this.ended !== 'time') return;
     const t = this.tally[categoryOf(a.kind)];
     t.count++;
     t.points += a.points;
     // The award was scored at ×multiplier and lifts the combo by one.
-    if (a.multiplier + 1 === COMBO_BONUS_AT) this.addTime(COMBO_BONUS, 'combo');
+    if (this.running && a.multiplier + 1 === COMBO_BONUS_AT) this.addTime(COMBO_BONUS, 'combo');
   }
 
   /** Something blew up (byPlayer: the player caused it; ownCar: it was their car). */
