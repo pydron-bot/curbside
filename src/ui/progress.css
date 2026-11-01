@@ -684,6 +684,11 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
   --who: #a6b4c8;
 }
 
+/* Commissioner Clamp: traffic-cone orange. */
+.dlg-line[data-who='clamp'] .dlg-who {
+  --who: #ff8a3d;
+}
+
 .dlg-text {
   display: grid;
   gap: 2px;

@@ -50,8 +50,8 @@ independently reviewed and fixed, then merged and play-tested:
 6. **Heat (M6):** 0–5 star wanted level, police pursuit AI, roadblocks, SWAT,
    helicopter, officers on foot, BUSTED, Pay 'n' Spray, traffic reactions.
 7. **Progression (M7):** save + cash, bank-your-chaos, Chaos Run 2:00 with
-   medals, frenzies, hidden packages, races, exports, taxi fares, eight
-   payphone missions, safehouse shop, progress page.
+   medals, frenzies, hidden packages, races, exports, taxi fares, thirteen
+   payphone missions in two chapters (`docs/STORY.md`), safehouse shop, progress page.
 8. **Feel:** handling (top speeds, cornering limit, drifts, burnouts, nitro),
    damage + armour, ped HP and combos, grenades/molotovs/rockets, drive-bys,
    stunt ramps.
@@ -242,7 +242,9 @@ still get the offline shell.
    phase A], since chatter and gang turf need them; then police radio
    chatter [`police-chatter`]; missions after the eighth [`missions-store`]: driven
    target cars (`drive: true`) and REPEAT JOB replays at half pay are done
-   2026-10-31; chapter 2 waits on Derek's story direction;
+   2026-10-31; chapter 2, *The Ledger* (five jobs against Commissioner
+   Clamp, script in `docs/STORY.md`), done 2026-11-01: play it on the
+   phone and tune its timers;
    gangs [`gangs-respect`]: district names (placeholders), the area card and one gang (VIPERS, NEON MILE, respect) done 2026-10-31 on `claude/gangs`; leaderboard needs a decision on any backend
    [`online-leaderboard`].
 

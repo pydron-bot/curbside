@@ -184,7 +184,7 @@ export class DialogueCard implements Panel {
   /** kicker: small line over the title ('INCOMING CALL', 'MISSION PASSED'). */
   show(kicker: string, title: string, lines: readonly DialogueLine[], reward: string, button: string, showFocus: boolean, done: () => void): void {
     this.done = done;
-    const who = (name: string) => (/TUNA/.test(name) ? 'tuna' : /PIKE/.test(name) ? 'pike' : 'vex');
+    const who = (name: string) => (/TUNA/.test(name) ? 'tuna' : /PIKE/.test(name) ? 'pike' : /CLAMP/.test(name) ? 'clamp' : 'vex');
     const lineHtml = lines
       .map(
         (l) =>
