@@ -73,9 +73,11 @@ async function play(page, label) {
     for (let i = 0; i < 3; i++) await new Promise((res) => requestAnimationFrame(() => res()));
     return { sim: u.simTime, calls: u.renderer.info.render.calls, alive: u.player.ped !== undefined, paused: u.paused };
   });
-  await page.screenshot({ path: path.join(opt.out, `${label}.png`) });
   check(r.sim >= 29, `${label}: simulated 30 s (simTime ${r.sim.toFixed(1)})`);
   check(r.calls > 0 && r.calls < DRAW_BUDGET, `${label}: ${r.calls} draw calls (budget ${DRAW_BUDGET})`);
+  // A 1280×720 'high' frame on SwiftShader takes ~20 s to capture on a busy runner (main and branches
+  // alike), so the default 30 s ran out now and then; a hung renderer still fails here.
+  await page.screenshot({ path: path.join(opt.out, `${label}.png`), timeout: 120000 });
   return r;
 }
 
