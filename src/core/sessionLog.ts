@@ -1,10 +1,13 @@
 /**
  * A session's performance over time, for device tests without a desktop
  * console: a compact sample every 10 s in a fixed ring, plus timestamped
- * events (tier / ratio steps, context loss, audio and visibility changes).
- * Persisted to storage (throttled) so a crash or a reload keeps it. Pure: the
+ * events (tier / ratio steps, context loss, audio and visibility changes),
+ * and "dips": what was on screen when frames ran slow (a ring too, so the
+ * size stays bounded). Persisted to storage (throttled) so a crash or a reload keeps it. Pure: the
  * caller feeds the numbers and the clock.
  */
+
+import { roundCounts, type SceneCounts } from './sceneCounts';
 
 export const SAMPLE_EVERY_MS = 10_000;
 /** An hour of samples at 10 s. */
@@ -13,6 +16,8 @@ export const EVENT_CAPACITY = 200;
 /** Storage writes at most this often (plus on pagehide), ms. */
 export const PERSIST_EVERY_MS = 30_000;
 export const DIAG_KEY = 'curbside.diag';
+/** Dips kept (newest), at most one per DIP_COOLDOWN_MS (core/sceneCounts.ts). */
+export const DIP_CAPACITY = 60;
 
 export interface SessionSample {
   /** Seconds since the session started. */
@@ -33,6 +38,8 @@ export interface SessionSample {
   /** The destruction test, while it is on: rubble bodies alive, and physics p95 per stepped frame (ms). */
   rubble?: number;
   physP95?: number;
+  /** What was on screen (sceneCounts.ts). */
+  n?: SceneCounts;
 }
 
 export interface SessionEvent {
@@ -48,6 +55,20 @@ export interface SessionLogData {
   events: SessionEvent[];
   /** Events dropped once the event list was full. */
   droppedEvents: number;
+  /** Oldest first; absent in logs from before dips were kept. */
+  dips?: SessionDip[];
+}
+
+/** A slow stretch: its frames and what was on screen. */
+export interface SessionDip {
+  t: number;
+  fps: number;
+  p95: number;
+  max: number;
+  tier: string;
+  ratio: number;
+  dc: number;
+  n: SceneCounts;
 }
 
 /** The slice of localStorage this needs (fakeable in tests). */
@@ -57,6 +78,7 @@ export interface KeyValueStore {
 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
+const r2 = (v: number) => Math.round(v * 100) / 100;
 
 export class SessionLog {
   private readonly samples: SessionSample[] = [];
@@ -64,6 +86,8 @@ export class SessionLog {
   private head = 0;
   private readonly events: SessionEvent[] = [];
   private dropped = 0;
+  private readonly dips: SessionDip[] = [];
+  private dipHead = 0;
   private lastSampleAt: number;
   private lastPersistAt: number;
   private dirty = false;
@@ -105,13 +129,38 @@ export class SessionLog {
       paused: s.paused,
     };
     if (s.rubble !== undefined) entry.rubble = s.rubble;
-    if (s.physP95 !== undefined) entry.physP95 = Math.round(s.physP95 * 100) / 100;
+    if (s.physP95 !== undefined) entry.physP95 = r2(s.physP95);
+    if (s.n) entry.n = roundCounts(s.n);
     if (this.samples.length < SAMPLE_CAPACITY) this.samples.push(entry);
     else {
       this.samples[this.head] = entry;
       this.head = (this.head + 1) % SAMPLE_CAPACITY;
     }
     this.dirty = true;
+  }
+
+  /** A dip (frames ran slow): the oldest goes once the ring is full. */
+  addDip(nowMs: number, d: Omit<SessionDip, 't'>): void {
+    const entry: SessionDip = {
+      t: this.seconds(nowMs),
+      fps: r1(d.fps),
+      p95: r1(d.p95),
+      max: r1(d.max),
+      tier: d.tier,
+      ratio: r2(d.ratio),
+      dc: d.dc,
+      n: roundCounts(d.n),
+    };
+    if (this.dips.length < DIP_CAPACITY) this.dips.push(entry);
+    else {
+      this.dips[this.dipHead] = entry;
+      this.dipHead = (this.dipHead + 1) % DIP_CAPACITY;
+    }
+    this.dirty = true;
+  }
+
+  get dipCount(): number {
+    return this.dips.length;
   }
 
   /** A timestamped event; once the list is full later ones are counted, not kept. */
@@ -137,7 +186,8 @@ export class SessionLog {
   /** Samples oldest first, events in order. */
   data(): SessionLogData {
     const ordered = this.samples.slice(this.head).concat(this.samples.slice(0, this.head));
-    return { started: this.started, samples: ordered, events: this.events.slice(), droppedEvents: this.dropped };
+    const dips = this.dips.slice(this.dipHead).concat(this.dips.slice(0, this.dipHead));
+    return { started: this.started, samples: ordered, events: this.events.slice(), droppedEvents: this.dropped, dips };
   }
 
   /** Write to storage if there is news and PERSIST_EVERY_MS has passed (or `force`). Never throws. */
@@ -163,7 +213,13 @@ export function loadPreviousLog(store: KeyValueStore | null): SessionLogData | n
     if (!raw) return null;
     const d = JSON.parse(raw) as Partial<SessionLogData>;
     if (!d || !Array.isArray(d.samples) || !Array.isArray(d.events)) return null;
-    return { started: String(d.started ?? ''), samples: d.samples, events: d.events, droppedEvents: Number(d.droppedEvents) || 0 };
+    return {
+      started: String(d.started ?? ''),
+      samples: d.samples,
+      events: d.events,
+      droppedEvents: Number(d.droppedEvents) || 0,
+      dips: Array.isArray(d.dips) ? d.dips : [],
+    };
   } catch {
     return null;
   }

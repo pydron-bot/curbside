@@ -121,6 +121,8 @@ import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
 import { Destruction } from './render/destruction';
 import { BlowWall } from './ui/blowWall';
 import { len2 } from './core/len';
+import { emptyCounts, formatCounts } from './core/sceneCounts';
+import { SceneCensus } from './render/sceneCensus';
 
 const app = document.getElementById('app')!;
 
@@ -547,6 +549,17 @@ const destruction = new Destruction({
   carDims: (a) => look.cars.dims(a),
 });
 look.addGlowSource((_g, view) => destruction.draw(view));
+// What is on screen, for the perf overlay, the session log and bug reports (render/sceneCensus.ts).
+const census = new SceneCensus({
+  effects,
+  look,
+  life: cityLife,
+  vehicles,
+  bus: events,
+  rubble: () => destruction.stats(),
+  now: () => performance.now() / 1000,
+});
+const censusOut = emptyCounts();
 new BreachSystem(events, breaches, { enabled: () => destruction.mode !== 'off', playing: () => !attract.active });
 events.on('enterVehicle', () => {
   // PeoplePose hides the body once it has ducked into the car.
@@ -1170,6 +1183,7 @@ function frame(now: number) {
   look.render(rig.camera);
   resolution.sample(elapsed);
   frameStats.sample(elapsed * 1000, performance.now() - t0);
+  diagnostics.frame(elapsed * 1000);
 }
 
 /** This frame's aim, for Combat (reused). */
@@ -1238,7 +1252,8 @@ const hud = new Hud(document.body, score, events, {
   debugText: (full) => {
     const f = frameStats.summarize(frameSummary);
     const head = full ? `${formatFrameStats(f)}\n` : `${formatFps(f.fps)} fps · `;
-    return `${head}${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc${full ? destruction.overlayText() : ''}`;
+    const line = `${head}${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc${full ? destruction.overlayText() : ''}`;
+    return full ? `${line}\n${formatCounts(census.fill(censusOut))}` : line;
   },
 });
 const combatHud = new CombatHud(document.getElementById('hud')!);
@@ -1439,6 +1454,7 @@ const diagnostics = new Diagnostics(document.body, {
     // Checked now (paused); it goes off as play resumes, which closes the sheet.
     blowWall: () => blowWall.request(),
   },
+  counts: (out) => census.fill(out),
 });
 addDiagnosticsButton(diagnostics, frontDoor, () => input.lastDevice !== 'touch');
 
@@ -1515,6 +1531,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   radar,
   frontDoor,
   diagnostics,
+  census,
   attract,
   touch,
   haptics,

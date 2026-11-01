@@ -105,6 +105,8 @@ export class Effects {
   private readonly hole = { value: new Vector4(0, 0, 0, 0) };
   /** Explosions in the last moment: chain reactions share one budget. */
   private recentBooms = 0;
+  /** The visible ground at the last update, m²: what fill is measured against. */
+  private ground = 0;
 
   constructor(scene: Scene, hotCapacity = 900, softCapacity = 700) {
     this.hot = new ParticlePool(hotCapacity);
@@ -648,7 +650,28 @@ export class Effects {
     if (marks) this.decals.clear();
   }
 
-  update(dt: number): void {
+  /** Particles over BIG_PARTICLE m drawn last frame (both pools). */
+  get big(): number {
+    return this.hot.drawnBig + this.soft.drawnBig;
+  }
+
+  /**
+   * Transparent particle area drawn last frame over the visible ground's:
+   * roughly how many screens of overdraw the fire and smoke cost (an
+   * estimate: it ignores height, which makes high smoke a little bigger).
+   */
+  get fill(): number {
+    return this.ground > 0 ? (this.hot.drawnArea + this.soft.drawnArea) / this.ground : 0;
+  }
+
+  /** The visible ground at the last update, m² (0 before the first). */
+  get viewArea(): number {
+    return this.ground;
+  }
+
+  /** Step and draw everything; `view` (the visible ground) scales the fill estimate. */
+  update(dt: number, view?: Rect): void {
+    if (view) this.ground = Math.max(1, (view.maxX - view.minX) * (view.maxZ - view.minZ));
     // Smoke and dust are lit by the sky: dim and cool them at night.
     const night = worldUniforms.uNight.value;
     const amb = this.ambient.value;

@@ -42,6 +42,8 @@ export class GlowSprites {
   private readonly shape: InstancedBufferAttribute;
   private readonly m = new Matrix4();
   private count = 0;
+  /** Quad area added this frame, m² (the fill estimate). */
+  private areaNow = 0;
 
   constructor(private readonly capacity = 384) {
     const geo = new PlaneGeometry(1, 1);
@@ -59,6 +61,17 @@ export class GlowSprites {
 
   begin(): void {
     this.count = 0;
+    this.areaNow = 0;
+  }
+
+  /** Glows in the current (or, between frames, the last) frame. */
+  get drawn(): number {
+    return this.count;
+  }
+
+  /** Their quad area, m². */
+  get area(): number {
+    return this.areaNow;
   }
 
   /**
@@ -83,7 +96,7 @@ export class GlowSprites {
     // Plane's local +Y (v) → the heading direction on the ground, local +X → across
     // (to the left, keeping the face up), local +Z → world up.
     this.m.set(-c * width, s * length, 0, x, 0, 0, 1, y, s * width, c * length, 0, z, 0, 0, 0, 1);
-    this.push(r, g, b, shape);
+    if (this.push(r, g, b, shape)) this.areaNow += Math.abs(width * length);
   }
 
   /** A quad standing upright at (x, y, z), facing `yaw`, `width` wide and `height` tall above y. */
@@ -91,7 +104,7 @@ export class GlowSprites {
     const c = Math.cos(yaw);
     const s = Math.sin(yaw);
     this.m.set(c * width, 0, s, x, 0, height, 0, y + height / 2, -s * width, 0, c, z, 0, 0, 0, 1);
-    this.push(r, g, b, shape);
+    if (this.push(r, g, b, shape)) this.areaNow += Math.abs(width * height);
   }
 
   end(): void {
@@ -102,12 +115,13 @@ export class GlowSprites {
     uploadRange(this.shape, n);
   }
 
-  private push(r: number, g: number, b: number, shape: GlowShape): void {
-    if (this.count >= this.capacity) return;
+  private push(r: number, g: number, b: number, shape: GlowShape): boolean {
+    if (this.count >= this.capacity) return false;
     const i = this.count++;
     this.mesh.setMatrixAt(i, this.m);
     this.colour.setXYZ(i, r, g, b);
     this.shape.setX(i, shape);
+    return true;
   }
 }
 

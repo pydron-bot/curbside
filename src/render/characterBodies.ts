@@ -29,6 +29,7 @@ export class CharacterBodies {
   readonly batches: readonly CharacterBatch[];
   readonly weapons: HeldWeapons;
   private readonly byKind: Record<BodyKind, CharacterBatch>;
+  private readonly tally = { live: 0, drawn: 0 };
 
   constructor(load = true) {
     const byKind = {} as Record<BodyKind, CharacterBatch>;
@@ -51,6 +52,19 @@ export class CharacterBodies {
   /** Redraw `model` with another body (the player's CHARACTER choice); outfit and state carry over. */
   setBody(model: CharacterModel, body: BodyKind): void {
     model.moveTo(this.byKind[body]);
+  }
+
+  /** Everyone shown, and those drawn, at the last flush (diagnostics). */
+  counts(): { live: number; drawn: number } {
+    let live = 0;
+    let drawn = 0;
+    for (const b of this.batches) {
+      live += b.live;
+      drawn += b.shown.length;
+    }
+    this.tally.live = live;
+    this.tally.drawn = drawn;
+    return this.tally;
   }
 
   /** Write everyone on screen (`view`: the ground the camera sees) and what they hold; contact shadows too. */

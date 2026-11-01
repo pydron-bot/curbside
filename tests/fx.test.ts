@@ -86,6 +86,20 @@ describe('particle pool', () => {
     expect(out.count).toBe(6);
   });
 
+  it('measures the area it drew (stretched quads by their length) and counts big ones', () => {
+    const pool = new ParticlePool(4);
+    pool.spawn(0, 0, 0, 0, 0, 0, 1, 1, 1, RAMP.flat, FRAME.dot);
+    pool.spawn(0, 0, 0, 0, 0, 0, 1, 4, 4, RAMP.flat, FRAME.puffA);
+    const k = pool.spawn(0, 0, 0, 2, 0, 0, 1, 0.5, 0.5, RAMP.flat, FRAME.spark);
+    pool.flags[k] = FLAG.stretch | FLAG.still;
+    pool.stretch[k] = 1;
+    pool.step(0.5);
+    pool.write(new InstanceBuffer(4));
+    // 1 + 16 + (2 + 0.5) × 0.5
+    expect(pool.drawnArea).toBeCloseTo(18.25);
+    expect(pool.drawnBig).toBe(1);
+  });
+
   it('cools fire from white-yellow through orange to dark red', () => {
     const c = [0, 0, 0];
     fireColour(0, c);
