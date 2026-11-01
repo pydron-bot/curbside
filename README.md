@@ -989,7 +989,7 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   then the chase's, then the rest, the two shared crash takes before any
   other; behind the title a take 40 ms after the last, in play gently,
   150 ms apart, so with PLAY as the first tap every kit is in some 15-20 s
-  into play), or a take a frame when a station is heard before its kit is
+  into play; nothing warms while the music is at volume 0), or a take a frame when a station is heard before its kit is
   in (warming waits for it); the live drum voices stand in until each part
   is in. The
   NOW PLAYING card shows the song and artist (`audio.song`,

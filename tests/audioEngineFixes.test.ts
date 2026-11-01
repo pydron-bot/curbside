@@ -682,6 +682,24 @@ describe('drum kits', () => {
     expect(idle.size).toBe(0);
   });
 
+  it('warm nothing while the music is dormant (volume 0), and carry on once it can be heard', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const { music } = player(STATIONS[0]);
+    music.setMode('game');
+    music.setDormant(true);
+    music.warmKits([CHASE_STATION, ...STATIONS].map((s) => s.sound));
+    vi.advanceTimersByTime(60_000);
+    vi.runAllTimers();
+    // Only the radio's own kit (wanted at once by the constructor); nothing warmed.
+    expect(takes(music)).toBe(18);
+    expect(complete(kits(music).get(kitKey(STATIONS[0].sound))!)).toBe(true);
+    expect(kits(music).get(kitKey(CHASE_STATION.sound))!.kick).toHaveLength(0);
+    music.setDormant(false);
+    vi.runAllTimers();
+    for (const k of kits(music).values()) expect(complete(k)).toBe(true);
+    music.dispose();
+  });
+
   it("warm every kit in play when PLAY was the first tap (Safari, no idle slots): the radio's, the other crash, the chase's, then the rest, WARM_GAP_PLAY apart", () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
     const { music } = player(STATIONS[0]); // NIGHTDRIVE: its kit has the plain crash

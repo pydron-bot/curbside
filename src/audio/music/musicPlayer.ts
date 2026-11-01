@@ -528,6 +528,7 @@ export class MusicPlayer {
     }
     this.duckGain.connect(this.out);
     if (this.running && !this.off) this.start(this.ctx.currentTime + 0.05);
+    this.scheduleRender(); // warming waited while nothing could be heard
   }
 
   get isDormant(): boolean {
@@ -667,7 +668,7 @@ export class MusicPlayer {
       this.renderBooked = true;
       if (typeof requestAnimationFrame === 'function') requestAnimationFrame(this.afterFrame);
       else setTimeout(this.renderNow, 0);
-    } else if (this.warmTimer === undefined && this.warmFrame === undefined && this.warmIdle === undefined) {
+    } else if (!this.dormant && this.warmTimer === undefined && this.warmFrame === undefined && this.warmIdle === undefined) {
       this.warmTimer = setTimeout(this.warmGapOver, this.onTitle ? WARM_GAP_TITLE : WARM_GAP_PLAY);
     }
   }
@@ -702,8 +703,8 @@ export class MusicPlayer {
 
   private readonly renderIdle = (): void => {
     this.warmTimer = this.warmIdle = undefined;
-    // A kit that's playing goes first (its take is booked).
-    if (this.disposed || this.renders.some((r) => r.urgent)) return;
+    // A kit that's playing goes first (its take is booked); music nobody can hear (volume 0) warms nothing.
+    if (this.disposed || this.dormant || this.renders.some((r) => r.urgent)) return;
     // The shared crash takes before anything else (the longest jobs, and every kit's), then the kits in order.
     for (const r of this.renders) {
       const i = r.jobs.findIndex((j) => j.part === 'crash');
