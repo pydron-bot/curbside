@@ -182,11 +182,18 @@ still get the offline shell.
    and a 17.2 m gantry at 1:1 [`props-world`]. Still for the device pass:
    whether all that reads on the phone, the heli's size at night, and the
    pickups' scale (left in code, [`pickups-debris`] skipped as low value).
-5. **deeek.org landing page** (cloud, after the user picks branding, the
-   project list and the image): [`hub-screenshots`], [`hub-page`],
-   [`hub-social-meta`], [`curbside-og-meta`], [`curbside-linkback`];
-   same-origin rules [`shared-origin-landing`]; live HTTPS/domain check is
-   the user's [`pages-domain-check`].
+5. **deeek.org landing page: done 2026-10-31.** The hub in
+   `pydron-bot/pydron-bot.github.io` (`c7c1e80`): a wall of posters with
+   Curbside featured, a "More soon" flyer and stills, a matching 404,
+   favicon, touch icon, link-preview meta and `og.jpg`, `.nojekyll`; its
+   README covers adding a project and the same-origin rules (no service
+   worker or manifest at `/`) [`hub-screenshots`, `hub-page`,
+   `hub-social-meta`, `shared-origin-landing`]. Curbside (`af2e1a3`):
+   link-preview meta and `public/og.jpg`, and a MORE AT DEEEK.ORG link on
+   the title [`curbside-og-meta`, `curbside-linkback`]. Left for the user
+   on a real network: [`pages-domain-check`] (both URLs on the phone and
+   desktop, Settings → Pages: DNS check and Enforce HTTPS, `www`
+   redirects, a link preview in iMessage).
 6. **Minor issues: all done 2026-10-31.** Left turns give way
    [`minor-junction-turns`] (README *Traffic lights*); the browser smoke
    test and CI [`smoke-ci`: `tools/smoke.mjs`, `.github/workflows/ci.yml`];

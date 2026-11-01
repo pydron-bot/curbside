@@ -174,5 +174,5 @@ Full list with context in `docs/HANDOFF.md`. In short:
 1. Real-device pass on an iPhone 15 Pro (frame rate, audio/silent switch, haptics, controller, touch feel) and tuning from it.
 2. Tune from real play: Chaos Run medals, race times, 5-star difficulty.
 3. Blender adjustment pass from in-game readability (notes at the end of `docs/BLENDER_TODO.md`).
-4. A landing page at the root of deeek.org for all projects (`pydron-bot/pydron-bot.github.io`; Curbside first).
+4. ~~A landing page at the root of deeek.org for all projects (`pydron-bot/pydron-bot.github.io`; Curbside first).~~ Done 2026-10-31.
 5. The minor known issues listed in `docs/HANDOFF.md`.
