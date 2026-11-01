@@ -483,6 +483,41 @@ describe('GameAudio: the car radio', () => {
     expect(g.music.station).toBe(STATIONS[3]);
   });
 
+  it('R by your own car: you hear its radio retune', () => {
+    const g = game({ station: 2 });
+    const mine = parked(QUIET.x + 1, QUIET.z);
+    g.drive(mine);
+    g.run(2);
+    g.walk();
+    g.f.lastCar = mine;
+    g.run(2);
+    g.audio.nextStation();
+    g.run(3);
+    expect(g.music.station).toBe(STATIONS[3]);
+    expect(g.heard()).toBeCloseTo(emitterGain('own', 1), 2);
+  });
+
+  it('pops NOW PLAYING only for the car radio’s own station: not the title theme, the chase or the street', () => {
+    const g = game();
+    const songs: string[] = [];
+    g.audio.onSongChange((_song, s) => songs.push(s.id));
+    g.audio.setMusicMode('menu');
+    g.run(4);
+    g.audio.setMusicMode('game');
+    g.walk();
+    g.emit({ type: 'boombox', id: 'vipers-0', x: QUIET.x + 3, z: QUIET.z, on: true });
+    g.run(4);
+    expect(g.music.station).toBe(STATIONS[BOOMBOX_STATION]);
+    g.emit({ type: 'wanted', level: 3, prev: 0, reason: 'crime' });
+    g.run(4);
+    expect(g.music.playingScore).toBe(true);
+    expect(songs).toEqual([]);
+    g.audio.nextStation(); // skip the chase: on foot the street takes over again
+    g.drive();
+    g.run(3);
+    expect(songs).toEqual([STATIONS[1].id]);
+  });
+
   it('a boombox cut while it is heard goes quiet at once', () => {
     const g = game();
     g.walk();
