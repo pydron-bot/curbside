@@ -28,7 +28,7 @@ import {
 } from '../../systems/trafficScenes';
 import { forwardSpeed, type VehicleArchetype, type VehicleControls } from '../../entities/vehicle';
 import type { SceneDriver, Vehicle } from '../population';
-import { SCENE_DROP, type Scene, type SceneCtx } from '../cityLife';
+import { SCENE_DROP, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { incident, type Chases } from './chases';
 import { raceRank, racing, type LabelSink } from '../debugLabels';
 
@@ -144,6 +144,17 @@ export class StreetRaces implements Scene {
         } else if (out.wants(v.sim.x, v.sim.z)) out.car(v, `RACER ${raceRank(r.racers, i)}/${n}`, 'traffic');
       }
     }
+  }
+
+  /** The leader, then the winner. */
+  subject(out: Subject): boolean {
+    const r = this.races[0];
+    if (!r) return false;
+    let v = r.winner;
+    for (let i = 0; i < r.racers.length && !v; i++) if (raceRank(r.racers, i) === 1) v = r.racers[i].v;
+    if (!v) return false;
+    const s = v.sim;
+    return watch(out, s.x, s.z, s.vx, s.vz);
   }
 
   /** Line one up now (tests, __ub): false if there was nowhere to. */

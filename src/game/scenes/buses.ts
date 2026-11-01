@@ -18,7 +18,7 @@ import { busDoor, shelterSpot, type Stand } from '../../systems/streetPeople';
 import { driveAi, type Obstacle } from '../../systems/traffic';
 import type { BusStop } from '../../world/streetStops';
 import { trafficPaint, type CrowdPed, type SceneDriver, type Vehicle } from '../population';
-import { SCENE_RANGE, type Scene, type SceneCtx } from '../cityLife';
+import { SCENE_RANGE, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { labelMembers, type LabelSink } from '../debugLabels';
 import { Gathering } from './gathering';
 import { roomFor, streetBody } from './people';
@@ -130,6 +130,17 @@ export class Buses implements Scene {
       labelMembers(out, r.boarding, 'BOARDING', false);
     }
     for (const w of this.waiting) labelMembers(out, w.crowd.members, 'BUS STOP', true);
+  }
+
+  /** A bus pulling in (framed with its stop) or at the stop; nothing once it's away. */
+  subject(out: Subject): boolean {
+    for (const r of this.runs) {
+      if (r.phase === 'drive' || !r.stop) continue;
+      const s = r.v.sim;
+      const st = r.stop;
+      return watch(out, (s.x + st.waitX) / 2, (s.z + st.waitZ) / 2, s.vx / 2, s.vz / 2);
+    }
+    return false;
   }
 
   /**
@@ -355,7 +366,7 @@ export class Buses implements Scene {
         this.looked.delete(s);
       }
     }
-    if (!life.d.playing()) return;
+    if (!life.lively('bus')) return;
     for (const w of this.waiting) if (roomFor(life, 2)) w.crowd.recruit();
     if (this.waiting.length >= MAX_STOPS) return;
     for (const s of life.stops) {

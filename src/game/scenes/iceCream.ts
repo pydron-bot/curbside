@@ -18,7 +18,7 @@ import { BLOCKS_PER_SIDE, BLOCK_SIZE, ROAD_WIDTH, SIDEWALK, isCarPark, lotBytes 
 import { dirHeading, type Dir } from '../../world/roads';
 import { BUS_PULL_IN, roadPoint, segmentValid } from '../../world/streetSpots';
 import type { SceneDriver, Vehicle } from '../population';
-import { SCENE_RANGE, type Scene, type SceneCtx } from '../cityLife';
+import { SCENE_RANGE, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { secs, labelMembers, type LabelSink } from '../debugLabels';
 import type { Fights } from './fights';
 import { Gathering } from './gathering';
@@ -126,10 +126,20 @@ export class IceCream implements Scene {
     }
   }
 
-  /** Debug (__ub): a van put down at the kerb near the player, open, with a few already queueing. */
+  /** A van pulling in or open; nothing once it drives on. */
+  subject(out: Subject): boolean {
+    for (const van of this.vans) {
+      if (van.phase === 'drive') continue;
+      const s = van.v.sim;
+      return watch(out, s.x, s.z, s.vx, s.vz);
+    }
+    return false;
+  }
+
+  /** Debug (__ub) and the title's highlights: a van put down at the kerb near the player, open, with a few already queueing. */
   force(): boolean {
     const life = this.life;
-    const p = life.d.player.position;
+    const p = life.d.focus();
     let best = Infinity;
     let bx = 0;
     let bz = 0;
@@ -250,7 +260,7 @@ export class IceCream implements Scene {
     const q = van.queue;
     van.timer += dt;
     // Calm people walking by come over (not in the last few seconds).
-    if (scan && van.timer < OPEN_FOR - 6 && life.d.playing() && roomFor(life, 2)) q.recruit();
+    if (scan && van.timer < OPEN_FOR - 6 && life.lively('iceCream') && roomFor(life, 2)) q.recruit();
     const served = q.step(dt);
     if (served) {
       served.model.cheer(1.2);

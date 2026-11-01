@@ -42,7 +42,7 @@ import {
   type ChaseKind,
 } from '../../systems/trafficScenes';
 import { trafficPaint, type CrowdPed, type SceneDriver, type Vehicle } from '../population';
-import { SCENE_DROP, type Scene, type SceneCtx } from '../cityLife';
+import { SCENE_DROP, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { ServiceRun, holdStill, type ServiceSpec } from './service';
 import { len2 } from '../../core/len';
 import type { LabelSink } from '../debugLabels';
@@ -170,6 +170,19 @@ export class Chases implements Scene {
       }
       if (c.pickup) out.car(c.pickup.v, 'CHASE COP (pickup)', 'police');
     }
+  }
+
+  /** The getaway, then the suspect on foot; nothing once the officers withdraw. */
+  subject(out: Subject): boolean {
+    const c = this.chases[0];
+    if (!c || c.phase === 'withdraw' || c.phase === 'over') return false;
+    if (c.phase === 'drive' && c.car) {
+      const s = c.car.sim;
+      return watch(out, s.x, s.z, s.vx, s.vz);
+    }
+    if (!c.suspect || !this.life.present(c.suspect)) return false;
+    const s = c.suspect.agent.s;
+    return watch(out, s.x, s.z, s.vx, s.vz);
   }
 
   /** Start one now (of `kind` if given: tests, __ub). False if there was nowhere to put it (or one's on). */
