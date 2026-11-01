@@ -112,6 +112,15 @@ export class Tows implements Scene, SceneDriver {
     this.tows.length = 0;
   }
 
+  /** Debug (TEST menu): a tow truck for `car` (else the best pick) now, whatever holds it off. */
+  force(car: Vehicle | null = this.pick()): boolean {
+    if (!car || this.tows.length >= MAX_TOWS || this.towing(car)) return false;
+    const run = ServiceRun.call(this.life, TOW_TRUCK, car.sim.x, car.sim.z);
+    if (!run) return false;
+    this.tows.push({ run, truck: run.v, car, stage: 'drive', timer: 0, rear: false, spot: { x: 0, z: 0, heading: 0 }, from: { x: 0, z: 0, heading: 0 }, left: { m: 99 } });
+    return true;
+  }
+
   /** The truck lining up and winching (v.scene once the run has brought it there). */
   drive(v: Vehicle, obstacles: Obstacle[]): VehicleControls | null {
     let t: Tow | null = null;

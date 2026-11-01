@@ -134,6 +134,20 @@ export class FireCrews implements Scene {
     this.cars.fill(null);
   }
 
+  /** Debug (TEST menu): a truck for the burning fire nearest the player now, whatever holds them off. */
+  force(): boolean {
+    const life = this.life;
+    if (this.crews.length >= MAX_TRUCKS) return false;
+    const at = life.d.focus();
+    const f = this.board.toCall(at.x, at.z, CALL_RANGE, 0, MIN_LEFT);
+    const run = f && ServiceRun.call(life, FIRE_TRUCK, f.x, f.z);
+    if (!f || !run) return false;
+    f.claimed = true;
+    this.crews.push({ run, fire: f, fireId: f.id, work: 'walk', timer: 0, out: false, men: [null, null], hosing: [false, false] });
+    life.emit('fireTruck', run.v.sim.x, run.v.sim.z);
+    return true;
+  }
+
   /** A car went up at (x, z): its wreck burns on. */
   private carFire(x: number, z: number): void {
     let wreck: Vehicle | null = null;

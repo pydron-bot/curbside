@@ -174,6 +174,11 @@ export class MissionMode implements Mode {
     return this.nextJob;
   }
 
+  /** The save's missions changed under it (the TEST menu): work the next job out again. */
+  refresh(): void {
+    this.nextJob = undefined;
+  }
+
   get passed(): number {
     return this.missions.filter((m) => this.ctx.progress.data.missions.includes(m.id)).length;
   }

@@ -95,6 +95,40 @@ export class StrayDogs implements Scene {
     this.pack.clear();
   }
 
+  /** Debug (TEST menu): a dog on the pavement nearest the player now (in view), up to the cap. */
+  force(): boolean {
+    if (this.pack.dogs.length >= MAX_DOGS) return false;
+    const at = this.life.d.focus();
+    const clamp = (v: number) => Math.max(0, Math.min(BLOCKS_PER_SIDE - 1, Math.floor((v + HALF_EXTENT) / BLOCK_SIZE)));
+    const bx = clamp(at.x);
+    const bz = clamp(at.z);
+    let best = Infinity;
+    let edge = -1;
+    let sx = 0;
+    let sz = 0;
+    // Somewhere 8–25 m off along the block's four pavement edges.
+    for (let e = 0; e < 4; e++) {
+      for (let t = 0.1; t < 0.95; t += 0.1) {
+        const p = cornerPoint(bx, bz, e, this.corner);
+        const px = p.x;
+        const pz = p.z;
+        const q = cornerPoint(bx, bz, e + 1, this.corner);
+        const x = px + (q.x - px) * t;
+        const z = pz + (q.z - pz) * t;
+        const d = Math.abs(len2(x - at.x, z - at.z) - 12);
+        if (d < best && d < 13 && !this.world.blocked(x, z, 0.5)) {
+          best = d;
+          edge = e;
+          sx = x;
+          sz = z;
+        }
+      }
+    }
+    if (edge < 0) return false;
+    this.pack.add(sx, sz, bx, bz, edge + 1, Math.floor(this.life.d.rand() * DOG_COATS));
+    return true;
+  }
+
   /** A dog somewhere on a pavement in the ring round the player, out of view. */
   private putDown(x: number, z: number): void {
     const life = this.life;

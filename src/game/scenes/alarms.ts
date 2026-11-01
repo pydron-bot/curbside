@@ -66,6 +66,24 @@ export class CarAlarms implements Scene {
     this.board.clear();
   }
 
+  /** Debug (TEST menu): the parked car nearest the player (`car`, if given) goes off now. */
+  force(car: Vehicle | null = null): boolean {
+    let best = 80;
+    if (!car) {
+      for (const v of this.life.d.vehicles) {
+        if (!v.parked || v.damage.wrecked) continue;
+        const d = this.life.distance(v.sim.x, v.sim.z);
+        if (d < best) {
+          best = d;
+          car = v;
+        }
+      }
+    }
+    if (!car) return false;
+    this.board.trigger(car, alarmPattern(car.sim.x, car.sim.z));
+    return true;
+  }
+
   /** A crash or a bullet at (x, z): any parked car it touched goes off. */
   private hit(x: number, z: number, margin: number): void {
     for (const v of this.life.d.vehicles) {
