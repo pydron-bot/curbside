@@ -688,10 +688,32 @@ export class GameAudio {
         return; // the mission / Chaos Run card plays its own sting
       case 'activityEnd':
         return; // the race banner / results card play their own stings
+      case 'street':
+        return this.onStreet(e);
       default: {
         const unhandled: never = e;
         return unhandled;
       }
+    }
+  }
+
+  /** The city's own happenings: a chime as the ice cream van opens, doors, a bus's brakes, a hose, a winch. */
+  private onStreet(e: EventOf<'street'>): void {
+    switch (e.what) {
+      case 'iceCream':
+        return this.chime(e.x, e.z);
+      case 'patientLoaded':
+      case 'arrest':
+        return this.oneShot('door', e, FALLOFF.near, 0.6, 0.2, (v) => sfx.door(v, false));
+      case 'busStop':
+      case 'hose':
+        // Air brakes / the pump: a hiss.
+        return this.oneShot('door', e, FALLOFF.near, 0.55, 0.25, sfx.spray);
+      case 'tow':
+        return this.oneShot('crash', e, FALLOFF.crash, 0.45, 0.2, (v) => sfx.crash(v, 4, true));
+      default:
+        // Sirens are continuous (StreetLife); the rest is heard through what it causes (shots, crashes, horns).
+        return;
     }
   }
 
