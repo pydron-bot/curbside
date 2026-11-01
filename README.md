@@ -563,6 +563,82 @@ director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
   came from the sidewalk crates (`world/pickups.ts`), a frenzy's gift, a
   mission's hand-out or the Chaos Run's loadout.*
 
+**Traffic scenes** (`claude/city-traffic`; rules pure and tested in
+`systems/trafficScenes.ts`). Chases, races and accidents are `LOUD` (held
+off by the title, an activity, wanted stars and the tutorial) and only one
+of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
+
+- **Police chases** (`scenes/chases.ts`, every 100–200 s): a getaway car
+  (sports, sedan or compact) or a scooter flat out in a panic through the
+  lights with one or two patrol cars behind it, lights and siren on
+  (traffic pulls over), ramming, PITting and boxing it in with the
+  police's pursuit logic; or someone on foot running down the street
+  (`fleeAxis`) from one or two officers, with a car following 40% of the
+  time. Boxed in, the suspect gives up by the car (55% of the unarmed) or
+  bolts. A runner out of breath (8–14 s) gives up; one caught running is
+  tackled. Then they're cuffed (kneeling, hands on head: the player's
+  `Arrested` clip), walked to a police car's back door (one is called for
+  an arrest on foot) and driven off: **arrested**. A crash that leaves the
+  car under 30% health, or an armed suspect (30%) shooting it out, leaves
+  them knocked out on the street for the ambulance: **taken down**. Lost
+  far off or over 110 s: **escaped**. Then the officers walk back to their
+  cars and drive off.
+  **Not the player's heat:** the chase's officers always have the suspect
+  (or nobody) as their target, are no unit of `PoliceForce` (so they
+  never see, bust or report the player), and are never left in a fighting
+  mode without an opponent (that would turn them on the player). Attack
+  them or ram their cars and the usual crimes apply (they're `cop` peds
+  and police-model cars); with any star the chase breaks off and its
+  officers on foot are handed to the police as strays
+  (`CityLifeDeps.enlist` → `heat.police.strays`), who then act under the
+  normal rules (and bust a player who stands there). No chase starts while
+  the player has stars.
+- **Street races** (`scenes/streetRaces.ts`, every 90–170 s, then
+  `raceOdds(hour)`: all at 22–4 h, 60% in the evening and before dawn, 25%
+  by day, else put off 20–45 s; `CityLifeDeps.hour` is `look.time.hour`,
+  and `nightlife()` at the top of the file is the hook for a nightlife
+  factor): 3–5 sports cars in racing colours line up off-screen and race a
+  4–6 junction route (`raceRoute`, mostly straight) at ~29 m/s as urgent
+  traffic (through the lights, overtaking in the oncoming lane), lighting
+  nitro on straights (a real boost, and exhaust flares in
+  `render/trafficLook.ts`). The first past the last junction wins (a long
+  horn, `raceWon`); they slow into traffic. 30% of races draw the police:
+  the back marker is handed to the chase scene (`chases.pursue(v)`).
+- **Accidents** (`scenes/accidents.ts`, every 80–160 s): a car finds the
+  one 3–30 m ahead in its lane mid-block; that one brakes hard, this one
+  doesn't. Both are left smoking (health 32–52%, below `SMOKE_AT`, above
+  `FIRE_AT`) with hazards blinking; the drivers get out and argue beside
+  the cars (a step in, a step back); 35% come to blows (`setOn`, `fight`
+  event). A patrol car comes (`ServiceRun`, lights on), the officer walks
+  over and breaks it up, has a word, and everyone leaves; a driver knocked
+  out goes to the ambulance. The cars stay in the lane, abandoned and
+  **flagged for a tow**: `Vehicle.towable` (set on crashed cars and dumped
+  getaways, cleared when recycled; `accidents.towables(out)` lists the ones
+  still standing, `ai` null, not the player's).
+- **Double-parked trucks** (`scenes/doubleParking.ts`, every 45–100 s,
+  held by the title and activities): a delivery van (parcel brown or
+  white) or a garbage truck in traffic pulls in 26–44 m before the next
+  junction, a little toward the parked cars, hazards on, for 20–40 s: the
+  courier carries parcels (`package`) from the back doors to the shopfront,
+  the two-man crew (hi-vis) wheel the bins put out at the kerb
+  (`trash_bin`) to the truck and back. Not on a lane with road works
+  (`kerbWorks`), within 18 m of a bus stop, or near a landmark or spray
+  bay (`CityLifeDeps.avoid`). With no truck about one is brought into
+  traffic off-screen and stops once it finds a spot.
+- **The queue behind** (`scenes/laneBlock.ts`, for the trucks and the
+  crashed cars): traffic queues as it does behind anything; anyone stopped
+  2.5 s honks (`horn` events, every 3–7 s); the front of the queue decides
+  once whether to go round (60%) and does when the oncoming lane is empty
+  for 60 m (`canPassAround`), traffic's own overtaking held on until it's
+  3 m past the front (`tests/trafficScenes.test.ts` drives a sedan round a
+  garbage truck: no contact).
+
+```ts
+life.chases.begin(kind?) · .pursue(v) · .chases · .ended   // 'car' | 'bike' | 'foot'; counts by outcome
+life.races.begin() · life.accidents.begin() · .towables(out) · life.doubleParking.begin(force?, job?)
+// Street events: chase, suspectRuns, arrest, suspectDown, race, raceWon, accident, fight, doublePark.
+```
+
 **The director.** `main.ts` creates one and calls `step(dt)` every sim step
 (after combat), `maintain(seed)` with population upkeep, `reset()` with a
 fresh run; a car with a `scene` is driven by `v.scene.drive(v, obstacles,
@@ -635,6 +711,17 @@ places round the city after 20 s each: 40.3 draw calls on average (54 at
 most) before, 41.3 (50) with the base (a parked model not otherwise in
 view costs its call and shadow pass). Smoke test (random seeds) 56 / 57 →
 61 / 51 on the iPhone sizes, 74 → 70 on desktop: within run-to-run spread.
+Traffic scenes: no new mesh or program. A model not otherwise on screen
+costs its call and shadow pass, so they keep to few: patrol cars only
+(`police`, no SUV or police bike), the racers all `sports`, getaways
+common models or the scooter, the bins in the `street` family (always
+drawn); one incident at a time. Measured as the drop when a forced
+scene's cars and people are hidden in the same frame, iPhone profile, at
+the seven places: a bike chase plus a garbage truck at most +7, a race
+chased by the police plus a truck +9, an accident plus a truck +4 (±3
+frame noise). The same places unforced: 39.4–44.9 calls on average before,
+44.3–57.0 after (most of it which traffic models are in view); smoke test
+56 / 56 on the iPhone sizes, 68 on desktop.
 
 ## Progression
 
