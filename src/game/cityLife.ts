@@ -48,14 +48,13 @@ import {
   carParkBays,
   pickBay,
   pickParkingSpot,
-  placeBusStops,
   placeHospital,
   type Avoid,
   type Bay,
-  type BusStop,
   type Hospital,
   type RoadSpot,
 } from '../world/streetSpots';
+import type { BusStop, VendorSpot } from '../world/streetStops';
 import type { City } from '../world/city';
 import type { Player } from './player';
 import { Medics } from './scenes/medics';
@@ -100,8 +99,12 @@ export interface CityLifeDeps {
   tutorial(): boolean;
   /** Cars other systems need left where they are (an activity's): no scene may take them. */
   keep(v: Vehicle): boolean;
-  /** Places parked cars keep clear of (landmarks, bays' mouths, ramps, the spawn corner). */
+  /** Places parked cars keep clear of (landmarks, bays' mouths, ramps, the spawn corner, the bus shelters' bays). */
   avoid: readonly Avoid[];
+  /** The bus shelters (dressing.street.busStops): the only bus stops. */
+  busStops: readonly BusStop[];
+  /** The food carts and fruit stands (dressing.street.vendors). */
+  vendors: readonly VendorSpot[];
   /** The quality tier's traffic multiplier. */
   trafficScale(): number;
   /** An NPC fires from (x, z) along unit (dx, dz) (combat's NPC bullet). */
@@ -133,8 +136,8 @@ export class CityLife {
   readonly d: CityLifeDeps;
   readonly clock: SceneClock;
   readonly hospital: Hospital;
-  /** Bus stops (world/streetSpots.ts placeBusStops): parked cars keep clear of them. */
-  readonly stops: BusStop[];
+  /** The bus shelters (world/streetStops.ts, via deps.busStops); deps.avoid keeps parked cars out of their bays. */
+  readonly stops: readonly BusStop[];
   /** The car parks' bays. */
   readonly bays: Bay[];
   readonly drops = new WeaponDrops();
@@ -161,9 +164,8 @@ export class CityLife {
     this.d = d;
     this.clock = new SceneClock(d.rand);
     this.hospital = placeHospital(d.city);
-    const avoid = [...d.avoid, { x: this.hospital.bayX, z: this.hospital.bayZ, r: 14 }];
-    this.stops = placeBusStops(avoid);
-    this.parkAvoid = [...avoid, ...this.stops.map((s) => ({ x: s.x, z: s.z, r: 13 }))];
+    this.stops = d.busStops;
+    this.parkAvoid = [...d.avoid, { x: this.hospital.bayX, z: this.hospital.bayZ, r: 14 }];
     this.bays = carParkBays(d.city);
     // The scenes: one line each.
     this.medics = this.add(new Medics(this));

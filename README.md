@@ -547,7 +547,7 @@ director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
   45% of picks with a car park in range, nose-in in a car park's painted
   bays (`carParkBays`: half the plazas, the same blocks and bays
   `world/ground.ts` paints, via the shared `lotRolls`). Clear of landmarks,
-  spray bays, ramps, bus stops, the hospital and the spawn corner. A
+  spray bays, ramps, the bus shelters' bays, the hospital and the spawn corner. A
   `parked` car counts apart from abandoned cars and wrecks (its own cap,
   on top of the idle cap) and is recycled like any other once far off;
   getting in clears the flag. Common models only (no extra draw calls).
@@ -604,8 +604,9 @@ life.spawnCar(archetype, paint, aheadShare?) · life.placeCar(archetype, paint, 
 life.lost(v) · life.present(c) · life.distance(x, z) · life.inView(x, z, margin?) · life.crowded(x, z, gap)
 life.rearOf(sim, out) · life.doorOf(sim) · life.emit(what, x, z) · life.hospital · life.stops · life.bays · life.drops
 holdStill(sim) · stopped(sim) · pullIn(sim, x, z, heading, cruise, obstacles, left)   // scenes/service.ts
-// Places (world/streetSpots.ts): roadPoint, pickParkingSpot, placeBusStops (BusStop: lane spot + waitX/Z),
-// carParkBays, pickBay, queueSpot, crowdSpot, BUS_PULL_IN, STOP_KERB.
+// Places (world/streetSpots.ts): roadPoint, pickParkingSpot, carParkBays, pickBay, queueSpot, crowdSpot, BUS_PULL_IN.
+// Bus stops are the shelters only: life.stops = deps.busStops (dressing.street.busStops, world/streetStops.ts
+// BusStop: wait spot, where a bus pulls in, its lane); deps.vendors the food carts (VendorSpot).
 // Flags: PedAgent.street (borrowable passer-by) / .scene (a scene's: upkeep leaves them) / .injured;
 //        Vehicle.ambient (brought in: the director retires it) / .scene (its driver) / .parked.
 // Bus: { type: 'street', what, x, z } (StreetWhat in core/events.ts; members for the planned scenes are reserved).

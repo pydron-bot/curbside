@@ -416,6 +416,8 @@ const cityLife = new CityLife({
     ...dressing.street.roadworks.map(({ area: a }) => ({ x: (a.minX + a.maxX) / 2, z: (a.minZ + a.maxZ) / 2, r: Math.hypot(a.maxX - a.minX, a.maxZ - a.minZ) / 2 + 4 })),
     ...dressing.street.busStops.map((b) => ({ x: b.stopX, z: b.stopZ, r: 13 })),
   ],
+  busStops: dressing.street.busStops,
+  vendors: dressing.street.vendors,
   trafficScale: () => getQuality().trafficScale,
   npcShoot: (x, z, dx, dz) => npcShoot(x, z, dx, dz),
   collect: (kind) => combat.collect(kind),

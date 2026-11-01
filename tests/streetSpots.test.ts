@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { generateCity, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, WORLD_LIMIT } from '../src/world/city';
 import { LANE_OFFSET, lanePoint } from '../src/world/roads';
 import {
-  BUS_PULL_IN,
   carParkBays,
   crowdSpot,
   isCarPark,
@@ -10,9 +9,7 @@ import {
   pickBay,
   PARK_ALONG,
   PARK_OFFSET,
-  STOP_ALONG,
   pickParkingSpot,
-  placeBusStops,
   placeHospital,
   queueSpot,
   roadPoint,
@@ -65,26 +62,6 @@ describe('pickParkingSpot', () => {
       expect(Math.abs(s.z)).toBeLessThan(WORLD_LIMIT);
     }
     expect(found).toBeGreaterThan(100);
-  });
-});
-
-describe('bus stops', () => {
-  const stops = placeBusStops([{ x: 0, z: 0, r: 40 }]);
-
-  it('are spread over the city, mid-block, never on the outer ring or inside `avoid`', () => {
-    expect(stops.length).toBeGreaterThan(80);
-    for (const s of stops) {
-      expect(s.along).toBe(STOP_ALONG);
-      expect(segmentValid(s.ix, s.iz, s.dir)).toBe(true);
-      expect(Math.hypot(s.waitX, s.waitZ)).toBeGreaterThan(40);
-      // The bus pulls in kerbside of the lane, riders wait on the pavement beyond it.
-      const along = roadPoint(s.ix, s.iz, s.dir, STOP_ALONG, BUS_PULL_IN);
-      expect(s.x).toBeCloseTo(along.x);
-      expect(s.z).toBeCloseTo(along.z);
-      expect(Math.hypot(s.waitX - s.x, s.waitZ - s.z)).toBeGreaterThan(2.5);
-    }
-    // Ids are their index (the scenes look stops up by id).
-    stops.forEach((s, i) => expect(s.id).toBe(i));
   });
 });
 
