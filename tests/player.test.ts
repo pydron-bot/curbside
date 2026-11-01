@@ -42,6 +42,20 @@ function runUntilRespawn(player: Player, limit = 10) {
   return Infinity;
 }
 
+describe('god mode', () => {
+  it('hits still land but take no health, and nothing kills', () => {
+    const { player, types } = setup();
+    player.invulnerable = true;
+    expect(player.hurt(MAX_HEALTH * 10)).toBe(false);
+    expect(player.health).toBe(MAX_HEALTH);
+    expect(player.alive).toBe(true);
+    expect(types()).toContain('playerHurt');
+    expect(types()).not.toContain('playerDied');
+    player.invulnerable = false;
+    expect(player.hurt(MAX_HEALTH * 10)).toBe(true);
+  });
+});
+
 describe('player transitions', () => {
   it('gets in and out, announcing both', () => {
     const { player, types } = setup();

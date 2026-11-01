@@ -60,7 +60,9 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 Settings (title or pause menu): master / effects / music volume, sound with
 the iPhone silent switch on, graphics quality, touch steering
 (point / classic), left-handed layout (mirrors the controls and the HUD),
-vibration, perf overlay (Off / FPS / Full).
+vibration, god mode (for testing: hits land but take no health, the police
+never cuff you, the heart turns gold; a life with it on earns no CRED and
+sets no free-roam or Chaos Run best), perf overlay (Off / FPS / Full).
 
 **Touch tuning** (for the device session): with the Perf overlay on (or
 `?debug`), pause → DIAGNOSTICS → TOUCH TUNING has −/+ steppers for stick

@@ -340,6 +340,10 @@ export class Heat {
     }
     // A held car can't get away, so nobody gets to cuff it: the meter waits.
     if (this.deps.held?.()) return;
+    if (p.invulnerable) {
+      this.bust.reset();
+      return;
+    }
     const car = p.driving;
     const sit = this.situation;
     sit.stars = this.wanted.level;

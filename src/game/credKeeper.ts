@@ -27,6 +27,8 @@ export class CredKeeper {
   private cash = 0;
   private seconds = 0;
   private peak = 0;
+  /** God mode was on at some point this life: it earns no CRED. */
+  private god = false;
   /** KEVLAR's armour is put on at the first step of a life (a Chaos Run has started by then). */
   private kitDue = false;
   /** Real seconds until LEVEL UP opens; < 0 when not waiting. */
@@ -56,6 +58,7 @@ export class CredKeeper {
   step(dt: number): void {
     const d = this.ctx.deps;
     if (this.counting) this.seconds += dt;
+    if (this.counting && d.player.invulnerable) this.god = true;
     if (this.scored()) Object.assign(this.fx, NEUTRAL);
     else perkEffects(this.ctx.progress.data.cred, this.fx);
     d.nitro.fill = this.fx.nitroFill;
@@ -94,6 +97,7 @@ export class CredKeeper {
     this.startScore = d.score.total;
     this.cash = 0;
     this.seconds = 0;
+    this.god = d.player.invulnerable;
     this.peak = d.heat.wanted.level;
     this.kitDue = true;
     this.pickIn = -1;
@@ -104,6 +108,7 @@ export class CredKeeper {
     const d = this.ctx.deps;
     if (!this.counting || !d.playing()) return;
     this.counting = false;
+    if (this.god) return;
     const progress = this.ctx.progress;
     const c = progress.data.cred;
     const gained = credForLife({
