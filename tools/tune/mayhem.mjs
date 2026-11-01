@@ -94,6 +94,12 @@ for (const tier of TIERS) {
             .map((v) => ({ v, d: Math.hypot(v.sim.x - px, v.sim.z - pz) }))
             .filter((c) => c.d < 32)
             .sort((a, b) => a.d - b.d);
+        // A car blowing up as the damage system does it: wrecked first (its wreck burns and smokes), then the blast.
+        const boom = (v) => {
+          v.damage.health = 0;
+          v.damage.wrecked = true;
+          u.explode(v);
+        };
         const blast = (x, z) => u.events.emit({ type: 'explosion', x, z, distance: Math.hypot(x - px, z - pz), byPlayer: true, source: 'rocket' });
 
         /** Live particles' area on screen over the screen's: what the GPU fills. */
@@ -140,16 +146,16 @@ for (const tier of TIERS) {
           const t = (k * stepMs) / 1000;
           if (single) {
             // Normal play: one car blowing up near you.
-            if (k === first) for (const c of cars().slice(0, 1)) u.explode(c.v);
+            if (k === first) for (const c of cars().slice(0, 1)) boom(c.v);
           } else if (k === first) {
             for (const w of walls) blast(w.x, w.z);
-            for (const c of cars().slice(0, 4)) u.explode(c.v);
+            for (const c of cars().slice(0, 4)) boom(c.v);
           }
           if (single) {
             // nothing more
-          } else if (k === Math.round(8000 / stepMs)) for (const c of cars().slice(0, 2)) u.explode(c.v);
+          } else if (k === Math.round(8000 / stepMs)) for (const c of cars().slice(0, 2)) boom(c.v);
           else if (k === Math.round(16000 / stepMs)) {
-            for (const c of cars().slice(0, 2)) u.explode(c.v);
+            for (const c of cars().slice(0, 2)) boom(c.v);
             if (walls[0]) blast(walls[0].x, walls[0].z);
           }
           if (!cityFires && fires) for (const f of fires.fires) f.alive = false;
