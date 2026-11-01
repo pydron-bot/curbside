@@ -16,7 +16,6 @@ import { onSettingsChange, settings, updateSettings } from '../core/settings';
 import { VEHICLE_SPECS, createVehicleState, type VehicleArchetype } from '../entities/vehicle';
 import type { WeaponKind } from '../systems/weapons';
 import { WEAPONS, WEAPON_ORDER } from '../systems/weapons';
-import { applyDamage, stepDamage } from '../systems/damage';
 import type { StaticGrid } from '../world/collision';
 import type { City } from '../world/city';
 import { DISTRICT_NAMES, districtAt } from '../world/districts';
@@ -27,15 +26,15 @@ import { FRENZIES } from './modes/frenzies';
 import { PACKAGE_COUNT } from './modes/packages';
 import { SAFEHOUSE, placePayphones } from './modes/places';
 import { MAX_ARMOUR, type Player } from './player';
-import { trafficPaint, type Population, type Vehicle } from './population';
+import type { Population, Vehicle } from './population';
 import type { ProgressDirector } from './progressDirector';
 import { addCredLevel, exportSave, importSave, jumpToMission, maxPerks, replaceSave, resetCred, resetSave, setTutorial, unlockAllMissions } from './saveTools';
 import { levelFor } from './cred';
-import { CarAlarms } from './scenes/alarms';
-import { FireCrews } from './scenes/fireCrews';
-import { Tows } from './scenes/tows';
-import { districtCentre, snapOnFoot, snapToLane, spawnBeside, type Free, type Spot } from './testSpots';
+import { SceneStarter, SCENES, type SceneId } from './sceneStarter';
+import { districtCentre, snapOnFoot, snapToLane, type Spot } from './testSpots';
 import { len2 } from '../core/len';
+
+export { SCENES, type SceneId };
 
 /** Every vehicle, in the order the picker lists them. */
 export const ARCHETYPES = Object.keys(VEHICLE_SPECS) as VehicleArchetype[];
@@ -50,59 +49,6 @@ export const TIME_PRESETS: ReadonlyArray<readonly [string, number]> = [
 export const SLOW_MO = [0.25, 0.5, 1] as const;
 export type RainMode = 'on' | 'off' | 'auto';
 
-export type SceneId =
-  | 'ambulance'
-  | 'fire'
-  | 'tow'
-  | 'alarm'
-  | 'chaseCar'
-  | 'chaseBike'
-  | 'chaseFoot'
-  | 'race'
-  | 'accident'
-  | 'doublePark'
-  | 'bus'
-  | 'iceCream'
-  | 'vendors'
-  | 'busker'
-  | 'fight'
-  | 'mugging'
-  | 'turf'
-  | 'dogs'
-  | 'rain';
-
-export const SCENES: ReadonlyArray<readonly [SceneId, string]> = [
-  ['ambulance', 'AMBULANCE CALL'],
-  ['fire', 'FIRE + TRUCK'],
-  ['tow', 'TOW TRUCK'],
-  ['alarm', 'CAR ALARM'],
-  ['chaseCar', 'CHASE · CAR'],
-  ['chaseBike', 'CHASE · SCOOTER'],
-  ['chaseFoot', 'CHASE · ON FOOT'],
-  ['race', 'STREET RACE'],
-  ['accident', 'ACCIDENT'],
-  ['doublePark', 'DOUBLE-PARKED TRUCK'],
-  ['bus', 'BUS STOP'],
-  ['iceCream', 'ICE CREAM VAN'],
-  ['vendors', 'FOOD-CART RUSH'],
-  ['busker', 'BUSKER'],
-  ['fight', 'FIGHT'],
-  ['mugging', 'MUGGING'],
-  ['turf', 'TURF WAR'],
-  ['dogs', 'STRAY DOG'],
-  ['rain', 'RAIN CROWD'],
-];
-
-/** People scenes with a force() of their own, by the scene's `kind`. */
-const PEOPLE_KIND: Partial<Record<SceneId, string>> = {
-  bus: 'buses',
-  iceCream: 'iceCream',
-  vendors: 'vendors',
-  busker: 'buskers',
-  fight: 'fights',
-  mugging: 'muggings',
-};
-
 export interface Landmark {
   id: string;
   label: string;
@@ -112,10 +58,6 @@ export interface Landmark {
 
 /** A forced shower lasts this long (until set back to auto), s. */
 const HOLD = Infinity;
-/** The fire's car goes up this far off: clear of the 9 m blast, and on a phone often still on screen, m. */
-const FIRE_RING = [11, 24] as const;
-/** The car for the tow truck is left this far off, m. */
-const TOW_RING = [8, 18] as const;
 /** The clock's normal pace (TimeOfDay's default: a day in 12 minutes), game hours per second. */
 const CLOCK_SPEED = 24 / (12 * 60);
 
@@ -153,12 +95,14 @@ export class TestTools {
   getIn = true;
   readonly landmarks: Landmark[];
   private readonly phones = new Map(placePayphones().map((p) => [p.id, p]));
-  private ignore: Vehicle | null = null;
+  /** Scenes started round a point, cars put down (shared with the title's highlights). */
+  readonly starter: SceneStarter;
   private readonly spot: Spot = { x: 0, z: 0, heading: 0 };
   /** What the sheet shows changed (time, rain, toggles). */
   onChange: () => void = () => {};
 
   constructor(private readonly d: TestToolsDeps) {
+    this.starter = new SceneStarter(d);
     const neon = districtCentre(d.city, 'arts');
     this.landmarks = [
       { id: 'safehouse', label: 'SAFEHOUSE', x: SAFEHOUSE.x, z: SAFEHOUSE.z },
@@ -231,10 +175,10 @@ export class TestTools {
     if (!this.canAct()) return 'NOT WHILE WASTED OR BUSTED';
     const at = p.position;
     const heading = p.driving ? p.driving.sim.heading : p.ped.heading;
-    const spot = this.besideOrNull(at.x, at.z, heading, 4.5, 16, p.driving);
+    const spot = this.starter.beside(at.x, at.z, heading, 4.5, 16, p.driving);
     if (!spot) return 'NO ROOM FOR A CAR HERE';
     this.cheat();
-    const v = this.place(archetype, spot);
+    const v = this.starter.place(archetype, spot);
     const name = CAR_NAMES[archetype];
     if (!this.getIn) return `${name} BESIDE YOU`;
     this.d.progress.board(v);
@@ -257,9 +201,8 @@ export class TestTools {
     const last = p.lastDriven;
     if (!v && last && len2(last.sim.x - p.ped.x, last.sim.z - p.ped.z) < 15 && !last.damage.wrecked) v = last;
     if (!v) return 'NO CAR TO FLIP';
-    this.ignore = v;
-    const spot = snapToLane(v.sim.x, v.sim.z, this.free, this.spot);
-    this.ignore = null;
+    const st = this.starter;
+    const spot = st.ignoring(v, () => snapToLane(v.sim.x, v.sim.z, st.free, this.spot));
     if (!spot) return 'NOWHERE CLEAR TO PUT IT';
     this.cheat();
     v.tipped = false;
@@ -319,9 +262,8 @@ export class TestTools {
     const p = this.d.player;
     if (!this.canAct()) return 'NOT WHILE WASTED OR BUSTED';
     const car = p.driving;
-    this.ignore = car;
-    const spot = car ? snapToLane(x, z, this.free, this.spot) : snapOnFoot(x, z, this.free, this.spot);
-    this.ignore = null;
+    const st = this.starter;
+    const spot = st.ignoring(car, () => (car ? snapToLane(x, z, st.free, this.spot) : snapOnFoot(x, z, st.free, this.spot)));
     if (!spot) return 'NOWHERE CLEAR THERE';
     this.cheat();
     if (car) {
@@ -343,42 +285,16 @@ export class TestTools {
   // --- Scenes ---
 
   scene(id: SceneId): string {
-    const life = this.d.cityLife;
     this.cheat();
-    switch (id) {
-      case 'ambulance':
-        return life.medics.force() ? 'SOMEONE DOWN · AMBULANCE CALLED' : 'NOBODY NEAR TO HELP';
-      case 'fire':
-        return this.fire();
-      case 'tow':
-        return this.tow();
-      case 'alarm':
-        return this.alarm();
-      case 'chaseCar':
-      case 'chaseBike':
-      case 'chaseFoot':
-        return life.chases.begin(id === 'chaseCar' ? 'car' : id === 'chaseBike' ? 'bike' : 'foot') ? 'POLICE CHASE' : 'NO CHASE (ONE ON, OR NO ROOM)';
-      case 'race':
-        return life.races.begin() ? 'STREET RACE' : 'NO RACE (NO ROOM)';
-      case 'accident':
-        return life.accidents.begin() ? 'ACCIDENT' : 'NO ACCIDENT · NO TWO CARS CLOSE: TRY AGAIN';
-      case 'doublePark':
-        return life.doubleParking.begin(true) ? 'DOUBLE-PARKED TRUCK' : 'TRUCK ON ITS WAY · STOPS AT THE NEXT SPOT';
-      case 'turf':
-        life.turfWar.soon();
-        return this.holds() ? `TURF WAR · HELD (${this.holds()})` : 'TURF WAR STARTING';
-      case 'dogs':
-        return life.dogs.force() ? 'A STRAY DOG' : 'NO DOG (TOO MANY, OR NO PAVEMENT)';
-      case 'rain':
-        this.setRain('on');
-        return 'RAIN · PEOPLE SHELTER';
-      default: {
-        const kind = PEOPLE_KIND[id]!;
-        const s = life.scenes.find((x) => (x as { kind?: string }).kind === kind) as { force?(): boolean } | undefined;
-        const label = SCENES.find(([k]) => k === id)![1];
-        return s?.force?.() ? label : `NO ${label} NEAR`;
-      }
+    if (id === 'rain') {
+      this.setRain('on');
+      return 'RAIN · PEOPLE SHELTER';
     }
+    const p = this.d.player;
+    const at = p.position;
+    const text = this.starter.start(id, at.x, at.z, p.ped.heading, p.driving);
+    if (id === 'turf' && this.holds()) return `TURF WAR · HELD (${this.holds()})`;
+    return text;
   }
 
   // --- Save ---
@@ -504,78 +420,4 @@ export class TestTools {
     if (life.d.tutorial()) return 'TUTORIAL';
     return '';
   }
-
-  /** A car blown up a safe way off; a fire truck comes for it. */
-  private fire(): string {
-    const p = this.d.player;
-    const at = p.position;
-    const spot = this.besideOrNull(at.x, at.z, p.ped.heading, FIRE_RING[0], FIRE_RING[1], p.driving);
-    if (!spot) return 'NO ROOM FOR A FIRE HERE';
-    const v = this.place('sedan', spot);
-    applyDamage(v.damage, v.damage.maxHealth);
-    if (stepDamage(v.damage, 1)) this.d.explode(v);
-    const crews = FireCrews.of(this.d.cityLife);
-    return crews?.force() ? 'CAR FIRE · FIRE TRUCK CALLED' : 'CAR FIRE (NO TRUCK FREE)';
-  }
-
-  /** An abandoned car left in the road nearby, and a tow truck for it. */
-  private tow(): string {
-    const p = this.d.player;
-    const at = p.position;
-    const spot = this.besideOrNull(at.x, at.z, p.ped.heading, TOW_RING[0], TOW_RING[1], p.driving);
-    if (!spot) return 'NO ROOM FOR A CAR HERE';
-    const v = this.place('compact', spot);
-    v.towable = true;
-    const tows = this.d.cityLife.scenes.find((s): s is Tows => s instanceof Tows);
-    return tows?.force(v) ? 'TOW TRUCK CALLED' : 'NO TOW TRUCK FREE';
-  }
-
-  /** The nearest parked car's alarm (one parked beside you if there's none). */
-  private alarm(): string {
-    const alarms = CarAlarms.of(this.d.cityLife);
-    if (!alarms) return 'NO ALARMS';
-    if (alarms.force()) return 'CAR ALARM';
-    const p = this.d.player;
-    const at = p.position;
-    const spot = this.besideOrNull(at.x, at.z, p.ped.heading, 6, 16, p.driving);
-    if (!spot) return 'NO PARKED CAR NEAR';
-    const v = this.place('sedan', spot);
-    v.parked = true;
-    return alarms.force(v) ? 'CAR ALARM' : 'NO ALARM';
-  }
-
-  private besideOrNull(x: number, z: number, heading: number, min: number, max: number, ignore: Vehicle | null): Spot | null {
-    this.ignore = ignore;
-    const spot = spawnBeside(x, z, heading, this.free, min, max, this.spot);
-    this.ignore = null;
-    return spot;
-  }
-
-  /** A car of `archetype` at `spot`, empty and still (an abandoned car: recycled once far and unseen). */
-  private place(archetype: VehicleArchetype, spot: Spot): Vehicle {
-    const v = this.d.population.takeVehicle(archetype, trafficPaint(archetype, this.d.rand));
-    v.police = false;
-    v.ai = null;
-    Object.assign(v.sim, createVehicleState(spot.x, spot.z, spot.heading));
-    Object.assign(v.prev, v.sim);
-    return v;
-  }
-
-  /** Clear of walls, props, ramps, cars and the player (testSpots' Free). */
-  private readonly free: Free = (x, z, r) => {
-    for (const g of this.d.grids) {
-      const near = g.near(x, z, r);
-      for (let i = 0; i < near.length; i++) {
-        const o = near[i];
-        if (x > o.minX - r && x < o.maxX + r && z > o.minZ - r && z < o.maxZ + r) return false;
-      }
-    }
-    for (const v of this.d.vehicles) {
-      if (v === this.ignore || !v.mesh.root.visible) continue;
-      const reach = v.sim.body?.reach ?? 2.4;
-      if (len2(v.sim.x - x, v.sim.z - z) < r + reach) return false;
-    }
-    const p = this.d.player;
-    return p.driving !== null || len2(p.ped.x - x, p.ped.z - z) > r + 0.5;
-  };
 }
