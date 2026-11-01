@@ -60,7 +60,9 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 Settings (title or pause menu): master / effects / music volume, sound with
 the iPhone silent switch on, graphics quality, touch steering
 (point / classic), left-handed layout (mirrors the controls and the HUD),
-vibration, perf overlay (Off / FPS / Full).
+vibration, god mode (for testing: hits land but take no health, the police
+never cuff you, the heart turns gold; a life with it on earns no CRED and
+sets no free-roam or Chaos Run best), perf overlay (Off / FPS / Full).
 
 **Touch tuning** (for the device session): with the Perf overlay on (or
 `?debug`), pause → DIAGNOSTICS → TOUCH TUNING has −/+ steppers for stick
@@ -695,7 +697,9 @@ are `src/game/modes/*Mode.ts`.
 - **CRED and perks** (`game/cred.ts` rules, `game/credKeeper.ts`,
   `ui/perkCard.ts`; design in `docs/CRED.md`): every life earns CRED when
   it ends, from its points (a bust's fine still counts), time alive, peak
-  stars and cash earned: about 250 for a good three minutes. The WASTED /
+  stars and cash earned from jobs, fares and races (not banked chains, whose
+  points already count): about 130 for a good three minutes, about 250 for
+  a wild five minutes at 5 stars. The WASTED /
   BUSTED card shows +CRED and a level bar (LEVEL UP stamped on a new one).
   Levels cost 100 CRED, then 50 more each. A level reached holds the respawn:
   1.7 s into the death screen LEVEL UP freezes the game and offers three of

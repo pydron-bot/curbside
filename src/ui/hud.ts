@@ -193,6 +193,10 @@ export class Hud {
     };
     showDebug();
     onSettingsChange(showDebug);
+    // God mode shows as a gold heart, so it's never left on by accident.
+    const showGod = () => this.status.classList.toggle('god', settings.godMode);
+    showGod();
+    onSettingsChange(showGod);
 
     bus.on('award', (e) => this.score.pop(e.award));
     bus.on('pickup', (e) => this.score.notice(pickupLabel(e.kind), e.kind === 'health' || e.kind === 'armour' ? 'health' : 'weapon'));

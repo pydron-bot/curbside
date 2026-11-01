@@ -27,6 +27,7 @@ describe('settings: sanitising what was stored', () => {
       perfOverlay: 'full',
       destruction: 'desktop',
       character: 'female',
+      godMode: true,
     };
     expect(sanitizeSettings(stored)).toEqual(stored);
   });

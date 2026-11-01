@@ -267,6 +267,9 @@ const player = new Player(events, SPAWN_POINT.x, SPAWN_POINT.z);
 const playerModel = look.characters.create({}, playerBody(settings.character));
 scene.add(playerModel.root);
 onSettingsChange((s) => look.characters.setBody(playerModel, playerBody(s.character)));
+// God mode (Settings → Controls), for mayhem testing.
+player.invulnerable = settings.godMode;
+onSettingsChange((s) => (player.invulnerable = s.godMode));
 
 let viewW = 0;
 let viewH = 0;
