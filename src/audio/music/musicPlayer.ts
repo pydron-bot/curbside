@@ -451,7 +451,7 @@ export class MusicPlayer {
   private cutAt(when: number): void {
     for (const v of this.notes) {
       v.kill(when);
-      // Booked to start after the cut, its own envelope (set at its start) would outrank kill's fade: silence it outright.
+      // Booked to start after the cut, it would still blip through kill's fade: silence it outright.
       if (v.t >= when) {
         v.out.gain.cancelScheduledValues(when);
         v.out.gain.setValueAtTime(0, when);
@@ -723,6 +723,17 @@ export class MusicPlayer {
     return v;
   }
 
+  /**
+   * A note's envelope stage, ahead of `v.out`. A cut fades `out` (cutAt,
+   * Voice.kill), and that must be the only automation there: a ramp still
+   * to come on `out` would take over from the fade and swell back up.
+   */
+  private env(v: Voice): GainNode {
+    const g = v.gain(0);
+    g.connect(v.out);
+    return g;
+  }
+
   private play(e: NoteEvent, t: number, step: number): void {
     switch (e.part) {
       case 'kick':
@@ -777,18 +788,19 @@ export class MusicPlayer {
       this.sidechain(t);
       return;
     }
-    const v = this.voice(t, this.drums, 0);
+    const v = this.voice(t, this.drums);
+    const env = this.env(v);
     const o = v.osc('sine', s.kickTune * 3, t, t + s.kickDecay + 0.1);
     sweep(o.frequency, t, s.kickTune * 3.2, s.kickTune, 0.07);
     o.frequency.setTargetAtTime(s.kickTune * 0.85, t + 0.07, s.kickDecay);
-    o.connect(v.out);
-    const g = v.out.gain;
+    o.connect(env);
+    const g = env.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(vel * 0.7, t + 0.002);
     g.setTargetAtTime(0, t + 0.012, s.kickDecay * 0.3);
     const click = v.noise(this.bank.white, t, t + 0.02);
     const cg = v.gain();
-    v.chain(click, cg, this.drums);
+    v.chain(click, cg, v.out);
     perc(cg.gain, t, vel * 0.1, 0.0005, 0.003);
     this.sidechain(t);
   }
@@ -860,18 +872,19 @@ export class MusicPlayer {
   private hat(t: number, vel: number, open: boolean): void {
     if (this.hit(open ? 'openHat' : 'hat', t, vel, this.drums)) return;
     const shaker = this.sound.hat === 'shaker';
-    const v = this.voice(t, this.hatBus, 0);
+    const v = this.voice(t, this.hatBus);
+    const env = this.env(v);
     const n = v.noise(this.bank.white, t, t + (open ? 0.5 : 0.12));
     if (shaker) {
       const bp = v.filter('bandpass', 6500, 1.2);
-      v.chain(n, bp, v.out);
-      const g = v.out.gain;
+      v.chain(n, bp, env);
+      const g = env.gain;
       g.setValueAtTime(0, t);
       g.linearRampToValueAtTime(vel * 0.22, t + 0.012);
       g.setTargetAtTime(0, t + 0.014, 0.02);
     } else {
-      n.connect(v.out);
-      perc(v.out.gain, t, vel * (open ? 0.2 : 0.26), 0.0005, open ? 0.09 : 0.012);
+      n.connect(env);
+      perc(env.gain, t, vel * (open ? 0.2 : 0.26), 0.0005, open ? 0.09 : 0.012);
     }
   }
 
@@ -880,31 +893,34 @@ export class MusicPlayer {
     if (this.hit('perc', t, vel, this.drums, rim ? 0.3 : 0.15, this.sound.throws ?? 0)) return;
     if (rim) return this.rim(t, vel * 0.7);
     // A tuned bongo-ish knock.
-    const v = this.voice(t, this.drums, 0);
+    const v = this.voice(t, this.drums);
+    const env = this.env(v);
     const o = v.osc('sine', 330, t, t + 0.15);
     sweep(o.frequency, t, 360, 290, 0.05);
-    o.connect(v.out);
-    perc(v.out.gain, t, vel * 0.35, 0.001, 0.03);
+    o.connect(env);
+    perc(env.gain, t, vel * 0.35, 0.001, 0.03);
   }
 
   private crash(t: number): void {
     if (this.hit('crash', t, 1, this.drums, 0.4)) return;
-    const v = this.voice(t, this.drums, 0);
+    const v = this.voice(t, this.drums);
+    const env = this.env(v);
     const n = v.noise(this.bank.white, t, t + 2.4);
     const hp = v.filter('highpass', 4200, 0.5);
-    v.chain(n, hp, v.out);
-    perc(v.out.gain, t, 0.2, 0.002, 0.42);
+    v.chain(n, hp, env);
+    perc(env.gain, t, 0.2, 0.002, 0.42);
     const send = v.gain(0.4);
     v.chain(v.out, send, this.verbSend);
   }
 
   private riser(t: number, dur: number): void {
-    const v = this.voice(t, this.mix, 0);
+    const v = this.voice(t, this.mix);
+    const env = this.env(v);
     const n = v.noise(this.bank.pink, t, t + dur + 0.05);
     const bp = v.filter('bandpass', 300, 2.5);
     sweep(bp.frequency, t, 300, 5200, dur);
-    v.chain(n, bp, v.out);
-    const g = v.out.gain;
+    v.chain(n, bp, env);
+    const g = env.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(0.2, t + dur - 0.02);
     g.linearRampToValueAtTime(0, t + dur + 0.02);
@@ -984,11 +1000,12 @@ export class MusicPlayer {
   }
 
   private slapClick(t: number, level: number, ghost: boolean): void {
-    const v = this.voice(t, this.synth, 0);
+    const v = this.voice(t, this.synth);
+    const env = this.env(v);
     const n = v.noise(this.bank.white, t, t + 0.03);
     const bp = v.filter('bandpass', ghost ? 1800 : 3000, 0.9);
-    v.chain(n, bp, v.out);
-    perc(v.out.gain, t, level, 0.0005, ghost ? 0.008 : 0.005);
+    v.chain(n, bp, env);
+    perc(env.gain, t, level, 0.0005, ghost ? 0.008 : 0.005);
   }
 
   /**
@@ -997,7 +1014,8 @@ export class MusicPlayer {
    */
   private cowbell(t: number, note: number, level: number, verb: number): void {
     const hz = midiToHz(note);
-    const v = this.voice(t, this.arpBus, 0);
+    const v = this.voice(t, this.arpBus);
+    const env = this.env(v);
     const bp = v.filter('bandpass', hz * 2.2, 1.4);
     const lo = v.osc('square', hz, t, t + 0.6);
     lo.detune.value = -6;
@@ -1005,8 +1023,8 @@ export class MusicPlayer {
     hi.detune.value = 6;
     lo.connect(bp);
     hi.connect(bp);
-    bp.connect(v.out);
-    const g = v.out.gain;
+    bp.connect(env);
+    const g = env.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(level, t + 0.001);
     g.setTargetAtTime(level * 0.35, t + 0.001, 0.012);
@@ -1055,7 +1073,8 @@ export class MusicPlayer {
     const s = this.sound;
     if (s.pad === 'chip') return this.chipPad(t, notes, dur);
     const soft = s.pad === 'soft';
-    const v = this.voice(t, this.padLp, 0);
+    const v = this.voice(t, this.padLp);
+    const env = this.env(v);
     const attack = soft ? 0.6 : 0.3;
     const release = 0.6;
     const stop = t + dur + release * 4;
@@ -1065,11 +1084,11 @@ export class MusicPlayer {
       a.detune.value = -7;
       const b = v.osc(soft ? 'sine' : s.pad === 'dark' ? 'square' : 'sawtooth', hz, t, stop);
       b.detune.value = 7;
-      a.connect(v.out);
-      b.connect(v.out);
+      a.connect(env);
+      b.connect(env);
     }
     const level = (PAD_LEVEL * (soft ? 1.6 : 1)) / Math.sqrt(notes.length);
-    const g = v.out.gain;
+    const g = env.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(level, t + attack);
     g.setValueAtTime(level, t + dur);
@@ -1078,15 +1097,16 @@ export class MusicPlayer {
 
   /** One 25% pulse per chord note, an 8-bit envelope (a quick drop to a held level). */
   private chipPad(t: number, notes: readonly number[], dur: number): void {
-    const v = this.voice(t, this.padLp, 0);
+    const v = this.voice(t, this.padLp);
+    const env = this.env(v);
     const stop = t + dur + 0.3;
     for (const n of notes) {
       const o = v.osc('square', midiToHz(n), t, stop);
       o.setPeriodicWave(this.wave('pulse25'));
-      o.connect(v.out);
+      o.connect(env);
     }
     const level = (PAD_LEVEL * 1.2) / Math.sqrt(notes.length);
-    const g = v.out.gain;
+    const g = env.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(level, t + 0.01);
     g.setTargetAtTime(level * 0.55, t + 0.02, 0.2);
@@ -1097,11 +1117,12 @@ export class MusicPlayer {
     const s = this.sound;
     if (s.keys === 'skank') {
       // Reggae skank: a short, bright chop high up; the echo picks it up.
-      const v = this.voice(t, this.keysBus, 0);
+      const v = this.voice(t, this.keysBus);
+      const env = this.env(v);
       const bp = v.filter('bandpass', 1900, 0.8);
       for (const n of notes) v.osc('square', midiToHz(n + 12), t, t + dur + 0.15).connect(bp);
-      bp.connect(v.out);
-      perc(v.out.gain, t, (KEYS_LEVEL * vel * 1.5) / Math.sqrt(notes.length), 0.002, Math.max(0.06, dur * 0.35));
+      bp.connect(env);
+      perc(env.gain, t, (KEYS_LEVEL * vel * 1.5) / Math.sqrt(notes.length), 0.002, Math.max(0.06, dur * 0.35));
       if (s.throws) {
         const send = v.gain(s.throws);
         v.chain(v.out, send, this.echoSend);
@@ -1110,31 +1131,33 @@ export class MusicPlayer {
     }
     if (s.keys === 'wah') {
       // Funk guitar chop through an auto-wah: the filter opens with the pick and falls back.
-      const v = this.voice(t, this.keysBus, 0);
+      const v = this.voice(t, this.keysBus);
+      const env = this.env(v);
       const wah = v.filter('bandpass', 450, 3);
       const f = wah.frequency;
       f.setValueAtTime(450, t);
       f.exponentialRampToValueAtTime(700 + 1900 * vel, t + 0.04);
       f.setTargetAtTime(550, t + 0.04, 0.08);
       for (const n of notes) v.osc('sawtooth', midiToHz(n), t, t + dur + 0.25).connect(wah);
-      wah.connect(v.out);
-      perc(v.out.gain, t, (KEYS_LEVEL * vel * 4) / Math.sqrt(notes.length), 0.003, Math.max(0.03, dur * 0.4));
+      wah.connect(env);
+      perc(env.gain, t, (KEYS_LEVEL * vel * 4) / Math.sqrt(notes.length), 0.003, Math.max(0.03, dur * 0.4));
       return;
     }
     if (s.keys === 'epiano') {
       // Electric piano: a sine body and a quick bell an octave up, with a slow fade.
-      const v = this.voice(t, this.keysBus, 0);
+      const v = this.voice(t, this.keysBus);
+      const env = this.env(v);
       const stop = t + dur + 1.2;
       for (const n of notes) {
         const hz = midiToHz(n);
-        v.osc('sine', hz, t, stop).connect(v.out);
+        v.osc('sine', hz, t, stop).connect(env);
         const bell = v.osc('sine', hz * 2, t, t + 0.5);
         const bg = v.gain();
-        v.chain(bell, bg, v.out);
+        v.chain(bell, bg, env);
         perc(bg.gain, t, 0.5, 0.002, 0.06);
       }
       const level = (KEYS_LEVEL * vel) / Math.sqrt(notes.length);
-      const g = v.out.gain;
+      const g = env.gain;
       g.setValueAtTime(0, t);
       g.linearRampToValueAtTime(level, t + 0.006);
       g.setTargetAtTime(level * 0.45, t + 0.01, 0.35);
@@ -1142,15 +1165,16 @@ export class MusicPlayer {
       return;
     }
     // Synth stab: a saw chord through a snapping filter.
-    const v = this.voice(t, this.keysBus, 0);
+    const v = this.voice(t, this.keysBus);
+    const env = this.env(v);
     const lp = v.filter('lowpass', 3000, 3);
     sweep(lp.frequency, t, 3200, 600, 0.12);
     for (const n of notes) {
       const o = v.osc('sawtooth', midiToHz(n + 12), t, t + dur + 0.3);
       o.connect(lp);
     }
-    lp.connect(v.out);
-    perc(v.out.gain, t, (KEYS_LEVEL * vel * 1.2) / Math.sqrt(notes.length), 0.003, Math.max(0.03, dur * 0.3));
+    lp.connect(env);
+    perc(env.gain, t, (KEYS_LEVEL * vel * 1.2) / Math.sqrt(notes.length), 0.003, Math.max(0.03, dur * 0.3));
     v.chain(v.out, this.echoSend);
   }
 
@@ -1159,41 +1183,44 @@ export class MusicPlayer {
     if (kind === 'cowbell') return this.cowbell(t, note, COWBELL_LEVEL * vel, 0);
     if (kind === 'pulse') {
       // Downbeats a fat square, the rest a thin buzz: the chip's duty-cycle colour.
-      const v = this.voice(t, this.arpBus, 0);
+      const v = this.voice(t, this.arpBus);
+      const env = this.env(v);
       const o = v.osc('square', midiToHz(note), t, t + 0.3);
       o.setPeriodicWave(this.wave(vel >= 1 ? 'pulse50' : 'pulse12'));
-      o.connect(v.out);
-      perc(v.out.gain, t, ARP_LEVEL * vel * (vel >= 1 ? 1.1 : 1.5), 0.001, 0.07);
+      o.connect(env);
+      perc(env.gain, t, ARP_LEVEL * vel * (vel >= 1 ? 1.1 : 1.5), 0.001, 0.07);
       return;
     }
     const pluck = kind === 'pluck';
-    const v = this.voice(t, this.arpBus, 0);
+    const v = this.voice(t, this.arpBus);
+    const env = this.env(v);
     const hz = midiToHz(note);
     const o = v.osc(pluck ? 'triangle' : 'square', hz, t, t + 0.4);
-    o.connect(v.out);
+    o.connect(env);
     if (pluck) {
       const o2 = v.osc('sine', hz * 2, t, t + 0.2);
       const g2 = v.gain();
-      v.chain(o2, g2, v.out);
+      v.chain(o2, g2, env);
       perc(g2.gain, t, 0.6, 0.001, 0.03);
     }
-    perc(v.out.gain, t, ARP_LEVEL * vel * (pluck ? 1.5 : 1), 0.002, pluck ? 0.09 : 0.06);
+    perc(env.gain, t, ARP_LEVEL * vel * (pluck ? 1.5 : 1), 0.002, pluck ? 0.09 : 0.06);
   }
 
   /** Radio static between stations. */
   private tuneStatic(now: number): void {
-    const v = new Voice(this.ctx, this.bank, now, 0);
+    const v = new Voice(this.ctx, this.bank, now);
     v.out.connect(this.duckGain);
     this.notes.push(v);
+    const env = this.env(v);
     const n = v.noise(this.bank.white, now, now + 0.4);
     const bp = v.filter('bandpass', 900, 3);
     sweep(bp.frequency, now, 600, 3400, 0.3);
-    v.chain(n, bp, v.out);
+    v.chain(n, bp, env);
     const whistle = v.osc('sine', 1800, now, now + 0.35);
     sweep(whistle.frequency, now, 2400, 900, 0.3);
     const wg = v.gain(0.05);
-    v.chain(whistle, wg, v.out);
-    const g = v.out.gain;
+    v.chain(whistle, wg, env);
+    const g = env.gain;
     g.setValueAtTime(0, now);
     g.linearRampToValueAtTime(0.16, now + 0.03);
     g.setValueAtTime(0.16, now + 0.24);

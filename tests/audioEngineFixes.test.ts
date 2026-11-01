@@ -206,30 +206,111 @@ function steps(a: Arranger, n: number): NoteEvent[][] {
   return out;
 }
 
+/** What a note gives at `t`: its out stage times its envelope (the loudest of its automated inner gains). */
+function heard(v: Voice, t: number): number {
+  let env = -1;
+  for (const n of v.nodes) {
+    const g = (n as unknown as FakeNode).gain;
+    if (n !== v.out && g.events.length > 0) env = Math.max(env, g.at(t));
+  }
+  return param(v.out).at(t) * (env < 0 ? 1 : env);
+}
+
+/** Voice.kill's fade. */
+const KILL_TAU = 0.012;
+
+/**
+ * Samples what each voice gives over the 80 ms a cut at `at` leaves it,
+ * before the cut. After it, `worst()` is the most any of them gives over
+ * that same envelope faded along kill's curve (1: never more; a ramp still
+ * to come on its out stage swells it back up), and `rising` how many were
+ * still swelling at the cut (pads in their attack, risers).
+ */
+function watchCut(voices: Voice[], at: number) {
+  const ts = Array.from({ length: 41 }, (_, i) => at + i * 0.002);
+  const uncut = voices.map((v) => ts.map((t) => heard(v, t)));
+  const rising = voices.filter((_, i) => Math.max(...uncut[i]) > uncut[i][0] * 1.05 + 1e-4);
+  const worst = () => {
+    let w = { ratio: 1, info: '' };
+    voices.forEach((v, i) =>
+      ts.forEach((t, k) => {
+        if (t >= v.end) return; // its sources have stopped
+        const allowed = uncut[i][k] * Math.exp(-(t - at) / KILL_TAU) + 1e-6;
+        const ratio = heard(v, t) / allowed;
+        if (ratio > w.ratio) w = { ratio, info: `${v.nodes.length}-node voice from ${((v.t - at) * 1000).toFixed(0)} ms, at +${((t - at) * 1000).toFixed(0)} ms` };
+      }),
+    );
+    return w;
+  };
+  return { ts, uncut, rising, worst };
+}
+
+const LOWTIDE = STATIONS.find((s) => s.sound.pad === 'soft')!;
+const INSERTCOIN = STATIONS.find((s) => s.sound.pad === 'chip')!;
+
+/** Run until the arranger is about to book `step` of bar `bar`. */
+function runTo(p: ReturnType<typeof player>, bar: number, step: number): void {
+  let guard = 0;
+  while (!(p.music.arranger.bar === bar && p.music.arranger.step === step) && guard++ < 4000) p.run(0.005, 0.005);
+  expect(guard).toBeLessThan(4000);
+}
+
 describe('switching what plays', () => {
-  it("a retune (or the theme giving way) kills the old phrase under its fade, so its pads don't come back up with it; the static stays", () => {
-    for (const how of ['station', 'theme'] as const) {
-      const { ctx, music, run, notes } = player(STATIONS[0]);
-      music.setTheme(THEME);
-      music.setMode(how === 'theme' ? 'menu' : 'game');
-      music.setIntensity(2);
-      run(4);
-      const now = ctx.currentTime;
-      const old = [...notes()];
-      expect(old.some((v) => v.end > now + 1), how).toBe(true); // a pad holds on for seconds
-      if (how === 'theme') music.setMode('game');
-      else music.setStation(2);
-      // Gone before the fade comes back up at now + 0.3.
-      for (const v of old) {
-        expect(v.end, how).toBeLessThanOrEqual(now + 0.36 + 1e-9);
-        for (const s of v.sources) expect((s as unknown as FakeNode).stopped, how).toBeLessThanOrEqual(now + 0.36 + 1e-9);
+  it("a retune (or the theme giving way, or the chase dropped) kills the old phrase under its fade, so nothing of it swells back up with it; the static stays", () => {
+    // Every step of a bar, for pads still in their attack at the cut; bar 3 is a song's intro's last, which rises.
+    const cases = [
+      ...[STATIONS[0], LOWTIDE, INSERTCOIN].map((s) => ({ how: 'station' as const, station: s, bar: 3 })),
+      { how: 'theme' as const, station: STATIONS[0], bar: 1 },
+      { how: 'score' as const, station: STATIONS[0], bar: 1 },
+    ];
+    const swelling = { pad: 0, riser: 0 };
+    for (const { how, station, bar } of cases) {
+      for (let k = 0; k < STEPS_PER_BAR; k++) {
+        const label = `${how} ${station.id} at step ${k}`;
+        const p = player(station);
+        const { ctx, music, notes } = p;
+        music.setTheme(THEME);
+        music.setMode(how === 'theme' ? 'menu' : 'game');
+        if (how === 'score') music.setScore(CHASE);
+        music.setIntensity(2);
+        runTo(p, bar, k);
+        const now = ctx.currentTime;
+        const old = [...notes()];
+        if (station.sound.pad !== 'chip') expect(old.some((v) => v.end > now + 1), label).toBe(true); // a pad holds on for seconds
+        const cut = watchCut(old, now + 0.28);
+        for (const v of cut.rising) {
+          const dest = (v.out as unknown as FakeNode).links[0][1];
+          if (dest === inner(music, 'padLp')) swelling.pad++;
+          if (dest === inner(music, 'mix')) swelling.riser++;
+        }
+        if (how === 'theme') music.setMode('game');
+        else if (how === 'score') music.dropScore();
+        else music.setStation(2);
+        // Gone before the fade comes back up at now + 0.3...
+        for (const v of old) {
+          expect(v.end, label).toBeLessThanOrEqual(now + 0.36 + 1e-9);
+          for (const s of v.sources) expect((s as unknown as FakeNode).stopped, label).toBeLessThanOrEqual(now + 0.36 + 1e-9);
+        }
+        // ...and silent as it does: every old voice only fades from the cut, so under the fade it's next to nothing.
+        const w = cut.worst();
+        expect(w.ratio, `${label}: ${w.info}`).toBeLessThan(1.000001);
+        const fade = param(inner<GainNode>(music, 'fadeGain'));
+        old.forEach((v, i) => {
+          const loudest = Math.max(1e-6, ...cut.uncut[i]);
+          cut.ts.forEach((t) => {
+            if (t < v.end) expect(fade.at(t) * heard(v, t), label).toBeLessThan(0.03 * loudest);
+          });
+        });
+        if (how === 'station') expect(notes().some((v) => v.t === now && v.end >= now + 0.34)).toBe(true);
+        music.dispose();
       }
-      if (how === 'station') expect(notes().some((v) => v.t === now && v.end >= now + 0.34)).toBe(true);
-      music.dispose();
     }
+    // Not vacuous: pads in their attack and risers were swelling at some of these cuts.
+    expect(swelling.pad).toBeGreaterThan(0);
+    expect(swelling.riser).toBeGreaterThan(0);
   });
 
-  it('GO cuts the old phrase dead: a note it booked to start just after GO never sounds', () => {
+  it('GO cuts the old phrase dead: a note it booked to start just after GO never sounds, and nothing still swelling comes back up', () => {
     const { ctx, music, run, notes } = player(STATIONS[0]);
     music.setMode('game');
     music.setIntensity(4);
@@ -245,6 +326,52 @@ describe('switching what plays', () => {
       for (const dt of [0, 0.002, 0.01, 0.03]) expect(param(v.out).at(v.t + dt), `voice at +${((v.t - when) * 1000).toFixed(0)} ms`).toBe(0);
     }
     music.dispose();
+    // GO at every step of a riser bar, on each kind of pad: what was ringing only fades from `when`, along kill's curve.
+    let swelling = 0;
+    for (const station of [STATIONS[0], LOWTIDE, INSERTCOIN]) {
+      for (let k = 0; k < STEPS_PER_BAR; k++) {
+        const p = player(station);
+        p.music.setMode('game');
+        p.music.setIntensity(4);
+        runTo(p, 3, k);
+        const at = p.ctx.currentTime + 0.03;
+        const old = [...p.notes()];
+        const cut = watchCut(old, at);
+        swelling += cut.rising.length;
+        p.music.dropIn(at, 4);
+        const w = cut.worst();
+        expect(w.ratio, `GO over ${station.id} at step ${k}: ${w.info}`).toBeLessThan(1.000001);
+        p.music.dispose();
+      }
+    }
+    expect(swelling).toBeGreaterThan(0);
+  });
+
+  it("keeps every note's envelope off its out stage, which only a cut (kill) automates", () => {
+    // Pumped like the game: every recipe each station plays, the live drums too (no kit renders here), and the static.
+    for (const station of [...STATIONS, CHASE_STATION]) {
+      const { music, run, notes } = player(station);
+      music.setMode('game');
+      const seen = new Set<Voice>();
+      for (const level of [1, 3, 5]) {
+        music.setIntensity(level);
+        for (let i = 0; i < 480; i++) {
+          run(0.025);
+          for (const v of notes()) seen.add(v);
+        }
+      }
+      const before = new Set(notes());
+      const check = (voices: Iterable<Voice>) => {
+        for (const v of voices) expect(param(v.out).events, `${station.id}: the note at ${v.t.toFixed(3)} s`).toEqual([]);
+      };
+      check(seen);
+      expect(seen.size).toBeGreaterThan(100);
+      music.nextStation(); // the static
+      const fresh = notes().filter((v) => !before.has(v));
+      expect(fresh.length).toBeGreaterThan(0);
+      check(fresh);
+      music.dispose();
+    }
   });
 
   it("drops the radio in at GO: its first step exactly at `when`, on a chorus, out of the duck, the old phrase cut there", () => {
