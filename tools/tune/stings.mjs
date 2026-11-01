@@ -13,7 +13,9 @@
  * dropping in on GO). Default: all of them.
  * Env: SECONDS (the theme, default 60), KEY (the music's key as a MIDI note,
  * default 45 = A), INDEX (the payphone job, default 0), RADIO (the station
- * under count-in-radio, default nightdrive).
+ * under count-in-radio, default nightdrive), MAJOR (1: the stings in a major
+ * key, as over INSERT COIN; 0: minor, even over a major song; unset: minor
+ * for KEY, and count-in-radio follows the radio's song like the game).
  */
 import { openAudioPage, renderOffline, writeAudio } from './audioLib.mjs';
 
@@ -25,6 +27,7 @@ const key = Number(process.env.KEY ?? 45);
 const index = Number(process.env.INDEX ?? 0);
 const radio = process.env.RADIO ?? 'nightdrive';
 const themeSeconds = Number(process.env.SECONDS ?? 60);
+const major = process.env.MAJOR === undefined || process.env.MAJOR === '' ? null : process.env.MAJOR === '1';
 
 const modules = {
   player: 'src/audio/music/musicPlayer.ts',
@@ -42,10 +45,10 @@ try {
     const seconds = SECONDS[name];
     const { wav, stats, log } = await renderOffline(page, {
       modules,
-      args: { name, key, index, radio },
+      args: { name, key, index, radio, major },
       seconds,
       window: name === 'theme' ? 5 : 0.5,
-      setup: async (ctx, { player, synth, sfx, stings, themes, stations }, { name, key, index, radio }) => {
+      setup: async (ctx, { player, synth, sfx, stings, themes, stations }, { name, key, index, radio, major }) => {
         const bank = new synth.NoiseBank(ctx);
         const impulse = synth.makeImpulse(ctx);
         const log = [];
@@ -88,11 +91,11 @@ try {
         }
         if (name === 'wasted') sfx.wasted(voice(0.05, L.wasted), key);
         else if (name === 'busted') sfx.busted(voice(0.05, L.busted), key);
-        else if (name === 'mission-start') sfx.playSting(voice(0.05, L.missionStart), stings.missionStartSting(key, index), kit);
+        else if (name === 'mission-start') sfx.playSting(voice(0.05, L.missionStart), stings.missionStartSting(key, index, !!major), kit);
         else if (name === 'mission-passed') sfx.playSting(voice(0.05, L.missionPassed), stings.missionPassedSting(key, index), kit);
-        else if (name === 'mission-failed') sfx.playSting(voice(0.05, L.missionFailed), stings.missionFailedSting(key, index), kit);
+        else if (name === 'mission-failed') sfx.playSting(voice(0.05, L.missionFailed), stings.missionFailedSting(key, index, !!major), kit);
         else if (name === 'count-in') {
-          for (const n of [3, 2, 1, 0]) sfx.playSting(voice(0.3 + (3 - n) * stings.COUNT_SPACING + (n === 0 ? 0.03 : 0), L.countIn), stings.countInSting(n, key), kit);
+          for (const n of [3, 2, 1, 0]) sfx.playSting(voice(0.3 + (3 - n) * stings.COUNT_SPACING + (n === 0 ? 0.03 : 0), L.countIn), stings.countInSting(n, key, !!major), kit);
         } else {
           // The radio cruising at intensity 1, then the count from 6 s: as GameAudio.countIn drives it.
           const counts = [3, 2, 1, 0].map((n) => ({ n, at: 6 + (3 - n) * stings.COUNT_SPACING }));
@@ -100,7 +103,9 @@ try {
             while (counts.length && counts[0].at <= now) {
               const { n } = counts.shift();
               const v = voice(now + 0.005 + (n === 0 ? 0.03 : 0), L.countIn);
-              sfx.playSting(v, stings.countInSting(n, music.arranger.key), kit);
+              const inMajor = major ?? music.arranger.major;
+              if (n === 3) log.push(`${now.toFixed(2)}s  counting in over ${music.arranger.song.title} in ${music.arranger.key} ${inMajor ? 'major' : 'minor'}`);
+              sfx.playSting(v, stings.countInSting(n, music.arranger.key, inMajor), kit);
               report();
               voices.length = 0;
               if (n > 0) music.duck(0.3, 0.3, 1.25);
@@ -121,7 +126,8 @@ try {
         return { log };
       },
     });
-    const files = writeAudio(outDir, name === 'mission-start' || name === 'mission-passed' || name === 'mission-failed' ? `${name}-${index}` : name, wav);
+    const base = name === 'mission-start' || name === 'mission-passed' || name === 'mission-failed' ? `${name}-${index}` : name;
+    const files = writeAudio(outDir, `${base}${major ? '-major' : ''}`, wav);
     const o = stats.overall;
     console.log(`\n${name}: ${files.join(', ')}\n  overall RMS ${o.rms} dBFS, peak ${o.peak} dBFS, clipped ${o.clipped}, non-finite ${o.nonFinite}`);
     for (const line of log) console.log(`  ${line}`);
