@@ -9,6 +9,8 @@ import {
   EMITTERS,
   NEON_PLAYING,
   PARKED_PLAYING,
+  ParkedRadios,
+  REPARKED,
   SWITCH_FADE,
   SWITCH_MARGIN,
   ShopEmitters,
@@ -91,7 +93,6 @@ describe('emitters on the street', () => {
       for (let z = -500; z < 500; z += 8) {
         const s = parkedStation(x, z);
         expect(parkedStation(x, z)).toBe(s);
-        expect(parkedStation(x + 0.6, z - 0.6)).toBe(s); // nudged, it plays on
         total++;
         if (s < 0) continue;
         expect(s).toBeLessThan(STATIONS.length);
@@ -106,6 +107,29 @@ describe('emitters on the street', () => {
       const h = hash01(i, i * 7);
       expect(h >= 0 && h < 1).toBe(true);
     }
+  });
+
+  it('keep a parked car on its station while it is nudged about (anywhere, not just on the hash grid), and pick again once it is re-parked', () => {
+    const radios = new ParkedRadios();
+    const car = (x: number, z: number): StreetCar => ({ sim: { x, z }, damage: { burning: false, wrecked: false } });
+    let flips = 0;
+    for (let i = 0; i < 4000; i++) {
+      const c = car((hash01(i, 1) - 0.5) * 1000, (hash01(i, 2) - 0.5) * 1000);
+      const s = radios.stationOf(c);
+      expect(s).toBe(parkedStation(c.sim.x, c.sim.z));
+      // Shoved up to 3 m (traffic, a blast): the hash of where it ends up would often differ; the radio doesn't.
+      const a = hash01(i, 3) * Math.PI * 2;
+      const d = [0.6, 1, 2, 3][i % 4];
+      c.sim.x += Math.cos(a) * d;
+      c.sim.z += Math.sin(a) * d;
+      if (parkedStation(c.sim.x, c.sim.z) !== s) flips++;
+      expect(radios.stationOf(c)).toBe(s);
+      // Driven off and parked somewhere else: a fresh pick, for there.
+      c.sim.x += REPARKED + 4;
+      expect(radios.stationOf(c)).toBe(parkedStation(c.sim.x, c.sim.z));
+    }
+    // The spots were off the grid: the hash alone would have changed station for many of them.
+    expect(flips).toBeGreaterThan(500);
   });
 
   it('count a car as parked only if nobody is in it, it is not the police, not wrecked, burning or sold, and it has a radio', () => {
@@ -148,7 +172,7 @@ describe('shopfronts that play', () => {
     }
   });
 
-  it('are found through the grid: exactly the ones in range, whatever the cell', () => {
+  it('finds every shop in range through the grid, whatever the cell', () => {
     const r = EMITTERS.shop.max;
     let checked = 0;
     for (let k = 0; k < 40; k++) {
@@ -303,7 +327,32 @@ describe('the music on foot', () => {
     expect(m.tune).toBe(2);
   });
 
-  it('allocates nothing per scan: the same picks are reused', () => {
+  it('steps out from silence when nothing was in your ears: no fade before a retune, and quickly down when nothing is near', () => {
+    // After WASTED (the music was off): another station nearby is tuned at once, nothing to fade out first.
+    const m = new StreetMusic();
+    m.begin(0, 0);
+    m.offer('car', 4, 2, 0);
+    m.end(0.2, 1, false);
+    expect(m.tune).toBe(4);
+    expect(m.gain).toBe(0);
+    // Stepping out of the car (the radio in your ears) fades it before retuning.
+    const out = new StreetMusic();
+    out.begin(0, 0);
+    out.offer('car', 4, 2, 0);
+    out.end(0.2, 1);
+    expect(out.tune).toBe(-1);
+    // Nothing near: the radio in your ears steps down slowly; anything else is down before the radio's next song comes in.
+    const carry = new StreetMusic();
+    carry.begin(0, 0);
+    carry.end(0.2, 1);
+    const fresh = new StreetMusic();
+    fresh.begin(0, 0);
+    fresh.end(0.2, -1);
+    expect(fresh.tau).toBeLessThan(0.1);
+    expect(carry.tau).toBeGreaterThan(fresh.tau * 3);
+  });
+
+  it('reuses its pick objects from scan to scan', () => {
     const m = new StreetMusic();
     const inner = m as unknown as { best: object; same: object };
     const best = inner.best;
