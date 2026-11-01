@@ -1,0 +1,321 @@
+/**
+ * Fires and the fire trucks that put them out. A car blowing up leaves its
+ * wreck burning, and a grenade or rocket going off against a building sets
+ * the wall alight (systems/emergency.ts FireBoard: they flare up, burn for
+ * FIRE_LIFE and die down; MAX_FIRES at once). A fire near the player calls
+ * a fire truck (ServiceRun: one in traffic close by, else one from
+ * off-screen with lights and siren). It pulls up, the siren stops (the
+ * lights keep flashing), two firefighters step down and hose it out
+ * (render/emergencyLook.ts draws the flames, the water and the steam),
+ * walk back, and it drives off. Unattended fires burn out on their own.
+ *
+ * Faked light and particles only; the fires hurt nobody (a molotov's
+ * still does: systems/projectiles.ts). Held off behind the title, in an
+ * activity (a mission, a race, the Chaos Run: fires burn out by
+ * themselves) and in the tutorial; MAX_TRUCKS at once.
+ */
+import type { VehicleState } from '../../entities/vehicle';
+import { FireBoard, wallFireAt, type Fire } from '../../systems/emergency';
+import type { CrowdPed, Vehicle } from '../population';
+import type { Scene, SceneCtx } from '../cityLife';
+import { ServiceRun, type ServiceSpec } from './service';
+import { len2 } from '../../core/len';
+
+/** Most trucks out at once. */
+export const MAX_TRUCKS = 2;
+/** A truck is called once a fire has burned this long, s... */
+const CALL_DELAY = 4;
+/** ...if it's this close to the player, m... */
+const CALL_RANGE = 150;
+/** ...and has this long still to burn, s. */
+const MIN_LEFT = 20;
+/** A grenade or rocket this close to a building's wall sets it alight, m; the fire sits this far out from the face. */
+const WALL_RANGE = 4.5;
+const WALL_OUT = 0.9;
+/** A car's blast is matched to the wreck within this, m. */
+const WRECK_MATCH = 3;
+/** Firefighters hose from either side of the fire: this far toward the truck and this far out to the side, m. */
+const HOSE_BACK = 2;
+const HOSE_SIDE = 4.2;
+/** A firefighter wedged on the way starts hosing anyway after this long, s (from up to HOSE_REACH m). */
+const WALK_GIVE_UP = 6;
+export const HOSE_REACH = 14;
+/** Back at the truck, or given up walking back, after this long, s. */
+const PACK_UP = 8;
+const CREW = 2;
+const FIREFIGHTER = { shirt: '#b8902e', pants: '#2a2a28', hair: '#e2b81c', shoes: '#1a1a1a' };
+
+export const FIRE_TRUCK: ServiceSpec = {
+  archetype: 'firetruck',
+  paint: '#c3191c',
+  claimRange: 140,
+  emergency: true,
+  cruise: 16,
+  top: 24,
+  arrive: 22,
+  timeout: 80,
+  aheadShare: 0.4,
+};
+
+/** On site: the crew walking out, hosing, walking back. */
+type Work = 'walk' | 'hose' | 'pack';
+
+export interface FireCrew {
+  run: ServiceRun;
+  fire: Fire;
+  fireId: number;
+  work: Work;
+  timer: number;
+  /** The crew has stepped down from the truck. */
+  out: boolean;
+  /** The firefighters (null until on site, or once back in the truck). */
+  readonly men: (CrowdPed | null)[];
+  /** Which of them is hosing now (the look draws their jets). */
+  readonly hosing: boolean[];
+}
+
+export class FireCrews implements Scene {
+  readonly board = new FireBoard();
+  readonly crews: FireCrew[] = [];
+  /** The wreck each fire slot burns on (null: a wall). */
+  private readonly cars: (Vehicle | null)[] = [];
+  private scan = 0;
+  private readonly at = { x: 0, z: 0 };
+
+  /** The director's fire scene (for the look and the other scenes). */
+  static of(life: SceneCtx): FireCrews | null {
+    for (const s of life.scenes) if (s instanceof FireCrews) return s;
+    return null;
+  }
+
+  constructor(private readonly life: SceneCtx) {
+    for (let i = 0; i < this.board.fires.length; i++) this.cars.push(null);
+    life.clock.define('fire', { every: [4, 8], cap: MAX_TRUCKS, first: 3, range: CALL_RANGE, hold: ['title', 'activity', 'tutorial'] });
+    life.d.bus.on('explosion', (e) => {
+      if (e.source === 'grenade' || e.source === 'rocket') this.wallFire(e.x, e.z);
+      else this.carFire(e.x, e.z);
+    });
+  }
+
+  get running(): number {
+    return this.crews.length;
+  }
+
+  step(dt: number): void {
+    const board = this.board;
+    board.step(dt);
+    // Fires on wrecks go where the wreck is pushed; a wreck recycled takes its fire with it.
+    for (let i = 0; i < board.fires.length; i++) {
+      const f = board.fires[i];
+      const car = this.cars[i];
+      if (!f.alive || !car) continue;
+      if (!car.mesh.root.visible || !car.damage.wrecked) {
+        board.drop(f);
+        this.cars[i] = null;
+        continue;
+      }
+      f.x = car.sim.x;
+      f.z = car.sim.z;
+    }
+    if ((this.scan -= dt) <= 0) {
+      this.scan = 0.5;
+      this.dispatch();
+    }
+    for (let i = this.crews.length - 1; i >= 0; i--) {
+      if (this.stepCrew(this.crews[i], dt)) continue;
+      this.crews.splice(i, 1);
+    }
+  }
+
+  reset(): void {
+    for (const c of this.crews) this.endCrew(c);
+    this.crews.length = 0;
+    this.board.clear();
+    this.cars.fill(null);
+  }
+
+  /** A car went up at (x, z): its wreck burns on. */
+  private carFire(x: number, z: number): void {
+    let wreck: Vehicle | null = null;
+    let best = WRECK_MATCH;
+    for (const v of this.life.d.vehicles) {
+      if (!v.damage.wrecked) continue;
+      const d = len2(v.sim.x - x, v.sim.z - z);
+      if (d < best) {
+        best = d;
+        wreck = v;
+      }
+    }
+    const f = this.ignite(wreck ? wreck.sim.x : x, wreck ? wreck.sim.z : z, false);
+    const i = this.board.fires.indexOf(f);
+    if (this.board.fresh || wreck) this.cars[i] = wreck;
+  }
+
+  /** A grenade or rocket by a wall: the building's face catches. */
+  private wallFire(x: number, z: number): void {
+    if (!wallFireAt(this.life.d.city.buildings, x, z, WALL_RANGE, WALL_OUT, this.at)) return;
+    const f = this.ignite(this.at.x, this.at.z, true);
+    if (this.board.fresh) this.cars[this.board.fires.indexOf(f)] = null;
+  }
+
+  private ignite(x: number, z: number, building: boolean): Fire {
+    const f = this.board.start(x, z, building);
+    if (this.board.fresh) this.life.emit('fire', f.x, f.z);
+    return f;
+  }
+
+  /** Send a truck to the nearest fire nobody's coming for. */
+  private dispatch(): void {
+    const life = this.life;
+    if (this.board.burning === 0 || !life.due('fire', this.crews.length)) return;
+    const at = life.d.focus();
+    const f = this.board.toCall(at.x, at.z, CALL_RANGE, CALL_DELAY, MIN_LEFT);
+    if (!f) return;
+    const run = ServiceRun.call(life, FIRE_TRUCK, f.x, f.z);
+    if (!run) {
+      life.clock.defer('fire', life.now, 2);
+      return;
+    }
+    life.clock.start('fire', life.now);
+    f.claimed = true;
+    this.crews.push({ run, fire: f, fireId: f.id, work: 'walk', timer: 0, out: false, men: [null, null], hosing: [false, false] });
+    life.emit('fireTruck', run.v.sim.x, run.v.sim.z);
+  }
+
+  /** One crew's step; false when it's over (and tidied up). */
+  private stepCrew(c: FireCrew, dt: number): boolean {
+    const run = c.run;
+    const f = c.fire;
+    const burning = f.alive && f.id === c.fireId;
+    if (run.phase === 'drive') {
+      // Burnt out before it got there: back to the station, lights off.
+      if (!burning) run.leave();
+      else run.goTo(f.x, f.z);
+    }
+    const phase = run.step(dt);
+    if (phase === 'done' || phase === 'failed') {
+      this.endCrew(c);
+      return false;
+    }
+    if (phase === 'onSite') this.work(c, burning, dt);
+    return true;
+  }
+
+  /** On site: out of the truck, hose it down, back in, off. */
+  private work(c: FireCrew, burning: boolean, dt: number): void {
+    const life = this.life;
+    const v = c.run.v;
+    const f = c.fire;
+    if (!c.out) {
+      c.out = true;
+      // Pulled up: the wail stops (traffic needn't give way), the lights flash on.
+      v.emergency = false;
+      for (let i = 0; i < CREW; i++) {
+        const door = this.doorOf(v.sim, i === 0 ? 1 : -1);
+        c.men[i] = life.addPed(door.x, door.z, v.sim.heading, FIREFIGHTER, 'ped_stocky');
+      }
+    }
+    c.timer += dt;
+    if (c.work !== 'pack' && !burning) {
+      // Out (hosed or burnt out): back to the truck.
+      c.work = 'pack';
+      c.timer = 0;
+    }
+    let hoses = 0;
+    let home = 0;
+    for (let i = 0; i < CREW; i++) {
+      const m = c.men[i];
+      c.hosing[i] = false;
+      if (!m) {
+        home++;
+        continue;
+      }
+      if (!life.present(m)) {
+        c.men[i] = null;
+        home++;
+        continue;
+      }
+      if (m.agent.mode === 'down') {
+        // Knocked over: the rest carry on without them (they're picked up when the truck goes).
+        if (c.work === 'pack') home++;
+        continue;
+      }
+      const s = m.agent.s;
+      if (c.work === 'pack') {
+        const door = this.doorOf(v.sim, i === 0 ? 1 : -1);
+        life.walkTo(m, door.x, door.z);
+        if (len2(s.x - door.x, s.z - door.z) < 1.1 || c.timer > PACK_UP) {
+          life.removePed(m);
+          c.men[i] = null;
+          home++;
+        }
+        continue;
+      }
+      // Their spot: either side of the fire, a little toward the truck.
+      this.stand(v.sim, f, i === 0 ? 1 : -1);
+      const dist = len2(s.x - this.at.x, s.z - this.at.z);
+      const reach = len2(s.x - f.x, s.z - f.z);
+      if (dist < 1 || (c.timer > WALK_GIVE_UP && reach < HOSE_REACH)) {
+        life.walkTo(m, s.x, s.z);
+        life.lookAt(m, f.x, f.z);
+        c.hosing[i] = true;
+        hoses++;
+      } else life.walkTo(m, this.at.x, this.at.z);
+    }
+    if (c.work === 'walk' && hoses > 0) {
+      c.work = 'hose';
+      life.emit('hose', f.x, f.z);
+    }
+    if (hoses > 0 && this.board.hose(f, dt, hoses)) {
+      life.emit('fireOut', f.x, f.z);
+      c.work = 'pack';
+      c.timer = 0;
+    }
+    if (c.work === 'pack' && home >= CREW) c.run.leave();
+    else if (c.work !== 'pack' && c.timer > WALK_GIVE_UP * 3 && hoses === 0) {
+      // Nobody could get to it: off they go.
+      c.work = 'pack';
+      c.timer = 0;
+    }
+  }
+
+  /**
+   * Where firefighter `side` (±1) stands to hose fire `f` from truck `s`
+   * (into `at`): beside the fire, a little toward the truck's nose, clear of
+   * the truck.
+   */
+  private stand(s: VehicleState, f: Fire, side: number): void {
+    const nose = (s.body?.reach ?? 4.6) - 0.5;
+    let dx = s.x + Math.sin(s.heading) * nose - f.x;
+    let dz = s.z + Math.cos(s.heading) * nose - f.z;
+    const d = len2(dx, dz) || 1;
+    dx /= d;
+    dz /= d;
+    const k = Math.min(HOSE_BACK, d);
+    this.at.x = f.x + dx * k + dz * side * HOSE_SIDE;
+    this.at.z = f.z + dz * k - dx * side * HOSE_SIDE;
+  }
+
+  /** The truck's cab door on `side` (+1 the driver's), into `at`. */
+  private doorOf(s: VehicleState, side: number): { x: number; z: number } {
+    const fx = Math.sin(s.heading);
+    const fz = Math.cos(s.heading);
+    const out = (s.body?.halfWidth ?? 1.2) + 0.7;
+    const along = (s.body?.reach ?? 4.6) * 0.45;
+    this.at.x = s.x + fz * side * out + fx * along;
+    this.at.z = s.z - fx * side * out + fz * along;
+    return this.at;
+  }
+
+  /** Off the call: the fire free for another truck, the crew gone, the truck back in traffic. */
+  private endCrew(c: FireCrew): void {
+    if (c.fire.id === c.fireId) c.fire.claimed = false;
+    for (let i = 0; i < CREW; i++) {
+      const m = c.men[i];
+      if (m && this.life.present(m)) this.life.removePed(m);
+      c.men[i] = null;
+      c.hosing[i] = false;
+    }
+    c.run.end();
+  }
+}

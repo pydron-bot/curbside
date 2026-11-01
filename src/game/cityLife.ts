@@ -59,6 +59,9 @@ import {
 import type { City } from '../world/city';
 import type { Player } from './player';
 import { Medics } from './scenes/medics';
+import { FireCrews } from './scenes/fireCrews';
+import { Tows } from './scenes/tows';
+import { CarAlarms } from './scenes/alarms';
 import { len2 } from '../core/len';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
@@ -167,6 +170,9 @@ export class CityLife {
     this.bays = carParkBays(d.city);
     // The scenes: one line each.
     this.medics = this.add(new Medics(this));
+    this.add(new FireCrews(this));
+    this.add(new Tows(this));
+    this.add(new CarAlarms(this));
   }
 
   /** Register a scene (stepped, reset with the rest). */
