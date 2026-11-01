@@ -28,6 +28,7 @@ describe('settings: sanitising what was stored', () => {
       destruction: 'desktop',
       character: 'female',
       godMode: true,
+      debugLabels: true,
     };
     expect(sanitizeSettings(stored)).toEqual(stored);
   });
@@ -59,6 +60,8 @@ describe('settings: sanitising what was stored', () => {
     expect(s.haptics).toBe(true);
     expect(s.leftHanded).toBe(false);
     expect(s.ignoreSilentSwitch).toBe(false);
+    expect(sanitizeSettings({ debugLabels: 'on' }).debugLabels).toBe(false);
+    expect(sanitizeSettings({ debugLabels: true }).debugLabels).toBe(true);
   });
 
   it("garbage JSON's values all fall back, one field at a time", () => {
