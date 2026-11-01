@@ -45,6 +45,7 @@ import { trafficPaint, type CrowdPed, type SceneDriver, type Vehicle } from '../
 import { SCENE_DROP, type Scene, type SceneCtx } from '../cityLife';
 import { ServiceRun, holdStill, type ServiceSpec } from './service';
 import { len2 } from '../../core/len';
+import type { LabelSink } from '../debugLabels';
 
 type Phase = 'drive' | 'foot' | 'cuffed' | 'withdraw' | 'over';
 
@@ -152,6 +153,23 @@ export class Chases implements Scene {
   reset(): void {
     for (const c of this.chases) this.end(c, true);
     this.chases.length = 0;
+  }
+
+  describe(out: LabelSink): void {
+    for (const c of this.chases) {
+      const what = c.kind === 'bike' ? 'bike' : 'car';
+      if (c.car && c.phase === 'drive') out.car(c.car, `CHASE: SUSPECT (${what})`, 'police');
+      if (c.suspect) {
+        const how = c.phase === 'cuffed' ? 'cuffed' : c.surrendered ? 'gave up' : c.suspect.agent.mode === 'down' ? 'down' : 'on foot';
+        out.ped(c.suspect, `CHASE: SUSPECT (${how})`, 'police');
+      }
+      const cop = c.phase === 'withdraw' ? 'CHASE COP (leaving)' : 'CHASE COP';
+      for (const u of c.units) {
+        if (u.v) out.car(u.v, cop, 'police');
+        for (const o of u.officers) out.ped(o, cop, 'police');
+      }
+      if (c.pickup) out.car(c.pickup.v, 'CHASE COP (pickup)', 'police');
+    }
   }
 
   /** Start one now (of `kind` if given: tests, __ub). False if there was nowhere to put it (or one's on). */

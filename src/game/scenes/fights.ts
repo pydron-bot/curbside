@@ -17,6 +17,7 @@ import { scare } from '../../systems/crowd';
 import { barges, planFight, type FightPlan } from '../../systems/streetPeople';
 import type { CrowdPed } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
+import { labelMembers, type LabelSink } from '../debugLabels';
 import { Gathering } from './gathering';
 import { handBack, roomFor } from './people';
 import { len2 } from '../../core/len';
@@ -81,6 +82,15 @@ export class Fights implements Scene {
   reset(): void {
     for (const f of this.fights) this.end(f);
     this.fights.length = 0;
+  }
+
+  describe(out: LabelSink): void {
+    for (const f of this.fights) {
+      const how = f.phase === 'shove' ? 'FIGHTER (shoving)' : 'FIGHTER';
+      out.ped(f.a, how, 'people');
+      out.ped(f.b, how, 'people');
+      labelMembers(out, f.ring.members, 'ONLOOKER', false);
+    }
   }
 
   /** Is `c` in a scuffle here? */

@@ -19,6 +19,7 @@ import { driveAi, type Obstacle } from '../../systems/traffic';
 import type { BusStop } from '../../world/streetStops';
 import { trafficPaint, type CrowdPed, type SceneDriver, type Vehicle } from '../population';
 import { SCENE_RANGE, type Scene, type SceneCtx } from '../cityLife';
+import { labelMembers, type LabelSink } from '../debugLabels';
 import { Gathering } from './gathering';
 import { roomFor, streetBody } from './people';
 import { holdStill, pullIn, stopped } from './service';
@@ -121,6 +122,14 @@ export class Buses implements Scene {
     for (const w of this.waiting) w.crowd.close();
     this.waiting.length = 0;
     this.looked.clear();
+  }
+
+  describe(out: LabelSink): void {
+    for (const r of this.runs) {
+      out.car(r.v, r.phase === 'dwell' ? 'BUS (doors open)' : r.phase === 'pull' ? 'BUS (pulling in)' : r.stop ? 'BUS → stop' : 'BUS', 'traffic');
+      labelMembers(out, r.boarding, 'BOARDING', false);
+    }
+    for (const w of this.waiting) labelMembers(out, w.crowd.members, 'BUS STOP', true);
   }
 
   /**

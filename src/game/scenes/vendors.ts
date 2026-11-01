@@ -14,6 +14,7 @@ import { cartBusyness, cartSpot, type Stand } from '../../systems/streetPeople';
 import type { VendorSpot } from '../../world/streetStops';
 import type { CrowdPed } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
+import { labelMembers, type LabelSink } from '../debugLabels';
 import type { Fights } from './fights';
 import { Gathering } from './gathering';
 import { roomFor, streetBody } from './people';
@@ -81,6 +82,13 @@ export class Vendors implements Scene {
     for (const st of this.stands) this.close(st);
     this.stands.length = 0;
     this.open.clear();
+  }
+
+  describe(out: LabelSink): void {
+    for (const st of this.stands) {
+      if (st.vendor) out.ped(st.vendor, 'VENDOR', 'people');
+      labelMembers(out, st.queue.members, 'QUEUE', true);
+    }
   }
 
   /** Debug (__ub): the cart nearest the player staffed now with three queueing. */

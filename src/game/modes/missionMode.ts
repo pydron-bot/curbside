@@ -30,6 +30,7 @@ import { KeyedText, type Mode, type ModeCtx } from './context';
 import { CAR_NAMES } from './exports';
 import { SAFEHOUSE, placePayphones, type Spot } from './places';
 import { len2 } from '../../core/len';
+import type { LabelSink } from '../debugLabels';
 
 /** Answering: on foot this close, or stopped in a car this close, m. */
 const ANSWER_FOOT = 2.4;
@@ -745,5 +746,15 @@ export class MissionMode implements Mode {
     }
     this.armed = true;
     this.syncRingBlip(null);
+  }
+
+  /** Debug labels: the job's people (story characters by name) and cars by their tags. */
+  describe(out: LabelSink): void {
+    for (const m of this.pedList) {
+      if (!m.ped) continue;
+      const who = m.body && STORY_BODIES.includes(m.body) ? m.body.toUpperCase() : `MISSION: ${m.tag}`;
+      out.ped(m.ped, m.hostile ? `${who} (hostile)` : who, 'mission');
+    }
+    for (const c of this.carList) out.car(c.v, `MISSION CAR: ${c.tag}`, 'mission');
   }
 }

@@ -20,6 +20,7 @@ import type { CrowdPed, Vehicle } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
 import { ServiceRun, type ServiceSpec } from './service';
 import { len2 } from '../../core/len';
+import { secs, type LabelSink } from '../debugLabels';
 
 /** Most trucks out at once. */
 export const MAX_TRUCKS = 2;
@@ -132,6 +133,17 @@ export class FireCrews implements Scene {
     this.crews.length = 0;
     this.board.clear();
     this.cars.fill(null);
+  }
+
+  describe(out: LabelSink): void {
+    for (const c of this.crews) {
+      out.car(c.run.v, c.run.phase === 'drive' ? 'FIRE TRUCK → fire' : 'FIRE TRUCK', 'emergency');
+      for (let i = 0; i < c.men.length; i++) {
+        const m = c.men[i];
+        if (m) out.ped(m, c.hosing[i] ? 'FIREFIGHTER (hosing)' : 'FIREFIGHTER', 'emergency');
+      }
+    }
+    for (const f of this.board.fires) if (f.alive && out.wants(f.x, f.z)) out.spot(f, `FIRE ${secs(f.life - f.age)}${f.claimed ? ' (called)' : ''}`, 'emergency');
   }
 
   /** A car went up at (x, z): its wreck burns on. */

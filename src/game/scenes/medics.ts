@@ -21,6 +21,7 @@ import { IN_PLAY } from '../../systems/cityScenes';
 import type { Scene, SceneCtx } from '../cityLife';
 import { ServiceRun, type ServiceSpec } from './service';
 import { len2 } from '../../core/len';
+import { secs, type LabelSink } from '../debugLabels';
 
 /** Most people held down waiting at once. */
 export const MAX_PATIENTS = 6;
@@ -116,6 +117,18 @@ export class Medics implements Scene {
       p.ped.agent.scene = false;
     }
     this.patients.length = 0;
+  }
+
+  describe(out: LabelSink): void {
+    for (const c of this.crews) {
+      const leaving = c.run.phase === 'leave';
+      out.car(c.run.v, leaving ? 'AMBULANCE (to hospital)' : c.patient ? 'AMBULANCE → patient' : 'AMBULANCE', 'emergency');
+      if (c.paramedic) out.ped(c.paramedic, c.care === 'treat' ? 'MEDIC (treating)' : c.care === 'carry' ? 'MEDIC (stretcher)' : 'MEDIC', 'emergency');
+    }
+    for (const p of this.patients) {
+      const s = p.ped.agent.s;
+      if (out.wants(s.x, s.z)) out.ped(p.ped, p.claimed ? 'PATIENT' : `PATIENT (waits ${secs(PATIENT_WAIT - (this.life.now - p.since))})`, 'emergency');
+    }
   }
 
   /** Passers-by knocked out cold near the player stay down as patients (up to the cap). */
