@@ -154,9 +154,20 @@ describe('the arranger with a theme', () => {
     expect(a.section).toBe('intro');
   });
 
+  it('starts the game on the radio\'s first song when the title theme took over before it played (boot)', () => {
+    const a = new Arranger(STATIONS[0]);
+    a.theme = THEME;
+    a.setMode('menu');
+    play(a, 3);
+    a.setMode('game');
+    play(a, 1);
+    expect(a.song).toBe(STATIONS[0].songs[0]);
+  });
+
   it("gives way to the radio in 'game' with its next song, keeping a retune made under the theme", () => {
     const a = new Arranger(STATIONS[0]);
     expect(a.song).toBe(STATIONS[0].songs[0]);
+    play(a, 1); // a bar of the radio's first song is heard
     a.theme = THEME;
     a.setMode('menu');
     play(a, 3);
@@ -179,6 +190,21 @@ describe('the arranger with a theme', () => {
     a.setMode('game');
     play(a, 1);
     expect(a.song).toBe(STATIONS[2].songs[1]);
+  });
+
+  it('reports the key of the song about to start while a switch is pending, so stings land in it', () => {
+    const a = new Arranger(STATIONS[0]);
+    a.theme = THEME;
+    a.setMode('menu');
+    play(a, 1);
+    a.setStation(STATIONS[1]);
+    expect(a.key).toBe(THEME_STATION.key);
+    a.setMode('game');
+    const next = STATIONS[1].songs[0];
+    expect(a.key).toBe(STATIONS[1].key + next.transpose);
+    play(a, 1);
+    expect(a.song).toBe(next);
+    expect(a.key).toBe(STATIONS[1].key + next.transpose);
   });
 
   it("without a theme 'menu' is still the station's own menu tier", () => {

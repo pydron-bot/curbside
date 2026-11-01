@@ -106,7 +106,7 @@ function finish(s: Sting, ring: number): Sting {
 export function wastedSting(key: number): Sting {
   const s = empty('saw');
   const s16 = sixteenth(136);
-  const t0 = 0.06;
+  const t0 = 0.15; // just after the slam's hit, not on top of it
   s.melody = hookNotes(leadTonic(key), s16, t0, 0, 4, 1);
   const held = s.melody[3];
   held.len = 2.4;
@@ -132,8 +132,9 @@ export function bustedSting(key: number): Sting {
   held.len = 0.5;
   s.melody.push({ t: held.t + held.len, note: tonic + 6, len: 1.6, vel: 0.8, glide: 0.12 });
   const root = chordRoot(key);
-  s.chords = [{ t: clang, notes: [root, root + 3, root + 10], len: 2.2, vel: 0.85 }];
-  s.bass = [{ t: clang, note: bassRoot(key), len: 2.6, vel: 0.9 }];
+  // In with the hook, just after the clang's strike rather than on it.
+  s.chords = [{ t: t0, notes: [root, root + 3, root + 10], len: 2.2, vel: 0.85 }];
+  s.bass = [{ t: t0, note: bassRoot(key), len: 2.6, vel: 0.9 }];
   s.echo = s16 * 3;
   return finish(s, 0.5);
 }

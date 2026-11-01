@@ -100,7 +100,7 @@ try {
             while (counts.length && counts[0].at <= now) {
               const { n } = counts.shift();
               const v = voice(now + 0.005 + (n === 0 ? 0.03 : 0), L.countIn);
-              sfx.playSting(v, stings.countInSting(n, music.station.key + music.arranger.song.transpose), kit);
+              sfx.playSting(v, stings.countInSting(n, music.arranger.key), kit);
               report();
               voices.length = 0;
               if (n > 0) music.duck(0.3, 0.3, 1.25);

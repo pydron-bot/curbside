@@ -896,15 +896,18 @@ export function playSting(v: Voice, s: Sting, kit: KitSource = NO_KIT, level = 1
   const t0 = v.t;
   const end = t0 + s.length;
   const sagged: OscillatorNode[] = [];
+  // The mono synths stop soon after their last note (the echo rings on without them).
+  const until = (notes: readonly { t: number; len: number }[]) => t0 + notes.reduce((e, n) => Math.max(e, n.t + n.len), 0) + 0.4;
 
   if (s.melody.length > 0) {
     const first = midiToHz(s.melody[0].note);
+    const stop = until(s.melody);
     const lp = v.filter('lowpass', s.lead === 'flute' ? 2600 : 4200, 0.8);
     const g = v.gain();
     v.chain(lp, g, v.input);
-    const oscs = [v.osc(STING_WAVE[s.lead], first, t0, end)];
+    const oscs = [v.osc(STING_WAVE[s.lead], first, t0, stop)];
     // The saw gets a detuned twin: the theme's fat lead.
-    if (s.lead === 'saw') oscs.push(v.osc('sawtooth', first, t0, end));
+    if (s.lead === 'saw') oscs.push(v.osc('sawtooth', first, t0, stop));
     for (let i = 0; i < oscs.length; i++) {
       if (oscs.length > 1) oscs[i].detune.value = i === 0 ? -8 : 8;
       oscs[i].connect(lp);
@@ -931,8 +934,9 @@ export function playSting(v: Voice, s: Sting, kit: KitSource = NO_KIT, level = 1
 
   if (s.bass.length > 0) {
     const first = midiToHz(s.bass[0].note);
-    const a = v.osc('sawtooth', first, t0, end);
-    const sub = v.osc('sine', first / 2, t0, end);
+    const stop = until(s.bass);
+    const a = v.osc('sawtooth', first, t0, stop);
+    const sub = v.osc('sine', first / 2, t0, stop);
     const lp = v.filter('lowpass', 300, 1.5);
     const subGain = v.gain(0.7);
     const g = v.gain();

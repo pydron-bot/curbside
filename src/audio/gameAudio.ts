@@ -286,10 +286,9 @@ export class GameAudio {
     return this.music?.arranger.radio ?? STATIONS[this.stationIndex];
   }
 
-  /** The key the music is in now (the song's own, or the theme's), for stings and UI sounds to sit in. */
+  /** The key the music is in (the song's own, or the theme's; the next one's mid-switch), for stings and UI sounds. */
   private get musicKey(): number {
-    const a = this.music?.arranger;
-    return a ? a.station.key + a.song.transpose : this.station.key;
+    return this.music?.arranger.key ?? this.station.key;
   }
 
   /** Stings borrow the radio's drum kit. */

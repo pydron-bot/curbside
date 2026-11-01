@@ -70,7 +70,12 @@ export const FORM: Form = [
   ['chorus', 8],
   ['outro', 4],
 ];
-export const formBars = (form: Form) => form.reduce((n, [, bars]) => n + bars, 0);
+/** A form's length in bars (worked out each bar: a plain loop). */
+export function formBars(form: Form): number {
+  let n = 0;
+  for (let i = 0; i < form.length; i++) n += form[i][1];
+  return n;
+}
 export const FORM_BARS = formBars(FORM);
 /** From this intensity up (a chase) the form no longer thins the arrangement out. */
 export const FORM_FULL_FROM = 3;
@@ -222,6 +227,8 @@ export class Arranger {
   private shaped: Tier;
   /** Each station's next song (the radio carries on where you left it). */
   private readonly nextSong = new Map<string, number>();
+  /** Bars of the current song played (restarts don't reset it). */
+  private songPlayed = 0;
 
   constructor(station: Station = STATIONS[0], opts: ArrangerOptions = {}) {
     this.form = opts.form ?? true;
@@ -260,6 +267,16 @@ export class Arranger {
   /** The station playing, or the one about to. */
   get upcomingStation(): Station {
     return this.stationFor(this.pendingMode ?? this.mode);
+  }
+
+  /**
+   * The key of the song playing, or of the one about to start when a switch
+   * is pending (theme to radio): stings sound in it, the count-in included.
+   */
+  get key(): number {
+    const s = this.upcomingStation;
+    if (s === this.station) return s.key + this.song.transpose;
+    return s.key + s.songs[(this.nextSong.get(s.id) ?? 0) % s.songs.length].transpose;
   }
 
   /** What plays in `mode`: the theme in 'menu' if there is one, else the radio; silence keeps what was on. */
@@ -312,6 +329,7 @@ export class Arranger {
     if (this.step === 0) {
       this.bar++;
       this.songBar++;
+      this.songPlayed++;
     }
     return step;
   }
@@ -323,6 +341,7 @@ export class Arranger {
     this.nextSong.set(station.id, i + 1);
     this.song = songs[i];
     this.songBar = 0;
+    this.songPlayed = 0;
     this.songNumber++;
     this.composeLead();
   }
@@ -335,6 +354,8 @@ export class Arranger {
     const wasTheme = this.playingTheme;
     const want = this.stationFor(this.mode);
     if (want !== this.station) {
+      // The theme took over before a bar of the radio's song (at boot): it's still that song's turn.
+      if (want === this.theme?.station && this.songPlayed === 0) this.nextSong.set(this.station.id, (this.nextSong.get(this.station.id) ?? 1) - 1);
       this.station = want;
       this.bar = 0;
       this.voicing = null;
