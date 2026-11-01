@@ -18,7 +18,11 @@ export const CHANGELOG: readonly Release[] = [
     version: '0.11.0',
     date: '2026-11-01',
     title: 'Version numbers',
-    notes: ['The version shows on the title screen.', 'Settings → Version history lists every release.'],
+    notes: [
+      'The version shows on the title screen.',
+      'Settings → Version history lists every release.',
+      'For playtesting: labels over the people and cars doing something (medics, chases, queues, gangs...); Shift+L on a keyboard.',
+    ],
   },
   {
     version: '0.10.0',
