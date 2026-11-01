@@ -226,6 +226,21 @@ forward). In priority order:
 7. **Ambient life (optional, fun):** `pigeon` (≤ 40 tris, one rigid body,
    plus a `Flap` clip on a 2-bone rig) for flocks that scatter when a car
    comes through.
+8. **Stray dog and umbrella** (`props.glb`, drawn in the props' `things`
+   family; today stand-ins built in code, `src/render/critterModels.ts`,
+   which a root of the same name replaces):
+   - `dog` (standing) and `dog_stride` (mid-trot: diagonal leg pairs swung
+     ~30° apart; the game swaps the two every half stride for the gait):
+     a medium mongrel ~0.65 m long, ~0.75 m to the ear tips, origin on the
+     ground between its feet, game +Z forward (the nose), ≤ 150 tris each,
+     rigid (no rig: the game tilts it to sniff and lays it on its side when
+     it's knocked over). The coat's material is `paint` (the game tints it
+     per dog: tan, dark brown, brown, grey, cream); nose and eyes in a fixed
+     dark colour. A readable silhouette from 20–50 m up: ears and a raised
+     tail. Drawn at 1.3× (the game's DOG_SCALE), so model it life size.
+   - `umbrella`: open, canopy ~1.15 m across (8–10 panels, `paint`, tinted
+     per walker), its rim ~2.0 m up and a short stick down to ~1.15 m (a
+     fixed dark colour), origin on the ground under the stick, ≤ 60 tris.
 
 The code side will wire these in by name when they land, falling back to
 today's stand-ins until then. Badge on the cop: the code side will add a

@@ -276,6 +276,20 @@ still get the offline shell.
    before the work was split, is on the local branch
    `claude/living-city-scenes-draft` (`4301862`, not pushed): a starting
    point, not reviewed against this base's APIs.
+   **Atmosphere: done 2026-11-01** on `claude/city-atmosphere` (README
+   *City life*): crowds by the hour and the weather (`game/cityMood.ts`
+   `densityFor`; the Neon Mile and the old town fill at night, the docks
+   and suburbs empty, rain thins every street), umbrellas, sheltering
+   under awnings and hurrying in the rain, groups under the neon at
+   night, a `nightlife` factor for the street races (`life.d.mood`), stray
+   dogs that chase runners and bark, pigeons that land again, and gang
+   turf flare-ups on the VIPERS' borders with colours-only rival crews
+   (step in and the side you didn't hit stands with you). Umbrellas and
+   dogs are code-built stand-ins in the props' `things` family (+2 calls
+   at most; Blender contract in `BLENDER_TODO.md` §8.8). **For the device
+   pass:** do the dogs and umbrellas read from the street camera; is a
+   skirmish (10–20 s) too short; the night crowd in the Neon Mile (up to
+   ~30 people plus the groups) on the phone's CPU.
    **Hotspots** (keep edits to these small): `core/events.ts` (the
    `StreetWhat` members for the planned scenes are already there),
    `game/cityLife.ts` (one `this.add(...)` line per scene), `main.ts` (one
