@@ -6,11 +6,16 @@
  * figures. Nothing plays, so it works headless and in the cloud.
  *
  * The page is driven by a setup function (source text, run in the page):
- *   async (ctx, mods, args) => ({ tick?(now), log?: string[] })
+ *   async (ctx, mods, args, { warmKits }) => ({ tick?(now), log?: string[] })
  * `mods` are the modules named in `modules` (key → path under src/). tick runs
  * every `tickEvery` seconds of audio time on the suspended context, like the
  * game's 25 ms timer, so schedulers book notes just ahead of the render (and
  * reap voices only once they have really played).
+ *
+ * Renders repeat exactly: Math.random is seeded afresh for each one (`seed`),
+ * and `await warmKits(music, sounds)` renders every drum kit the music will
+ * play before the render starts, rather than whenever the page's timers get
+ * a turn during it.
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -27,6 +32,17 @@ export async function openAudioPage() {
   page.on('console', (m) => {
     if (m.type() === 'error') console.error('console:', m.text());
   });
+  await page.addInitScript(() => {
+    // mulberry32, reseeded for each render (as lib.mjs's game page).
+    let s = 1;
+    Math.random = () => {
+      s = (s + 0x6d2b79f5) | 0;
+      let t = Math.imul(s ^ (s >>> 15), 1 | s);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    window.__seed = (n) => (s = n | 0 || 1);
+  });
   // Any URL on the dev server will do: only its origin matters, for the module imports.
   await page.goto(new URL('src/audio/synth.ts', DEV_URL).href);
   return { browser, page };
@@ -37,15 +53,35 @@ export async function openAudioPage() {
  * overall and per-window ({ windows } seconds) RMS and peak in dBFS, the
  * count of clipped samples (|x| > 1) and of non-finite ones (NaN, ±Infinity).
  */
-export async function renderOffline(page, { setup, modules, args = {}, seconds, rate = 44100, tickEvery = 0.025, window = 5 }) {
+export async function renderOffline(page, { setup, modules, args = {}, seconds, rate = 44100, tickEvery = 0.025, window = 5, seed = 1 }) {
   const urls = Object.fromEntries(Object.entries(modules).map(([k, p]) => [k, new URL(p, DEV_URL).href]));
   const res = await page.evaluate(
-    async ({ setupSrc, urls, args, seconds, rate, tickEvery, window }) => {
+    async ({ setupSrc, urls, args, seconds, rate, tickEvery, window, seed }) => {
       const mods = {};
       for (const [k, url] of Object.entries(urls)) mods[k] = await import(url);
+      globalThis.__seed(seed);
       const ctx = new OfflineAudioContext(2, Math.ceil(rate * seconds), rate);
+      /** Render `sounds`' drum kits (and any already asked for), a take per task, and wait until every part of every kit is in. */
+      const warmKits = async (music, sounds = []) => {
+        for (const s of sounds) music.warmKit(s);
+        if (!(music.kits instanceof Map)) throw new Error('warmKits: MusicPlayer has no `kits` map any more; update audioLib.mjs');
+        let last = -1;
+        for (let still = 0, i = 0; still < 5 && i < 600; i++) {
+          await new Promise((r) => setTimeout(r, 50));
+          let n = 0;
+          let missing = false;
+          for (const kit of music.kits.values()) {
+            for (const takes of Object.values(kit)) {
+              n += takes.length;
+              missing ||= takes.length === 0;
+            }
+          }
+          still = !missing && n === last ? still + 1 : 0;
+          last = n;
+        }
+      };
       const setup = (0, eval)(`(${setupSrc})`);
-      const job = (await setup(ctx, mods, args)) ?? {};
+      const job = (await setup(ctx, mods, args, { warmKits })) ?? {};
       // Suspend points land on render quanta (128 frames).
       const quantum = 128 / rate;
       const step = Math.max(quantum, Math.round(tickEvery / quantum) * quantum);
@@ -112,7 +148,7 @@ export async function renderOffline(page, { setup, modules, args = {}, seconds, 
       for (let i = 0; i < bytes.length; i += 0x8000) b64 += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
       return { wav: btoa(b64), stats, log: job.log ?? [] };
     },
-    { setupSrc: setup.toString(), urls, args, seconds, rate, tickEvery, window },
+    { setupSrc: setup.toString(), urls, args, seconds, rate, tickEvery, window, seed },
   );
   return { wav: Buffer.from(res.wav, 'base64'), stats: res.stats, log: res.log };
 }
