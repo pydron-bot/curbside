@@ -86,6 +86,59 @@ describe('particle pool', () => {
     expect(out.count).toBe(6);
   });
 
+  it('measures the area it drew (stretched quads by their length) and counts big ones', () => {
+    const pool = new ParticlePool(4);
+    pool.spawn(0, 0, 0, 0, 0, 0, 1, 1, 1, RAMP.flat, FRAME.dot);
+    pool.spawn(0, 0, 0, 0, 0, 0, 1, 4, 4, RAMP.flat, FRAME.puffA);
+    const k = pool.spawn(0, 0, 0, 2, 0, 0, 1, 0.5, 0.5, RAMP.flat, FRAME.spark);
+    pool.flags[k] = FLAG.stretch | FLAG.still;
+    pool.stretch[k] = 1;
+    pool.step(0.5);
+    pool.write(new InstanceBuffer(4));
+    // 1 + 16 + (2 + 0.5) × 0.5
+    expect(pool.drawnArea).toBeCloseTo(18.25);
+    expect(pool.drawnBig).toBe(1);
+  });
+
+  it('budgets: drops spawns past its limit and holds sizes to maxSize', () => {
+    const pool = new ParticlePool(10);
+    pool.limit = 3;
+    for (let i = 0; i < 5; i++) pool.spawn(0, 0, 0, 0, 0, 0, 1, 1, 1, RAMP.flat, FRAME.dot);
+    expect(pool.count).toBe(3);
+    pool.clear();
+    pool.maxSize = 4;
+    const i = pool.spawn(0, 0, 0, 0, 0, 0, 1, 2.4, 8, RAMP.smoke, FRAME.puffA);
+    expect(pool.size0[i]).toBeCloseTo(2.4);
+    expect(pool.size1[i]).toBe(4);
+  });
+
+  it('budgets: with fade, big particles age faster and small ones do not', () => {
+    const pool = new ParticlePool(4);
+    const big = pool.spawn(0, 0, 0, 0, 0, 0, 3, 2, 6, RAMP.smoke, FRAME.puffA);
+    const small = pool.spawn(0, 0, 0, 0, 0, 0, 3, 0.5, 1, RAMP.smoke, FRAME.dust);
+    pool.fade = 2;
+    pool.step(0.5);
+    expect(pool.age[big]).toBeCloseTo(1.5);
+    expect(pool.age[small]).toBeCloseTo(0.5);
+    pool.step(0.6);
+    expect(pool.alive[big]).toBe(0);
+    expect(pool.alive[small]).toBe(1);
+  });
+
+  it('counts quads high up (nearer a top-down camera) bigger', () => {
+    const low = new ParticlePool(1);
+    const high = new ParticlePool(1);
+    low.spawn(0, 0, 0, 0, 0, 0, 1, 2, 2, RAMP.flat, FRAME.dot);
+    high.spawn(0, 10, 0, 0, 0, 0, 1, 2, 2, RAMP.flat, FRAME.dot);
+    for (const p of [low, high]) {
+      p.step(0.5);
+      p.write(new InstanceBuffer(1), 20);
+    }
+    expect(low.drawnArea).toBeCloseTo(4);
+    // Half way up to the eye: twice as wide on screen, four times the area.
+    expect(high.drawnArea).toBeCloseTo(16);
+  });
+
   it('cools fire from white-yellow through orange to dark red', () => {
     const c = [0, 0, 0];
     fireColour(0, c);

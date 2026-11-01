@@ -113,6 +113,37 @@ on: turn it off and the shipped feel is back. The report's `TUNE` line and
 `tune` JSON list the values that differ from the defaults, the numbers to
 bake in as new constants.
 
+**Perf log** (`ui/diagnostics.ts`, `core/sessionLog.ts`): every 10 s the
+session log samples frame times, tier, ratio and draw calls, and `n`: what
+was on screen (`core/sceneCounts.ts`, filled by `render/sceneCensus.ts`
+from counters the pools and batches already keep): live fire / smoke
+particles, big ones (over 2.5 m) and their **fill** (quad area over the
+visible ground, nearer the camera counting bigger: screens of overdraw),
+glows drawn and their fill, fires (in view / burning), burning cars,
+explosions in the last 10 s, rubble drawn / live, people and cars drawn /
+shown, and the city scenes running by kind. Frames are also judged in 1 s
+windows: one whose p95 is over 25 ms logs a **dip** with the same counts
+(at most one per 5 s; the newest 60 kept in `dips`), so a drop names what
+was on screen. The Full overlay shows the counts on two more lines
+(`fx hot/soft big fill · glow n (fill) · fire seen/all burn boom`,
+`ppl · cars · scenes`), the Diagnostics summary an `ON SCREEN` line and the
+recent dips. Nothing is allocated per frame.
+
+**Report bug** (`ui/bugReport.ts`): with test tools on
+(`settings.testTools`), the Perf overlay on or `?debug`, a bug button sits
+in the pause card's top corner (the Diagnostics sheet has a REPORT BUG tab
+too). It captures the moment: the game view (one frame rendered through
+`Look` and copied in the same task, 960 px wide JPEG; no
+`preserveDrawingBuffer`), position, heading, vehicle, health, wanted level,
+time of day, weather, tier and activity, the on-screen counts, the last
+30 s of bus events (a preallocated 600-slot ring, `core/eventTrail.ts`,
+rows `[secondsAgo, type, x, z, value, word, byPlayer]`) and the whole
+Diagnostics report. Type a note, then SHARE: the JPEG and a JSON file go
+to the share sheet (`navigator.share` with files; `.txt` if JSON is
+refused). Cancelling is just noted; no share API or a refusal saves both
+files instead; COPY copies the JSON. The smoke test runs the flow with the
+share sheet mocked.
+
 ## Status
 
 - **M0 Setup** — done, verified on a phone over Tailscale: Vite 8 + three 0.186 + TS + vite-plugin-pwa, Vitest.
@@ -1330,6 +1361,16 @@ Playwright isn't a game dependency: run with
   On foot: a parked car peaks at gain 0.2 against the car radio (−14 dB)
   2.5 m off, a shop 0.19 at 3.5 m, the boombox 0.6 at 4 m and still 0.05 at
   26 m; a switch is silent for about 0.5 s.
+- **`mayhem.mjs [--tier medium|low|high|all] [--time day|night|both] [--scenario mayhem|single] [--no-city-fires] [--step 50] [--dpr 3] [--shot dir]`**:
+  heavy mayhem on the iPhone profile (unlike the others it renders: real
+  frames stepped by `__ub.stepFrame(ms)`, Rapier loaded, god mode and the
+  destruction test on). Blows up four cars and three walls round the
+  player, two more cars at 8 s, two more and a wall at 16 s, and runs to
+  36 s (fires, fire trucks, hoses); `single` is one car. Reports peak live
+  particles, the transparent fill projected from the camera (screens of
+  overdraw; SwiftShader can't time the GPU), glows and their fill, draw
+  calls, fires and rubble. `--dpr 1` is faster and gives the same fill
+  (a share of the screen). Numbers under *Effects and camera*.
 
 ## Layout
 
@@ -2013,6 +2054,53 @@ then desktop 'high'):
 
 A five-car chain peaks at ~280 fire, ~180 smoke and ~60 debris particles
 on the phone tier (pools hold 900 / 700 / 128).
+
+**Particle budgets** (`quality.ts`, applied by `Effects.applyBudget`). On a
+phone the cost of mayhem is fill, not draw calls or JS: big translucent
+quads stacked over the screen. `Effects.fill` estimates it each frame
+(each drawn quad's area over the visible ground's, a quad counting bigger
+the nearer it is to the camera: screens of overdraw). It matches a count
+projected through the camera for one blast (5.6 vs 5.4) and reads high
+while a chain's smoke is high up (8.7 vs 5.7), which only makes the
+budget act a little early. Over the tier's fill budget, big particles
+(over 2.5 m) age up to 4× as fast (fully at 1.5× the budget) and new
+smoke is held to `smokeMaxOver`; in a chain (another blast within ~¼ s)
+the later blasts' smoke and their fireballs' after-smoke are held to it
+at once and live 0.65 of their life, since a chain's smoke peaks seconds
+after the budget could see it. Fires on screen beyond `fullFires` share
+that many fires' flames, smoke and embers, and only the first
+`chainLights` blasts of a chain get fake lights. High is the look as
+designed (no budget); one car blowing up stays under the medium budget,
+so normal play looks the same.
+
+| Tier | particleScale | live fire / smoke | fill budget | smoke max (always / over) | full-rate fires | chain lights |
+|---|---|---|---|---|---|---|
+| high | 1 | 900 / 700 | none | – / – | all | all |
+| medium | 0.75 | 700 / 500 | 7 screens | – / 5 m | 3 | 3 |
+| low | 0.5 | 480 / 340 | 4 screens | 4.5 / 3.5 m | 2 | 2 |
+
+Measured with `tools/tune/mayhem.mjs` (iPhone profile, 36 s: four cars and
+three walls at once, two cars at 8 s, two cars and a wall at 16 s; six
+fires, fire trucks; god mode, destruction test on; peaks unless noted).
+Fill is projected through the camera, in screens (`--dpr 1`: fill and
+draw calls don't depend on it); before = 0.11.0 with the logging only:
+
+| Tier, time | live fire / smoke | fill peak | fill mean | glows (fill) | draw calls |
+|---|---|---|---|---|---|
+| medium, day | 327 / 295 → 277 / 256 | 15.2 → 5.7 | 2.32 → 1.25 | 46 (9.7) → 42 (4.9) | 56 → 56 |
+| medium, night | 317 / 295 → 277 / 256 | 15.2 → 5.7 | 2.39 → 1.32 | 50 (9.8) → 50 (5.0) | 59 → 59 |
+| low, day | 186 / 133 → 169 / 115 | 8.7 → 2.4 | 1.57 → 0.69 | 43 (8.4) → 39 (3.6) | 32 → 32 |
+| low, night | 197 / 133 → 169 / 115 | 8.7 → 2.4 | 1.57 → 0.70 | 52 (8.5) → 52 (3.8) | 35 → 35 |
+| one car, medium | 66 / 50 → same | 5.4 → 5.4 | 1.33 → 1.33 | 27 (1.6) → same | 47 |
+| one car, low | 46 / 33 → same | 3.8 → 1.6 | 0.95 → 0.56 | 27 (1.6) → same | 27 |
+
+Nearly all of it is smoke: the blasts' columns and the fireballs'
+after-smoke (up to ~10 m quads, rising toward the camera); flames are
+under 0.1 screens even with six fires. Without the living city's fires
+(`--no-city-fires`, medium, night) the same run peaks at 14.5 with a mean
+of 1.96: its fires (each wreck and hit wall burns 75 s) add ~20% to the
+mean fill, ~20% more live fire particles and eight glows, but the peak is
+the blasts', as it was before the city.
 
 API for other systems:
 

@@ -79,6 +79,11 @@ export class SceneClock {
     this.next.set(kind, this.now + (spec.first ?? this.wait(spec)));
   }
 
+  /** Kinds defined so far, in order. */
+  get kinds(): string[] {
+    return [...this.specs.keys()];
+  }
+
   spec(kind: string): SceneSpec {
     const s = this.specs.get(kind);
     if (!s) throw new Error(`scene kind '${kind}' was never defined`);

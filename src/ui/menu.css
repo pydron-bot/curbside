@@ -242,10 +242,7 @@ kbd.pad.b {
 }
 
 /* TEST (Settings → Test tools): a chip in the card's corner, so the card keeps its rows. */
-.pause-corner {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+.pause-chip {
   display: flex;
   align-items: center;
   gap: 5px;
@@ -262,13 +259,13 @@ kbd.pad.b {
   cursor: pointer;
 }
 
-.pause-corner svg {
+.pause-chip svg {
   width: 16px;
   height: 16px;
 }
 
-.pause-corner[hidden],
-#paused.busy .pause-corner {
+.pause-chip[hidden],
+#paused.busy .pause-chip {
   display: none;
 }
 
@@ -286,12 +283,25 @@ kbd.pad.b {
 
 @media (max-height: 360px) {
   .pause-card {
-    gap: 9px;
-    padding: 14px 18px 16px;
+    gap: 8px;
+    padding: 10px 18px 13px;
+  }
+
+  .pause-title {
+    font-size: 27px;
+  }
+
+  .pause-menu {
+    gap: 8px;
+  }
+
+  /* Four rows of 44 px buttons (DIAGNOSTICS on) still fit at 852x340. */
+  .pause-grid {
+    gap: 6px 8px;
   }
 
   .pause-resume {
-    min-height: 48px;
+    min-height: 44px;
   }
 }
 
@@ -982,4 +992,128 @@ kbd.pad.b {
   background: rgb(46 230 255 / 0.12);
   color: var(--neon-cyan);
   box-shadow: inset 0 0 0 1px var(--neon-cyan);
+}
+
+/* --- Pause card corner: small icon buttons (REPORT BUG, ui/bugReport.ts) --- */
+.pause-card {
+  position: relative;
+}
+
+.pause-corner {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.pause-corner-btn {
+  width: 40px;
+  height: 40px;
+  padding: 9px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.08);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.pause-corner-btn svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.pause-corner-btn:hover,
+.pause-corner-btn.nav-focus {
+  background: rgb(255 255 255 / 0.18);
+  box-shadow: inset 0 0 0 2px var(--neon-cyan, #2ee6ff);
+}
+
+@media (max-height: 360px) {
+  .pause-corner {
+    top: 6px;
+    right: 6px;
+  }
+
+  .pause-corner-btn {
+    width: 36px;
+    height: 36px;
+    padding: 8px;
+  }
+
+  .pause-chip {
+    height: 36px;
+    padding: 0 8px;
+  }
+}
+
+/* --- Report bug (ui/bugReport.ts) --- */
+.sheet-body.bug {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 12px;
+  align-items: start;
+  padding-top: 10px;
+}
+
+.bug-shot {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.06);
+  overflow: hidden;
+}
+
+.bug-shot img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bug-noshot {
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.bug-side {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bug-note {
+  width: 100%;
+  min-height: 62px;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgb(0 0 0 / 0.35);
+  color: var(--ink);
+  font: 14px/1.35 system-ui, -apple-system, sans-serif;
+  user-select: text;
+  -webkit-user-select: text;
+  touch-action: manipulation;
+}
+
+.bug-note.nav-focus,
+.bug-note:focus {
+  outline: 2px solid var(--neon-cyan, #2ee6ff);
+  outline-offset: 1px;
+}
+
+.bug-summary {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 11px/1.4 ui-monospace, Menlo, monospace;
+  color: var(--ink);
+  opacity: 0.85;
+}
+
+.bug-side .diag-status {
+  margin: 0;
 }

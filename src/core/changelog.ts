@@ -17,10 +17,13 @@ export const CHANGELOG: readonly Release[] = [
   {
     version: '0.11.0',
     date: '2026-11-01',
-    title: 'Version numbers',
+    title: 'Version numbers, bug reports and smoother mayhem',
     notes: [
       'The version shows on the title screen.',
       'Settings → Version history lists every release.',
+      'REPORT BUG (the bug on the pause card, with test tools or the perf overlay on): a screenshot, where you are and what just happened, shared from your phone with a note.',
+      'The performance log notes what was on screen (particles, fires, glows, people, cars, scenes) and catches every slow stretch.',
+      'Heavy mayhem keeps its frame rate better on phones: smoke thins sooner when the screen fills, and many fires share their flames.',
       'Settings → Test tools adds TEST to the pause menu for playtesting: god mode, weapons, wanted level, spawn any vehicle, time of day, rain, slow motion, teleport from the city map, start any street scene, and save tools (CRED, cash, story jobs, tutorial, reset, export and import). God mode moved there; any of it marks the life (no CRED, bests or medals).',
       'For playtesting: labels over the people and cars doing something (medics, chases, queues, gangs...); Shift+L on a keyboard.',
     ],

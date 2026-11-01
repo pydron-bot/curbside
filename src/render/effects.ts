@@ -36,6 +36,10 @@ const TRACER_STREAK = 7;
 /** Where bullets fly, m above the ground. */
 const GUN_Y = 1.2;
 const MAX_TRACERS = 64;
+/** Over the fill budget, big particles age up to this much faster again. */
+const BUDGET_FADE = 3;
+/** A chain's held smoke (phone tiers) lives this share of its life: it peaks before the budget can see it. */
+const HELD_LIFE = 0.65;
 const MAX_LIGHTS = 48;
 
 /** One debris/explosion colour (linear). */
@@ -105,6 +109,8 @@ export class Effects {
   private readonly hole = { value: new Vector4(0, 0, 0, 0) };
   /** Explosions in the last moment: chain reactions share one budget. */
   private recentBooms = 0;
+  /** The visible ground at the last update, m²: what fill is measured against. */
+  private ground = 0;
 
   constructor(scene: Scene, hotCapacity = 900, softCapacity = 700) {
     this.hot = new ParticlePool(hotCapacity);
@@ -190,6 +196,13 @@ export class Effects {
    */
   explode(x: number, z: number, paint: Rgb = CHARCOAL, masonry = false): void {
     this.recentBooms += 1;
+    // A chain's smoke peaks seconds later, after the fill budget could see it:
+    // with a budget (phone tiers), every blast after the first holds its smoke
+    // to smokeMaxOver and HELD_LIFE now (its fireballs' after-smoke too).
+    const q = getQuality();
+    const maxSize = this.soft.maxSize;
+    const held = this.recentBooms > 1.5 && Number.isFinite(q.fillBudget);
+    if (held) this.soft.maxSize = Math.min(maxSize, q.smokeMaxOver);
     const budget = this.scale / Math.max(1, this.recentBooms * 0.6);
     const n = (count: number) => Math.max(1, Math.round(count * budget));
     // Overlapping blasts in a chain add up: each extra one's lights and fire
@@ -199,9 +212,12 @@ export class Effects {
     const heat = 0.6 + 0.4 * glow;
 
     // Flash on the ground and a shockwave ring out to the blast radius (9 m).
-    this.light(x, 0.12, z, 2.5, 12, 2.1 * glow, 1.25 * glow, 0.5 * glow, 0.34, GLOW.disc);
-    this.light(x, 0.1, z, 1.5, 9.5, 1.9 * glow, 1.15 * glow, 0.55 * glow, 0.38, GLOW.ring);
-    this.light(x, 0.1, z, 1, 11.5, 0.5 * glow, 0.36 * glow, 0.24 * glow, 0.45, GLOW.ring);
+    // Phone tiers light only the first few of a chain: the rest add little but fill.
+    if (this.recentBooms <= q.chainLights + 0.5) {
+      this.light(x, 0.12, z, 2.5, 12, 2.1 * glow, 1.25 * glow, 0.5 * glow, 0.34, GLOW.disc);
+      this.light(x, 0.1, z, 1.5, 9.5, 1.9 * glow, 1.15 * glow, 0.55 * glow, 0.38, GLOW.ring);
+      this.light(x, 0.1, z, 1, 11.5, 0.5 * glow, 0.36 * glow, 0.24 * glow, 0.45, GLOW.ring);
+    }
     // A brief white pop high over the car (draws over its roof); once per chain, or they stack to white.
     if (this.recentBooms < 1.5) this.flare(x, 2.8, z, 4.6, 0.12, 2, 1.7, 1.2);
 
@@ -225,7 +241,7 @@ export class Effects {
       );
       if (i < 0) break;
       this.fireLook(i, 1.75 * heat, 0.38 * glow);
-      this.hot.flags[i] = FLAG.handoff;
+      this.hot.flags[i] = held ? FLAG.handoff | FLAG.held : FLAG.handoff;
       this.hot.drag[i] = 1.6;
     }
     for (let k = n(36); k > 0; k--) {
@@ -247,7 +263,7 @@ export class Effects {
       if (i < 0) break;
       this.fireLook(i, 1.55 * heat, 0.45 * glow);
       this.hot.drag[i] = 3.2;
-      if (Math.random() < 0.35) this.hot.flags[i] = FLAG.handoff;
+      if (Math.random() < 0.35) this.hot.flags[i] = held ? FLAG.handoff | FLAG.held : FLAG.handoff;
     }
     // Rising column of dark smoke that spreads into a cap. Kept translucent
     // and not too wide (with the burnt-out fire's smoke below): it rises
@@ -263,7 +279,7 @@ export class Effects {
         Math.cos(a) * 1.5 + this.windX,
         4.5 + Math.random() * 3,
         Math.sin(a) * 1.5 + this.windZ,
-        2.6 + Math.random() * 1.6,
+        (2.6 + Math.random() * 1.6) * (held ? HELD_LIFE : 1),
         2.4,
         5.5 + Math.random() * 2.5,
         RAMP.smoke,
@@ -341,6 +357,7 @@ export class Effects {
     }
     this.glass(x, 1.1, z, n(8), 6);
     this.decals.stamp(x, z, 4.2 + Math.random() * 0.8, Math.random() * 6.3, 0.92, 75, DECAL.scorch);
+    this.soft.maxSize = maxSize;
   }
 
   /** A tracer from the muzzle (x1, z1) to where the bullet stopped (x2, z2). */
@@ -648,7 +665,53 @@ export class Effects {
     if (marks) this.decals.clear();
   }
 
-  update(dt: number): void {
+  /** Particles over BIG_PARTICLE m drawn last frame (both pools). */
+  get big(): number {
+    return this.hot.drawnBig + this.soft.drawnBig;
+  }
+
+  /**
+   * Transparent particle area drawn last frame over the visible ground's:
+   * roughly how many screens of overdraw the fire and smoke cost (an
+   * estimate: each quad counts bigger the nearer it is to the camera's
+   * height, as on a top-down screen; close to a projected count, a little
+   * over while smoke is high).
+   */
+  get fill(): number {
+    return this.ground > 0 ? (this.hot.drawnArea + this.soft.drawnArea) / this.ground : 0;
+  }
+
+  /** The visible ground at the last update, m² (0 before the first). */
+  get viewArea(): number {
+    return this.ground;
+  }
+
+  /**
+   * The tier's particle budgets (quality.ts), from last frame's fill: live
+   * caps per pool always; past the fill budget big particles fade up to
+   * 1 + BUDGET_FADE times as fast (at 1.5× it) and new smoke is held to
+   * smokeMaxOver, easing off as the fill drops. High has no fill budget:
+   * its look is as designed.
+   */
+  private applyBudget(): void {
+    const q = getQuality();
+    this.hot.limit = Math.min(this.hot.capacity, q.hotCap);
+    this.soft.limit = Math.min(this.soft.capacity, q.softCap);
+    // Full pressure at 1.5× the budget.
+    const over = Number.isFinite(q.fillBudget) ? (this.fill / q.fillBudget - 1) * 2 : 0;
+    const p = over <= 0 ? 0 : over >= 1 ? 1 : over;
+    this.hot.fade = p * BUDGET_FADE;
+    this.soft.fade = p * BUDGET_FADE;
+    this.soft.maxSize = p > 0 ? Math.min(q.smokeMax, q.smokeMaxOver) : q.smokeMax;
+  }
+
+  /**
+   * Step and draw everything; `view` (the visible ground) and `eyeHeight`
+   * (the camera's, m) scale the fill estimate the budgets go by.
+   */
+  update(dt: number, view?: Rect, eyeHeight = 0): void {
+    this.applyBudget();
+    if (view) this.ground = Math.max(1, (view.maxX - view.minX) * (view.maxZ - view.minZ));
     // Smoke and dust are lit by the sky: dim and cool them at night.
     const night = worldUniforms.uNight.value;
     const amb = this.ambient.value;
@@ -663,10 +726,10 @@ export class Effects {
     for (let i = 0; i < MAX_LIGHTS; i++) if (this.lAge[i] < this.lLife[i]) this.lAge[i] += dt;
 
     this.hotOut.reset();
-    this.hot.write(this.hotOut);
+    this.hot.write(this.hotOut, eyeHeight);
     this.writeTracers(dt);
     this.softOut.reset();
-    this.soft.write(this.softOut);
+    this.soft.write(this.softOut, eyeHeight);
     upload(this.hotMesh, this.hotOut);
     upload(this.softMesh, this.softOut);
   }
@@ -714,6 +777,8 @@ export class Effects {
 
   /** A burnt-out fire particle hands off to a smoke puff where it died. */
   private fireToSmoke(pool: ParticlePool, i: number): void {
+    const maxSize = this.soft.maxSize;
+    if (pool.flags[i] & FLAG.held) this.soft.maxSize = Math.min(maxSize, getQuality().smokeMaxOver);
     const j = this.soft.spawn(
       pool.x[i],
       pool.y[i] + 0.4,
@@ -721,12 +786,13 @@ export class Effects {
       pool.vx[i] * 0.4 + this.windX,
       1.6 + Math.random() * 1.5,
       pool.vz[i] * 0.4 + this.windZ,
-      1.8 + Math.random() * 1.4,
+      (1.8 + Math.random() * 1.4) * (pool.flags[i] & FLAG.held ? HELD_LIFE : 1),
       pool.size1[i] * 0.8,
       pool.size1[i] * 1.5,
       RAMP.smoke,
       puffFrame(),
     );
+    this.soft.maxSize = maxSize;
     if (j < 0) return;
     this.smokeLook(j, 0.07 + Math.random() * 0.06, 0.55);
     this.soft.drag[j] = 0.8;

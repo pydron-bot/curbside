@@ -81,6 +81,9 @@ export class CarBatch {
   /** The same meshes as a list, for allocation-free iteration every frame. */
   private readonly meshList: ArchetypeMesh[] = [];
   private readonly records: CarRecord[] = [];
+  /** Cars shown, and drawn, at the last flush (diagnostics). */
+  live = 0;
+  drawn = 0;
   private readonly placeholder = placeholderCarGeometry();
   private models: VehicleModels | null = null;
   private envMap: Texture | null = null;
@@ -192,12 +195,15 @@ export class CarBatch {
     for (let k = 0; k < list.length; k++) list[k].count = 0;
     const night = worldUniforms.uNight.value;
     const time = worldUniforms.uTime.value;
+    let live = 0;
+    let drawn = 0;
     for (const rec of this.records) {
       const car = rec.car;
       if (!isShown(car.root)) {
         rec.tracked = false;
         continue;
       }
+      live++;
       car.root.updateWorldMatrix(true, false);
       const e = car.root.matrixWorld.elements;
       const x = e[12];
@@ -210,6 +216,7 @@ export class CarBatch {
       const am = this.meshFor(car.archetype);
       if (am.count >= PER_ARCHETYPE) continue;
       const i = am.count++;
+      drawn++;
       const lights = !car.charred && rec.idle < LIGHTS_LINGER ? 1 : 0;
       am.mesh.setMatrixAt(i, car.root.matrixWorld);
       am.paint.setXYZ(i, car.paint.r, car.paint.g, car.paint.b);
@@ -237,6 +244,8 @@ export class CarBatch {
       uploadRange(am.siren, n);
     }
     this.uploadAll = false;
+    this.live = live;
+    this.drawn = drawn;
   }
 
   /** Follow a car's motion: forward speed, braking (hard deceleration) and how long it's been still. */

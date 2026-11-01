@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { emptyCounts } from '../src/core/sceneCounts';
 import {
   DIAG_KEY,
+  DIP_CAPACITY,
   EVENT_CAPACITY,
   loadPreviousLog,
   PERSIST_EVERY_MS,
@@ -80,5 +82,34 @@ describe('SessionLog', () => {
     store.map.set(DIAG_KEY, '{oops');
     expect(loadPreviousLog(store)).toBeNull();
     expect(loadPreviousLog(null)).toBeNull();
+  });
+});
+
+describe('SessionLog: what was on screen', () => {
+  it('samples carry the counts, fills rounded', () => {
+    const log = new SessionLog(0, 'x');
+    log.addSample(SAMPLE_EVERY_MS, { ...base, n: { ...emptyCounts(), hot: 300, fill: 2.345, kinds: 'fire×2' } });
+    const s = log.data().samples[0];
+    expect(s.n).toMatchObject({ hot: 300, fill: 2.3, kinds: 'fire×2' });
+  });
+
+  it('keeps the newest DIP_CAPACITY dips, oldest first, and persists them', () => {
+    const log = new SessionLog(0, 'x');
+    const store = fakeStore();
+    for (let i = 0; i < DIP_CAPACITY + 3; i++) log.addDip(i * 6000, { fps: 39.84, p95: 29.04, max: 40, tier: 'low', ratio: 1.251, dc: 43 + i, n: emptyCounts() });
+    const d = log.data();
+    expect(d.dips).toHaveLength(DIP_CAPACITY);
+    expect(d.dips![0].dc).toBe(46);
+    expect(d.dips![0].fps).toBe(39.8);
+    expect(d.dips![0].ratio).toBe(1.25);
+    expect(log.dipCount).toBe(DIP_CAPACITY);
+    log.persist(1e9, store, true);
+    expect(loadPreviousLog(store)!.dips).toHaveLength(DIP_CAPACITY);
+  });
+
+  it('an older log without dips loads with none', () => {
+    const store = fakeStore();
+    store.setItem(DIAG_KEY, JSON.stringify({ started: 's', samples: [], events: [], droppedEvents: 0 }));
+    expect(loadPreviousLog(store)!.dips).toEqual([]);
   });
 });

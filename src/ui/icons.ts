@@ -123,6 +123,10 @@ export const ICONS = {
     '<rect x="4" y="4" width="16" height="16" rx="3.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 8.5v7M8.5 12h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
   ),
   chevron: svg('<path d="M4 18 12 6l8 12-8-4z" fill="currentColor"/>'),
+  /** A beetle: REPORT BUG. */
+  bug: svg(
+    '<ellipse cx="12" cy="14" rx="5" ry="6.2" fill="currentColor"/><circle cx="12" cy="6.6" r="2.6" fill="currentColor"/><path d="M7 11H3.5M7 15H3M7.6 18.8 4.5 21M17 11h3.5M17 15h4M16.4 18.8l3.1 2.2M10.3 4.6 8.6 2.6M13.7 4.6l1.7-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
+  ),
 } as const;
 
 export type IconName = keyof typeof ICONS;

@@ -10,6 +10,7 @@
  * Colour and opacity follow a ramp over its life, so smoke fades out instead
  * of shrinking and fire cools from white through yellow and orange to red.
  */
+import { BIG_PARTICLE } from '../core/sceneCounts';
 
 /** Colour/opacity over life. */
 export const RAMP = {
@@ -56,6 +57,8 @@ export const FLAG = {
   handoff: 4,
   /** Doesn't move: the velocity only orients a stretched quad (flares, wind streaks). */
   still: 8,
+  /** Its handoff smoke is held to the fill budget's size (a blast in a chain; effects.ts). */
+  held: 16,
 } as const;
 
 /** Where `write()` puts each live particle: one instance per particle. */
@@ -175,6 +178,21 @@ export class ParticlePool {
   readonly ramp: Uint8Array;
   readonly flags: Uint8Array;
   readonly alive: Uint8Array;
+  /**
+   * Budgets (render/quality.ts via Effects): spawns beyond `limit` live are
+   * dropped, sizes are held to `maxSize`, and big particles (over
+   * BIG_PARTICLE m) age `1 + fade` times as fast, so a heavy scene's smoke
+   * thins sooner instead of piling up overdraw.
+   */
+  limit: number;
+  maxSize = Infinity;
+  fade = 0;
+  /**
+   * Drawn by the last write(): quad area (m², what the GPU fills; seen from
+   * `eyeHeight`, higher quads count bigger) and quads over BIG_PARTICLE m.
+   */
+  drawnArea = 0;
+  drawnBig = 0;
   /** Called (no allocation) as a FLAG.handoff particle dies. */
   onDeath: ((pool: ParticlePool, i: number) => void) | null = null;
   private readonly free: Int32Array;
@@ -185,6 +203,7 @@ export class ParticlePool {
   private readonly colour = new Float32Array(3);
 
   constructor(readonly capacity: number) {
+    this.limit = capacity;
     const f = () => new Float32Array(capacity);
     this.x = f();
     this.y = f();
@@ -241,6 +260,9 @@ export class ParticlePool {
     ramp: Ramp,
     frame: Frame,
   ): number {
+    if (this.live >= this.limit) return -1;
+    if (size0 > this.maxSize) size0 = this.maxSize;
+    if (size1 > this.maxSize) size1 = this.maxSize;
     let i: number;
     if (this.freeCount > 0) i = this.free[--this.freeCount];
     else if (this.top < this.capacity) i = this.top++;
@@ -284,9 +306,10 @@ export class ParticlePool {
   /** Age, move and retire particles. */
   step(dt: number): void {
     if (dt <= 0) return;
+    const fast = dt * (1 + this.fade);
     for (let i = 0; i < this.top; i++) {
       if (!this.alive[i]) continue;
-      const age = this.age[i] + dt;
+      const age = this.age[i] + (this.fade > 0 && (this.size1[i] > BIG_PARTICLE || this.size0[i] > BIG_PARTICLE) ? fast : dt);
       if (age >= this.life[i]) {
         this.age[i] = this.life[i];
         if (this.flags[i] & FLAG.handoff && this.onDeath) this.onDeath(this, i);
@@ -322,9 +345,11 @@ export class ParticlePool {
     }
   }
 
-  /** Push every live particle into `sink`. Returns how many went in. */
-  write(sink: ParticleSink): number {
+  /** Push every live particle into `sink` (`eyeHeight`: the camera's, m, for drawnArea). Returns how many went in. */
+  write(sink: ParticleSink, eyeHeight = 0): number {
     let n = 0;
+    let area = 0;
+    let big = 0;
     const c = this.colour;
     for (let i = 0; i < this.top; i++) {
       if (!this.alive[i]) continue;
@@ -357,15 +382,28 @@ export class ParticlePool {
       let ax = 0;
       let ay = 0;
       let az = 0;
+      let long = size;
       if (this.flags[i] & FLAG.stretch) {
         const s = this.stretch[i];
         ax = this.vx[i] * s;
         ay = this.vy[i] * s;
         az = this.vz[i] * s;
+        // The shader draws it (stretch + size) long and size wide.
+        long += Math.sqrt(ax * ax + ay * ay + az * az);
       }
       if (!sink.push(this.x[i], this.y[i], this.z[i], size, ax, ay, az, this.rot[i], r, g, b, a, this.frame[i], this.add[i])) break;
       n++;
+      // Nearer the camera, bigger on screen (a top-down view: by height).
+      let k = 1;
+      if (eyeHeight > 0) {
+        k = eyeHeight / Math.max(eyeHeight * 0.25, eyeHeight - this.y[i]);
+        k *= k;
+      }
+      area += long * size * k;
+      if (long > BIG_PARTICLE) big++;
     }
+    this.drawnArea = area;
+    this.drawnBig = big;
     return n;
   }
 

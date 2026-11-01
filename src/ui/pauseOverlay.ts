@@ -43,7 +43,7 @@ export class PauseOverlay implements Panel {
   private onReload: (() => void) | null = null;
   private readonly resumeBtn: HTMLButtonElement;
   private readonly grid: HTMLElement;
-  private readonly card: HTMLElement;
+  private readonly corner: HTMLElement;
   private reason: PauseReason = 'paused';
   private armed: HTMLButtonElement | null = null;
   private armTimer = 0;
@@ -56,7 +56,9 @@ export class PauseOverlay implements Panel {
     el.classList.add('ui-overlay');
     const card = document.createElement('div');
     card.className = 'pause-card ui-card';
-    this.card = card;
+    // Small icon buttons in the card's top corner (testing tools): they cost the menu no height.
+    this.corner = document.createElement('div');
+    this.corner.className = 'pause-corner';
     this.title = document.createElement('div');
     this.title.className = 'pause-title';
     this.hint = document.createElement('div');
@@ -83,7 +85,7 @@ export class PauseOverlay implements Panel {
     const build = document.createElement('div');
     build.className = 'build-id';
     build.textContent = `v${VERSION} · Build ${BUILD_ID}`;
-    card.append(this.title, this.hint, this.menu, this.update, this.reload, build);
+    card.append(this.corner, this.title, this.hint, this.menu, this.update, this.reload, build);
     el.append(card);
 
     this.nav.add({ el: this.resumeBtn, activate: () => actions.resume() });
@@ -111,10 +113,12 @@ export class PauseOverlay implements Panel {
       this.hint.textContent = 'The game will carry on in a moment';
       this.hint.hidden = false;
       this.menu.hidden = true;
+      this.corner.hidden = true;
     } else {
       this.title.textContent = 'PAUSED';
       this.hint.hidden = true;
       this.menu.hidden = false;
+      this.corner.hidden = false;
     }
     // Opening fresh: Resume is highlighted, ready for Enter / A.
     if (this.el.hidden) this.nav.focusElement(this.resumeBtn);
@@ -150,10 +154,27 @@ export class PauseOverlay implements Panel {
     const b = document.createElement('button');
     b.type = 'button';
     b.tabIndex = -1;
-    b.className = 'pause-corner';
+    b.className = 'pause-chip';
     b.innerHTML = `${ICONS[icon]}<b></b>`;
     b.querySelector('b')!.textContent = label;
-    this.card.append(b);
+    this.corner.append(b);
+    this.nav.add({ el: b, activate });
+    return b;
+  }
+
+  /**
+   * A small icon button in the card's top corner (shown with the menu, not on
+   * the reloading-graphics card). Hide it with `hidden`.
+   */
+  addCornerButton(label: string, icon: IconName, activate: () => void): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.tabIndex = -1;
+    b.className = 'pause-corner-btn';
+    b.setAttribute('aria-label', label);
+    b.title = label;
+    b.innerHTML = ICONS[icon];
+    this.corner.append(b);
     this.nav.add({ el: b, activate });
     return b;
   }
