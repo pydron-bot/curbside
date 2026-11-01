@@ -23,7 +23,8 @@ export class CredKeeper {
   /** Counting a life (from a respawn to its WASTED / BUSTED). */
   private counting = false;
   private startScore = 0;
-  private startCash = 0;
+  /** Cash earned this life, banked chains and LEVEL UP payouts left out. */
+  private cash = 0;
   private seconds = 0;
   private peak = 0;
   /** KEVLAR's armour is put on at the first step of a life (a Chaos Run has started by then). */
@@ -42,6 +43,10 @@ export class CredKeeper {
     d.bus.on('respawn', () => this.newLife());
     d.bus.on('wanted', (e) => {
       if (this.counting) this.peak = Math.max(this.peak, e.level);
+    });
+    // Chains are already counted as points; counting their cash too paid them twice (three times with stars).
+    ctx.progress.onCash((c) => {
+      if (this.counting && c.amount > 0 && c.reason !== 'chain' && c.reason !== 'cred') this.cash += c.amount;
     });
     d.bus.on('playerDied', () => this.lifeOver(0));
     d.bus.on('busted', (e) => this.lifeOver(e.fine));
@@ -87,7 +92,7 @@ export class CredKeeper {
     const d = this.ctx.deps;
     this.counting = d.playing();
     this.startScore = d.score.total;
-    this.startCash = this.ctx.progress.stats.cashEarned;
+    this.cash = 0;
     this.seconds = 0;
     this.peak = d.heat.wanted.level;
     this.kitDue = true;
@@ -105,7 +110,7 @@ export class CredKeeper {
       points: d.score.total + fine - this.startScore,
       seconds: this.seconds,
       peakStars: this.peak,
-      cash: progress.stats.cashEarned - this.startCash,
+      cash: this.cash,
     });
     const before = levelFor(c.total).level;
     c.total += gained;

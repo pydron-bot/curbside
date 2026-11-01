@@ -22,16 +22,24 @@ life now also leaves you a little stronger.
 
 **CRED for a life** (`credForLife`):
 
-    points / 150 + seconds alive / 6 + cash earned / 25 + 10 × s(s+1)/2   (s = peak stars, 0..5)
+    points / 400 + seconds alive / 6 + cash earned / 50 + 5 × s(s+1)/2   (s = peak stars, 0..5)
+
+"Cash earned" is jobs, fares, races and the like. Banked chains and LEVEL
+UP payouts don't count: a chain's points already do, and its cash grows with
+stars, so counting it too paid one chain three times. That's what took a
+first playtest to level 5 in five minutes (one 52,000-point life at 5 stars
+came to about 1,100 CRED).
 
 | Life | CRED |
 | --- | --- |
-| A quick death (25 s, 1,200 points) | ~12 |
-| A good three minutes (20,000 points, 3 stars, a $1,000 job) | ~250 |
-| Reaching 5 stars, on its own | 150 |
+| A quick death (25 s, 1,200 points) | ~7 |
+| A good three minutes (20,000 points, 3 stars, a $1,000 job) | ~130 |
+| A wild five minutes (52,000 points, 5 stars, chains only) | ~255 |
+| Reaching 5 stars, on its own | 75 |
 
-**Level n** costs 100 + 50 × (n − 1). The first level comes after one or
-two lives; maxing everything takes 28,000 CRED, roughly a hundred good
+**Level n** costs 100 + 50 × (n − 1). The first level comes after one
+good life; level 5 (1,000 CRED) after four wild lives or seven or eight
+good ones; maxing everything takes 28,000 CRED, roughly a hundred wild
 lives. Once everything is maxed, each further level pays $500.
 
 **Perks** (per rank, ×4 at max):
@@ -88,6 +96,6 @@ treat this as a comparison, not a verdict.
 - **Pacing:** tune the CRED weights and the level curve from real play. The
   play log could record CRED per life.
 - **Stars:** do they give too much? Forcing 3 stars and dying straight away
-  is worth 60 CRED. In real play stars cost effort; watch for farming.
+  is worth 30 CRED. In real play stars cost effort; watch for farming.
 - **More perks later** (a start-of-life weapon tier, crate ammo, a faster
   carjack). Every new perk lengthens the road to maxed.
