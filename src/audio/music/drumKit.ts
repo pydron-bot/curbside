@@ -47,8 +47,9 @@ export function kitKey(s: StationSound): string {
 }
 
 /**
- * The kit as small jobs (one take each, a few ms), so a caller can render
- * it between frames instead of in one go. Same output as renderKit.
+ * The kit as small jobs (one take each: up to ~10 ms on a laptop, the
+ * crash's 2.2 s 12-24 ms), so a caller can render it between frames
+ * instead of in one go. Same output as renderKit.
  */
 export function kitJobs(sound: StationSound, rate: number, seed = 1): KitJob[] {
   const r = mulberry32(seed);

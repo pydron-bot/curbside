@@ -8,7 +8,7 @@ import type { ScoreKind } from '../systems/score';
 import type { WeaponKind } from '../systems/weapons';
 import { clamp01, semis } from './mix';
 import type { KitPart } from './music/drumKit';
-import { bustedSting, wastedSting, type Sting, type StingDrum } from './music/stings';
+import { bustedSting, wastedSting, type Sting, type StingDrum, type StingNote } from './music/stings';
 import { fold, midiToHz, scaleNote, SCALES } from './music/theory';
 import { perc, sweep, type Voice } from './synth';
 
@@ -949,12 +949,14 @@ export function playSting(v: Voice, s: Sting, kit: KitSource = NO_KIT, level = 1
       sagged.push(oscs[i]);
     }
     const lead = level * STING_LEAD * (s.lead === 'flute' ? 1.6 : s.lead === 'square' ? 0.85 : 1);
-    for (const n of s.melody) {
+    for (let i = 0; i < s.melody.length; i++) {
+      const n = s.melody[i];
       const at = t0 + n.t;
       const hz = midiToHz(n.note);
       for (const o of oscs) o.frequency.setTargetAtTime(hz, at, n.glide ?? 0.005);
       g.gain.setTargetAtTime(lead * n.vel, at, s.lead === 'flute' ? 0.02 : 0.005);
-      g.gain.setTargetAtTime(0, at + n.len * 0.9, s.lead === 'flute' ? 0.06 : 0.035);
+      // A note that runs into the next is slurred into it: its release would cut the next one short.
+      if (releases(s.melody, i, 0.9)) g.gain.setTargetAtTime(0, at + n.len * 0.9, s.lead === 'flute' ? 0.06 : 0.035);
     }
     if (s.echo > 0) {
       const d = v.track(v.ctx.createDelay(1));
@@ -978,13 +980,14 @@ export function playSting(v: Voice, s: Sting, kit: KitSource = NO_KIT, level = 1
     v.chain(a, lp, g, v.input);
     v.chain(sub, subGain, g);
     sagged.push(a, sub);
-    for (const n of s.bass) {
+    for (let i = 0; i < s.bass.length; i++) {
+      const n = s.bass[i];
       const at = t0 + n.t;
       const hz = midiToHz(n.note);
       a.frequency.setTargetAtTime(hz, at, n.glide ?? 0.004);
       sub.frequency.setTargetAtTime(hz / 2, at, n.glide ?? 0.004);
       g.gain.setTargetAtTime(level * STING_BASS * n.vel, at, 0.004);
-      g.gain.setTargetAtTime(0, at + n.len * 0.88, 0.04);
+      if (releases(s.bass, i, 0.88)) g.gain.setTargetAtTime(0, at + n.len * 0.88, 0.04);
       // Filter pluck: opens on the note and closes over it.
       lp.frequency.setValueAtTime(300 + 1300 * n.vel, at);
       lp.frequency.setTargetAtTime(300, at + 0.005, 0.1);
@@ -1052,6 +1055,12 @@ export function playSting(v: Voice, s: Sting, kit: KitSource = NO_KIT, level = 1
     }
   }
   v.until(end);
+}
+
+/** A mono part's note `i` gets a release (at `hold` of its length) only when that falls before the next note starts. */
+function releases(notes: readonly StingNote[], i: number, hold: number): boolean {
+  const next = notes[i + 1];
+  return !next || notes[i].t + notes[i].len * hold < next.t;
 }
 
 /** Synth drums for a sting when the radio's kit isn't rendered yet. */

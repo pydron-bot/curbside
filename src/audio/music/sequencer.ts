@@ -251,6 +251,8 @@ export class Arranger {
   private landed = false;
   /** The riser into a score's first bar is booked. */
   private risen = false;
+  /** This bar already rises (into the next section): a score asked for in it needs no riser of its own. */
+  private barRises = false;
   /** The score is on its way out: its outro, then the radio. */
   private ending = false;
   /** Bar of the score's outro playing (-1: not in it). */
@@ -409,6 +411,9 @@ export class Arranger {
     this.songBar = firstBar('chorus');
     this.voicing = null;
     this.fill = false;
+    // A fresh attack on GO's downbeat: no slide in from the old phrase's tie, no arp resting under its lead.
+    this.bassTied = false;
+    this.leadLeft = 0;
   }
 
   /** Fill `out` with the events of the current step, then move on. Returns that step's index in its bar. */
@@ -424,7 +429,7 @@ export class Arranger {
       const score = this.score;
       if (score && !this.risen && step >= 4 && step <= 12 && this.station !== score.station && this.upcomingStation === score.station) {
         this.risen = true;
-        if (!out.some((e) => e.part === 'riser')) out.push({ part: 'riser', note: 0, notes: null, vel: 1, len: STEPS_PER_BAR - step });
+        if (!this.barRises) out.push({ part: 'riser', note: 0, notes: null, vel: 1, len: STEPS_PER_BAR - step });
       }
     }
     this.step = (step + 1) % STEPS_PER_BAR;
@@ -481,6 +486,7 @@ export class Arranger {
     this.rose = this.target > this.intensity;
     this.intensity = this.target;
     this.fill = false;
+    this.barRises = false;
     this.arpCount = 0;
     const bpm = over?.bpm ?? targetBpm(this.station, this.intensity, this.mode);
     // Intensity glides the tempo; a new station (a theme or score included) starts at its own: dub after chiptune is half the speed.
@@ -535,6 +541,7 @@ export class Arranger {
     const rise = tier.riser || (this.form && this.mode === 'game' && (at.section === 'intro' || at.section === 'break'));
     if (step === 0 && rise && lastBar && (!formed || at.next !== 'intro')) {
       out.push({ part: 'riser', note: 0, notes: null, vel: 1, len: STEPS_PER_BAR });
+      this.barRises = true;
     }
 
     // --- Harmony ---
