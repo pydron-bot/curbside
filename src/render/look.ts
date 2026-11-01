@@ -18,7 +18,7 @@ import { getQuality, onQualityChange } from './quality';
 import { SceneLighting } from './sceneLighting';
 import { worldUniforms } from './shaderLib';
 import { driveMarker, type DriveMarker } from './playerMarker';
-import { SunShadow } from './sunShadow';
+import { SunShadow, type ShadowStats } from './sunShadow';
 import { TimeOfDay } from './timeOfDay';
 import { CarBatch } from './vehicleBatch';
 import { WorldProps } from './worldProps';
@@ -99,9 +99,13 @@ export class Look {
     scene.add(this.city.root);
     this.props = new WorldProps(streetProps, plans);
     scene.add(...this.props.objects);
+    // What never moves casts into the sun shadow's cache, drawn only when it stops serving.
+    this.sunShadow.addStatic(this.city.root);
+    for (const f of this.props.staticFamilies) this.sunShadow.addStaticFamily(f);
     // The models replace the city's box stand-ins for lamps, rooftop kit and trees.
     this.props.onLoaded(() => {
       this.city.hideStandIns();
+      this.sunShadow.invalidate();
       this.warmedUp = false;
     });
     this.addGlowSource((g, view) => this.props.drawGlows(g, view));
@@ -122,6 +126,11 @@ export class Look {
       this.uploaded = false;
     });
     this.update(0, null);
+  }
+
+  /** How often the sun shadow's static casters were drawn again, and why. */
+  get shadowStats(): ShadowStats {
+    return this.sunShadow.stats;
   }
 
   /** Advance the clock and the sky; `player` places the marker (null hides it). */

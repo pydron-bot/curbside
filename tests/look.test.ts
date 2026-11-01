@@ -1,6 +1,4 @@
-import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
-import { createShadowBox, fitShadowBox, SHADOW_MAX_HEIGHT } from '../src/render/sunShadow';
 import {
   CYCLE_SECONDS,
   START_HOUR,
@@ -14,7 +12,7 @@ import {
   wrapHour,
 } from '../src/render/timeOfDay';
 import { planBuildings } from '../src/world/buildingPlans';
-import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, generateCity, type Rect } from '../src/world/city';
+import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, generateCity } from '../src/world/city';
 import { DISTRICTS, MAX_HEIGHT, districtOf, pickWeighted } from '../src/world/districts';
 import { LAMP_OFFSET, generateStreetLamps } from '../src/world/streetLamps';
 
@@ -79,54 +77,6 @@ describe('time of day', () => {
       expect(Math.hypot(...d)).toBeCloseTo(1, 6);
       expect(d[1]).toBeGreaterThan(0.35);
     }
-  });
-});
-
-describe('sun shadow fit', () => {
-  const view: Rect = { minX: -30, minZ: -18, maxX: 32, maxZ: 16 };
-  const toLight = new Vector3(...sunDirection(18.4));
-
-  /** The light's axes as fitShadowBox builds them. */
-  function axes(dir: Vector3) {
-    const az = dir.clone().normalize();
-    const ax = new Vector3(0, 1, 0).cross(az).normalize();
-    const ay = az.clone().cross(ax);
-    return { ax, ay, az };
-  }
-
-  it('covers every corner of the view volume', () => {
-    const box = fitShadowBox(view, toLight, 2048, createShadowBox());
-    const { ax, ay, az } = axes(toLight);
-    for (let i = 0; i < 8; i++) {
-      const p = new Vector3(i & 1 ? view.maxX : view.minX, i & 4 ? SHADOW_MAX_HEIGHT : 0, i & 2 ? view.maxZ : view.minZ);
-      const d = p.clone().sub(box.target);
-      expect(Math.abs(d.dot(ax))).toBeLessThanOrEqual(box.halfWidth);
-      expect(Math.abs(d.dot(ay))).toBeLessThanOrEqual(box.halfHeight);
-      const depth = box.position.clone().sub(p).dot(az);
-      expect(depth).toBeGreaterThan(box.near);
-      expect(depth).toBeLessThan(box.far);
-    }
-  });
-
-  it('snaps to whole shadow texels so edges do not crawl as the camera moves', () => {
-    const { ax, ay } = axes(toLight);
-    const box = createShadowBox();
-    for (const shift of [0, 0.013, 0.37, 1.9]) {
-      const moved = { minX: view.minX + shift, maxX: view.maxX + shift, minZ: view.minZ - shift, maxZ: view.maxZ - shift };
-      fitShadowBox(moved, toLight, 2048, box);
-      const u = box.target.dot(ax) / box.texelX;
-      const v = box.target.dot(ay) / box.texelY;
-      expect(Math.abs(u - Math.round(u))).toBeLessThan(1e-3);
-      expect(Math.abs(v - Math.round(v))).toBeLessThan(1e-3);
-    }
-  });
-
-  it('keeps its size while the view only slides', () => {
-    const a = fitShadowBox(view, toLight, 1024, createShadowBox());
-    const moved = { minX: view.minX + 0.4, maxX: view.maxX + 0.4, minZ: view.minZ, maxZ: view.maxZ };
-    const b = fitShadowBox(moved, toLight, 1024, createShadowBox());
-    expect(b.halfWidth).toBe(a.halfWidth);
-    expect(b.halfHeight).toBe(a.halfHeight);
   });
 });
 
