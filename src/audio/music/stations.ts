@@ -13,7 +13,7 @@
  *          the previous note, '~' holds it and slides into the next one (an
  *          808 glide; across the bar line too when it's the last step), '.' rest
  */
-import { SCALES, type Chord, type MotifNote } from './theory';
+import { CHORD_SHAPES, SCALES, type Chord, type MotifNote } from './theory';
 
 export interface Tier {
   kick?: string;
@@ -98,6 +98,39 @@ export interface Song {
   leadSeed: number;
   /** A hand-written 8-bar melody, played as written instead of one composed from `leadSeed` (the title theme's hook). */
   melody?: readonly MotifNote[];
+}
+
+/** +1 if a chord has the key's major third, -1 its minor third, 0 neither. */
+function thirdOf(c: Chord): number {
+  let t = 0;
+  for (const s of CHORD_SHAPES[c.quality]) {
+    const pc = (c.root + s) % 12;
+    if (pc === 4) t++;
+    else if (pc === 3) t--;
+  }
+  return t;
+}
+
+/**
+ * Whether a song is in a major key, so the stings over it can be too (a
+ * minor third against a major chorus clashes). Its tonic chords' third
+ * decides (a dominant ninth is major); a song with no tonic chord (one that
+ * lives on its relative minor) goes by which of the key's thirds its chords
+ * hold more. Ties are minor, like the hook.
+ */
+export function songMajor(song: Song): boolean {
+  let tonic = 0;
+  let all = 0;
+  for (let part = 0; part < 2; part++) {
+    const chords = part === 0 ? song.verse : song.chorus;
+    if (!chords) continue;
+    for (const c of chords) {
+      const t = thirdOf(c);
+      all += t;
+      if (c.root === 0) tonic += t;
+    }
+  }
+  return tonic !== 0 ? tonic > 0 : all > 0;
 }
 
 export interface Station {

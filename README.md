@@ -766,7 +766,13 @@ Playwright isn't a game dependency: run with
   `mission-failed`, `count-in` (3-2-1-GO at the real 1 s spacing) and
   `count-in-radio` (the same over the radio at the game's music / SFX
   balance: held down under the count, dropping in on GO). `SECONDS` (the
-  theme, 60), `KEY` (MIDI, 45 = A), `INDEX` (the payphone job), `RADIO`.
+  theme, 60), `KEY` (MIDI, 45 = A), `INDEX` (the payphone job), `RADIO`,
+  `MAJOR` (1 the major spelling, 0 minor; unset: minor for `KEY`, and
+  `count-in-radio` follows the radio's song, as the game does). The major
+  spellings are as loud as the minor (in D, 2026-11-01: count-in −21.7
+  dBFS, mission start −18.8, failed −21.2; RMS within 0.1 dB, peaks within
+  0.6); over INSERT COIN `count-in-radio` is −22.2 either way, with no F
+  rubbing against its F# any more.
   Baseline 2026-11-01 (raw, key A): the theme −17.1 dBFS overall (about
   −18 in its intro and first hook, −15.5 in the hook with drums; the
   stations' menu tiers are −15.4 to −17.9), peak −0.9; WASTED −14.1 (the
@@ -856,7 +862,18 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   its next song (its first, at boot); `audio.station`, the saved station
   and the NOW PLAYING card stay the radio's (a retune on the title is kept
   for the game). Every sting and UI sound is tuned to the key the music is
-  in (the song's own, transposition included). The new stings quote the
+  in (the song's own, transposition included), and to its mode: a song is
+  major when its tonic chords have the major third (or, with no tonic
+  chord, when its chords hold the key's major third rather than its minor
+  one; `songMajor` in `stations.ts`, `Arranger.major` next to `key`, the
+  next song's mid-switch). INSERT COIN's four songs and GETAWAY's dominant
+  blues (Hot Wire Strut) are major, everything else minor. Over a major
+  song the count-in goes I - IV - V to a major GO, a job starts on the hook
+  re-spelled major and fails on to the relative minor (sad, but no minor
+  third against the radio's major one), awards climb the major
+  pentatonic, KABOOM stabs a major tenth and a UI fail falls through the
+  fourth; minor songs get exactly what they had. WASTED and BUSTED stay
+  minor (the music stops). The new stings quote the
   hook: WASTED (heavy, then the tape sags) and BUSTED (cold, sinking to the
   flat fifth) over their slam and clang; a payphone job starts on a bar of
   heist pulse under the hook, passes on it in the major, fails on it losing
@@ -967,7 +984,7 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
 | `music/drumKit.ts`, `music/waves.ts` | rendered drum kits and the chip noise channel, custom oscillator shapes (pure, tested) |
 | `synth.ts` | noise buffers, node-tracking `Voice`, envelopes, reverb impulse |
 | `sfx.ts`, `loops.ts`, `music/musicPlayer.ts` | one-shot recipes, continuous voices (engine, tyres, fire, ambience, sirens), music instruments |
-| `music/themes.ts`, `music/stings.ts` | the title theme and its hook; the stings built on it as scores (pure, tested), played by `sfx.playSting` |
+| `music/themes.ts`, `music/stings.ts` | the title theme and its hook; the stings built on it as scores in the song's key and mode (pure, tested), played by `sfx.playSting` |
 | `music/chase.ts`, `streetMusic.ts` | the chase score and when it plays; music on foot: emitters, falloff, muffle and pan, stations by district and hash, the switch with its hysteresis, the shop grid, the boomboxes (pure, tested) |
 
 API for other systems:

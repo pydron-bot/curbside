@@ -4,7 +4,10 @@
  * in seconds from the sting's start. Worked out here (pure, unit-tested) and
  * played by sfx.playSting on a handful of small synths. Each takes the key
  * the music is in (any octave), so it lands in tune with the radio it cuts
- * across; the hook is minor, like every station.
+ * across. The hook is minor; the stings the radio plays on under or after
+ * (the count-in, a job starting or failing) also take the song's mode
+ * (Arranger.major), so a major song gets major chords, not a minor third
+ * rubbing against its own. WASTED and BUSTED stop the music: minor always.
  */
 import { HOOK } from './themes';
 import { fold } from './theory';
@@ -84,6 +87,8 @@ export function hookNotes(tonic: number, s16: number, t0: number, from = 0, to =
 
 /** The hook in the parallel major: the minor third and sixth raised. */
 const major = (d: number) => (d % 12 === 3 || d % 12 === 8 ? d + 1 : d);
+/** The hook as written, for a minor key, or re-spelled for a major one. */
+const spelled = (inMajor: boolean) => (inMajor ? major : undefined);
 
 const empty = (lead: StingLead): Sting => ({ lead, melody: [], bass: [], chords: [], drums: [], riser: null, sag: null, echo: 0, length: 0 });
 
@@ -146,22 +151,25 @@ const MISSION_BPM = [116, 124, 108, 132];
 /**
  * A job starts: a bar of heist pulse (bass eighths, kick on the hook's
  * 3+3+2, hats) under the hook's call, then a stab and a crash on the next
- * downbeat. `index` (the job's) picks the lead, the tempo and the stab.
+ * downbeat. `index` (the job's) picks the lead, the tempo and the stab. In a
+ * major key the call and the tonic chords are major (the radio dips under it,
+ * it doesn't stop).
  */
-export function missionStartSting(key: number, index: number): Sting {
+export function missionStartSting(key: number, index: number, inMajor = false): Sting {
   const i = ((index % 4) + 4) % 4;
   const s = empty(MISSION_LEADS[i]);
   const s16 = sixteenth(MISSION_BPM[i]);
-  s.melody = hookNotes(leadTonic(key), s16, 0, 0, 4, 1);
+  const home = inMajor ? MAJOR : MINOR;
+  s.melody = hookNotes(leadTonic(key), s16, 0, 0, 4, 1, spelled(inMajor));
   const bass = bassRoot(key);
   for (let k = 0; k < 8; k++) s.bass.push({ t: k * 2 * s16, note: bass + (k === 3 ? 12 : 0), len: s16 * 1.6, vel: k % 2 === 0 ? 1 : 0.8 });
   for (const step of [0, 3, 6, 8, 11, 14]) s.drums.push({ t: step * s16, part: 'kick', vel: step === 0 || step === 8 ? 1 : 0.7 });
   for (let step = 2; step < 16; step += 4) s.drums.push({ t: step * s16, part: 'hat', vel: 0.6 });
   const root = chordRoot(key);
-  s.chords.push({ t: 0, notes: chord(root, MINOR), len: 3 * s16, vel: 0.7 });
+  s.chords.push({ t: 0, notes: chord(root, home), len: 3 * s16, vel: 0.7 });
   // The button: home on even jobs; odd ones hang on the major fifth (to be continued...).
   const button = 16 * s16;
-  const last = index % 2 === 0 ? chord(root, MINOR, true) : chord(root + 7 - 12, MAJOR, true);
+  const last = index % 2 === 0 ? chord(root, home, true) : chord(root + 7 - 12, MAJOR, true);
   s.chords.push({ t: button, notes: last, len: 0.5, vel: 1 });
   s.bass.push({ t: button, note: index % 2 === 0 ? bass : bass + 7 - (bass + 7 >= 48 ? 12 : 0), len: 0.7, vel: 1 });
   s.melody.push({ t: button, note: leadTonic(key) + (index % 2 === 0 ? 12 : 11), len: 0.45, vel: 1 });
@@ -207,13 +215,15 @@ export function missionPassedSting(key: number, index: number): Sting {
 /**
  * MISSION FAILED: the hook's call gets as far as the flat sixth and loses
  * its nerve, sliding down chromatically on to the low tonic as the chord
- * sinks with it.
+ * sinks with it. In a major key (the radio plays on under it) the call is
+ * major and it fails on to the relative minor instead, a deceptive cadence:
+ * sad, with no minor third against the radio's major one.
  */
-export function missionFailedSting(key: number, index: number): Sting {
+export function missionFailedSting(key: number, index: number, inMajor = false): Sting {
   const s = empty(index % 2 === 0 ? 'square' : 'saw');
   const s16 = sixteenth(120);
   const tonic = leadTonic(key);
-  s.melody = hookNotes(tonic, s16, 0, 0, 3, 0.9);
+  s.melody = hookNotes(tonic, s16, 0, 0, 3, 0.9, spelled(inMajor));
   for (const [step, semi] of [
     [8, 7],
     [11, 6],
@@ -225,15 +235,20 @@ export function missionFailedSting(key: number, index: number): Sting {
   s.melody.push({ t: down, note: tonic, len: 1.1, vel: 0.85, glide: 0.05 });
   const root = chordRoot(key);
   const bass = bassRoot(key);
+  // Minor: i, iv over the flat sixth, i over the low tonic. Major: I, IV over
+  // the sixth, then vi over it (the bass falls to the sixth and stays).
+  const home = inMajor ? MAJOR : MINOR;
+  const low = bass + (inMajor ? 9 : 8) - 12;
+  const last = inMajor ? low : bass;
   s.chords = [
-    { t: 0, notes: chord(root, MINOR), len: 7 * s16, vel: 0.6 },
-    { t: 8 * s16, notes: chord(root + 5 - 12, MINOR), len: 7 * s16, vel: 0.55 },
-    { t: down, notes: chord(root, MINOR), len: 1.1, vel: 0.7 },
+    { t: 0, notes: chord(root, home), len: 7 * s16, vel: 0.6 },
+    { t: 8 * s16, notes: chord(root + 5 - 12, home), len: 7 * s16, vel: 0.55 },
+    { t: down, notes: inMajor ? chord(root + 9 - 12, MINOR) : chord(root, MINOR), len: 1.1, vel: 0.7 },
   ];
   s.bass = [
     { t: 0, note: bass, len: 7 * s16, vel: 0.9 },
-    { t: 8 * s16, note: bass + 8 - 12, len: 7 * s16, vel: 0.9 },
-    { t: down, note: bass - 12 >= 28 ? bass - 12 : bass, len: 1.2, vel: 1 },
+    { t: 8 * s16, note: low, len: 7 * s16, vel: 0.9 },
+    { t: down, note: last - 12 >= 28 ? last - 12 : last, len: 1.2, vel: 1 },
   ];
   s.drums = [
     { t: 0, part: 'kick', vel: 0.8 },
@@ -249,18 +264,20 @@ export const COUNT_SPACING = 1;
 /**
  * One beat of the 3-2-1-GO count-in: `n` is the number showing (3, 2, 1),
  * 0 is GO. Each count is a hit that builds on the last (kick, then snare,
- * then a roll into GO) on the next chord of i - VI - V, over its stretch of a
- * riser climbing to the tonic. Each covers only its own second, so the hits
- * stay with the numbers on screen and nothing hangs on if the count stops.
- * GO lands the tonic chord with a crash, the lead on the octave.
+ * then a roll into GO) on the next chord of i - VI - V (I - IV - V in a major
+ * key, the bass climbing from IV), over its stretch of a riser climbing to
+ * the tonic. Each covers only its own second, so the hits stay with the
+ * numbers on screen and nothing hangs on if the count stops. GO lands the
+ * tonic chord with a crash, the lead on the octave, and the radio drops in.
  */
-export function countInSting(n: number, key: number): Sting {
+export function countInSting(n: number, key: number, inMajor = false): Sting {
   const root = chordRoot(key);
   const bass = bassRoot(key);
   const tonic = leadTonic(key);
+  const home = inMajor ? MAJOR : MINOR;
   const s = empty('saw');
   if (n <= 0) {
-    s.chords = [{ t: 0, notes: chord(root, MINOR, true), len: 0.5, vel: 1 }];
+    s.chords = [{ t: 0, notes: chord(root, home, true), len: 0.5, vel: 1 }];
     s.bass = [{ t: 0, note: bass, len: 0.6, vel: 1 }];
     s.melody = [{ t: 0, note: tonic + 12, len: 0.32, vel: 1 }];
     s.drums = [
@@ -272,8 +289,9 @@ export function countInSting(n: number, key: number): Sting {
   }
   const k = Math.min(3, Math.max(1, Math.round(n)));
   const build = (3 - k) / 3; // 0 on "3", 2/3 on "1"
-  // i on 3, VI on 2, V (major, the leading tone) on 1.
-  const [chordRootAt, shape, bassAt] = k === 3 ? [root, MINOR, bass] : k === 2 ? [root + 8 - 12, MAJOR, bass + 8 - 12] : [root + 7 - 12, MAJOR, bass + 7 - 12];
+  // i (I) on 3, VI (IV) on 2, V (major, the leading tone) on 1.
+  const second = inMajor ? 5 : 8;
+  const [chordRootAt, shape, bassAt] = k === 3 ? [root, home, bass] : k === 2 ? [root + second - 12, MAJOR, bass + second - 12] : [root + 7 - 12, MAJOR, bass + 7 - 12];
   const vel = 0.6 + build * 0.45;
   s.chords = [{ t: 0, notes: chord(chordRootAt, shape), len: 0.22, vel }];
   s.bass = [{ t: 0, note: bassAt, len: 0.45, vel }];

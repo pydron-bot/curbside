@@ -836,15 +836,17 @@ export function respawn(v: Voice, key: number): void {
 
 /**
  * A score award, tuned to the music's key: a grace note into a pluck that
- * climbs one minor-pentatonic step per combo multiplier, adding a fifth and an
- * octave sparkle as the chain grows. Each kind has a little signature.
+ * climbs one pentatonic step (minor, or major in a major key: the radio plays
+ * on under it) per combo multiplier, adding a fifth and an octave sparkle as
+ * the chain grows. Each kind has a little signature.
  */
-export function award(v: Voice, kind: ScoreKind, multiplier: number, key: number): void {
+export function award(v: Voice, kind: ScoreKind, multiplier: number, key: number, major = false): void {
   const t = v.t;
   const tonic = fold(key, 64);
   const degree = Math.min(9, Math.max(0, multiplier - 1));
-  const note = scaleNote(tonic, SCALES.pentatonicMinor, degree);
-  const grace = scaleNote(tonic, SCALES.pentatonicMinor, degree - 1);
+  const scale = major ? SCALES.pentatonicMajor : SCALES.pentatonicMinor;
+  const note = scaleNote(tonic, scale, degree);
+  const grace = scaleNote(tonic, scale, degree - 1);
   if (kind === 'nearMiss') {
     const n = v.noise(v.bank.white, t, t + 0.2);
     const bp = v.filter('bandpass', 1200, 2);
@@ -863,17 +865,18 @@ export function award(v: Voice, kind: ScoreKind, multiplier: number, key: number
   if (multiplier >= 7) pluck(v, at + 0.12, note + 12, 0.1, 0.16, 7000);
 }
 
-/** KABOOM: a brassy minor stab, a timpani hit and a cymbal. */
-export function bigSting(v: Voice, key: number): void {
+/** KABOOM: a brassy stab (minor, or major in a major key), a timpani hit and a cymbal. */
+export function bigSting(v: Voice, key: number, major = false): void {
   const t = v.t;
   const root = fold(key, 57);
+  const tenth = major ? 16 : 15;
   const lp = v.filter('lowpass', 400, 2);
   lp.frequency.setValueAtTime(400, t);
   lp.frequency.exponentialRampToValueAtTime(5000, t + 0.04);
   lp.frequency.exponentialRampToValueAtTime(800, t + 0.45);
   const g = v.gain();
   v.chain(lp, g, v.input);
-  for (const s of [0, 7, 12, 15]) {
+  for (const s of [0, 7, 12, tenth]) {
     const o = v.osc('sawtooth', midiToHz(root + s), t, t + 1.4);
     o.detune.value = rnd(-8, 8);
     o.connect(lp);
@@ -1077,7 +1080,8 @@ function stingDrum(v: Voice, part: StingDrum, at: number, vel: number): void {
 
 export type UiSound = 'click' | 'confirm' | 'back' | 'countdown' | 'go' | 'success' | 'fail' | 'cash' | 'star' | 'ring';
 
-export function ui(v: Voice, kind: UiSound, key: number): void {
+/** `key` and `major`: the music's, so the pitched ones sit in it. */
+export function ui(v: Voice, kind: UiSound, key: number, major = false): void {
   const t = v.t;
   const root = fold(key, 69);
   switch (kind) {
@@ -1117,7 +1121,8 @@ export function ui(v: Voice, kind: UiSound, key: number): void {
       noiseHit(v, v.bank.white, t + 0.24, 'highpass', 7000, 0.6, 0.08, 0.01, 0.3);
       return;
     case 'fail': {
-      [7, 3, 0].forEach((s, i) => pluck(v, t + i * 0.12, root + s - 12, 0.16, i === 2 ? 0.25 : 0.1, 2500));
+      // Down from the fifth through the minor third; in a major key (the radio plays on) through the fourth instead.
+      [7, major ? 5 : 3, 0].forEach((s, i) => pluck(v, t + i * 0.12, root + s - 12, 0.16, i === 2 ? 0.25 : 0.1, 2500));
       const o = v.osc('sawtooth', 110, t + 0.24, t + 1.2);
       const lp = v.filter('lowpass', 600, 0.7);
       const g = v.gain();

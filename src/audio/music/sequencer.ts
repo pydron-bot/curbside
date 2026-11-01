@@ -20,7 +20,7 @@
  *   an outro of its own. The radio comes back with its next song.
  */
 import { clamp, lerp } from '../mix';
-import { STATIONS, type Song, type Station, type Tier } from './stations';
+import { STATIONS, songMajor, type Song, type Station, type Tier } from './stations';
 import { avoidClash, chordClasses, composeLead, fold, scaleNote, voiceChord, type MotifNote } from './theory';
 
 export const STEPS_PER_BAR = 16;
@@ -356,9 +356,18 @@ export class Arranger {
    * is pending (theme to radio): stings sound in it, the count-in included.
    */
   get key(): number {
+    return this.upcomingStation.key + this.upcomingSong.transpose;
+  }
+
+  /** That song is in a major key (INSERT COIN's are): stings spell their chords to match. */
+  get major(): boolean {
+    return songMajor(this.upcomingSong);
+  }
+
+  /** The song playing, or the one about to start when a switch is pending. */
+  private get upcomingSong(): Song {
     const s = this.upcomingStation;
-    if (s === this.station) return s.key + this.song.transpose;
-    return s.key + s.songs[(this.nextSong.get(s.id) ?? 0) % s.songs.length].transpose;
+    return s === this.station ? this.song : s.songs[(this.nextSong.get(s.id) ?? 0) % s.songs.length];
   }
 
   /** What plays in `mode`: the theme in 'menu' if there is one, the score in 'game', else the radio; silence keeps what was on. */

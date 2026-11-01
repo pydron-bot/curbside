@@ -33,7 +33,7 @@ import {
 import { CHASE, ChaseMusic, type ChaseCue } from './music/chase';
 import { MusicPlayer } from './music/musicPlayer';
 import type { MusicMode } from './music/sequencer';
-import { STATIONS, type Song, type Station } from './music/stations';
+import { STATIONS, songMajor, type Song, type Station } from './music/stations';
 import { STING_LEVELS, countInSting, missionFailedSting, missionPassedSting, missionStartSting } from './music/stings';
 import { THEME } from './music/themes';
 import * as sfx from './sfx';
@@ -320,6 +320,11 @@ export class GameAudio {
     return this.music?.arranger.key ?? this.station.key;
   }
 
+  /** That key is major (stings and UI sounds spell their chords to match). */
+  private get musicMajor(): boolean {
+    return this.music?.arranger.major ?? songMajor(this.station.songs[0]);
+  }
+
   /** Stings borrow the radio's drum kit. */
   private readonly kitTake = (part: Parameters<sfx.KitSource>[0]): AudioBuffer | null => this.music?.kitTake(part) ?? null;
 
@@ -451,7 +456,7 @@ export class GameAudio {
     }
     const v = this.voice(null, FALLOFF.near, 0.8, 0, 0, 'ui');
     if (!v) return;
-    sfx.ui(v, kind, this.musicKey);
+    sfx.ui(v, kind, this.musicKey, this.musicMajor);
     this.commit('ui', v);
   }
 
@@ -467,7 +472,7 @@ export class GameAudio {
     const go = n <= 0;
     const v = this.voice(null, FALLOFF.near, STING_LEVELS.countIn, 0, go ? GO_DELAY : 0, 'ui');
     if (!v) return;
-    sfx.playSting(v, countInSting(n, this.musicKey), this.kitTake);
+    sfx.playSting(v, countInSting(n, this.musicKey, this.musicMajor), this.kitTake);
     this.commit('sting', v);
     const music = this.music;
     if (!music || this.dead) return;
@@ -492,12 +497,13 @@ export class GameAudio {
     const ctx = this.ctx;
     if (!ctx || !this.bank || ctx.state !== 'running') return;
     const key = this.musicKey;
+    const major = this.musicMajor;
     const [sting, level] =
       kind === 'start'
-        ? [missionStartSting(key, index), STING_LEVELS.missionStart]
+        ? [missionStartSting(key, index, major), STING_LEVELS.missionStart]
         : kind === 'passed'
           ? [missionPassedSting(key, index), STING_LEVELS.missionPassed]
-          : [missionFailedSting(key, index), STING_LEVELS.missionFailed];
+          : [missionFailedSting(key, index, major), STING_LEVELS.missionFailed];
     const v = this.voice(null, FALLOFF.near, level, 0, 0, 'ui');
     if (!v) return;
     sfx.playSting(v, sting, this.kitTake);
@@ -686,6 +692,8 @@ export class GameAudio {
             radio: music.arranger.radio.name,
             theme: music.playingTheme,
             song: music.arranger.song.title,
+            key: music.arranger.key,
+            major: music.arranger.major,
             section: music.arranger.section,
             mode: music.mode,
             intensity: music.arranger.intensity,
@@ -1188,8 +1196,8 @@ export class GameAudio {
     this.chaos.add(a.kind === 'boom' ? 0.6 : 0.35 + 0.08 * a.multiplier);
     const v = this.voice(null, FALLOFF.near, a.kind === 'boom' ? 0.9 : 0.75, 0, 0, 'ui');
     if (v) {
-      if (a.kind === 'boom') sfx.bigSting(v, key);
-      else sfx.award(v, a.kind, a.multiplier, key);
+      if (a.kind === 'boom') sfx.bigSting(v, key, this.musicMajor);
+      else sfx.award(v, a.kind, a.multiplier, key, this.musicMajor);
       this.commit('award', v);
     }
     if (newBest) {
