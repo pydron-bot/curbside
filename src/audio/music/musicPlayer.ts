@@ -244,9 +244,10 @@ export class MusicPlayer {
     this.arranger.setScore(score);
   }
 
-  /** The score's way out: its outro from the next bar line, then the radio's next song. */
+  /** The score's way out: its outro from the next bar line, then the radio's next song. Not playing (silent, asleep), it just goes. */
   endScore(): void {
-    this.arranger.endScore();
+    if (this.dormant || this.off || !this.running) this.arranger.setScore(null);
+    else this.arranger.endScore();
   }
 
   /** Drop the score now: a quick fade and the radio from the top of a phrase (nothing to do if it isn't playing). */
@@ -285,6 +286,8 @@ export class MusicPlayer {
   start(when: number): void {
     this.running = true;
     this.off = false;
+    // A calm-down left over from before the silence is stale: the chase it ended is long gone.
+    if (this.arranger.scoreEnding) this.arranger.setScore(null);
     this.arranger.restart();
     this.clock.reset(when);
     this.fadeGain.gain.setTargetAtTime(1, when, 0.05);
@@ -302,7 +305,12 @@ export class MusicPlayer {
         this.songSeen = this.arranger.songNumber;
         this.onSong?.(this.arranger.song, this.arranger.station);
       }
-      if (this.arranger.station.sound !== this.sound) this.applySound(this.arranger.station.sound, t);
+      if (this.arranger.station.sound !== this.sound) {
+        // The new shapes and drive wiring take at once, up to LOOKAHEAD before t, and a bar-line switch to or
+        // from the score has no fade over it: let the old station's mono notes go first.
+        this.releaseMono(now);
+        this.applySound(this.arranger.station.sound, t);
+      }
       if (step === 0) this.onBar(t);
       this.clock.bpm = this.arranger.bpm;
       const dur = this.clock.stepDuration;
@@ -337,6 +345,8 @@ export class MusicPlayer {
     const now = this.ctx.currentTime;
     if (mode === 'off') {
       this.off = true;
+      // Drop anything queued first: a fade back up booked by an earlier restart must not undo the silence.
+      this.fadeGain.gain.cancelScheduledValues(now);
       this.fadeGain.gain.setTargetAtTime(0, now, 0.15);
       this.arranger.setMode('off');
       return;
@@ -378,6 +388,8 @@ export class MusicPlayer {
     const g = this.fadeGain.gain;
     g.setTargetAtTime(0, now, 0.02);
     g.setTargetAtTime(1, now + 0.3, 0.04);
+    // Kill the old phrase while the fade is down, or its pads and keys come back up with it.
+    this.cutAt(now + 0.28);
     this.arranger.restart();
     this.clock.reset(now + 0.32);
   }
@@ -388,17 +400,25 @@ export class MusicPlayer {
    * phrase had booked past `when` is cut, so nothing doubles or hangs over.
    */
   dropIn(when: number, intensity: number): void {
+    // GO lets go of the count-in's duck even when nothing drops in (a frenzy counted in over the chase).
+    this.duckDip.release(when, 0.04);
+    automateDip(this.duckGain.gain, this.duckDip, this.ctx.currentTime, 0.015);
     if (!this.running || this.off || this.dormant || this.arranger.mode !== 'game' || this.arranger.playing) return;
     this.cutAt(when);
     this.arranger.dropIn(intensity);
     this.clock.reset(when);
-    this.duckDip.release(when, 0.04);
-    automateDip(this.duckGain.gain, this.duckDip, this.ctx.currentTime, 0.015);
   }
 
   /** Cut whatever the old phrase booked past `when`, so nothing doubles or hangs over what starts there. */
   private cutAt(when: number): void {
-    for (const v of this.notes) v.kill(when);
+    for (const v of this.notes) {
+      v.kill(when);
+      // Booked to start after the cut, its own envelope (set at its start) would outrank kill's fade: silence it outright.
+      if (v.t >= when) {
+        v.out.gain.cancelScheduledValues(when);
+        v.out.gain.setValueAtTime(0, when);
+      }
+    }
     // The mono synths: drop the old phrase's queued notes and let a held one go.
     this.bassA.frequency.cancelScheduledValues(when);
     this.bassB.frequency.cancelScheduledValues(when);
@@ -407,6 +427,14 @@ export class MusicPlayer {
     this.bassAmp.gain.setTargetAtTime(0, when, 0.01);
     this.leadAmp.gain.cancelScheduledValues(when);
     this.leadAmp.gain.setTargetAtTime(0, when, 0.01);
+  }
+
+  /** Let the bass and lead go now (their queued notes dropped). */
+  private releaseMono(now: number): void {
+    this.bassAmp.gain.cancelScheduledValues(now);
+    this.bassAmp.gain.setTargetAtTime(0, now, 0.008);
+    this.leadAmp.gain.cancelScheduledValues(now);
+    this.leadAmp.gain.setTargetAtTime(0, now, 0.008);
   }
 
   /** One take of a hit from the current station's kit (stings borrow the radio's drums); null until it's rendered. */
@@ -492,13 +520,16 @@ export class MusicPlayer {
    * Patch the drive into the bass chain (or take it out). The shaper saturates
    * fully at 4, so the bass's `peak` is scaled to hit it `drive` hard and comes
    * back out at the same peak. Rewiring happens as a new station's first bar
-   * is booked, under the retune fade.
+   * is booked, up to LOOKAHEAD before it: under the retune fade, or (to and
+   * from the score) once pump has let the bass go.
    */
   private patchDrive(drive: number, peak: number, t: number): void {
     const on = drive > 0;
     if (on) {
-      this.drivePre.gain.setValueAtTime(drive / (4 * peak), t);
-      this.drivePost.gain.setValueAtTime(peak / Math.tanh(drive), t);
+      // Patched in now, it's scaled now too: what's left of the bass must not hit the shaper at full gain.
+      const at = on !== this.driven ? this.ctx.currentTime : t;
+      this.drivePre.gain.setValueAtTime(drive / (4 * peak), at);
+      this.drivePost.gain.setValueAtTime(peak / Math.tanh(drive), at);
     }
     if (on === this.driven) return;
     this.driven = on;

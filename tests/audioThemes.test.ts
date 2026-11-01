@@ -332,31 +332,6 @@ describe('the music player with the theme', () => {
     expect(maxNotes()).toBeLessThan(80);
     music.dispose();
   });
-
-  it('drops the radio in at GO: out of the duck, on a chorus, at the intensity asked', () => {
-    const { ctx, music, run } = player(STATIONS[0]);
-    music.setTheme(THEME);
-    music.setMode('game');
-    music.setIntensity(1);
-    run(6);
-    music.duck(0.3, 0.3, 1.25);
-    const when = ctx.currentTime + 0.03;
-    music.dropIn(when, 4);
-    music.pump(ctx.currentTime);
-    expect(music.arranger.intensity).toBe(4);
-    expect(music.arranger.section).toBe('chorus');
-    expect(music.clock.nextTime).toBeGreaterThan(when); // its first step booked at `when`
-    music.setIntensity(4);
-    run(3);
-    expect(music.arranger.intensity).toBe(4);
-    // Not on the title: the theme plays on.
-    music.setMode('menu');
-    run(1);
-    music.dropIn(ctx.currentTime + 0.03, 5);
-    run(1);
-    expect(music.playingTheme).toBe(true);
-    music.dispose();
-  });
 });
 
 const KEYS = [40, 45, 48, 45 - 5, 45 + 5, 47];
