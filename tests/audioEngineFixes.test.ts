@@ -658,6 +658,26 @@ describe('drum kits', () => {
     expect(idle).toHaveLength(0);
   });
 
+  it("hurry the shared crash into a kit wanted now when a warming kit still has it to render (INSERT COIN's radio, PLAY before any idle slot, then the first star)", () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal('requestIdleCallback', (fn: () => void) => idle.push(fn)); // no idle slot comes
+    const { music } = player(INSERTCOIN); // the radio's (chip) kit renders between frames
+    music.setMode('menu');
+    music.warmKits([...STATIONS, CHASE_STATION].map((s) => s.sound));
+    music.setMode('game');
+    vi.runAllTimers();
+    const chase = kits(music).get(kitKey(CHASE_STATION.sound))!;
+    const owner = kits(music).get(kitKey(STATIONS[0].sound))!; // the first plain kit queued: the plain crash is its job
+    expect(chase).not.toBe(owner);
+    expect(chase.crash).toBe(owner.crash);
+    expect(chase.crash).toHaveLength(0);
+    music.warmKit(CHASE_STATION.sound);
+    vi.runAllTimers();
+    expect(complete(chase)).toBe(true); // its crash too, without going back to the title
+    expect(owner.kick).toHaveLength(0); // the rest of the warming kit still waits
+    music.dispose();
+  });
+
   it('warm every kit on the title without requestIdleCallback (Safari) too, a take per timer slot', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { music } = player(STATIONS[0]);
