@@ -228,9 +228,10 @@ export type StreetWhat =
   | 'busStop'
   | 'tow'
   | 'fight'
-  // Atmosphere: a stray dog barking (chasing a runner) or yelping (hit, scared off).
+  // Atmosphere: a stray dog barking (chasing a runner) or yelping (hit, scared off), a gang turf flare-up.
   | 'bark'
-  | 'yelp';
+  | 'yelp'
+  | 'turfWar';
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;
