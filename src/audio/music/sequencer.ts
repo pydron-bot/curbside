@@ -13,9 +13,11 @@
  *   chords and melody. While calm the form shapes the arrangement (a drumless
  *   intro, the melody saved for the chorus, a breakdown); in a chase
  *   (intensity FORM_FULL_FROM and up) every section plays in full.
- *   While the mode is 'menu' a title Theme (themes.ts) can play instead of
- *   the radio: a station of its own through its own looping form; the radio
- *   comes back with its next song.
+ *   Music off the dial can play instead of the radio, through the same path:
+ *   a Theme (themes.ts) is a station of its own with its own looping form.
+ *   The title theme plays while the mode is 'menu'; a score (the chase,
+ *   chase.ts) plays in 'game', rising into its first bar and leaving through
+ *   an outro of its own. The radio comes back with its next song.
  */
 import { clamp, lerp } from '../mix';
 import { STATIONS, type Song, type Station, type Tier } from './stations';
@@ -115,16 +117,23 @@ export function firstBar(section: Section, form: Form = FORM): number {
 }
 
 /**
- * A title theme (themes.ts): a station of its own that plays while the mode
- * is 'menu', at its own tempo, through its own looping form with each part
- * at a set tier (no intensity, no shaping), so it builds a little and loops.
+ * Music off the dial: a station of its own that plays instead of the radio
+ * through its own looping form. The title theme (themes.ts) plays in 'menu'
+ * at a set tempo, each part at a set tier, so it builds a little and loops;
+ * the chase (chase.ts) is a score for 'game' that follows the intensity like
+ * the radio, under rules of its own.
  */
 export interface Theme {
   station: Station;
-  bpm: number;
   form: Form;
-  /** The station tier each part of the form plays. */
-  levels: readonly number[];
+  /** A set tempo; left out, the tempo follows the intensity over the station's range, like the radio's. */
+  bpm?: number;
+  /** The station tier each part of the form plays; left out, the intensity's, shaped by the section. */
+  levels?: readonly number[];
+  /** How a section plays the intensity's tier (shapeTier when left out). */
+  shape?: (tier: Tier, section: Section, intensity: number) => Tier;
+  /** Played on the way out (endScore) before the radio comes back: its bars, and the tier they play. */
+  outro?: { bars: number; tier: Tier };
 }
 
 /**
@@ -210,12 +219,14 @@ export interface ArrangerOptions {
 }
 
 export class Arranger {
-  /** The station playing: the radio's, or the theme's while that plays. */
+  /** The station playing: the radio's, or a theme's or score's while that plays. */
   station: Station;
   /** The radio station: what plays in 'game' (and in 'menu' when there's no theme). */
   radio: Station;
   /** Played instead of the radio while the mode is 'menu' (null: the radio's menu tier). */
   theme: Theme | null = null;
+  /** Played instead of the radio in 'game' (the chase), from the next bar line; null: the radio. */
+  score: Theme | null = null;
   /** The song playing, its bar in the form, and a count of songs started (listeners compare it). */
   song: Song;
   songBar = 0;
@@ -236,6 +247,14 @@ export class Arranger {
   private fill = false;
   /** The music stepped up on this bar: hit the crash. */
   private rose = false;
+  /** A score came in on this bar: it lands on a crash. */
+  private landed = false;
+  /** The riser into a score's first bar is booked. */
+  private risen = false;
+  /** The score is on its way out: its outro, then the radio. */
+  private ending = false;
+  /** Bar of the score's outro playing (-1: not in it). */
+  private outroBar = -1;
   private arpCount = 0;
   /** Steps left of the lead note sounding (an arp that yields rests under it). */
   private leadLeft = 0;
@@ -271,9 +290,24 @@ export class Arranger {
     return this.theme !== null && this.station === this.theme.station;
   }
 
-  /** Songs run through a form (the theme always does). */
+  /** The score is what's playing (its outro included). */
+  get playingScore(): boolean {
+    return this.score !== null && this.station === this.score.station;
+  }
+
+  /** The score is playing its outro, or will from the next bar line. */
+  get scoreEnding(): boolean {
+    return this.ending;
+  }
+
+  /** What's playing off the dial (the theme or the score), or null for the radio. */
+  get playing(): Theme | null {
+    return this.playingTheme ? this.theme : this.playingScore ? this.score : null;
+  }
+
+  /** Songs run through a form (a theme or score always does). */
   private get formed(): boolean {
-    return this.form || this.playingTheme;
+    return this.form || this.playing !== null;
   }
 
   /** The bar playing is its section's last (an 8-bar phrase's without the form). */
@@ -285,9 +319,31 @@ export class Arranger {
     this.target = clamp(Math.round(level), 0, 5);
   }
 
-  /** Tune the radio: it switches at the next bar line (the phrase restarts), or when the theme gives way. */
+  /** Tune the radio: it switches at the next bar line (the phrase restarts), or when the theme or score gives way. */
   setStation(station: Station): void {
     this.radio = station;
+  }
+
+  /**
+   * Play `score` instead of the radio in 'game' from the next bar line, with
+   * a riser into it and a crash on its first bar. Asked again while it's on
+   * its way out, it stays (its form carries on). Null drops it at the next
+   * bar line, no outro.
+   */
+  setScore(score: Theme | null): void {
+    if (score !== this.score) {
+      this.score = score;
+      this.risen = false;
+    }
+    this.ending = false;
+    this.outroBar = -1;
+  }
+
+  /** The score's way out: its outro from the next bar line, then the radio's next song. Not started yet, it just doesn't. */
+  endScore(): void {
+    if (!this.score) return;
+    if (this.playingScore && this.score.outro) this.ending = true;
+    else this.setScore(null);
   }
 
   /** The station playing, or the one about to. */
@@ -305,10 +361,11 @@ export class Arranger {
     return s.key + s.songs[(this.nextSong.get(s.id) ?? 0) % s.songs.length].transpose;
   }
 
-  /** What plays in `mode`: the theme in 'menu' if there is one, else the radio; silence keeps what was on. */
+  /** What plays in `mode`: the theme in 'menu' if there is one, the score in 'game', else the radio; silence keeps what was on. */
   private stationFor(mode: MusicMode): Station {
     if (mode === 'off') return this.station;
-    return mode === 'menu' && this.theme ? this.theme.station : this.radio;
+    if (mode === 'menu') return this.theme ? this.theme.station : this.radio;
+    return this.score ? this.score.station : this.radio;
   }
 
   setMode(mode: MusicMode): void {
@@ -335,7 +392,7 @@ export class Arranger {
    * song's first chorus at `intensity` or more, with no wait for a bar line.
    */
   dropIn(intensity: number): void {
-    if (this.mode !== 'game' || this.pendingMode || this.playingTheme) return;
+    if (this.mode !== 'game' || this.pendingMode || this.playing) return;
     this.target = Math.max(this.target, clamp(Math.round(intensity), 0, 5));
     this.intensity = this.target;
     this.bar = 0;
@@ -352,7 +409,15 @@ export class Arranger {
     if (step === 0) this.startBar();
     // Stepping up next bar: lead into it with a fill.
     if (step === 12 && this.mode === 'game' && this.target > this.intensity) this.fill = true;
-    if (this.mode !== 'off') this.emit(this.tier(), step, out);
+    if (this.mode !== 'off') {
+      this.emit(this.tier(), step, out);
+      // A score taking over at the bar line: rise into it over what's left of this bar (a hit alone when that's too short).
+      const score = this.score;
+      if (score && !this.risen && step >= 4 && step <= 12 && this.station !== score.station && this.upcomingStation === score.station) {
+        this.risen = true;
+        if (!out.some((e) => e.part === 'riser')) out.push({ part: 'riser', note: 0, notes: null, vel: 1, len: STEPS_PER_BAR - step });
+      }
+    }
     this.step = (step + 1) % STEPS_PER_BAR;
     if (this.step === 0) {
       this.bar++;
@@ -379,35 +444,53 @@ export class Arranger {
       this.mode = this.pendingMode;
       this.pendingMode = null;
     }
+    // A score on its way out plays its outro, then gives way (in 'game': elsewhere the score isn't playing).
+    if (this.ending && this.playingScore && this.mode === 'game') {
+      if (++this.outroBar >= this.score!.outro!.bars) this.setScore(null);
+    }
     const want = this.stationFor(this.mode);
     const retuned = want !== this.station;
     if (retuned) {
-      // The theme took over before a bar of the radio's song (at boot): it's still that song's turn.
-      if (want === this.theme?.station && this.songPlayed === 0) this.nextSong.set(this.station.id, (this.nextSong.get(this.station.id) ?? 1) - 1);
+      // A theme or score took over before a bar of the radio's song (at boot): it's still that song's turn.
+      if ((want === this.theme?.station || want === this.score?.station) && this.songPlayed === 0) {
+        this.nextSong.set(this.station.id, (this.nextSong.get(this.station.id) ?? 1) - 1);
+      }
       this.station = want;
       this.bar = 0;
       this.voicing = null;
       this.bassTied = false;
       this.startSong(want);
-    } else if (this.formed && this.songBar >= (this.playingTheme ? formBars(this.theme!.form) : FORM_BARS)) {
-      this.startSong(this.station);
+      this.landed = want === this.score?.station;
+      this.risen = false;
+    } else {
+      this.landed = false;
+      const over = this.playing;
+      if (this.formed && this.outroBar < 0 && this.songBar >= (over ? formBars(over.form) : FORM_BARS)) this.startSong(this.station);
     }
-    const theme = this.playingTheme ? this.theme! : null;
+    const over = this.playing;
+    const outro = this.outroBar >= 0 && over === this.score ? over!.outro! : null;
     this.rose = this.target > this.intensity;
     this.intensity = this.target;
     this.fill = false;
     this.arpCount = 0;
-    const bpm = theme ? theme.bpm : targetBpm(this.station, this.intensity, this.mode);
-    // Intensity glides the tempo; a new station (the theme included) starts at its own: dub after chiptune is half the speed.
-    this.bpm = retuned || theme ? bpm : this.bpm + clamp(bpm - this.bpm, -BPM_GLIDE, BPM_GLIDE);
+    const bpm = over?.bpm ?? targetBpm(this.station, this.intensity, this.mode);
+    // Intensity glides the tempo; a new station (a theme or score included) starts at its own: dub after chiptune is half the speed.
+    this.bpm = retuned || over?.bpm !== undefined ? bpm : this.bpm + clamp(bpm - this.bpm, -BPM_GLIDE, BPM_GLIDE);
 
     const s = this.station;
     const song = this.song;
     // Without the form: always the verse.
-    this.at = theme ? sectionAt(this.songBar, theme.form) : sectionAt(this.form ? this.songBar : FORM[0][1]);
-    const base = s.tiers[theme ? theme.levels[this.at.part] : this.intensity];
-    this.shaped = this.form && !theme ? shapeTier(base, this.at.section, this.intensity) : base;
-    const chords = this.at.section === 'chorus' && song.chorus ? song.chorus : song.verse;
+    this.at = outro
+      ? { section: 'outro', bar: this.outroBar, bars: outro.bars, next: 'intro', part: -1 }
+      : over
+        ? sectionAt(this.songBar, over.form)
+        : sectionAt(this.form ? this.songBar : FORM[0][1]);
+    const levels = over?.levels;
+    const base = outro ? outro.tier : s.tiers[levels ? levels[this.at.part] : this.intensity];
+    const shape = over?.shape ?? shapeTier;
+    this.shaped = outro || levels || !this.formed ? base : shape(base, this.at.section, this.intensity);
+    // A score's outro plays the top of the chorus (where its hook belongs), drums out.
+    const chords = (this.at.section === 'chorus' || outro) && song.chorus ? song.chorus : song.verse;
     const chord = chords[(this.formed ? this.at.bar : this.bar) % chords.length];
     const key = s.key + song.transpose;
     this.voicing = voiceChord(key, chord, this.voicing, s.padCenter);
@@ -438,7 +521,7 @@ export class Arranger {
     }
     drum('hat', hitVelocity(tier.hat, step), rollCount(tier.hat, step));
     drum('openHat', hitVelocity(tier.openHat, step), rollCount(tier.openHat, step));
-    if (step === 0 && tier.crash && (phraseBar === 0 || this.rose)) drum('crash', 1);
+    if (step === 0 && (this.landed || (tier.crash && (phraseBar === 0 || this.rose)))) drum('crash', 1);
     // Rise into the next section (calm intros and breaks rise into the drums coming back in too).
     const rise = tier.riser || (this.form && this.mode === 'game' && (at.section === 'intro' || at.section === 'break'));
     if (step === 0 && rise && lastBar && (!formed || at.next !== 'intro')) {

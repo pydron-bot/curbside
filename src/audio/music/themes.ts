@@ -120,7 +120,7 @@ export const THEME_STATION: Station = {
   songs: [{ title: 'Curbside', artist: 'Halogen Getaway', transpose: 0, verse: THEME_VERSE, chorus: THEME_CHORUS, leadSeed: 0, melody: THEME_MELODY }],
 };
 
-export const THEME: Theme = {
+export const THEME = {
   station: THEME_STATION,
   bpm: THEME_BPM,
   // Intro, the hook, the beat comes in, the hook with drums, a breath: 30 bars.
@@ -132,4 +132,4 @@ export const THEME: Theme = {
     ['break', 4],
   ],
   levels: [1, 2, 3, 4, 0],
-};
+} satisfies Theme;

@@ -234,6 +234,53 @@ export class MusicPlayer {
     return this.arranger.playingTheme;
   }
 
+  /** A score (the chase) is what's playing, its outro included. */
+  get playingScore(): boolean {
+    return this.arranger.playingScore;
+  }
+
+  /** Play `score` instead of the radio in 'game': it comes in on the next bar line, risen into, with a crash (no static: it's not a retune). */
+  setScore(score: Theme): void {
+    this.arranger.setScore(score);
+  }
+
+  /** The score's way out: its outro from the next bar line, then the radio's next song. */
+  endScore(): void {
+    this.arranger.endScore();
+  }
+
+  /** Drop the score now: a quick fade and the radio from the top of a phrase (nothing to do if it isn't playing). */
+  dropScore(): void {
+    const playing = this.arranger.playingScore;
+    this.arranger.setScore(null);
+    if (playing && this.running && !this.off) this.restartAfterFade(this.ctx.currentTime);
+  }
+
+  /**
+   * Retune without a sound (music heard on the street switches like this,
+   * its owner fading it out first and back in after): the station changes at
+   * the next bar line, at its own tempo, with its next song; `now`, nobody
+   * can hear it, so it changes at once, from the top of a phrase, with
+   * nothing of the old station left ringing. Returns the station.
+   */
+  tune(index: number, now = false): Station {
+    this.stationIndex = ((index % STATIONS.length) + STATIONS.length) % STATIONS.length;
+    const station = STATIONS[this.stationIndex];
+    this.arranger.setStation(station);
+    if (now && this.running && !this.off && !this.dormant && this.arranger.upcomingStation === station && this.arranger.station !== station) {
+      const when = this.ctx.currentTime + 0.02;
+      this.cutAt(when);
+      this.arranger.restart();
+      this.clock.reset(when);
+    }
+    return station;
+  }
+
+  /** Render a station sound's drum kit ahead of time (between frames), so it's in when that music first plays. */
+  warmKit(sound: StationSound): void {
+    this.kitFor(sound);
+  }
+
   /** Begin playing from the top of a phrase at `when`. */
   start(when: number): void {
     this.running = true;
@@ -341,20 +388,25 @@ export class MusicPlayer {
    * phrase had booked past `when` is cut, so nothing doubles or hangs over.
    */
   dropIn(when: number, intensity: number): void {
-    if (!this.running || this.off || this.dormant || this.arranger.mode !== 'game' || this.playingTheme) return;
+    if (!this.running || this.off || this.dormant || this.arranger.mode !== 'game' || this.arranger.playing) return;
+    this.cutAt(when);
+    this.arranger.dropIn(intensity);
+    this.clock.reset(when);
+    this.duckDip.release(when, 0.04);
+    automateDip(this.duckGain.gain, this.duckDip, this.ctx.currentTime, 0.015);
+  }
+
+  /** Cut whatever the old phrase booked past `when`, so nothing doubles or hangs over what starts there. */
+  private cutAt(when: number): void {
     for (const v of this.notes) v.kill(when);
     // The mono synths: drop the old phrase's queued notes and let a held one go.
     this.bassA.frequency.cancelScheduledValues(when);
     this.bassB.frequency.cancelScheduledValues(when);
     this.lead.frequency.cancelScheduledValues(when);
-    for (const g of [this.bassAmp.gain, this.leadAmp.gain]) {
-      g.cancelScheduledValues(when);
-      g.setTargetAtTime(0, when, 0.01);
-    }
-    this.arranger.dropIn(intensity);
-    this.clock.reset(when);
-    this.duckDip.release(when, 0.04);
-    automateDip(this.duckGain.gain, this.duckDip, this.ctx.currentTime, 0.015);
+    this.bassAmp.gain.cancelScheduledValues(when);
+    this.bassAmp.gain.setTargetAtTime(0, when, 0.01);
+    this.leadAmp.gain.cancelScheduledValues(when);
+    this.leadAmp.gain.setTargetAtTime(0, when, 0.01);
   }
 
   /** One take of a hit from the current station's kit (stings borrow the radio's drums); null until it's rendered. */
@@ -838,21 +890,22 @@ export class MusicPlayer {
       const f = this.lead.frequency;
       const g = this.leadAmp.gain;
       const hz = midiToHz(note);
+      const gain = this.sound.leadGain ?? 1;
       if (kind === 'pulse') {
         // Chip: straight onto the note, gated.
         f.setValueAtTime(hz, t);
-        g.setTargetAtTime(LEAD_LEVEL * 1.3, t, 0.003);
+        g.setTargetAtTime(LEAD_LEVEL * 1.3 * gain, t, 0.003);
         g.setTargetAtTime(0, t + Math.max(0.05, dur * 0.85), 0.012);
       } else if (kind === 'brass') {
         // A horn scoops up into the note and swells.
         f.setValueAtTime(hz * 0.93, t);
         f.setTargetAtTime(hz, t + 0.004, 0.03);
-        g.setTargetAtTime(LEAD_LEVEL * 1.15, t, 0.025);
+        g.setTargetAtTime(LEAD_LEVEL * 1.15 * gain, t, 0.025);
         g.setTargetAtTime(0, t + Math.max(0.05, dur * 0.85), 0.06);
       } else {
         // Melodica: breathy onset, slurred between notes.
         f.setTargetAtTime(hz, t, 0.025);
-        g.setTargetAtTime(LEAD_LEVEL * 1.8, t, 0.035);
+        g.setTargetAtTime(LEAD_LEVEL * 1.8 * gain, t, 0.035);
         g.setTargetAtTime(0, t + Math.max(0.05, dur * 0.85), 0.08);
       }
       return;
