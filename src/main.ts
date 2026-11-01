@@ -395,6 +395,8 @@ const people = new PeoplePose({
 // --- Audio (unlocks on the first tap / click / key) ---
 const audio = new GameAudio({ best: score.best });
 const audioFrame = createAudioFrame(vehicles);
+// Shopfronts that play music on foot, picked from the city's plans once.
+audio.streetShops(city.buildings, look.plans);
 const audioCar = createCarSound();
 mountRadioToast(document.body, audio);
 const streetLife = new StreetLife({
@@ -1072,6 +1074,8 @@ function frame(now: number) {
   audioFrame.car = player.driving && controls ? describeCar(audioCar, player.driving.sim, controls, player.driving.archetype) : null;
   audioFrame.footSpeed = player.driving || attract.active ? 0 : len2(ped.vx, ped.vz);
   audioFrame.health = player.health;
+  audioFrame.playerCar = player.driving;
+  audioFrame.lastCar = player.lastDriven;
   audio.update(frameSeconds, audioFrame);
 
   const at = player.position;

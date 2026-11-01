@@ -76,7 +76,7 @@ export interface StationSound {
   reverb: number;
   /** Overall level trim so stations sit at the same loudness. */
   trim: number;
-  /** The lead's level against the rest (1 when left out; the title theme's hook sits on top). */
+  /** The lead's level against the rest (1 when left out; the hook sits on top in the title theme and the chase). */
   leadGain?: number;
 }
 
