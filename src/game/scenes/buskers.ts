@@ -13,7 +13,7 @@ import { blockSide } from '../../world/kerbs';
 import type { CrowdPed } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
 import { Gathering } from './gathering';
-import { roomFor } from './people';
+import { roomFor, streetBody } from './people';
 import { len2 } from '../../core/len';
 
 /** Buskers stand this far in from the road's centreline (on the plaza, clear of the pavement), m. */
@@ -120,7 +120,7 @@ export class Buskers implements Scene {
     if (!best) return false;
     const b = this.start(best);
     for (let i = 0; i < 4; i++) {
-      const c = life.addPed(best.x + Math.sin(best.heading) * 4 + i, best.z + Math.cos(best.heading) * 4, 0);
+      const c = life.addPed(best.x + Math.sin(best.heading) * 4 + i, best.z + Math.cos(best.heading) * 4, 0, undefined, streetBody(life));
       c.agent.street = true;
       b.crowd.add(c);
     }
@@ -149,7 +149,7 @@ export class Buskers implements Scene {
     const life = this.life;
     life.clock.start('busker', life.now);
     const rand = life.d.rand;
-    const ped = life.addPed(s.x, s.z, s.heading, OUTFITS[Math.floor(rand() * OUTFITS.length)]);
+    const ped = life.addPed(s.x, s.z, s.heading, OUTFITS[Math.floor(rand() * OUTFITS.length)], streetBody(life));
     const crowd = new Gathering(life, { kind: 'crowd', capacity: 7, draw: 24, joinChance: 0.5, stay: [12, 28], radius: 2.6, arc: 2.4 });
     crowd.at(s.x, s.z, s.heading);
     const b: Busker = { ped, spot: s, crowd, until: life.now + SET_SECONDS[0] + rand() * (SET_SECONDS[1] - SET_SECONDS[0]), beat: 0 };

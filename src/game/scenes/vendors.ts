@@ -16,7 +16,7 @@ import type { CrowdPed } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
 import type { Fights } from './fights';
 import { Gathering } from './gathering';
-import { roomFor } from './people';
+import { roomFor, streetBody } from './people';
 
 /** Carts this close to the player are staffed, m; let go beyond CART_DROP and out of view. */
 const CART_RANGE = 90;
@@ -93,7 +93,7 @@ export class Vendors implements Scene {
     st ??= this.staff(best);
     st.vendor ??= this.addVendor(best);
     for (let i = 0; i < 3; i++) {
-      const c = life.addPed(best.serveX + best.queueX * (4 + i), best.serveZ + best.queueZ * (4 + i), 0);
+      const c = life.addPed(best.serveX + best.queueX * (4 + i), best.serveZ + best.queueZ * (4 + i), 0, undefined, streetBody(life));
       c.agent.street = true;
       st.queue.add(c);
     }
@@ -125,7 +125,7 @@ export class Vendors implements Scene {
         const n = Math.floor(busy * 2.4 * life.d.rand());
         for (let i = 0; i < n; i++) {
           const p = cartSpot(s, i, s.setting === 'kerb', { x: 0, z: 0, heading: 0 });
-          const c = life.addPed(p.x, p.z, p.heading);
+          const c = life.addPed(p.x, p.z, p.heading, undefined, streetBody(life));
           c.agent.street = true;
           st.queue.add(c);
         }
@@ -149,7 +149,7 @@ export class Vendors implements Scene {
   }
 
   private addVendor(s: VendorSpot): CrowdPed {
-    const c = this.life.addPed(s.vendorX, s.vendorZ, Math.atan2(s.serveX - s.vendorX, s.serveZ - s.vendorZ), VENDOR_OUTFIT);
+    const c = this.life.addPed(s.vendorX, s.vendorZ, Math.atan2(s.serveX - s.vendorX, s.serveZ - s.vendorZ), VENDOR_OUTFIT, streetBody(this.life));
     this.life.lookAt(c, s.serveX, s.serveZ);
     return c;
   }

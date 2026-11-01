@@ -20,7 +20,7 @@ import type { BusStop } from '../../world/streetStops';
 import { trafficPaint, type CrowdPed, type SceneDriver, type Vehicle } from '../population';
 import { SCENE_RANGE, type Scene, type SceneCtx } from '../cityLife';
 import { Gathering } from './gathering';
-import { roomFor } from './people';
+import { roomFor, streetBody } from './people';
 import { holdStill, pullIn, stopped } from './service';
 import { len2 } from '../../core/len';
 
@@ -252,7 +252,7 @@ export class Buses implements Scene {
     const off = life.d.rand() < 0.6 ? 1 + (life.d.rand() < 0.35 ? 1 : 0) : 0;
     for (let i = 0; i < off; i++) {
       const d = busDoor(v.x, v.z, v.heading, reach, half, false, this.door);
-      const c = life.addPed(d.x - Math.sin(v.heading) * i * 0.8, d.z - Math.cos(v.heading) * i * 0.8, s.heading);
+      const c = life.addPed(d.x - Math.sin(v.heading) * i * 0.8, d.z - Math.cos(v.heading) * i * 0.8, s.heading, undefined, streetBody(life));
       c.agent.street = true;
       life.giveBack(c);
     }
@@ -329,7 +329,7 @@ export class Buses implements Scene {
   /** Someone already waiting (a stop coming into range out of view). */
   private seedRider(w: Waiting): void {
     const p = shelterSpot(w.stop.waitX, w.stop.waitZ, w.stop.heading, w.crowd.members.length, this.spot);
-    const c = this.life.addPed(p.x, p.z, p.heading);
+    const c = this.life.addPed(p.x, p.z, p.heading, undefined, streetBody(this.life));
     c.agent.street = true;
     w.crowd.add(c);
   }

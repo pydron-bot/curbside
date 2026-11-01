@@ -21,7 +21,7 @@ import type { SceneDriver, Vehicle } from '../population';
 import { SCENE_RANGE, type Scene, type SceneCtx } from '../cityLife';
 import type { Fights } from './fights';
 import { Gathering } from './gathering';
-import { roomFor } from './people';
+import { roomFor, streetBody } from './people';
 import { holdStill, pullIn, stopped } from './service';
 
 /** Open this long, s (shuts early once nobody's left after OPEN_MIN). */
@@ -145,7 +145,7 @@ export class IceCream implements Scene {
     van.heading = bh;
     this.open(van);
     for (let i = 0; i < 3; i++) {
-      const c = life.addPed(bx - Math.cos(bh) * 4 + (life.d.rand() - 0.5) * 4, bz + Math.sin(bh) * 4 + (life.d.rand() - 0.5) * 4, 0);
+      const c = life.addPed(bx - Math.cos(bh) * 4 + (life.d.rand() - 0.5) * 4, bz + Math.sin(bh) * 4 + (life.d.rand() - 0.5) * 4, 0, undefined, streetBody(life));
       c.agent.street = true;
       van.queue.add(c);
     }
