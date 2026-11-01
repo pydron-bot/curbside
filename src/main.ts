@@ -121,6 +121,8 @@ import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
 import { Destruction } from './render/destruction';
 import { BlowWall } from './ui/blowWall';
 import { len2 } from './core/len';
+import { LabelsOverlay, toggleLabels } from './ui/labelsOverlay';
+import { describeWorld, type LabelWorld } from './game/debugLabels';
 
 const app = document.getElementById('app')!;
 
@@ -1168,6 +1170,7 @@ function frame(now: number) {
 
   look.update(frameSeconds, viewOfPlayer());
   look.render(rig.camera);
+  labels.update(frameSeconds, viewW, viewH, playing);
   resolution.sample(elapsed);
   frameStats.sample(elapsed * 1000, performance.now() - t0);
 }
@@ -1248,6 +1251,23 @@ radar.setBlip('hospital', { x: cityLife.hospital.x, z: cityLife.hospital.z, kind
 const wantedHud = new WantedHud(document.body, events);
 const heatPresenter = new HeatPresenter(heat, audio, radar, wantedHud, hud.score, events);
 const threats = new ThreatIndicators(document.body);
+// Playtest labels (settings.debugLabels, Shift+L): what the people and cars round the player are up to.
+const labelWorld: LabelWorld = { crowd: population.crowd, vehicles, police: heat.police, drops: cityLife.drops.list, now: 0, driving: null, lastDriven: null, pinned: activityCars };
+const labels = new LabelsOverlay(app, {
+  camera: () => rig.camera,
+  focus: () => player.position,
+  view: (out) => rig.visibleGround(out),
+  collect: (board) => {
+    progress.missions.describe(board);
+    progress.taxi.describe(board);
+    cityLife.describe(board);
+    labelWorld.now = simTime;
+    labelWorld.driving = player.driving;
+    labelWorld.lastDriven = player.lastDriven;
+    describeWorld(board, labelWorld);
+  },
+});
+labels.bindKey(window);
 const frontDoor = new FrontDoor(document.body, document.getElementById('paused')!, input, audio, {
   startGame,
   enterTitle,
@@ -1504,6 +1524,14 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   combat,
   /** The city's own life (game/cityLife.ts): clock, scenes, medics, drops, people, owned, hospital, bays. */
   cityLife,
+  /** Playtest labels: toggle(on?), list() (nearest first), stats() (JS ms per frame), resetStats(). */
+  labels: {
+    toggle: (on?: boolean) => toggleLabels(on),
+    list: () => labels.list(),
+    stats: () => ({ ...labels.stats }),
+    resetStats: () => labels.resetStats(),
+    overlay: labels,
+  },
   nitro,
   ramps,
   stunts,
