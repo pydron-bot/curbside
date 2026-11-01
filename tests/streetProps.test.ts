@@ -124,10 +124,12 @@ describe('street furniture', () => {
 
   it('keeps clear of pickups, payphones, the safehouse and the spray bays (and their mouths)', () => {
     const shops = [...placeSprayShops(city), placeDocks(city)];
+    const phones = placePayphones();
     for (const p of street.props) {
       if (p.kind === 'streetlamp' || p.kind === 'traffic_light' || p.kind.startsWith('tree') || p.kind === 'palm') continue;
-      for (const k of pickups) expect(Math.hypot(k.x - p.x, k.z - p.z), p.kind).toBeGreaterThan(1.5);
-      for (const ph of placePayphones()) expect(Math.hypot(ph.x - p.x, ph.z - p.z)).toBeGreaterThan(1.9);
+      // One expect per prop (thousands of props × every pickup is slow as expects).
+      expect(Math.min(...pickups.map((k) => Math.hypot(k.x - p.x, k.z - p.z))), p.kind).toBeGreaterThan(1.5);
+      expect(Math.min(...phones.map((ph) => Math.hypot(ph.x - p.x, ph.z - p.z)))).toBeGreaterThan(1.9);
       expect(Math.hypot(SAFEHOUSE.x - p.x, SAFEHOUSE.z - p.z)).toBeGreaterThan(3);
     }
     // Nothing solid in the way in to any bay.
