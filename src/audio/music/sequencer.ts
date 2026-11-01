@@ -6,7 +6,8 @@
  *   so timing stays sample-accurate however janky the main thread is.
  * - Arranger: what plays on each 16th. Intensity, station and mode changes
  *   wait for a bar line; stepping up gets a drum fill, tempo glides a few BPM
- *   per bar, pads are voice-led, and the lead melody repeats per phrase.
+ *   per bar (a new station starts at its own), pads are voice-led, and the
+ *   lead melody repeats per phrase.
  *   Each station plays its songs in turn through a song FORM (intro, verse,
  *   chorus, break, chorus, outro), every song in its own key with its own
  *   chords and melody. While calm the form shapes the arrangement (a drumless
@@ -132,6 +133,12 @@ export interface NoteEvent {
   vel: number;
   /** Length in 16th steps. */
   len: number;
+  /** Drums: hits in the step, evenly spaced (a hi-hat roll); 1 when left out. */
+  roll?: number;
+  /** Bass: glides in from the note before without a new attack (a '~' before it). */
+  slide?: boolean;
+  /** Bass: held into a note that slides in (its run ends in '~'), so it has no release of its own. */
+  tie?: boolean;
 }
 
 export type MusicMode = 'game' | 'menu' | 'off';
@@ -140,8 +147,18 @@ export type MusicMode = 'game' | 'menu' | 'off';
 export function hitVelocity(pattern: string | undefined, step: number): number {
   if (!pattern) return 0;
   const c = pattern.charCodeAt(step);
-  return c === 120 /* x */ ? 1 : c === 111 /* o */ ? 0.5 : 0;
+  return c === 120 /* x */ ? 1 : c === 111 /* o */ ? 0.5 : c === 114 /* r */ || c === 116 /* t */ ? 0.8 : 0;
 }
+
+/** Hits in a drum step: 2 for a roll ('r', 32nds), 3 for a triplet roll ('t'), else 1. */
+export function rollCount(pattern: string | undefined, step: number): number {
+  if (!pattern) return 1;
+  const c = pattern.charCodeAt(step);
+  return c === 114 /* r */ ? 2 : c === 116 /* t */ ? 3 : 1;
+}
+
+const HOLD = 45; // '-'
+const SLIDE = 126; // '~'
 
 /** Tempo for an intensity on a station (menus sit a little under the chill tempo). */
 export function targetBpm(station: Station, intensity: number, mode: MusicMode): number {
@@ -178,6 +195,10 @@ export class Arranger {
   /** The music stepped up on this bar: hit the crash. */
   private rose = false;
   private arpCount = 0;
+  /** Steps left of the lead note sounding (an arp that yields rests under it). */
+  private leadLeft = 0;
+  /** The last bass note was held into a slide: the next one glides in. */
+  private bassTied = false;
   private lead: Array<MotifNote | undefined> = [];
   private readonly form: boolean;
   /** This bar's section, and the tier as it plays it (worked out once per bar). */
@@ -198,6 +219,11 @@ export class Arranger {
   /** The section playing (`verse` throughout without the form). */
   get section(): Section {
     return this.form ? this.at.section : 'verse';
+  }
+
+  /** The bar playing is its section's last (an 8-bar phrase's without the form). */
+  get lastBar(): boolean {
+    return this.form ? this.at.bar === this.at.bars - 1 : this.bar % BARS_PER_PHRASE === BARS_PER_PHRASE - 1;
   }
 
   setIntensity(level: number): void {
@@ -224,6 +250,8 @@ export class Arranger {
     this.songBar = 0;
     this.step = 0;
     this.voicing = null;
+    this.bassTied = false;
+    this.leadLeft = 0;
   }
 
   tier(): Tier {
@@ -259,11 +287,13 @@ export class Arranger {
   }
 
   private startBar(): void {
+    const retuned = this.pendingStation !== null;
     if (this.pendingStation) {
       this.station = this.pendingStation;
       this.pendingStation = null;
       this.bar = 0;
       this.voicing = null;
+      this.bassTied = false;
       this.startSong(this.station);
     } else if (this.form && this.songBar >= FORM_BARS) {
       this.startSong(this.station);
@@ -277,7 +307,8 @@ export class Arranger {
     this.fill = false;
     this.arpCount = 0;
     const want = targetBpm(this.station, this.intensity, this.mode);
-    this.bpm += clamp(want - this.bpm, -BPM_GLIDE, BPM_GLIDE);
+    // Intensity glides the tempo; a new station starts at its own (dub after chiptune is half the speed).
+    this.bpm = retuned ? want : this.bpm + clamp(want - this.bpm, -BPM_GLIDE, BPM_GLIDE);
 
     const s = this.station;
     const song = this.song;
@@ -298,8 +329,8 @@ export class Arranger {
     // The phrase the melody, crash and riser follow: the section's bars with the form, else 8-bar phrases.
     const phraseBar = this.form ? at.bar % BARS_PER_PHRASE : this.bar % BARS_PER_PHRASE;
     const lastBar = this.form ? at.bar === at.bars - 1 : phraseBar === BARS_PER_PHRASE - 1;
-    const drum = (part: Part, vel: number) => {
-      if (vel > 0) out.push({ part, note: 0, notes: null, vel, len: 1 });
+    const drum = (part: Part, vel: number, roll = 1) => {
+      if (vel > 0) out.push(roll > 1 ? { part, note: 0, notes: null, vel, len: 1, roll } : { part, note: 0, notes: null, vel, len: 1 });
     };
 
     // --- Drums ---
@@ -307,13 +338,13 @@ export class Arranger {
       drum(s.sound.snare === 'rim' ? 'perc' : 'snare', [0.45, 0.6, 0.8, 1][step - 12]);
       if (step === 12) drum('kick', 1);
     } else {
-      drum('kick', hitVelocity(tier.kick, step));
-      drum('snare', hitVelocity(tier.snare, step));
-      drum('clap', hitVelocity(tier.clap, step));
-      drum('perc', hitVelocity(tier.perc, step));
+      drum('kick', hitVelocity(tier.kick, step), rollCount(tier.kick, step));
+      drum('snare', hitVelocity(tier.snare, step), rollCount(tier.snare, step));
+      drum('clap', hitVelocity(tier.clap, step), rollCount(tier.clap, step));
+      drum('perc', hitVelocity(tier.perc, step), rollCount(tier.perc, step));
     }
-    drum('hat', hitVelocity(tier.hat, step));
-    drum('openHat', hitVelocity(tier.openHat, step));
+    drum('hat', hitVelocity(tier.hat, step), rollCount(tier.hat, step));
+    drum('openHat', hitVelocity(tier.openHat, step), rollCount(tier.openHat, step));
     if (step === 0 && tier.crash && (phraseBar === 0 || this.rose)) drum('crash', 1);
     // Rise into the next section (calm intros and breaks rise into the drums coming back in too).
     const rise = tier.riser || (this.form && this.mode === 'game' && (at.section === 'intro' || at.section === 'break'));
@@ -328,31 +359,44 @@ export class Arranger {
     if (keys > 0) out.push({ part: 'keys', note: 0, notes: voicing, vel: keys, len: s.sound.keysLen });
 
     // --- Bass ---
-    if (tier.bass) {
-      const note = this.bassNote(tier.bass.charCodeAt(step));
+    const bass = tier.bass;
+    if (bass) {
+      const c = bass.charCodeAt(step);
+      const note = this.bassNote(c);
       if (note > 0) {
         let len = 1;
-        while (step + len < STEPS_PER_BAR && tier.bass.charCodeAt(step + len) === 45 /* - */) len++;
-        out.push({ part: 'bass', note, notes: null, vel: tier.bass[step] === 'x' ? 1 : 0.85, len });
+        while (step + len < STEPS_PER_BAR && (bass.charCodeAt(step + len) === HOLD || bass.charCodeAt(step + len) === SLIDE)) len++;
+        const tie = bass.charCodeAt(step + len - 1) === SLIDE;
+        const vel = c === 120 /* x */ ? 1 : c === 103 /* g */ ? 0.35 : 0.85;
+        out.push({ part: 'bass', note, notes: null, vel, len, slide: this.bassTied, tie });
+        this.bassTied = tie;
+      } else if (c !== HOLD && c !== SLIDE) {
+        this.bassTied = false;
       }
+    } else {
+      this.bassTied = false;
     }
+
+    // The lead note starting here, if any (an arp that yields rests under it).
+    const m = tier.lead ? this.lead[phraseBar * STEPS_PER_BAR + step] : undefined;
+    if (m) this.leadLeft = m.len;
 
     // --- Arpeggio: walks the chord an octave above the pad ---
     if (hitVelocity(tier.arp, step) > 0) {
       const order = s.sound.arpOrder;
       const i = order[this.arpCount++ % order.length];
-      const n = voicing.length;
-      const note = voicing[i % n] + 12 * (1 + Math.floor(i / n));
-      out.push({ part: 'arp', note, notes: null, vel: step % 4 === 0 ? 1 : 0.75, len: 1 });
+      if (!(s.sound.arpYields && this.leadLeft > 0)) {
+        const n = voicing.length;
+        const note = voicing[i % n] + 12 * (1 + Math.floor(i / n));
+        out.push({ part: 'arp', note, notes: null, vel: step % 4 === 0 ? 1 : 0.75, len: 1 });
+      }
     }
+    if (this.leadLeft > 0) this.leadLeft--;
 
     // --- Lead ---
-    if (tier.lead) {
-      const m = this.lead[phraseBar * STEPS_PER_BAR + step];
-      if (m) {
-        const note = avoidClash(scaleNote(s.leadTonic + this.song.transpose, s.leadScale, m.degree), this.classes);
-        out.push({ part: 'lead', note, notes: null, vel: 0.9, len: m.len });
-      }
+    if (m) {
+      const note = avoidClash(scaleNote(s.leadTonic + this.song.transpose, s.leadScale, m.degree), this.classes);
+      out.push({ part: 'lead', note, notes: null, vel: 0.9, len: m.len });
     }
   }
 
@@ -363,8 +407,12 @@ export class Arranger {
         return root;
       case 111: // o
         return root + 12;
+      case 103: // g (ghost)
+        return root;
       case 53: // 5
         return root + 7;
+      case 52: // 4
+        return root + 5;
       case 51: // 3
         return root + (this.classes.includes((this.chordRoot + 4) % 12) ? 4 : 3);
       case 55: // 7
