@@ -732,6 +732,16 @@ Playwright isn't a game dependency: run with
   sports car lost in 18, busted 2, median end 26 s, 1 drop to 4 stars;
   tough car: none escaped, 12 down to 4 stars (median 84 s), 3 to 3 stars,
   2 busted.
+- **`music.mjs <out-dir> [station-id …]`**: renders stations offline
+  (`audioLib.mjs`: the game's own audio modules on an OfflineAudioContext
+  in the page, ticked like the 25 ms timer) to MP3 (WAV without ffmpeg) for
+  listening, with the songs heard and RMS / peak per 5 s window. `SECONDS`
+  (90), `SCRIPT` (intensity steps, `0:1,24:3,48:5,72:0`), `MODE=menu`.
+  Needs no game page, only the dev server (`URL=http://localhost:5173/`).
+  Baseline 2026-11-01 (90 s, default script, raw music output): every
+  station at −14.6 to −14.7 dBFS overall, about −18 at intensity 1, −15 at
+  3 and −13 at 5; peaks at about 0 dBFS (the music bus and limiter follow in
+  the game). New stations should land within a dB of that.
 
 ## Layout
 
