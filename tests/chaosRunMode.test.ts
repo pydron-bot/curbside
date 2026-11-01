@@ -19,7 +19,7 @@ function setup() {
     deps: {
       bus,
       score,
-      audio: { ui() {} },
+      audio: { ui() {}, countIn() {} },
       heat: { wanted: { clear() {} }, police: { standDown() {} } },
       hud: { setBest() {} },
       player: { position: { x: 0, z: 0 } },

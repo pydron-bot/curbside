@@ -34,8 +34,8 @@ export async function openAudioPage() {
 
 /**
  * Render `seconds` of audio. Returns { wav: Buffer, stats, log }: stats has the
- * overall and per-window ({ windows } seconds) RMS and peak in dBFS and the
- * count of clipped samples (|x| > 1).
+ * overall and per-window ({ windows } seconds) RMS and peak in dBFS, the
+ * count of clipped samples (|x| > 1) and of non-finite ones (NaN, ±Infinity).
  */
 export async function renderOffline(page, { setup, modules, args = {}, seconds, rate = 44100, tickEvery = 0.025, window = 5 }) {
   const urls = Object.fromEntries(Object.entries(modules).map(([k, p]) => [k, new URL(p, DEV_URL).href]));
@@ -67,15 +67,20 @@ export async function renderOffline(page, { setup, modules, args = {}, seconds, 
         let sum = 0;
         let peak = 0;
         let clipped = 0;
+        let nonFinite = 0;
         for (let i = a; i < b; i++) {
           const l = L[i];
           const r = R[i];
+          if (!Number.isFinite(l) || !Number.isFinite(r)) {
+            nonFinite++;
+            continue;
+          }
           sum += l * l + r * r;
           const p = Math.max(Math.abs(l), Math.abs(r));
           if (p > peak) peak = p;
           if (p > 1) clipped++;
         }
-        return { rms: db(Math.sqrt(sum / Math.max(1, 2 * (b - a)))), peak: db(peak), clipped };
+        return { rms: db(Math.sqrt(sum / Math.max(1, 2 * (b - a)))), peak: db(peak), clipped, nonFinite };
       };
       const n = L.length;
       const windows = [];

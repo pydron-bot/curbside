@@ -73,12 +73,12 @@ export class RaceMode implements Mode {
         if (n !== this.shownCount && n > 0) {
           this.shownCount = n;
           ctx.ui.banner(String(n), 'count', run.def.name, 0.9);
-          ctx.deps.audio.ui('countdown');
+          ctx.deps.audio.countIn(n);
         }
       } else if (before === 'countdown') {
         ctx.holdControls = false;
         ctx.ui.banner('GO!', 'go', '', 0.8);
-        ctx.deps.audio.ui('go');
+        ctx.deps.audio.countIn(0);
       }
       if (r === 'checkpoint') {
         ctx.deps.audio.ui('confirm');

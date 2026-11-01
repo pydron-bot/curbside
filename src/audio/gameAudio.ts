@@ -33,6 +33,8 @@ import {
 import { MusicPlayer } from './music/musicPlayer';
 import type { MusicMode } from './music/sequencer';
 import { STATIONS, type Song, type Station } from './music/stations';
+import { STING_LEVELS, countInSting, missionFailedSting, missionPassedSting, missionStartSting } from './music/stings';
+import { THEME } from './music/themes';
 import * as sfx from './sfx';
 import { NoiseBank, Voice, automateDip, makeImpulse, nodeStats } from './synth';
 import { RateGate, VoiceLimiter } from './voices';
@@ -85,7 +87,8 @@ type Category =
   | 'foot'
   | 'horn'
   | 'ambient'
-  | 'player';
+  | 'player'
+  | 'sting';
 
 /** Concurrent one-shots per category; the oldest is stolen past this. */
 const LIMITS: Record<Category, number> = {
@@ -104,6 +107,7 @@ const LIMITS: Record<Category, number> = {
   horn: 4,
   ambient: 3,
   player: 3,
+  sting: 3,
 };
 const MAX_VOICES = 40;
 
@@ -144,6 +148,13 @@ const STATION_KEY = 'curbside.station';
 const OPEN = 20000;
 /** Entering a car this soon (ms) after a carjack means its engine is already running: no starter. */
 const CARJACK_WINDOW_MS = 1500;
+/** GO's hit (and the radio dropping in on it) this long after the call, so the radio's first notes book on time. */
+const GO_DELAY = 0.03;
+/** Chaos energy GO adds: the run starts with the music already up a few layers. */
+const GO_ENERGY = 3.2;
+/** The radio under a count-in: this deep, held a little past the next count (GO lets go at once). */
+const COUNT_DUCK = 0.3;
+const COUNT_HOLD = 1.25;
 
 const rnd = (lo: number, hi: number) => lo + Math.random() * (hi - lo);
 
@@ -270,9 +281,18 @@ export class GameAudio {
     return this.ctx ? this.ctx.state : this.failed ? 'unavailable' : 'locked';
   }
 
+  /** The radio station (also under the title theme, so a retune there is kept for the game). */
   get station(): Station {
-    return this.music?.station ?? STATIONS[this.stationIndex];
+    return this.music?.arranger.radio ?? STATIONS[this.stationIndex];
   }
+
+  /** The key the music is in (the song's own, or the theme's; the next one's mid-switch), for stings and UI sounds. */
+  private get musicKey(): number {
+    return this.music?.arranger.key ?? this.station.key;
+  }
+
+  /** Stings borrow the radio's drum kit. */
+  private readonly kitTake = (part: Parameters<sfx.KitSource>[0]): AudioBuffer | null => this.music?.kitTake(part) ?? null;
 
   /** Create / resume the context. Safe to call from any user-gesture handler (a title screen's tap). */
   unlock(): void {
@@ -396,8 +416,58 @@ export class GameAudio {
     }
     const v = this.voice(null, FALLOFF.near, 0.8, 0, 0, 'ui');
     if (!v) return;
-    sfx.ui(v, kind, this.station.key);
+    sfx.ui(v, kind, this.musicKey);
     this.commit('ui', v);
+  }
+
+  /**
+   * The 3-2-1-GO before a run (Chaos Run, races, frenzies): call with each
+   * number as it shows (3, 2, 1), then 0 on GO. The counts are hits that
+   * build over a riser in the music's key with the radio held down under
+   * them; GO lands a big hit and the radio drops back in hard on a chorus.
+   */
+  countIn(n: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.bank || ctx.state !== 'running') return;
+    const go = n <= 0;
+    const v = this.voice(null, FALLOFF.near, STING_LEVELS.countIn, 0, go ? GO_DELAY : 0, 'ui');
+    if (!v) return;
+    sfx.playSting(v, countInSting(n, this.musicKey), this.kitTake);
+    this.commit('sting', v);
+    const music = this.music;
+    if (!music || this.dead) return;
+    if (!go) {
+      music.duck(COUNT_DUCK, 0.3, COUNT_HOLD);
+      return;
+    }
+    // Play takes over from here; the next frames ask for the same level, so the drop sticks.
+    this.chaos.add(GO_ENERGY);
+    this.chaos.step(0);
+    const level = this.autoIntensity ? Math.min(MAX_INTENSITY, (this.inCar ? 1 : 0) + this.chaos.level) : 0;
+    music.dropIn(v.t, Math.max(this.intensityFloor, level));
+    music.pump(ctx.currentTime);
+  }
+
+  /**
+   * A payphone job's music, built on the theme's hook: 'start' as it begins,
+   * 'passed', 'failed'. `index` (the job's) gives each its own colour. The
+   * radio dips under it.
+   */
+  missionCue(kind: 'start' | 'passed' | 'failed', index = 0): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.bank || ctx.state !== 'running') return;
+    const key = this.musicKey;
+    const [sting, level] =
+      kind === 'start'
+        ? [missionStartSting(key, index), STING_LEVELS.missionStart]
+        : kind === 'passed'
+          ? [missionPassedSting(key, index), STING_LEVELS.missionPassed]
+          : [missionFailedSting(key, index), STING_LEVELS.missionFailed];
+    const v = this.voice(null, FALLOFF.near, level, 0, 0, 'ui');
+    if (!v) return;
+    sfx.playSting(v, sting, this.kitTake);
+    this.commit('sting', v);
+    this.music?.duck(kind === 'start' ? 0.3 : 0.4, 0.8, sting.length * 0.6);
   }
 
   /** Game paused: silence the world, muffle the music. Suspends the context if it stays paused a while. */
@@ -435,12 +505,13 @@ export class GameAudio {
     return station;
   }
 
-  /** The song on the radio (null before the music starts). */
+  /** The song on the radio (null before the music starts, and under the title theme). */
   get song(): Song | null {
-    return this.music?.arranger.song ?? null;
+    const m = this.music;
+    return m && !m.playingTheme ? m.arranger.song : null;
   }
 
-  /** A new song started on the radio (the first song too). */
+  /** A new song started on the radio (the first song too; not the title theme). */
   onSongChange(fn: (song: Song, s: Station) => void): () => void {
     this.songListeners.push(fn);
     return () => {
@@ -564,6 +635,10 @@ export class GameAudio {
       music: music
         ? {
             station: music.station.name,
+            radio: music.arranger.radio.name,
+            theme: music.playingTheme,
+            song: music.arranger.song.title,
+            section: music.arranger.section,
             mode: music.mode,
             intensity: music.arranger.intensity,
             target: music.arranger.target,
@@ -784,7 +859,10 @@ export class GameAudio {
     this.musicBus.connect(this.master);
 
     this.music = new MusicPlayer(ctx, bank, this.musicBus, impulse, STATIONS[this.stationIndex]);
+    this.music.setTheme(THEME);
     this.music.onSong = (song, station) => {
+      // The title theme isn't on the radio: no NOW PLAYING for it.
+      if (station === THEME.station) return;
       for (const fn of this.songListeners) fn(song, station);
     };
     if (this.musicMode !== 'off' && !this.dead) this.music.setMode(this.musicMode);
@@ -1027,7 +1105,7 @@ export class GameAudio {
   }
 
   private onAward(a: Award, newBest: boolean): void {
-    const key = this.station.key;
+    const key = this.musicKey;
     this.chaos.add(a.kind === 'boom' ? 0.6 : 0.35 + 0.08 * a.multiplier);
     const v = this.voice(null, FALLOFF.near, a.kind === 'boom' ? 0.9 : 0.75, 0, 0, 'ui');
     if (v) {
@@ -1065,9 +1143,9 @@ export class GameAudio {
     this.chaos.reset();
     if (!this.ctx || !this.bank) return;
     const now = this.ctx.currentTime;
-    const v = this.voice(null, FALLOFF.near, 1, 0, 0, 'ui');
+    const v = this.voice(null, FALLOFF.near, STING_LEVELS.wasted, 0, 0, 'ui');
     if (v) {
-      sfx.wasted(v, this.station.key);
+      sfx.wasted(v, this.musicKey);
       this.commit('player', v);
     }
     this.music?.setMode('off');
@@ -1088,9 +1166,9 @@ export class GameAudio {
     this.chaos.reset();
     if (!this.ctx || !this.bank) return;
     const now = this.ctx.currentTime;
-    const v = this.voice(null, FALLOFF.near, 1, 0.1, 0, 'ui');
+    const v = this.voice(null, FALLOFF.near, STING_LEVELS.busted, 0.1, 0, 'ui');
     if (v) {
-      sfx.busted(v, this.station.key);
+      sfx.busted(v, this.musicKey);
       this.commit('player', v);
     }
     this.music?.setMode('off');
@@ -1115,7 +1193,7 @@ export class GameAudio {
     automateDip(this.worldMuffle.frequency, this.muffleDip, now, 0.01);
     const v = fromDeath ? this.voice(null, FALLOFF.near, 0.9, 0, 0, 'ui') : null;
     if (v) {
-      sfx.respawn(v, this.station.key);
+      sfx.respawn(v, this.musicKey);
       this.commit('player', v);
     }
     if (this.musicMode !== 'off') this.music?.setMode(this.musicMode);

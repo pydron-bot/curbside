@@ -13,7 +13,7 @@
  *          the previous note, '~' holds it and slides into the next one (an
  *          808 glide; across the bar line too when it's the last step), '.' rest
  */
-import { SCALES, type Chord } from './theory';
+import { SCALES, type Chord, type MotifNote } from './theory';
 
 export interface Tier {
   kick?: string;
@@ -76,6 +76,8 @@ export interface StationSound {
   reverb: number;
   /** Overall level trim so stations sit at the same loudness. */
   trim: number;
+  /** The lead's level against the rest (1 when left out; the title theme's hook sits on top). */
+  leadGain?: number;
 }
 
 /**
@@ -94,6 +96,8 @@ export interface Song {
   /** Chorus chords (8); the verse's when left out. */
   chorus?: readonly Chord[];
   leadSeed: number;
+  /** A hand-written 8-bar melody, played as written instead of one composed from `leadSeed` (the title theme's hook). */
+  melody?: readonly MotifNote[];
 }
 
 export interface Station {

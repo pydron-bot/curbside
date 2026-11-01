@@ -12,7 +12,7 @@
  */
 import { Dip } from '../mix';
 import { NoiseBank, Voice, automateDip, perc, sweep } from '../synth';
-import { Arranger, StepClock, swingOffset, type MusicMode, type NoteEvent } from './sequencer';
+import { Arranger, StepClock, swingOffset, type MusicMode, type NoteEvent, type Theme } from './sequencer';
 import { kitJobs, kitKey, type KitPart } from './drumKit';
 import { STATIONS, type Song, type Station, type StationSound } from './stations';
 import { midiToHz } from './theory';
@@ -224,6 +224,16 @@ export class MusicPlayer {
     return this.off ? 'off' : this.arranger.mode;
   }
 
+  /** The title theme to play while the mode is 'menu' (null: the station's menu tier). */
+  setTheme(theme: Theme | null): void {
+    this.arranger.theme = theme;
+  }
+
+  /** The title theme is what's playing (not the radio). */
+  get playingTheme(): boolean {
+    return this.arranger.playingTheme;
+  }
+
   /** Begin playing from the top of a phrase at `when`. */
   start(when: number): void {
     this.running = true;
@@ -291,7 +301,10 @@ export class MusicPlayer {
       this.arranger.mode = mode;
       this.start(now + 0.05);
     } else {
+      const was = this.arranger.upcomingStation;
       this.arranger.setMode(mode);
+      // To or from the title theme: a quick fade and a fresh start, not a cut on the bar line.
+      if (this.running && this.arranger.upcomingStation !== was) this.restartAfterFade(now);
     }
   }
 
@@ -305,21 +318,55 @@ export class MusicPlayer {
     const station = STATIONS[this.stationIndex];
     const now = this.ctx.currentTime;
     this.arranger.setStation(station);
-    if (this.running && !this.off) {
-      const g = this.fadeGain.gain;
-      g.setTargetAtTime(0, now, 0.02);
-      g.setTargetAtTime(1, now + 0.3, 0.04);
+    // Under the title theme the radio is retuned silently, for when the game starts.
+    if (this.running && !this.off && this.arranger.upcomingStation === station) {
+      this.restartAfterFade(now);
       this.tuneStatic(now);
-      this.arranger.restart();
-      this.clock.reset(now + 0.32);
     }
     return station;
   }
 
-  /** Dip the music under something loud. `depth` is the gain at the bottom; overlapping ducks merge (deepest wins). */
-  duck(depth: number, release: number): void {
+  /** Fade out and start again from the top of a phrase (a new station, or the theme) ~0.3 s later. */
+  private restartAfterFade(now: number): void {
+    const g = this.fadeGain.gain;
+    g.setTargetAtTime(0, now, 0.02);
+    g.setTargetAtTime(1, now + 0.3, 0.04);
+    this.arranger.restart();
+    this.clock.reset(now + 0.32);
+  }
+
+  /**
+   * GO after a count-in: at `when` the radio drops in on the downbeat of a
+   * chorus at `intensity` or more, out of any duck at once. Whatever the old
+   * phrase had booked past `when` is cut, so nothing doubles or hangs over.
+   */
+  dropIn(when: number, intensity: number): void {
+    if (!this.running || this.off || this.dormant || this.arranger.mode !== 'game' || this.playingTheme) return;
+    for (const v of this.notes) v.kill(when);
+    // The mono synths: drop the old phrase's queued notes and let a held one go.
+    this.bassA.frequency.cancelScheduledValues(when);
+    this.bassB.frequency.cancelScheduledValues(when);
+    this.lead.frequency.cancelScheduledValues(when);
+    for (const g of [this.bassAmp.gain, this.leadAmp.gain]) {
+      g.cancelScheduledValues(when);
+      g.setTargetAtTime(0, when, 0.01);
+    }
+    this.arranger.dropIn(intensity);
+    this.clock.reset(when);
+    this.duckDip.release(when, 0.04);
+    automateDip(this.duckGain.gain, this.duckDip, this.ctx.currentTime, 0.015);
+  }
+
+  /** One take of a hit from the current station's kit (stings borrow the radio's drums); null until it's rendered. */
+  kitTake(part: KitPart): AudioBuffer | null {
+    const takes = this.kit?.[part];
+    return takes && takes.length > 0 ? takes[this.take++ % takes.length] : null;
+  }
+
+  /** Dip the music under something loud. `depth` is the gain at the bottom, held `hold` s; overlapping ducks merge (deepest wins). */
+  duck(depth: number, release: number, hold = 0.12): void {
     const now = this.ctx.currentTime;
-    this.duckDip.add(now, depth, 0.12, Math.max(0.15, release));
+    this.duckDip.add(now, depth, hold, Math.max(0.15, release));
     automateDip(this.duckGain.gain, this.duckDip, now, 0.015);
   }
 
@@ -813,7 +860,7 @@ export class MusicPlayer {
     const flute = kind === 'flute';
     this.lead.frequency.setTargetAtTime(midiToHz(note), t, flute ? 0.03 : 0.018);
     const g = this.leadAmp.gain;
-    g.setTargetAtTime(LEAD_LEVEL * (flute ? 1.6 : 1), t, flute ? 0.03 : 0.01);
+    g.setTargetAtTime(LEAD_LEVEL * (flute ? 1.6 : 1) * (this.sound.leadGain ?? 1), t, flute ? 0.03 : 0.01);
     g.setTargetAtTime(0, t + Math.max(0.05, dur * 0.85), 0.05);
   }
 
