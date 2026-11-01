@@ -8,6 +8,7 @@ import type { StreetProps } from '../world/streetProps';
 import { GLOW, type GlowSprites } from './glowSprites';
 import { PropBatch, propUniforms } from './propBatch';
 import { PropModels } from './propModels';
+import { addCritterModels } from './critterModels';
 import { worldUniforms } from './shaderLib';
 import { publicUrl } from '../core/paths';
 
@@ -90,6 +91,8 @@ export class WorldProps {
       'barrier',
       'traffic_cone',
       'road_barrier_long',
+      // Stand-ins built in code unless props.glb has them (critterModels.ts).
+      'umbrella',
     ],
     192,
   );
@@ -227,6 +230,7 @@ export class WorldProps {
 
   private useModels(models: PropModels): void {
     this.models = models;
+    addCritterModels(models);
     for (const f of this.families) f.setModels(models);
     this.addStreet();
     this.addRoofs(models);

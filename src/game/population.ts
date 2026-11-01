@@ -232,6 +232,8 @@ export interface MaintainContext {
   /** Quality-tier multipliers on TRAFFIC_COUNT / CROWD_COUNT. */
   trafficScale?: number;
   crowdScale?: number;
+  /** Share of crowd spawns kept at (x, z), 0..1 (game/cityMood.ts: busier districts get more); unset keeps all. */
+  spawnWeight?: (x: number, z: number) => number;
   /** First fill (game start, respawn): closer rings, no per-call limits. */
   seed?: boolean;
   /**
@@ -611,6 +613,7 @@ export class Population {
     if (d < lo - 2 || d > hi + 4) return;
     // The group spreads up to ~2.5 m either way.
     if (inRect(ax, az, ctx.view, VIEW_MARGIN + 3)) return;
+    if (ctx.spawnWeight && this.rand() > ctx.spawnWeight(ax, az)) return;
 
     const [cmin, cmax] = CROWD_CLUSTER;
     const n = Math.min(target - this.crowd.length, cmin + Math.floor(this.rand() * (cmax - cmin + 1)));

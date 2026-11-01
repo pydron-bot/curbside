@@ -110,6 +110,8 @@ import { StreetLife } from './game/streetLife';
 import { CityLife } from './game/cityLife';
 import { TUTORIAL_DONE } from './game/tutorial';
 import { CityLifeLook } from './render/cityLifeLook';
+import { CityMood } from './game/cityMood';
+import { atmosphereLook } from './render/atmosphereLook';
 import { mountRadioToast } from './ui/radioToast';
 import { publicUrl } from './core/paths';
 import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
@@ -296,6 +298,8 @@ attract.start(SPAWN_POINT.x, SPAWN_POINT.z);
 const keepVehicles: Array<Vehicle | null> = [null, null];
 /** Cars an activity needs kept (a mission's target, the Chaos Run car): filled by the progress director. */
 const activityCars: Vehicle[] = [];
+/** The hour and the rain for the crowd (game/cityMood.ts): busier nightlife, thinner rainy streets. */
+const cityMood = new CityMood();
 /**
  * Recycle and top up traffic and crowd; `seed` fills the streets from scratch
  * and puts the spawn point's parked cars back.
@@ -315,7 +319,8 @@ function maintainPopulation(seed = false, parked = seed) {
     view: rig.visibleGround(viewRect),
     keep: keepVehicles,
     trafficScale: getQuality().trafficScale,
-    crowdScale: getQuality().crowdScale,
+    crowdScale: getQuality().crowdScale * cityMood.densityAt(at.x, at.z),
+    spawnWeight: cityMood.weight,
     seed,
     parked: parked ? PARKED : undefined,
   });
@@ -415,10 +420,12 @@ const cityLife = new CityLife({
   npcShoot: (x, z, dx, dz) => npcShoot(x, z, dx, dz),
   collect: (kind) => combat.collect(kind),
   focus: () => (attract.active ? attract : player.position),
+  mood: cityMood,
 });
 maintainCity = (seed) => cityLife.maintain(seed);
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
 look.addGlowSource((g, view) => cityLook.draw(g, view));
+cityLook.add(atmosphereLook(cityLife));
 const cityView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 // Everyone's place, pose and clip each frame (and the player ducking into cars, cheering wins).
 const people = new PeoplePose({
@@ -1101,6 +1108,7 @@ function frame(now: number) {
   const focus = attract.active ? attract : player.position;
   pigeons.update(frameSeconds * fx.hitStop.scale, focus.x, focus.z, rig, vehicles, population.crowd, attract.active ? null : player);
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
+  cityMood.set(look.time.hour, fx.weather.rain);
   // Rubble on the sim's clock: frozen by pause, cards and hit-stop like the world.
   destruction.update(simDt);
   // The city scenes' particles (registered looks), on the sim's clock too.
