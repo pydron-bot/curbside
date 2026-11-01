@@ -9,6 +9,8 @@
  * in), unit-tested.
  */
 
+import { defaultCred, sanitiseCred, type CredSave } from './cred';
+
 export const SAVE_KEY = 'curbside.save';
 export const SAVE_VERSION = 1;
 /** Where the free-roam best score lived before the save existed. */
@@ -66,6 +68,8 @@ export interface SaveData {
   tutorial: number;
   /** Each gang's respect for the player, -100..100 by gang id (game/gangs.ts); missing is 0. */
   respect: Record<string, number>;
+  /** CRED earned, levels cashed in and perk ranks (game/cred.ts). */
+  cred: CredSave;
 }
 
 export function defaultStats(): LifetimeStats {
@@ -104,6 +108,7 @@ export function defaultSave(): SaveData {
     unlocks: [],
     tutorial: 0,
     respect: {},
+    cred: defaultCred(),
   };
 }
 
@@ -162,6 +167,7 @@ export function migrateSave(raw: unknown, legacyBest = 0): SaveData {
     save.unlocks = strings(raw.unlocks);
     const veteran = save.stats.playTime >= TUTORIAL_SKIP_PLAYED;
     save.tutorial = Math.min(TUTORIAL_STEPS, num(raw.tutorial, veteran ? TUTORIAL_STEPS : 0));
+    save.cred = sanitiseCred(raw.cred);
     if (isObj(raw.respect)) {
       save.respect = {};
       for (const [k, r] of Object.entries(raw.respect)) {

@@ -22,11 +22,13 @@ export class Nitro {
   /** 0..1 */
   charge = NITRO_START;
   boosting = false;
+  /** Gains are multiplied by this (the NITRO JUNKIE perk). */
+  fill = 1;
 
   constructor(private readonly bus: EventBus) {}
 
   add(amount: number): void {
-    this.charge = Math.min(1, this.charge + Math.max(0, amount));
+    this.charge = Math.min(1, this.charge + Math.max(0, amount) * this.fill);
   }
 
   /**

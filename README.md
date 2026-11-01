@@ -559,6 +559,25 @@ are `src/game/modes/*Mode.ts`.
   a "BANKED $X" feed line. WASTED or BUSTED before then loses the chain
   ("CHAIN LOST"). WASTED also costs a $200 hospital bill; BUSTED fines 25%
   of your cash (the share the bust takes off the score), at most $1,500.
+- **CRED and perks** (`game/cred.ts` rules, `game/credKeeper.ts`,
+  `ui/perkCard.ts`; design in `docs/CRED.md`): every life earns CRED when
+  it ends, from its points (a bust's fine still counts), time alive, peak
+  stars and cash earned: about 250 for a good three minutes. The WASTED /
+  BUSTED card shows +CRED and a level bar (LEVEL UP stamped on a new one).
+  Levels cost 100 CRED, then 50 more each. A level reached holds the respawn:
+  1.7 s into the death screen LEVEL UP freezes the game and offers three of
+  eight perks (seeded by the level, so a reload shows the same three), four
+  ranks each: TOUGH +15 max health, KEVLAR 25 armour at the start of each
+  life, BODYWORK −10% damage to your car, NITRO JUNKIE +15% nitro gains,
+  SLIPPERY +15% time for a cop to cuff you, GHOST −8% time out of sight to
+  lose a star, HUSTLER −20% on hospital bills and fines, BANKER +10% on
+  banked chains (per rank). Picked levels and ranks are saved
+  (`save.cred`); a level not picked waits for the next death screen; once
+  every perk is maxed a level pays $500. The effects are knobs on the
+  systems (`Nitro.fill`, `BustMeter.slow`, `Wanted.evadeScale`,
+  `DamageState.taken` on the car you drive), set every sim step from
+  `CredKeeper.fx`, which is NEUTRAL during a Chaos Run or a race so bests
+  and medals stay comparable. PROGRESS lists the level and every rank.
 - **Cash HUD**: under the score's BEST line, a rolling counter with a
   "+$600" / "−$400" chip and the register's ching; the title shows CASH
   beside BEST.
@@ -743,14 +762,16 @@ Playwright isn't a game dependency: run with
   6.5k (p75 11.3k, max 24.5k), 4 bronze; weaver 12.7k (22.6k, 30.1k), 10
   bronze; drifter 7.8k (12.4k, 33.3k), 4 bronze; no silver or gold. Boom and
   smash are half to three quarters of the points (the weaver: drift 39%).
-- **`heat.mjs [chases=20] [--stars 5] [--secs 180] [--tough] [--seed 1]`**:
+- **`heat.mjs [chases=20] [--stars 5] [--secs 180] [--tough] [--perks] [--seed 1]`**:
   chases from a built-up 3 stars to `--stars`, a junction-to-junction
   evader; escapes, busts, wrecks, time to each lower star, crashes, shots
   taken, helicopter time on you. `--tough` keeps the car healthy to test
   the evasion rules alone. Baseline 2026-10-31 (20 chases, 5 stars): stock
   sports car lost in 18, busted 2, median end 26 s, 1 drop to 4 stars;
   tough car: none escaped, 12 down to 4 stars (median 84 s), 3 to 3 stars,
-  2 busted.
+  2 busted. `--perks` maxes every CRED perk; 2026-11-01 (12 chases each,
+  seed 1): stock car lost at a median 33 s without, 45 s with; tough car
+  2 of 12 down to 3 stars with them, none without; no escapes either way.
 - **`music.mjs <out-dir> [station-id …]`**: renders stations offline
   (`audioLib.mjs`: the game's own audio modules on an OfflineAudioContext
   in the page, ticked like the 25 ms timer) to MP3 (WAV without ffmpeg) for

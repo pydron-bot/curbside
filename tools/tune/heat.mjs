@@ -5,22 +5,31 @@
  * with the same seeds, never an absolute verdict: the bot drives worse than a
  * person and doesn't use resprays.
  *
- *   npx -y -p playwright@1.63.0 node tools/tune/heat.mjs [chases=20] [--stars 5] [--secs 180] [--tough] [--seed 1]
+ *   npx -y -p playwright@1.63.0 node tools/tune/heat.mjs [chases=20] [--stars 5] [--secs 180] [--tough] [--perks] [--seed 1]
  *
  * Each chase: a fresh run, a sports car at a random inner crossing, 3 stars
  * for 10 s so units are on the street (not a cold force(5)), then --stars.
  * The bot drives junction to junction and at each picks the exit with the
  * least police and helicopter pressure, never straight back; it backs off
  * walls. --tough keeps the car's health topped up, isolating the evasion
- * rules from the damage model.
+ * rules from the damage model. --perks plays with every CRED perk maxed
+ * (game/cred.ts), to check 5 stars stay a threat at the top end.
  */
 import { args, openGame, pct } from './lib.mjs';
 
-const opt = args({ stars: 5, secs: 180, tough: false, seed: 1 });
+const opt = args({ stars: 5, secs: 180, tough: false, perks: false, seed: 1 });
 const CHASES = opt._[0] ?? 20;
 
 const { browser, page } = await openGame();
 await page.evaluate(() => window.__ub.startGame());
+if (opt.perks === true) {
+  await page.evaluate(() => {
+    const c = window.__ub.progress.progress.data.cred;
+    for (const id of ['tough', 'vest', 'bodywork', 'nitro', 'slippery', 'ghost', 'hustler', 'banker']) c.perks[id] = 4;
+    c.picked = 32;
+    c.total = 1e6;
+  });
+}
 
 await page.evaluate(() => {
   const u = window.__ub;
@@ -168,7 +177,7 @@ for (let i = 0; i < CHASES; i++) {
 const n = runs.length;
 const count = (f) => runs.filter(f).length;
 const s = opt.stars;
-console.log(`\n${s}-STAR CHASES  ${n} (seeds ${opt.seed * 1000}..${opt.seed * 1000 + n - 1}), ${opt.secs} s each${opt.tough ? ', tough car' : ''}`);
+console.log(`\n${s}-STAR CHASES  ${n} (seeds ${opt.seed * 1000}..${opt.seed * 1000 + n - 1}), ${opt.secs} s each${opt.tough ? ', tough car' : ''}${opt.perks ? ', every perk maxed' : ''}`);
 console.log(`  ended   escaped ${count((r) => r.end === 'escaped')} · busted ${count((r) => r.end === 'busted')} · wasted ${count((r) => r.end === 'wasted')} · car lost ${count((r) => r.end === 'wrecked')} · still wanted ${count((r) => r.end === 'held')}`);
 for (let k = s - 1; k >= 0; k--) {
   const ts = runs.map((r) => r.first[k]).filter((t) => t !== undefined);

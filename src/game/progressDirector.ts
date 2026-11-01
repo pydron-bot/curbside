@@ -44,6 +44,8 @@ import { RaceMode } from './modes/raceMode';
 import { RACES, formatRaceTime } from './modes/races';
 import { SHOP_ITEMS, TOUGH_SKIN_HEALTH, canBuy, sprayPrice } from './modes/shop';
 import { TaxiMode } from './modes/taxiMode';
+import { PERKS, PERK_RANKS, levelFor, pendingLevels, rankOf } from './cred';
+import { CredKeeper } from './credKeeper';
 import { BUST_FINE } from './heat';
 import { MAX_ARMOUR, MAX_HEALTH } from './player';
 import type { Vehicle } from './population';
@@ -83,6 +85,8 @@ export class ProgressDirector implements ModeCtx {
   readonly missions: MissionMode;
   readonly gangs: GangMode;
   readonly area: AreaMode;
+  /** CRED, LEVEL UP and the perks' effects. */
+  readonly cred: CredKeeper;
   private readonly modes: Mode[];
   private readonly props: ProgressProps;
   private readonly bank = new ChainBank();
@@ -137,6 +141,8 @@ export class ProgressDirector implements ModeCtx {
     pruneSave(this.progress.data, { missions: this.missions.missions.map((m) => m.id) });
     this.gangs = new GangMode(this);
     this.area = new AreaMode(this, new AreaCard(document.body), this.gangs);
+    // Perks are off while a score or a time is being set.
+    this.cred = new CredKeeper(this, () => this.chaos.active || this.races.running);
     // Card owners first: a running mode claims the activity card before a passive one.
     this.modes = [this.chaos, this.frenzies, this.races, this.missions, this.taxi, this.exports, this.packages, this.gangs, this.area];
 
@@ -160,7 +166,7 @@ export class ProgressDirector implements ModeCtx {
     // Banners raised by a death or arrest (MISSION FAILED, RACE OVER) wait for the respawn.
     this.ui.holdBanners = () => d.playing() && !this.live;
     d.bus.on('respawn', () => {
-      this.applyUpgrades();
+      this.applyUpgrades(true);
       this.ui.releaseBanner();
     });
     d.bus.on('pause', (e) => {
@@ -172,7 +178,7 @@ export class ProgressDirector implements ModeCtx {
     window.addEventListener('pagehide', () => this.progress.flush());
 
     d.look.addGlowSource((g, view) => this.glow(g, view));
-    this.applyUpgrades();
+    this.applyUpgrades(true);
   }
 
   // --- ModeCtx ---
@@ -215,7 +221,7 @@ export class ProgressDirector implements ModeCtx {
   bankChain(): void {
     if (!this.bank.open) return;
     const links = this.bank.links;
-    const cash = this.bank.close(this.packages.bankBonus);
+    const cash = this.bank.close(this.packages.bankBonus * this.cred.fx.bank);
     if (cash <= 0) return;
     this.progress.earn(cash, 'chain');
     const s = this.progress.stats;
@@ -280,6 +286,8 @@ export class ProgressDirector implements ModeCtx {
   step(dt: number): void {
     if (!this.deps.playing()) return;
     this.progress.step(dt);
+    this.cred.step(dt);
+    this.applyUpgrades(false);
     for (const m of this.modes) m.step(dt);
     // Bank the chain once the combo runs out.
     if (this.bank.open && !chainLive(this.deps.score)) this.bankChain();
@@ -295,6 +303,7 @@ export class ProgressDirector implements ModeCtx {
     const ui = this.ui;
     ui.update(dt);
     if (!this.deps.playing()) return;
+    this.cred.update(dt);
     let claimed = false;
     for (const m of this.modes) if (!claimed && m.hud(dt)) claimed = true;
     if (!claimed) ui.activity(null);
@@ -348,6 +357,7 @@ export class ProgressDirector implements ModeCtx {
 
   private resetAll(): void {
     for (const m of this.modes) m.reset();
+    this.cred.reset();
     for (const p of [...this.modals]) {
       p.hide?.();
       this.closeModal(p);
@@ -408,7 +418,8 @@ export class ProgressDirector implements ModeCtx {
     const lost = this.bank.lose();
     if (lost > 0) this.notice(`CHAIN LOST · ${fmt(lost)}`, 'lost');
     const cash = this.progress.cash;
-    const due = busted ? bustFine(cash) : hospitalBill(cash);
+    // HUSTLER takes a share off.
+    const due = Math.round((busted ? bustFine(cash) : hospitalBill(cash)) * this.cred.fx.bills);
     const taken = this.progress.charge(due, busted ? 'fine' : 'hospital');
     if (taken > 0) this.notice(busted ? `FINE −$${fmt(taken)}` : `HOSPITAL −$${fmt(taken)}`, 'lost');
     // On the card too, beside the points: two different "fines" need their units.
@@ -416,14 +427,16 @@ export class ProgressDirector implements ModeCtx {
     this.progress.flush();
   }
 
-  /** Upgrades that shape every life: TOUGH SKIN's extra health. */
-  private applyUpgrades(): void {
+  /**
+   * Max health: TOUGH SKIN's and the TOUGH perk's (off in a scored mode).
+   * A new life (`fresh`) starts full; mid-life a lower cap only trims.
+   */
+  private applyUpgrades(fresh: boolean): void {
     const p = this.deps.player;
-    const max = MAX_HEALTH + (this.progress.has('armour') ? TOUGH_SKIN_HEALTH : 0);
-    if (p.maxHealth !== max) {
-      p.maxHealth = max;
-      if (p.alive) p.health = Math.max(p.health, max);
-    }
+    const max = MAX_HEALTH + (this.progress.has('armour') ? TOUGH_SKIN_HEALTH : 0) + this.cred.fx.maxHealth;
+    if (p.maxHealth === max) return;
+    p.maxHealth = max;
+    if (p.alive) p.health = fresh ? Math.max(p.health, max) : Math.min(p.health, max);
   }
 
   /** The safehouse door: stand on it to shop; the pause menu offers it nearby. */
@@ -475,7 +488,7 @@ export class ProgressDirector implements ModeCtx {
           if (canBuy(it, progress.cash, owned) !== 'ok' || !progress.spend(it.price, 'shop')) return false;
           if (it.kind === 'upgrade') {
             progress.unlock(it.id);
-            this.applyUpgrades();
+            this.applyUpgrades(true);
           } else if (it.kind === 'armour') {
             player.addArmour(MAX_ARMOUR);
           } else if (it.weapon) {
@@ -490,6 +503,22 @@ export class ProgressDirector implements ModeCtx {
       () => (fromStreet ? this.closeModal(this.shop) : this.deps.frontDoor.closePanel(this.shop)),
       this.focusRing,
     );
+  }
+
+  /** PROGRESS: the CRED level, how far into the next, and every perk's rank. */
+  private credSection(): StatsModel['sections'][number] {
+    const c = this.progress.data.cred;
+    const lv = levelFor(c.total);
+    const waiting = pendingLevels(c);
+    const title = (name: string) => name[0] + name.slice(1).toLowerCase();
+    return {
+      title: 'CRED & PERKS',
+      rows: [
+        { label: `Level ${lv.level}`, value: `${fmt(lv.into)} / ${fmt(lv.need)} CRED`, bar: lv.into / lv.need },
+        ...(waiting > 0 ? [{ label: 'Perks waiting to pick', value: `${waiting}` }] : []),
+        ...PERKS.map((perk) => ({ label: `${title(perk.name)} · ${perk.says(Math.max(1, rankOf(c, perk.id))).toLowerCase()}`, value: `${rankOf(c, perk.id)}/${PERK_RANKS}`, bar: rankOf(c, perk.id) / PERK_RANKS })),
+      ],
+    };
   }
 
   private openStats(): void {
@@ -533,6 +562,7 @@ export class ProgressDirector implements ModeCtx {
           ],
           chips: { label: 'EXPORT ORDERS', items: this.exports.orders.map((o) => ({ text: o.label, done: o.done })) },
         },
+        this.credSection(),
         {
           title: 'BEST',
           rows: [

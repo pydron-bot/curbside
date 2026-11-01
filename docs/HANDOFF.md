@@ -248,6 +248,13 @@ still get the offline shell.
    gangs [`gangs-respect`]: district names (placeholders), the area card and one gang (VIPERS, NEON MILE, respect) done 2026-10-31 on `claude/gangs`; leaderboard needs a decision on any backend
    [`online-leaderboard`].
 
+9. **CRED and perks: done 2026-11-01** on `claude/cred-perks` (README
+   *Progression*, design in `docs/CRED.md`). Every life earns CRED; a level
+   holds the WASTED / BUSTED screen for a pick of three perks (eight perks,
+   four ranks each), off in the Chaos Run and races. **For the device
+   pass:** tap a pick on the phone, feel the pacing (first level after a
+   life or two?), and watch whether stars give too much CRED.
+
 Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
 launch ramp landing at a corner checkpoint (is that a feature?).
 

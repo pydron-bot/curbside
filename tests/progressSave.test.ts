@@ -63,6 +63,13 @@ describe('save: defaults and migration', () => {
     expect(s.unlocks).toEqual(['scanner']);
   });
 
+  it('CRED: a save from before it starts at zero; a stored record round-trips, cleaned', () => {
+    expect(migrateSave({ v: 1, cash: 10 }).cred).toEqual({ total: 0, picked: 0, perks: {} });
+    const s = migrateSave({ v: 1, cred: { total: 300, picked: 1, perks: { tough: 1, made_up: 4 } } });
+    expect(s.cred).toEqual({ total: 300, picked: 1, perks: { tough: 1 } });
+    expect(migrateSave(JSON.parse(JSON.stringify(s))).cred).toEqual(s.cred);
+  });
+
   it('a fresh player gets the first-run pointers; a save from before them with real play skips them', () => {
     expect(defaultSave().tutorial).toBe(0);
     expect(migrateSave({ cash: 10 }).tutorial).toBe(0);
