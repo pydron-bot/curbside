@@ -9,6 +9,7 @@ import {
 import { propMaterial } from '../world/cityMesh';
 import { mulberry32 } from '../world/random';
 import { RUBBLE_CAPACITY } from './destructionStyle';
+import { lampList } from './shaderLib';
 
 /** A crumbling chunk settles this far into the pavement before it shrinks, m. */
 const SETTLE = 0.04;
@@ -138,8 +139,11 @@ export interface RubbleSource {
 /**
  * Every rubble chunk in one InstancedMesh (plus its shadow pass on desktop
  * style), on the city's prop material: lit by sun, shadows, sky and street
- * lamps like the walls it came from, and sharing the city's programs, so it
- * adds none, and its shadow pass reuses the city chunks' depth variant.
+ * lamps like the walls it came from. Each chunk carries its street-lamp
+ * short list (`aLamps`, worked out in add()), so at night a chunk lights
+ * from the lamps in reach rather than walking eight per fragment: that's
+ * the material's lampList variant, one program of its own; its shadow pass
+ * reuses the city chunks' depth variant.
  * Built and added to the scene at boot whatever the setting, drawn visible at
  * count 0 for two frames so its buffers go up behind the title: switching
  * the test on mid-session then compiles and uploads nothing new.
@@ -150,12 +154,15 @@ export class RubbleBatch {
   readonly mesh: InstancedMesh;
   private n = 0;
   private warm = 2;
+  private readonly lamps: InstancedBufferAttribute;
 
   constructor(readonly capacity = RUBBLE_CAPACITY) {
     const geo = chunkGeometry();
     // propMaterial's emission reads aGlow; rubble never glows.
     geo.setAttribute('aGlow', new InstancedBufferAttribute(new Float32Array(capacity), 1));
-    this.mesh = new InstancedMesh(geo, propMaterial(), capacity);
+    this.lamps = new InstancedBufferAttribute(new Float32Array(capacity * 4), 4).setUsage(DynamicDrawUsage);
+    geo.setAttribute('aLamps', this.lamps);
+    this.mesh = new InstancedMesh(geo, propMaterial({ lampList: true }), capacity);
     // Create the colour attribute now so the program is compiled with it at warm-up.
     this.mesh.setColorAt(0, new Color(0.5, 0.5, 0.5));
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
@@ -252,6 +259,8 @@ export class RubbleBatch {
     c[ci] = colour[k] * dark;
     c[ci + 1] = colour[k + 1] * dark;
     c[ci + 2] = colour[k + 2] * dark;
+    // The lamps that reach any of it (it never grows: half its diagonal from the middle).
+    lampList(pose[p], pose[p + 2], 0.5 * Math.sqrt(sx * sx + sy * sy + sz * sz), this.lamps.array as Float32Array, this.n * 4);
     this.n++;
   }
 
@@ -262,11 +271,13 @@ export class RubbleBatch {
     mesh.visible = n > 0 || this.warm > 0;
     if (this.warm > 0) this.warm--;
     if (n === 0) return;
-    // Whole buffers (up to 19 KB): three's update ranges allocate per upload.
+    // Whole buffers (up to 19 KB each): three's update ranges allocate per upload.
     mesh.instanceMatrix.clearUpdateRanges();
     mesh.instanceMatrix.needsUpdate = true;
     mesh.instanceColor!.clearUpdateRanges();
     mesh.instanceColor!.needsUpdate = true;
+    this.lamps.clearUpdateRanges();
+    this.lamps.needsUpdate = true;
   }
 
   /** Nothing drawn changed since the last end() (a settled pile, the same chunks in view): draw it again, upload nothing. */

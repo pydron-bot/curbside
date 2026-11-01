@@ -18,7 +18,7 @@ import {
   type Material,
 } from 'three';
 import { BREACH_FRAGMENT_GLSL, BREACH_VERTEX_GLSL, breachUniforms } from '../render/breachScars';
-import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from '../render/shaderLib';
+import { UB_COMMON, UB_LAMP_LIST, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from '../render/shaderLib';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, type City, type Rect } from './city';
 import { AWNING_DEPTH, AWNING_HEIGHT, planBuildings, type BuildingPlan, type RoofProp } from './buildingPlans';
 import { DISTRICTS, DISTRICT_STYLES, ROOF_TYPES, type District, type RoofType } from './districts';
@@ -399,15 +399,22 @@ function boundaryWallMesh(city: City, geo: BufferGeometry, mat: Material): Insta
  * emission at night (neon, lamp heads). Every instance shares one program
  * (the cache key), so other batches (rubble) can use it for free; they need
  * `instanceColor` and an `aGlow` attribute from the start.
+ *
+ * `lampList`: small things that move (rubble) light from a per-instance
+ * short list of street lamps (an `aLamps` attribute, shaderLib.ts lampList)
+ * instead of walking eight per fragment: the same light, one more program,
+ * compiled with the rest at start-up.
  */
-export function propMaterial(): MeshLambertMaterial {
+export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMaterial {
+  const listed = opts.lampList === true;
   const mat = new MeshLambertMaterial();
   mat.onBeforeCompile = (shader) => {
     useWorldUniforms(shader);
     shader.vertexShader = after(
       shader.vertexShader,
       '#include <common>',
-      'attribute float aGlow;\nvarying float vGlow;\nvarying vec3 vPropWorld;\nvarying vec3 vPropNormal;',
+      'attribute float aGlow;\nvarying float vGlow;\nvarying vec3 vPropWorld;\nvarying vec3 vPropNormal;' +
+        (listed ? '\nattribute vec4 aLamps;\nflat varying vec4 vPropLamps;' : ''),
     );
     shader.vertexShader = after(
       shader.vertexShader,
@@ -415,21 +422,22 @@ export function propMaterial(): MeshLambertMaterial {
       `vGlow = aGlow;
       mat4 propModel = modelMatrix * instanceMatrix;
       vPropWorld = (propModel * vec4(transformed, 1.0)).xyz;
-      vPropNormal = normalize(mat3(propModel) * objectNormal);`,
+      vPropNormal = normalize(mat3(propModel) * objectNormal);${listed ? '\nvPropLamps = aLamps;' : ''}`,
     );
     shader.fragmentShader = after(
       shader.fragmentShader,
       '#include <common>',
-      `varying float vGlow;\nvarying vec3 vPropWorld;\nvarying vec3 vPropNormal;\n${UB_COMMON}\n${UB_STREET_LIGHT}`,
+      `varying float vGlow;\nvarying vec3 vPropWorld;\nvarying vec3 vPropNormal;\n${UB_COMMON}\n${UB_STREET_LIGHT}` +
+        (listed ? `\nflat varying vec4 vPropLamps;\n${UB_LAMP_LIST}` : ''),
     );
     shader.fragmentShader = after(
       shader.fragmentShader,
       '#include <emissivemap_fragment>',
       `totalEmissiveRadiance += vColor.rgb * vGlow * (0.12 + uNight)
-        + diffuseColor.rgb * ubStreetLight(vPropWorld, normalize(vPropNormal));`,
+        + diffuseColor.rgb * ${listed ? 'ubListedLight' : 'ubStreetLight'}(vPropWorld, normalize(vPropNormal));`,
     );
   };
-  mat.customProgramCacheKey = () => 'curbside-props';
+  mat.customProgramCacheKey = () => (listed ? 'curbside-props-listed' : 'curbside-props');
   return mat;
 }
 
