@@ -244,9 +244,11 @@ export class ChaosRunMode implements Mode {
     const run = this.run!;
     this.finalScore = Math.max(this.finalScore, deps.score.total);
     const best = progress.best(CHAOS_RUN_ID);
-    const newBest = progress.recordBest(CHAOS_RUN_ID, this.finalScore);
+    // God mode runs don't count.
+    const god = deps.player.invulnerable;
+    const newBest = !god && progress.recordBest(CHAOS_RUN_ID, this.finalScore);
     const medal = chaosMedal(this.finalScore);
-    progress.recordMedal(CHAOS_RUN_ID, medal);
+    if (!god) progress.recordMedal(CHAOS_RUN_ID, medal);
     progress.flush();
     deps.bus.emit({ type: 'activityEnd', kind: 'chaosRun', id: CHAOS_RUN_ID, time: run.elapsed, score: this.finalScore, medal, end: reason, bonusTime: run.bonusTime });
     const next = nextMedal(this.finalScore);

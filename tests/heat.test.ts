@@ -151,6 +151,15 @@ describe('heat: police response', () => {
     expect(w.log.some((e) => e.type === 'wanted' && e.reason === 'busted')).toBe(true);
   });
 
+  it('god mode: the police come but never cuff', () => {
+    const w = world(3);
+    w.player.invulnerable = true;
+    w.heat.wanted.force(1);
+    expect(w.runUntil(() => w.player.arrested, 60)).toBeGreaterThanOrEqual(60);
+    expect(w.types()).not.toContain('busted');
+    expect(w.heat.wanted.level).toBe(1);
+  });
+
   it('never sends more units than the level calls for, and stands them down when the heat is gone', () => {
     const w = world(5);
     w.heat.wanted.force(3);

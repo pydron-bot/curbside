@@ -37,6 +37,8 @@ export interface Settings {
   destruction: DestructionMode;
   /** The player's body: picked on the title screen (CHARACTER). */
   character: PlayerCharacter;
+  /** Testing: the player can't die or be busted; such a life earns no CRED and sets no bests. */
+  godMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -51,6 +53,7 @@ export const DEFAULT_SETTINGS: Settings = {
   perfOverlay: 'off',
   destruction: 'off',
   character: 'male',
+  godMode: false,
 };
 
 const KEY = 'curbside.settings';
@@ -74,7 +77,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     const v = raw[k];
     if (typeof v === 'number' && Number.isFinite(v)) out[k] = Math.min(1, Math.max(0, v));
   }
-  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics'] as const) {
+  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics', 'godMode'] as const) {
     const v = raw[k];
     if (typeof v === 'boolean') out[k] = v;
   }

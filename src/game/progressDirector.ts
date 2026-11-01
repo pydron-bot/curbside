@@ -295,7 +295,7 @@ export class ProgressDirector implements ModeCtx {
     this.stepTutorial();
     // Free roam's best as it's beaten (the Chaos Run records its own at the end).
     const total = this.deps.score.total;
-    if (!this.chaos.active && total > this.progress.best('free')) this.progress.recordBest('free', total);
+    if (!this.chaos.active && !this.deps.player.invulnerable && total > this.progress.best('free')) this.progress.recordBest('free', total);
   }
 
   /** Per frame (real time, not while paused). */

@@ -51,6 +51,8 @@ export class Player {
   stunned = 0;
   punchCooldown = 0;
   health = MAX_HEALTH;
+  /** God mode (settings, for testing): hurt() never takes health, the police can't cuff. */
+  invulnerable = false;
   /** Health a life starts with (raised by the shop's TOUGH SKIN upgrade). */
   maxHealth = MAX_HEALTH;
   /** Body armour, 0..MAX_ARMOUR: takes every hit first. Lost on death. */
@@ -143,6 +145,12 @@ export class Player {
    */
   hurt(amount: number): boolean {
     if (!this.alive || this.arrested || amount <= 0) return false;
+    if (this.invulnerable) {
+      // God mode: the hit still lands (flash, knockback, regen pause), the health doesn't move.
+      this.sinceHurt = 0;
+      this.bus.emit({ type: 'playerHurt', amount, health: this.health, armour: this.armour, absorbed: 0 });
+      return false;
+    }
     const absorbed = Math.min(this.armour, amount);
     this.armour -= absorbed;
     this.health = Math.max(0, this.health - (amount - absorbed));

@@ -86,6 +86,10 @@ body:not([data-scene='play']) #wasted {
   animation: hp-critical 0.8s ease-in-out infinite alternate;
 }
 
+.hud-status.god .hp-icon {
+  color: #ffd23f;
+}
+
 .hud-status.critical .hp-icon {
   animation: hp-beat 0.8s ease-in-out infinite;
 }

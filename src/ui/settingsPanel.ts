@@ -6,7 +6,7 @@ import { MenuNav, overlay, type Panel } from './menu';
 import { onTap } from './tap';
 
 type SliderKey = 'masterVolume' | 'sfxVolume' | 'musicVolume';
-type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics';
+type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics' | 'godMode';
 type ChoiceKey = 'quality' | 'steering' | 'perfOverlay';
 
 type Row =
@@ -87,6 +87,7 @@ export class SettingsPanel implements Panel {
       },
       { kind: 'toggle', key: 'leftHanded', label: 'Left-handed layout', sub: 'Mirror the touch controls' },
       { kind: 'toggle', key: 'haptics', label: 'Vibration', sub: 'Phone and controller rumble' },
+      { kind: 'toggle', key: 'godMode', label: 'God mode', sub: "Testing: can't die or get busted; no CRED or bests" },
     ];
     const displayRows: Row[] = [
       {
