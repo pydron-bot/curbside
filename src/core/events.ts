@@ -227,7 +227,10 @@ export type StreetWhat =
   | 'iceCreamServed'
   | 'busStop'
   | 'tow'
-  | 'fight';
+  | 'fight'
+  // Traffic: two cars collided on their own, a truck double-parked in the lane.
+  | 'accident'
+  | 'doublePark';
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;

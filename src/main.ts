@@ -420,6 +420,8 @@ const cityLife = new CityLife({
   npcShoot: (x, z, dx, dz) => npcShoot(x, z, dx, dz),
   collect: (kind) => combat.collect(kind),
   focus: () => (attract.active ? attract : player.position),
+  hour: () => look.time.hour,
+  enlist: (officer) => heat.police.strays.push(officer),
 });
 maintainCity = (seed) => cityLife.maintain(seed);
 const cityLook = new CityLifeLook(cityLife, effects, look.props);

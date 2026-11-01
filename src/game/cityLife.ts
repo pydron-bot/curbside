@@ -110,6 +110,10 @@ export interface CityLifeDeps {
   collect(kind: WeaponKind): boolean;
   /** Who's looking: the focus of the camera (attract cruise or player). */
   focus(): { x: number; z: number; vx: number; vz: number };
+  /** The game hour, 0..24 (render/timeOfDay.ts): street races run mostly at night. */
+  hour?(): number;
+  /** Hand a scene's officer to the police (the player turned on them): normal heat rules from there. */
+  enlist?(officer: CrowdPed): void;
 }
 
 /** A scene's view of the director. */

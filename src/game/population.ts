@@ -60,6 +60,8 @@ export interface Vehicle {
   scene?: SceneDriver | null;
   /** Parked at the kerb by upkeep: counted apart from abandoned cars and wrecks. */
   parked?: boolean;
+  /** Left in the road by a city scene (a crash, a getaway): a tow truck may take it (scenes/accidents.ts). */
+  towable?: boolean;
 }
 
 /** Something that drives a vehicle for a city scene (allocation-free: returns a reused object). */
@@ -488,6 +490,7 @@ export class Population {
     v.ambient = false;
     v.scene = null;
     v.parked = false;
+    v.towable = false;
     v.mesh.siren = false;
     v.mesh.root.visible = false;
     v.sim.vx = v.sim.vz = v.sim.yawRate = 0;
