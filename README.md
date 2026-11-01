@@ -55,7 +55,7 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Nitro | Shift in a car | NOS (fills the button) | B |
 | Pause | P / Esc | ❚❚ top centre (also automatic on app switch / portrait) | Start (B resumes) |
 | Menus | arrows + Enter, Esc / Backspace back | tap | D-pad / left stick + A, B back |
-| Next radio station | R | tap the "now playing" card | Select / View |
+| Next radio station | R | tap the "now playing" card (it shows as a chase comes in: tap it for the radio) | Select / View |
 
 Settings (title or pause menu): master / effects / music volume, sound with
 the iPhone silent switch on, graphics quality, touch steering
@@ -753,13 +753,17 @@ Playwright isn't a game dependency: run with
   listening, with the songs heard and RMS / peak per 5 s window. `SECONDS`
   (90), `SCRIPT` (intensity steps, `0:1,24:3,48:5,72:0`), `MODE=menu`.
   Needs no game page, only the dev server (`URL=http://localhost:5173/`).
+  The audio renders repeat too (`audioLib.mjs` seeds `Math.random` afresh
+  for each, and renders every drum kit it will play before it starts): the
+  same figures every run, the WAVs a 16-bit step apart in a few samples
+  (the browser's own float rounding).
   Baseline 2026-11-01 (90 s, default script, raw music output): every
   station at −14.6 to −14.7 dBFS overall, about −18 at intensity 1, −15 at
   3 and −13 at 5; peaks at about 0 dBFS (the music bus and limiter follow in
   the game). New stations should land within a dB of that. The four added
   2026-11-01 do: SIDEWAYS 808 −14.6, GETAWAY 104.3 −15.1, DUBWISE 88.8
   −15.2 and INSERT COIN −14.8 overall, peaks at most +0.7 dBFS (as
-  NIGHTDRIVE's +0.6). `MODE=menu` renders sit at −15.3 to −18.6.
+  NIGHTDRIVE's +0.6). `MODE=menu` renders sit at −15.3 to −18.5.
 - **`stings.mjs <out-dir> [name …]`**: renders the title theme and the
   stings built on its hook the same way, at the voice levels the game plays
   them: `theme`, `wasted`, `busted`, `mission-start`, `mission-passed`,
@@ -773,11 +777,11 @@ Playwright isn't a game dependency: run with
   dBFS, mission start −18.8, failed −21.2; RMS within 0.1 dB, peaks within
   0.6); over INSERT COIN `count-in-radio` is −22.2 either way, with no F
   rubbing against its F# any more.
-  Baseline 2026-11-01 (raw, key A): the theme −17.1 dBFS overall (about
-  −18 in its intro and first hook, −15.5 in the hook with drums; the
-  stations' menu tiers are −15.4 to −17.9), peak −0.9; WASTED −14.1 (the
-  old one −13.5), BUSTED −16.6 to −17.5 (old −16.9 to −18.4), both peaking
-  near +1 dBFS from their slam and clang layers (the old ones +3.5 to +4.9
+  Baseline 2026-11-01 (raw, key A, seeded): the theme −16.8 dBFS overall
+  (about −18 in its intro and first hook, −15.5 in the hook with drums;
+  the stations' menu tiers, above, −15.3 to −18.5), peak −1.8; WASTED −14.1
+  (the old one −13.5), BUSTED −16.6 (old −16.9 to −18.4), peaking at +1.2
+  and +1.5 dBFS from their slam and clang layers (the old ones +3.5 to +4.9
   and +1.6 to +2.1; the limiter follows in the game); mission start −18.8,
   passed −19.4, failed −21.2 (peaks −5.7, −4.7, −7.7); the count's hits
   peak at −10, −8 and −5.5 and GO at −4.7.
@@ -861,7 +865,9 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   drums, a breath; 72 s at 100 BPM). `'game'` brings the radio back with
   its next song (its first, at boot); `audio.station`, the saved station
   and the NOW PLAYING card stay the radio's (a retune on the title is kept
-  for the game). Every sting and UI sound is tuned to the key the music is
+  for the game, and a station heard on foot doesn't carry over: off the
+  game the music is put back on the radio's station, silently under the
+  theme). Every sting and UI sound is tuned to the key the music is
   in (the song's own, transposition included), and to its mode: a song is
   major when its tonic chords have the major third (or, with no tonic
   chord, when its chords hold the key's major third rather than its minor
@@ -877,10 +883,14 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   hook: WASTED (heavy, then the tape sags) and BUSTED (cold, sinking to the
   flat fifth) over their slam and clang; a payphone job starts on a bar of
   heist pulse under the hook, passes on it in the major, fails on it losing
-  its nerve (each job its own lead and tempo; the radio dips under them);
-  the 3-2-1-GO before a Chaos Run, race or frenzy is a hit per number,
-  building over a riser to the tonic with the radio held down, and GO
-  drops the radio back in hard on a chorus, a few layers up. Scores are
+  its nerve (the starts cycle four leads and tempos by job, the passes
+  three, the fails two; the radio dips under them); the 3-2-1-GO before a
+  Chaos Run, race or frenzy is a hit per number, building over a riser to
+  the tonic with the music held down, and GO lands a big hit; in a car it
+  drops the radio back in hard on a chorus, a few layers up (on foot the
+  street plays on: a frenzy started on foot runs to whatever is playing
+  nearby, or to silence). Getting into a car puts the radio back on your
+  station at once, so a run's count-in is in its key. Scores are
   pure data (`stings.ts`), played by one gliding lead and bass per sting,
   chord stabs and takes of the radio's own drum kit.
 - **The chase.** From 3 stars the radio gives way to a score of the game's
@@ -894,13 +904,22 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   wanted level and play through the usual intensity floor; at one or two
   stars it carries on, calmer. When the police lose you (back to 0 stars:
   evaded, resprayed) it calms down, two drumless bars of the hook, and
-  hands back to the radio's next song; caught again during those, it
-  carries on. WASTED and BUSTED stop the music as before and drop the
-  chase; after respawn it's the radio. R (or tapping the card) during a
-  chase is the player's call: the chase drops for the next station and
-  stays away for the rest of that chase, until the stars are back to 0 and
-  up to 3 again. It plays in your ears on foot too, never through the street
-  below; no NOW PLAYING for it. The mechanism is the theme's: an `Arranger`
+  hands back to the radio's next song; back to 3 stars during those, it
+  carries on (at one or two it hands back all the same). WASTED and BUSTED
+  fade the music out as before (and it stays out: a death clears the stars
+  before the music hears of it, so the chase is dropped only once the
+  music is off) and drop the chase; after respawn it's the radio, or what
+  the street plays, with the respawn sting in its key. R (or tapping the
+  card) during a chase is the player's call: the chase drops for the next
+  station and stays away for the rest of that chase, until the stars are
+  back to 0 and up to 3 again. It plays in your ears on foot too, never
+  through the street below; on foot its last bar fades out, so the street
+  takes over from silence, not with the radio's next song in your ears. The
+  radio card names it while it plays: it drops in as the chase comes in and
+  when you get into a car during one, CURBSIDE PURSUIT in the police's red
+  and blue over `NOW PLAYING · R FOR RADIO` (`TAP FOR RADIO` on touch), and
+  that tap or R is the skip (`audio.playingScore`, `audio.onScoreChange`).
+  The mechanism is the theme's: an `Arranger`
   plays a `Theme` instead of the radio (`theme` in 'menu', `score` in
   'game'), and a Theme without a set tempo or tiers follows the intensity
   under its own form, section rules (`shape`) and `outro`.
@@ -910,14 +929,18 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   music path (`StreetChain` in `loops.ts`: a lowpass, a pan and a gain;
   open in the car, the chase and the title). The car you got out of plays
   your station where you left it, so its radio fades as you walk away (and
-  comes back as you walk back); about one in three parked cars has its radio
-  on (nobody in it, not police, not wrecked or burning; the station a hash
-  of where it's parked: the van by the spawn point plays the first
-  station); half the neon-lit shopfronts and a quarter of those with
-  awnings play their district (NEON MILE funk or phonk, GLASS HEIGHTS
+  comes back as you walk back), unless it's a police car or SUV, a SWAT
+  van, an ambulance, a fire truck or a two-wheeler (no radio worth hearing,
+  like those at the kerb); about one in three parked cars has its radio on
+  (nobody in it, not police, not wrecked or burning; the station a hash of
+  where it's first heard parked, kept while it stays about there, so a
+  nudge from traffic or a blast doesn't retune it or switch it off; moved
+  6 m it's been re-parked and picks again: the van by the spawn point plays
+  the first station); half the neon-lit shopfronts and a quarter of those
+  with awnings play their district (NEON MILE funk or phonk, GLASS HEIGHTS
   synthwave or breaks, COBBLE ROW lo-fi, RUSTWATER DOCKS dub, MAPLE FLATS
-  chiptune or lo-fi, a fifth of each with something else; 591 in the city,
-  in a 32 m grid built once); and each VIPERS hangout's boombox plays
+  chiptune or lo-fi, a fifth or two of each with something else; 591 in
+  the city, in a 32 m grid built once); and each VIPERS hangout's boombox plays
   SIDEWAYS 808 while its crew stands about calm, loud enough to carry 30 m
   or so. When the crew turns on you or gets knocked about it's cut with a
   record scratch, and back once they've settled for 12 s (`gangMode` emits
@@ -930,13 +953,16 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   when it's 1.6× louder than the loudest playing the current one, so
   walking between two doesn't flap; the change fades out, retunes quietly
   from the top of a phrase and fades back in. Nothing in range for 4 s and
-  the music goes dormant (no notes booked) until something is. Getting into
-  a car puts the radio back on your station (with the usual static when
-  that's a change, seamless when it's already playing it) and NOW PLAYING
-  as usual; songs heard from the street never pop the card. R on foot
-  retunes the car radio for next time and shows the card with its name
-  (by your own car you hear it retune). The street is scanned every 0.2 s
-  with nothing allocated.
+  the music goes dormant (no notes booked) until something is. Stepping out
+  of the car carries the radio on from your ears down to the street; after
+  WASTED or BUSTED (the music was off) and after the chase, the street
+  starts from silence instead. Getting into a car puts the radio back on
+  your station (with the usual static when that's a change, seamless when
+  it's already playing it) and NOW PLAYING as usual; songs heard from the
+  street never pop the card. R on foot retunes the car radio for next time
+  and shows the card with its name (by your own car you hear it retune).
+  The street is scanned every 0.2 s with nothing allocated but a parked
+  car's record the first time it's heard (`ParkedRadios`).
 - **Music.** A look-ahead scheduler (25 ms timer, 0.12 s ahead on the audio
   clock) plays original songs in seven styles: NIGHTDRIVE FM (synthwave),
   BREAKNECK 99.1 (breakbeat), LOW TIDE (lo-fi), SIDEWAYS 808 (phonk),
@@ -952,7 +978,8 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   kick, snare, arps, lead, crashes and risers, opens the filter and lifts
   the tempo; changes land on bar lines with a fill, tempo glides. It follows
   chaos (combos, explosions, speed) above a floor set with `setIntensity`.
-  `'menu'` mode is a drumless arrangement for a title screen. Drums play
+  `'menu'` mode plays the title theme (or, with no theme set, the station's
+  drumless menu tier). Drums play
   from a kit rendered per station sound (`drumKit.ts`: layered, saturated
   hits, 808-style metal hats, a four-hand clap, up to three takes each in
   round robin), rendered a take at a time between frames when a station is
@@ -1001,9 +1028,11 @@ audio.missionCue('start' | 'passed' | 'failed', index)  // a payphone job's musi
 audio.setPaused(bool)
 audio.setIntensity(0..5)             // music floor, e.g. the wanted level
 audio.setMusicMode('game' | 'menu' | 'off')
-audio.nextStation()                  // also R / tapping the radio card
+audio.nextStation()                  // also R / tapping the radio card (mid-chase: drops the chase)
+audio.playingScore                   // the chase is playing instead of the radio
+audio.onScoreChange(fn)              // fn(true) as the chase comes in, fn(false) when the radio's back
 audio.unlock()                       // call from a title screen's tap
-audio.debug                          // state, voices, nodes, engine, music
+audio.debug                          // state, voices, nodes, engine, music, street (on foot), chaos, muffle
 ```
 
 To audition sounds without playing, render them offline: every recipe takes
