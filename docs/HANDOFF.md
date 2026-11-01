@@ -125,6 +125,12 @@ safety valve when DynamicResolution drops a tier, which it only does with
 Settings → Graphics on Auto, the default), and PHONE stays on the switch to
 compare against. Full numbers in README *Destruction test*.
 
+**Done 2026-11-01:** the service worker's navigation fallback skips URLs
+that name a file (`navigateFallbackDenylist` in `vite.config.ts`), so
+opening `/curbside/og.jpg` (or any file added there later) on a device that
+has played shows the file, not the game; `.html` and the bare game URL
+still get the offline shell.
+
 1. ~~Live touch tuning~~ [`touch-tuning`]: done 2026-10-31 (pause →
    DIAGNOSTICS → TOUCH TUNING; README *Controls*). Use it during the device
    pass and send the report: its `TUNE` line is the numbers to bake in.
