@@ -471,7 +471,8 @@ export class GameAudio {
    * The 3-2-1-GO before a run (Chaos Run, races, frenzies): call with each
    * number as it shows (3, 2, 1), then 0 on GO. The counts are hits that
    * build over a riser in the music's key with the radio held down under
-   * them; GO lands a big hit and the radio drops back in hard on a chorus.
+   * them; GO lands a big hit and, in a car, the radio drops back in hard on
+   * a chorus (on foot the street plays on: it isn't the radio in your ears).
    */
   countIn(n: number): void {
     const ctx = this.ctx;
@@ -490,6 +491,8 @@ export class GameAudio {
     // Play takes over from here; the next frames ask for the same level, so the drop sticks.
     this.chaos.add(GO_ENERGY);
     this.chaos.step(0);
+    // On foot the street plays on: a shop's radio doesn't jump to its chorus for you.
+    if (this.walking) return;
     const level = this.autoIntensity ? Math.min(MAX_INTENSITY, (this.inCar ? 1 : 0) + this.chaos.level) : 0;
     music.dropIn(v.t, Math.max(this.intensityFloor, level));
     music.pump(ctx.currentTime);
@@ -538,7 +541,7 @@ export class GameAudio {
     this.intensityFloor = clamp(level, 0, MAX_INTENSITY);
   }
 
-  /** 'game' plays the adaptive soundtrack, 'menu' a sparse title arrangement, 'off' fades it out. */
+  /** 'game' plays the adaptive soundtrack, 'menu' the title theme, 'off' fades it out. */
   setMusicMode(mode: MusicMode): void {
     this.musicMode = mode;
     if (!this.dead) this.music?.setMode(mode);

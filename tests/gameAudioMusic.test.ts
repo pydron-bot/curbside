@@ -539,6 +539,16 @@ describe('GameAudio: the car radio', () => {
     }
     expect(g.music.isDormant).toBe(true);
     expect(g.heard()).toBeLessThan(0.01);
+    // By a boombox: it plays on, not jumped to a chorus; in a car the radio drops in.
+    const dropIn = vi.spyOn(g.music, 'dropIn');
+    g.emit({ type: 'boombox', id: 'vipers-0', x: QUIET.x + 3, z: QUIET.z, on: true });
+    g.run(3);
+    g.audio.countIn(0);
+    expect(dropIn).not.toHaveBeenCalled();
+    g.drive();
+    g.run(2);
+    g.audio.countIn(0);
+    expect(dropIn).toHaveBeenCalledTimes(1);
   });
 });
 
