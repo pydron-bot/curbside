@@ -762,6 +762,38 @@ export function busted(v: Voice, key: number): void {
   playSting(v, bustedSting(key));
 }
 
+/**
+ * A record scratch: the boombox's music dragged back and forth under a hand
+ * (a pitched buzz and a band of noise swept down, up, down) and stopped dead.
+ */
+export function recordScratch(v: Voice): void {
+  const t = v.t;
+  const o = v.osc('sawtooth', 300, t, t + 0.4);
+  const f = o.frequency;
+  f.setValueAtTime(320, t);
+  f.exponentialRampToValueAtTime(90, t + 0.09);
+  f.exponentialRampToValueAtTime(420, t + 0.16);
+  f.exponentialRampToValueAtTime(60, t + 0.32);
+  const bp = v.filter('bandpass', 1400, 1.1);
+  const b = bp.frequency;
+  b.setValueAtTime(1600, t);
+  b.exponentialRampToValueAtTime(500, t + 0.09);
+  b.exponentialRampToValueAtTime(2200, t + 0.16);
+  b.exponentialRampToValueAtTime(300, t + 0.32);
+  const n = v.noise(v.bank.white, t, t + 0.4);
+  const ng = v.gain(0.9);
+  v.chain(n, ng, bp);
+  const og = v.gain(0.25);
+  v.chain(o, og, bp);
+  const g = v.gain();
+  v.chain(bp, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.55, t + 0.01);
+  g.gain.setValueAtTime(0.4, t + 0.09);
+  g.gain.linearRampToValueAtTime(0.6, t + 0.13);
+  g.gain.setTargetAtTime(0, t + 0.3, 0.025);
+}
+
 /** A Pay 'n' Spray at work: a long hiss of paint with a rattle-can shake at the start. */
 export function spray(v: Voice): void {
   const t = v.t;
