@@ -742,6 +742,21 @@ Playwright isn't a game dependency: run with
   station at −14.6 to −14.7 dBFS overall, about −18 at intensity 1, −15 at
   3 and −13 at 5; peaks at about 0 dBFS (the music bus and limiter follow in
   the game). New stations should land within a dB of that.
+- **`stings.mjs <out-dir> [name …]`**: renders the title theme and the
+  stings built on its hook the same way, at the voice levels the game plays
+  them: `theme`, `wasted`, `busted`, `mission-start`, `mission-passed`,
+  `mission-failed`, `count-in` (3-2-1-GO at the real 1 s spacing) and
+  `count-in-radio` (the same over the radio at the game's music / SFX
+  balance: held down under the count, dropping in on GO). `SECONDS` (the
+  theme, 60), `KEY` (MIDI, 45 = A), `INDEX` (the payphone job), `RADIO`.
+  Baseline 2026-11-01 (raw, key A): the theme −17.1 dBFS overall (about
+  −18 in its intro and first hook, −15.5 in the hook with drums; the
+  stations' menu tiers are −15.4 to −17.9), peak −0.9; WASTED −14.1 (the
+  old one −13.5), BUSTED −16.6 to −17.5 (old −16.9 to −18.4), both peaking
+  near +1 dBFS from their slam and clang layers (the old ones +3.5 to +4.9
+  and +1.6 to +2.1; the limiter follows in the game); mission start −18.8,
+  passed −19.4, failed −21.2 (peaks −5.7, −4.7, −7.7); the count's hits
+  peak at −10, −8 and −5.5 and GO at −4.7.
 
 ## Layout
 
@@ -799,6 +814,27 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   node and voice counts. Continuous voices push parameters at ~45 Hz.
 - **Events.** It subscribes to every `GameEvent` on the bus (`src/core/events.ts`);
   nothing in the simulation calls it directly.
+- **Title theme and stings.** The game has a tune of its own: a two-bar
+  hook in A minor (`themes.ts`: a falling call on a 3+3+2, the flat sixth
+  sighing on to the fifth, then a climb home), written out note for note
+  (a song's `melody` plays as written instead of a composed lead). On the
+  title GameAudio's `'menu'` plays it as a theme instead of the station's
+  menu tier: a station off the dial with its own chords and a 30-bar loop
+  that builds a little (intro, the hook, the beat comes in, the hook with
+  drums, a breath; 72 s at 100 BPM). `'game'` brings the radio back with
+  its next song (its first, at boot); `audio.station`, the saved station
+  and the NOW PLAYING card stay the radio's (a retune on the title is kept
+  for the game). Every sting and UI sound is tuned to the key the music is
+  in (the song's own, transposition included). The new stings quote the
+  hook: WASTED (heavy, then the tape sags) and BUSTED (cold, sinking to the
+  flat fifth) over their slam and clang; a payphone job starts on a bar of
+  heist pulse under the hook, passes on it in the major, fails on it losing
+  its nerve (each job its own lead and tempo; the radio dips under them);
+  the 3-2-1-GO before a Chaos Run, race or frenzy is a hit per number,
+  building over a riser to the tonic with the radio held down, and GO
+  drops the radio back in hard on a chorus, a few layers up. Scores are
+  pure data (`stings.ts`), played by one gliding lead and bass per sting,
+  chord stabs and takes of the radio's own drum kit.
 - **Music.** A look-ahead scheduler (25 ms timer, 0.12 s ahead on the audio
   clock) plays original songs in three styles: NIGHTDRIVE FM (synthwave),
   BREAKNECK 99.1 (breakbeat), LOW TIDE (lo-fi), four songs each (made-up
@@ -827,6 +863,7 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
 | `music/theory.ts`, `music/stations.ts`, `music/sequencer.ts` | chords, voice leading, lead composer, station data, step clock and arranger (pure, tested) |
 | `synth.ts` | noise buffers, node-tracking `Voice`, envelopes, reverb impulse |
 | `sfx.ts`, `loops.ts`, `music/musicPlayer.ts` | one-shot recipes, continuous voices (engine, tyres, fire, ambience, sirens), music instruments |
+| `music/themes.ts`, `music/stings.ts` | the title theme and its hook; the stings built on it as scores (pure, tested), played by `sfx.playSting` |
 
 API for other systems:
 
@@ -835,6 +872,8 @@ audio.update(dt, frame)              // per frame: listener x/z, player car (des
 audio.siren(id, x, z, on, style?)    // call every frame while it sounds; 'twoTone' | 'wail' | 'yelp'; stale ids fade out after 1 s
 audio.horn(x, z, duration?)
 audio.ui('click' | 'confirm' | 'back' | 'countdown' | 'go' | 'success' | 'fail' | 'cash' | 'star')
+audio.countIn(n)                     // a run's 3-2-1-GO: 3, 2, 1 as each number shows, 0 on GO
+audio.missionCue('start' | 'passed' | 'failed', index)  // a payphone job's music (index: the job's)
 audio.setPaused(bool)
 audio.setIntensity(0..5)             // music floor, e.g. the wanted level
 audio.setMusicMode('game' | 'menu' | 'off')
