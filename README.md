@@ -1779,15 +1779,41 @@ and every new program is compiled behind the current frame.
   self-lit, hazard paint catches the light, the ramp deck gets chevrons,
   red tips blink, `searchlight`/`siren_*` flash, `frenzy` takes the
   instance tint, `booth_roof` can be cut away.
-- **Families** (`render/propBatch.ts`, `render/worldProps.ts`): several
-  models merged into one geometry; each instance says which model it is
-  and the vertex shader drops every other model's vertices, so a family is
-  one draw call (and one in the shadow pass): `lamps`, `street` (traffic
-  lights, furniture, road works, carts and shelters), `roofs`, `trees`, `landmarks`, `things` (pickups,
-  frenzy tokens, packages, roadblock barriers and cones, knocked-over
-  props in flight) and `debris`. Static instances are bucketed in 32 m
-  cells and the buffers are refilled only when the view crosses a cell;
-  per-frame ones are appended. One program for all of them.
+- **Families** (`render/propBatch.ts`, `render/propChunks.ts`,
+  `render/worldProps.ts`): a family's models are packed one after another
+  into a vertex texture (RGBA32UI, two texels a vertex: position and
+  surface class; normal and colour as half floats), and each prop is drawn
+  as a few *chunks*, instances of a fixed run of vertices (the size picked
+  per family from its models: 126 for `street`, 156 for `roofs`, a whole
+  288 for `lamps`) that the vertex shader pulls from its own model's
+  stretch, dropping the run past the model's end. So a prop runs only its
+  own model (rounded up to whole chunks), and a family is still one draw
+  call (and one in the shadow pass) with no WebGL extension: `lamps`,
+  `street` (traffic lights, furniture, road works, carts and shelters),
+  `roofs`, `trees`, `landmarks`, `things` (pickups, frenzy tokens,
+  packages, roadblock barriers and cones, knocked-over props in flight)
+  and `debris`. Static instances are bucketed in 32 m cells and the
+  buffers (a copy per chunk) are refilled only when the view crosses a
+  cell; per-frame ones are appended. One program for all of them, each
+  family with its own vertex texture. Not `BatchedMesh`: it draws every
+  instance as its own draw (on iOS through `WEBGL_multi_draw`, which
+  Safari has had since 15 but ANGLE's Metal backend runs as a loop of
+  draws; without it, as Firefox is, one WebGL call per prop), and it has
+  no per-instance attributes for the props' phase, road, glow and tint.
+- **Lamp short lists** (`world/streetLamps.ts` `lampsNear`,
+  `render/shaderLib.ts` `lampList` / `UB_LAMP_LIST`): each prop, rubble
+  chunk and flying car part carries the (at most two) street-lamp heads
+  whose light can reach any of it, worked out on the CPU when it's placed
+  (every frame for the moving ones), and lights from those at night
+  instead of `ubStreetLight`'s walk of eight lamps per fragment. Every lamp
+  left out is out of reach, so it's the same light at a quarter of the
+  terms (`tests/lampList.test.ts` checks it against the lattice); lamps
+  stand 16 m apart and never at a corner, so every street prop qualifies,
+  and anything bigger that more lamps reach walks the lattice as before.
+  Same program per family (a per-instance branch, no switch mid-play);
+  rubble uses a `lampList` variant of the city's prop material, one more
+  program compiled at start-up. The fx debris boxes were already on plain
+  Lambert with no lamp light.
 - **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new
@@ -1860,7 +1886,8 @@ and every new program is compiled behind the current frame.
   tagged with the material names the GLB will use, so they light the same
   (`blink_amber` blinks, `ad_panel` / `screen` / `stripe_*` are self-lit,
   `roadwork_sign` / `barrier_orange` catch the light, `paint` takes the
-  tint); a GLB root of the same name replaces its stand-in. Contracts in
+  tint); a GLB root of the same name replaces its stand-in (a heavier real
+  model costs only its own instances, not the family's). Contracts in
   `docs/BLENDER_TODO.md` §10.
 - **Collision**: lamp posts, signal poles, bollards, dumpsters, planters,
   food carts and fruit stands, vending machines, ATMs, bus shelters (back
@@ -1950,6 +1977,16 @@ and every new program is compiled behind the current frame.
   model's, the others dropped early), and 17–88 street instances are in
   view (capacity 1,100), so the scene's submitted triangles rose about 1.6×
   (e.g. 253k → 438k on the plaza).
+  Vertex pulling (iPhone profile, 852×393, medium tier, on foot, seed 7,
+  2026-11-01; whole-frame triangles submitted by day, and the prop
+  families' vertex-shader runs, lit and shadow pass): spawn 190k → 47k
+  triangles (props 475k → 45k vertices), a road-works site 294k → 32k
+  (854k → 68k), a downtown street 125k → 48k (267k → 35k), a plaza 304k →
+  49k (834k → 67k); night the same. Draw calls unchanged (props 6–10 of
+  24–46); programs 22 → 23 (the rubble variant), none compiled after
+  start-up. Screenshots at the same spots, day and night, match to a few
+  stray shadow-edge pixels; rubble and car parts drawn from their lamp
+  lists and forced onto the lattice in the same frame match exactly.
 
 `dressCity(city, pickups, ramps)` → `{ street, landmarks, solids,
 knockables }` is the one call `main.ts` makes before building the
