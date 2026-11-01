@@ -231,6 +231,11 @@ bake in as new constants.
   bike) with their own handling, health and collision bodies; emergency
   calls with right of way; two-wheelers that lean, carry a rider and
   throw them off in a hard crash.
+- **City life** (`src/game/cityLife.ts`, `src/game/scenes/`; see *City
+  life* below): the knocked out stay down for an ambulance to the
+  hospital, parked cars at the kerbs and in the car parks, guns dropped by
+  the armed; a scheduler and two primitives (service vehicle call-outs,
+  queues and crowds) for the ambient scenes to come.
 - **M8 Ship** — live on GitHub Pages at deeek.org/curbside/ (served from a
   sub-path: `CURBSIDE_BASE`, `publicUrl()`). Next: a real-device
   performance pass and the to-do list in `docs/HANDOFF.md`.
@@ -291,7 +296,9 @@ molotovs 10, rockets 8).
 Everyone, officers included, has 100 HP: pistol 34 (3 hits), SMG 15 (~7),
 shotgun 7 × 16 (one blast up close, thinner at range). A hit staggers for
 0.3 s (no walking, no attacking, the next attack pushed back); 0 HP is a
-knockout: down 8 s, then they run with no grudge. Only a knockout scores
+knockout: down 8 s, then they run with no grudge (a passer-by
+knocked out near you stays down for the ambulance instead: *City life*;
+anyone armed drops their gun). Only a knockout scores
 KNOCKOUT. Punches chain jab (22), jab (22), hook (40, knocks down) within
 0.75 s. Firing locks on: hostiles (fighters, shooters, police while
 wanted) at any angle first, else the best target in a 90° cone; with a
@@ -502,6 +509,128 @@ heat.shops / heat.station                 // landmarks (world/landmarks.ts)
 // Bus: { type: 'wanted', level, prev, reason } · { type: 'busted', fine } · { type: 'horn', x, z, duration }
 //      { type: 'respray', x, z, cleared }; pedDown/explosion/bulletHit/enterVehicle carry `cop` / `police` flags.
 ```
+
+## City life
+
+The city getting on with its day around the player, none of it the
+player's heat or score: the knocked out stay down until an ambulance takes
+them to the hospital, cars stand parked at the kerbs and in the car parks,
+and an armed person knocked out drops their gun for you to pick up. One
+director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
+*scenes* built on it (`src/game/scenes/`); the rules are pure and tested
+(`systems/cityScenes.ts`, `world/streetSpots.ts`, `world/drops.ts`).
+
+- **Knocked out stays down** (`scenes/medics.ts`): a passer-by (crowd
+  upkeep's people and drivers thrown out of their cars: `PedAgent.street`)
+  knocked out cold within 120 m is held down (`injured`: the down timer
+  never runs out, so the get-up clip never starts) instead of getting up
+  after 8 s. 3 s later an ambulance is called: one in traffic within 140 m
+  takes it, else one comes from off-screen with lights and siren (traffic
+  pulls over, StreetLife wails). It pulls up, a paramedic (white shirt)
+  steps out of the door nearest them, kneels 2.2 s, and brings them back
+  on a stretcher (the body slides a pace behind); anyone else lying within
+  35 m goes on the same trip, then it drives off to the **hospital**
+  (`placeHospital`: a built-up block near (10, 7), a red cross on the
+  pavement, `+` on the radar), lights still on. At most 6 held down (more
+  get up as before), 2 ambulances out; nobody comes in 100 s and they come
+  round. Officers, gang members and story characters are other systems'
+  and get up as before.
+- **Parking** (`CityLife.maintain`, `Population.parkCar`): 10 cars
+  (`PARKED_COUNT` × the tier's traffic scale) parked round the player,
+  filled out of view 35–150 m off: at the kerb mid-block (`PARK_OFFSET`
+  6.9 m from the centreline: 1 m clear of the lane, so traffic and
+  pull-overs pass; 14–50 m before a junction, a car length apart), or,
+  45% of picks with a car park in range, nose-in in a car park's painted
+  bays (`carParkBays`: half the plazas, the same blocks and bays
+  `world/ground.ts` paints, via the shared `lotRolls`). Clear of landmarks,
+  spray bays, ramps, bus stops, the hospital and the spawn corner. A
+  `parked` car counts apart from abandoned cars and wrecks (its own cap,
+  on top of the idle cap) and is recycled like any other once far off;
+  getting in clears the flag. Common models only (no extra draw calls).
+- **Dropped guns** (`world/drops.ts`, `CityLife.scanDrops`): anyone armed
+  (an armed passer-by, a gang member with a gun, an officer, SWAT) knocked
+  out drops what they carry (`CrowdPed.gun`, else a pistol) a step from
+  where they fell: the pickups.glb crate model, small, in a pulsing amber
+  ring. Walk over it to take it (`combat.collect`, the usual `pickup`
+  event and feed line; left lying if you're full). 8 at most (the oldest
+  goes), 45 s each. A civilian who dropped theirs fights with fists after.
+  *Before this, nobody dropped anything: a knockout only knocked them
+  over (`systems/crowd.ts` hurtPed / `game/combat.ts` resolve), and guns
+  came from the sidewalk crates (`world/pickups.ts`), a frenzy's gift, a
+  mission's hand-out or the Chaos Run's loadout.*
+
+**The director.** `main.ts` creates one and calls `step(dt)` every sim step
+(after combat), `maintain(seed)` with population upkeep, `reset()` with a
+fresh run; a car with a `scene` is driven by `v.scene.drive(v, obstacles,
+dt)` before traffic (null hands it to traffic for that step), and every
+crowd step asks `cityLife.targetFor(c)` for a ped's target (another ped,
+else the player as before), routing their punches and shots through
+`cityLife.punch(c)` / `shoot(c, dx, dz)`. Scenes register with
+`life.add(scene)` (a `Scene`: `step(dt)`, `running`, `reset()`).
+
+```ts
+// Scheduling (systems/cityScenes.ts, pure): each scene defines its kind once
+life.clock.define('ice', { every: [70, 140], cap: 1, first: 30, range: 110, hold: IN_PLAY });
+life.due('ice', running)          // its clock has run down, under its cap, nothing holding it off
+life.near('ice', x, z)            // within its range of the player (default SCENE_START_RANGE 150 m)
+life.clock.start('ice', life.now) // wind the clock (or .defer(kind, now, s): nowhere to put one yet)
+// Holds: 'title' (attract), 'activity' (mission, race, frenzy, fare, Chaos Run), 'wanted', 'tutorial'.
+// LOUD = all four (chases, races, brawls); IN_PLAY = ['title'].
+
+// A service vehicle's call-out (scenes/service.ts): ambulance, fire truck, tow truck, police
+const run = ServiceRun.call(life, { archetype: 'firetruck', paint: '#c3191c', claimRange: 140, emergency: true,
+  cruise: 16, top: 24, arrive: 26, timeout: 80, dwell?: 6, stopAtCar?: false, aheadShare?: 0.5 }, x, z);
+run.goTo(x, z, heading?) · run.redirect(x, z) · run.leave(x?, z?) · run.rush()   // lights on while leaving
+run.step(dt): 'drive' | 'onSite' | 'leave' | 'done' | 'failed'   // run.site: seconds on site; run.v: the vehicle
+run.end()                                                          // stop now (reset)
+// Claims one of that model in traffic within claimRange of the point, else brings one in off-screen
+// (lane 75–140 m from the player, its `paint` livery: any model, tinted). Drives there with the police's
+// pursuit logic (Errand: lanes far off, straight in within 38 m, ~7 m short of a person or at a car's end),
+// holds still on site, drives off lights out (to a point, or as traffic), then hands back to traffic.
+
+// People gathering (scenes/gathering.ts): queues and crowds
+const g = new Gathering(life, { kind: 'queue', capacity: 5, draw: 30, joinChance: 0.6, serveEvery: 3.2, side: 2.2 });
+const c = new Gathering(life, { kind: 'crowd', capacity: 8, draw: 25, joinChance: 0.5, stay: [10, 25], radius: 3, arc?: Math.PI });
+g.at(x, z, heading) · g.recruit() /* ~1×/s */ · g.add(ped) · g.step(dt) /* → the one served / done, handed back */ · g.close()
+
+// People and cars for scenes (cityLife.ts)
+life.addPed(x, z, heading, outfit?, body?) · life.borrow(c) · life.giveBack(c) · life.removePed(c)
+life.walkTo(c, x, z) · life.lookAt(c, x, z) · life.setOn(a, b, gun?, seconds?) · life.unfight(c) · life.opponentOf(c)
+life.spawnCar(archetype, paint, aheadShare?) · life.placeCar(archetype, paint, x, z, heading) · life.release(v) · life.retire(v)
+life.lost(v) · life.present(c) · life.distance(x, z) · life.inView(x, z, margin?) · life.crowded(x, z, gap)
+life.rearOf(sim, out) · life.doorOf(sim) · life.emit(what, x, z) · life.hospital · life.stops · life.bays · life.drops
+holdStill(sim) · stopped(sim) · pullIn(sim, x, z, heading, cruise, obstacles, left)   // scenes/service.ts
+// Places (world/streetSpots.ts): roadPoint, pickParkingSpot, placeBusStops (BusStop: lane spot + waitX/Z),
+// carParkBays, pickBay, queueSpot, crowdSpot, BUS_PULL_IN, STOP_KERB.
+// Flags: PedAgent.street (borrowable passer-by) / .scene (a scene's: upkeep leaves them) / .injured;
+//        Vehicle.ambient (brought in: the director retires it) / .scene (its driver) / .parked.
+// Bus: { type: 'street', what, x, z } (StreetWhat in core/events.ts; members for the planned scenes are reserved).
+// Look (render/cityLifeLook.ts): cityLook.add({ update?(dt, view, fx), draw?(glows, view, props) }).
+```
+
+**Adding a scene.** Write `src/game/scenes/<name>.ts` with a class that
+implements `Scene`: in its constructor `life.clock.define(kind, spec)`
+(pick its holds: `LOUD` for anything that could get in the player's way);
+in `step`, when `life.due(kind, running)` and you have a spot
+(`life.near(kind, x, z)`, out of view if things appear there), start one
+and `life.clock.start(kind, life.now)` (or `defer` and try later); drive
+vehicles with `ServiceRun` (or your own `SceneDriver` on `v.scene`), people
+with `Gathering`, `walkTo` / `setOn`; emit `street` events; hand everything
+back in `reset()`. Register it with one line in `CityLife`'s constructor
+(`this.add(new YourScene(this))`) and, if it draws, one `cityLook.add(...)`
+in `main.ts`. Only borrow `street` people, only take vehicles that are
+`ai`-driven, unpinned (`life.d.keep`), not `police`, not the player's. No
+per-step allocation (reuse records; no closures in `drive`).
+
+**Budget.** No new mesh, program or draw call: the vehicles and people are
+the usual batches, the drops go in the props' `things` family, light in
+the shared glow batch. Live cars rise by the parked target (10 on
+'high'/'medium', 8 on 'low') plus whatever scenes bring in; people by
+those a scene holds. iPhone profile ('medium'), a fixed seed at seven
+places round the city after 20 s each: 40.3 draw calls on average (54 at
+most) before, 41.3 (50) with the base (a parked model not otherwise in
+view costs its call and shadow pass). Smoke test (random seeds) 56 / 57 →
+61 / 51 on the iPhone sizes, 74 → 70 on desktop: within run-to-run spread.
 
 ## Progression
 

@@ -255,6 +255,36 @@ still get the offline shell.
    pass:** tap a pick on the phone, feel the pacing (first level after a
    life or two?), and watch whether stars give too much CRED.
 
+10. **Living city, the shared base: done 2026-11-01** on
+   `claude/living-city` (README *City life*). The knocked out stay down
+   and an ambulance takes them to the hospital (new, `+` on the radar);
+   parked cars at the kerbs and in the car parks' painted bays; anyone
+   armed knocked out drops their gun to pick up (before: nobody dropped
+   anything). Under them: the `CityLife` director with a pure scheduler
+   (cooldowns, caps, range from the player; holds for the title, an
+   activity, wanted stars and the tutorial), a service-vehicle call-out
+   (`scenes/service.ts` ServiceRun) and queues/crowds
+   (`scenes/gathering.ts` Gathering), typed `street` events. iPhone
+   profile ~41 draw calls on average at a fixed seed (40 before), no new
+   mesh or program; smoke OK (61 / 51 iPhone, 70 desktop).
+   **Being built on it in parallel** (one worktree each, branched from
+   this base): fires and fire trucks, police chases, street races, the ice
+   cream van's queue, bus stops, tow trucks, scuffles between people; and
+   the extras (witnesses, traffic accidents, car alarms, muggings,
+   performers and stands, gang flare-ups, double-parked trucks, crowds by
+   time and weather, stray dogs). A first draft of the scenes, written
+   before the work was split, is on the local branch
+   `claude/living-city-scenes-draft` (`4301862`, not pushed): a starting
+   point, not reviewed against this base's APIs.
+   **Hotspots** (keep edits to these small): `core/events.ts` (the
+   `StreetWhat` members for the planned scenes are already there),
+   `game/cityLife.ts` (one `this.add(...)` line per scene), `main.ts` (one
+   `cityLook.add(...)` per scene that draws), `game/population.ts` and
+   `systems/crowd.ts` (the `street` / `scene` / `injured` / `ambient` /
+   `parked` flags), `audio/gameAudio.ts` (`onStreet`). **For the device
+   pass:** does a knocked-out body lying there read on the phone; are the
+   parked cars in the way on foot or in a chase; the drop ring at night.
+
 Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
 launch ramp landing at a corner checkpoint (is that a feature?).
 
