@@ -44,6 +44,9 @@ export interface TurfBorder {
   /** Along that pavement, unit (the two sides square up along it). */
   alongX: number;
   alongZ: number;
+  /** Toward the road (and the other crew's block across it), unit: the kerb side of the pavement, clear of the awnings. */
+  outX: number;
+  outZ: number;
   home: Crew;
   away: Crew;
 }
@@ -73,7 +76,7 @@ export function turfBorders(district: (bx: number, bz: number) => District = dis
         cornerPoint(bx, bz, edge, a);
         cornerPoint(bx, bz, edge + 1, b);
         const len = Math.hypot(b.x - a.x, b.z - a.z);
-        out.push({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, alongX: (b.x - a.x) / len, alongZ: (b.z - a.z) / len, home, away });
+        out.push({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, alongX: (b.x - a.x) / len, alongZ: (b.z - a.z) / len, outX: dx, outZ: dz, home, away });
       }
     }
   }

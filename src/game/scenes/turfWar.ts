@@ -146,8 +146,10 @@ export class TurfWar implements Scene {
       for (let i = 0; i < n; i++) {
         // In a loose bunch at their end, walking in.
         const back = WALK_IN + i * 1.2 + r();
-        const x = border.x + border.alongX * dir * back + border.alongZ * (r() - 0.5) * 1.2;
-        const z = border.z + border.alongZ * dir * back - border.alongX * (r() - 0.5) * 1.2;
+        // On the kerb side of the walkers' line (the wall side is under the awnings).
+        const out = 0.2 + r() * 1.1;
+        const x = border.x + border.alongX * dir * back + border.outX * out;
+        const z = border.z + border.alongZ * dir * back + border.outZ * out;
         const c = life.addPed(x, z, Math.atan2(-dir * border.alongX, -dir * border.alongZ), { shirt: crew.shirt, pants: crew.pants }, crew.bodies[i % crew.bodies.length]);
         const armed = guns && i === 0;
         c.agent.gang = crew.id;
@@ -155,7 +157,8 @@ export class TurfWar implements Scene {
         if (armed) c.gun = 'pistol';
         // To a step short of the middle, squaring up.
         const stop = 1.6 + (i % 2) * 0.9;
-        life.walkTo(c, border.x + border.alongX * dir * stop + border.alongZ * (i - n / 2) * 0.9, border.z + border.alongZ * dir * stop - border.alongX * (i - n / 2) * 0.9);
+        const kerb = 0.2 + (i % 3) * 0.5;
+        life.walkTo(c, border.x + border.alongX * dir * stop + border.outX * kerb, border.z + border.alongZ * dir * stop + border.outZ * kerb);
         life.lookAt(c, border.x, border.z);
         f.members.push({ ped: c, side, armed, out: false, judged: false });
       }

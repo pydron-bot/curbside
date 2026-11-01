@@ -37,13 +37,13 @@ describe('turf war: crews and borders', () => {
       expect(isGang(b.home) || isGang(b.away)).toBe(true);
       expect(b.home.id).not.toBe(b.away.id);
       expect(districtAt(b.x, b.z)).toBe(b.home.turf);
-      // Over the road (a pavement and a road's width) is the other crew's.
-      const nx = b.alongZ;
-      const nz = -b.alongX;
+      // Over the road (a pavement and a road's width) toward `out` is the other crew's.
       const across = SIDEWALK + ROAD_WIDTH;
-      const there = [districtAt(b.x + nx * across, b.z + nz * across), districtAt(b.x - nx * across, b.z - nz * across)];
-      expect(there).toContain(b.away.turf);
+      expect(districtAt(b.x + b.outX * across, b.z + b.outZ * across)).toBe(b.away.turf);
       expect(Math.hypot(b.alongX, b.alongZ)).toBeCloseTo(1);
+      expect(b.alongX * b.outX + b.alongZ * b.outZ).toBeCloseTo(0);
+      // Toward the kerb: a step that way is still off the buildings.
+      expect(city.buildings.some((r) => b.x + b.outX > r.minX && b.x + b.outX < r.maxX && b.z + b.outZ > r.minZ && b.z + b.outZ < r.maxZ)).toBe(false);
       // On the pavement: inside no building, and mid-block.
       expect(city.buildings.some((r) => b.x > r.minX && b.x < r.maxX && b.z > r.minZ && b.z < r.maxZ)).toBe(false);
       const off = (v: number) => (((v % BLOCK_SIZE) + BLOCK_SIZE) % BLOCK_SIZE);
