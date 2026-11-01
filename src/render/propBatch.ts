@@ -81,7 +81,7 @@ export class PropBatch {
   /** Chunks the instance buffers hold. */
   private chunkCap = 1;
   /** The family's vertex texture (two texels a vertex: position and surface; normal and colour as halves). */
-  private readonly verts: IUniform<DataTexture> = { value: vertexTexture(new Uint32Array(8), 1) };
+  private readonly verts: IUniform<DataTexture> = { value: vertexTexture(new Uint32Array(8), 1, 2) };
   /** Per kind: its first vertex and end in the texture, its chunks, and how far it reaches from its origin (across, and in 3D), m. */
   private readonly kStart: Int32Array;
   private readonly kEnd: Int32Array;
@@ -469,9 +469,9 @@ function dynamicRange(a: InstancedBufferAttribute, from: number, count: number):
   a.needsUpdate = true;
 }
 
-/** A family's vertices as an RGBA32UI texture, VERTS_PER_ROW to a row (read with texelFetch). */
-function vertexTexture(data: Uint32Array, rows: number): DataTexture {
-  const t = new DataTexture(data, VERTS_PER_ROW * 2, rows, RGBAIntegerFormat, UnsignedIntType);
+/** A family's vertices as an RGBA32UI texture, VERTS_PER_ROW to a row (read with texelFetch; a one-vertex placeholder until the models come). */
+function vertexTexture(data: Uint32Array, rows: number, width = VERTS_PER_ROW * 2): DataTexture {
+  const t = new DataTexture(data, width, rows, RGBAIntegerFormat, UnsignedIntType);
   t.internalFormat = 'RGBA32UI';
   t.minFilter = NearestFilter;
   t.magFilter = NearestFilter;
