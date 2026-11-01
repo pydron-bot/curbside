@@ -59,6 +59,10 @@ import {
 import type { City } from '../world/city';
 import type { Player } from './player';
 import { Medics } from './scenes/medics';
+import type { CityMood } from './cityMood';
+import { StreetMood } from './scenes/streetMood';
+import { StrayDogs } from './scenes/strayDogs';
+import { TurfWar } from './scenes/turfWar';
 import { len2 } from '../core/len';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
@@ -110,6 +114,8 @@ export interface CityLifeDeps {
   collect(kind: WeaponKind): boolean;
   /** Who's looking: the focus of the camera (attract cruise or player). */
   focus(): { x: number; z: number; vx: number; vz: number };
+  /** The hour, the rain and the nightlife (game/cityMood.ts; main.ts keeps it up to date). */
+  mood?: CityMood;
 }
 
 /** A scene's view of the director. */
@@ -139,6 +145,9 @@ export class CityLife {
   readonly bays: Bay[];
   readonly drops = new WeaponDrops();
   readonly medics: Medics;
+  readonly streetMood: StreetMood;
+  readonly dogs: StrayDogs;
+  readonly turfWar: TurfWar;
   readonly scenes: Scene[] = [];
   /** Vehicles the scenes brought in (ambient): retired here once far and unseen. */
   readonly owned: Vehicle[] = [];
@@ -167,6 +176,9 @@ export class CityLife {
     this.bays = carParkBays(d.city);
     // The scenes: one line each.
     this.medics = this.add(new Medics(this));
+    this.streetMood = this.add(new StreetMood(this));
+    this.dogs = this.add(new StrayDogs(this));
+    this.turfWar = this.add(new TurfWar(this));
   }
 
   /** Register a scene (stepped, reset with the rest). */

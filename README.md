@@ -564,6 +564,50 @@ director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
   over (`systems/crowd.ts` hurtPed / `game/combat.ts` resolve), and guns
   came from the sidewalk crates (`world/pickups.ts`), a frenzy's gift, a
   mission's hand-out or the Chaos Run's loadout.*
+- **Crowds by the hour and the weather** (`game/cityMood.ts`, pure):
+  `densityFor(district, hour, rain)` multiplies the crowd target: by day
+  downtown and the old town are busiest and the docks quietest; from 18:00
+  the crowd drains out of the docks, the suburbs and downtown into the
+  Neon Mile (×1.3 at night) and the old town's bars, the quiet districts
+  down to ×0.22–0.3; full rain takes 45% off every street. Crowd upkeep
+  takes the density where the player is (`crowdScale`) and keeps spawns in
+  proportion to each district's (`MaintainContext.spawnWeight`), so new
+  people gather where the life is. *Before: the same 22 (× tier) people
+  everywhere, day or night, rain or shine.*
+- **Rain and night on the pavements** (`scenes/streetMood.ts`): in the rain
+  (`render/fxWeather.ts` WeatherCycle: a shower every few minutes) walkers
+  hurry (`rainPace`, up to ×1.5), 40% put up an umbrella (a canopy over
+  their head, six colours), and up to 10 of the rest duck in under an
+  awning on their own pavement (`world/shopSpots.ts`: from the same
+  building plans the awnings are drawn from) and wait there, looking out
+  at the road, until it stops. At night groups of 2–3 hang about under the
+  neon (up to 4 groups at full nightlife, put down out of view 24–70 m
+  off, most in the Neon Mile), and drift off as ordinary passers-by at
+  dawn or after a minute or so.
+- **Stray dogs** (`systems/dogs.ts` pure, `scenes/strayDogs.ts`): up to 4
+  round the player (fewer downtown and in the Neon Mile than in the
+  suburbs and the docks), put down out of view, trotting round the
+  pavements and stopping to sniff. Anyone running past within 8 m (a
+  passer-by or the player) is chased for up to 3.5 s or 22 m, barking
+  (`street` 'bark'); gunfire within 32 m sends them bolting; a car through
+  them, a blast or a punch knocks them over ('yelp') and they get up and
+  run. They keep out of walls.
+- **Pigeons land again** (`systems/pigeons.ts`): most spooked flocks (60%)
+  wheel round and glide down 14–26 m on, away from the scare, and peck
+  about there until spooked again; the rest fly off as before.
+- **Gang turf flare-ups** (`systems/turfWar.ts` pure, `scenes/turfWar.ts`):
+  every 2–4 minutes (`LOUD`), where the VIPERS' turf meets a rival crew's
+  across a road (`RIVALS`, colours only: COBBLE KINGS in the old town,
+  DOCK RATS at the docks, GLASS BOYS downtown), 2–4 of each walk in from
+  either end of the pavement, square up and fight with fists (in 30%, one
+  on each side has a pistol), 35–110 m from the player. The badly hurt may
+  run for it; it's over when one side is all knocked out or gone, and the
+  winners walk off. **Stepping in:** hit someone on one side (a punch, a
+  shot, a knock-down) and that side turns on you while the other stands
+  with you for the rest of the skirmish (they keep fighting the side you
+  hit; hit both and both are on you); knocking a VIPER down costs respect
+  as ever (`gangMode` hears the same `pedDown`). The knocked out are handed
+  to the street (`street`), so the ambulances come for them.
 
 **The director.** `main.ts` creates one and calls `step(dt)` every sim step
 (after combat), `maintain(seed)` with population upkeep, `reset()` with a
@@ -611,6 +655,11 @@ holdStill(sim) · stopped(sim) · pullIn(sim, x, z, heading, cruise, obstacles, 
 // Flags: PedAgent.street (borrowable passer-by) / .scene (a scene's: upkeep leaves them) / .injured;
 //        Vehicle.ambient (brought in: the director retires it) / .scene (its driver) / .parked.
 // Bus: { type: 'street', what, x, z } (StreetWhat in core/events.ts; members for the planned scenes are reserved).
+// The mood (game/cityMood.ts): life.d.mood?.hour · .rain (0..1) · .raining · .nightlife (0..1: nightlifeFactor(hour),
+//   0 by day, easing in 18:00–22:00, full till 03:00, gone by 06:00: the street races' cue) · .nightlifeAt(x, z)
+//   (× NIGHTLIFE[district]: arts 1, oldtown 0.6, downtown 0.3) · .densityAt(x, z); pure: densityFor, nightlifeAt, rainPace.
+// Atmosphere scenes: life.streetMood (shelterers, groups, umbrellas) · life.dogs.pack (dogs; startle, knock) · life.turfWar
+//   (flare, borders; soon() starts one at the next step, holds permitting).
 // Look (render/cityLifeLook.ts): cityLook.add({ update?(dt, view, fx), draw?(glows, view, props) }).
 ```
 
@@ -630,7 +679,18 @@ per-step allocation (reuse records; no closures in `drive`).
 
 **Budget.** No new mesh, program or draw call: the vehicles and people are
 the usual batches, the drops go in the props' `things` family, light in
-the shared glow batch. Live cars rise by the parked target (10 on
+the shared glow batch. The umbrellas and dogs too go in `things`, as
+stand-in models built in code (`render/critterModels.ts`: `dog`,
+`dog_stride`, `umbrella`, replaced by props.glb roots of those names;
+contract in `docs/BLENDER_TODO.md` §8): that family's call and its shadow
+pass (+2) when nothing else of it is in view, else nothing; the turf crews
+wear the crowd's own bodies. Measured on the iPhone profile, the fixed
+seed's seven places after 20 s each (afternoon / 23:00 / 23:00 in rain),
+two runs each: 41.0–42.4 / 44.0–44.7 / 44.3–45.6 calls on average (53 /
+47–51 / 46–50 at most) before the atmosphere work, 40.3–42.9 / 42.6–44.3
+/ 42.4–45.4 (54–55 / 45–50 / 46–51) with it (rain and the quiet
+districts thin the crowd); taking the umbrellas and dogs out of a frozen
+frame where they were the only `things` in view: −2. Live cars rise by the parked target (10 on
 'high'/'medium', 8 on 'low') plus whatever scenes bring in; people by
 those a scene holds. iPhone profile ('medium'), a fixed seed at seven
 places round the city after 20 s each: 40.3 draw calls on average (54 at
@@ -1332,7 +1392,8 @@ Everyone in the city is drawn from the Blender bodies in `public/assets/`
 - **Pigeons** (`systems/pigeons.ts` pure, `render/pigeonMesh.ts`): up to
   three flocks settle out of view on plazas, parks and the kerb side of
   pavements and scatter at a passing car, a runner, the player walking up,
-  gunfire, blasts and horns: one instanced draw call with the `Flap` clip
+  gunfire, blasts and horns (most come down again a little way off: *City
+  life*): one instanced draw call with the `Flap` clip
   sampled into the vertex shader, a contact shadow each, none when no bird
   is in view.
 - **Budget** (`?debug`, whole frame): each body on screen costs 2 calls

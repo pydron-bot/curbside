@@ -10,8 +10,8 @@ function world(threats: PigeonThreat[] = [], x = 0, z = 0): PigeonWorld {
   return { view: { minX: x + VIEW.minX, maxX: x + VIEW.maxX, minZ: z + VIEW.minZ, maxZ: z + VIEW.maxZ }, x, z, threats };
 }
 
-function setup(kind: BlockKind = 'buildings', seed = 3) {
-  return new Pigeons({ kindAt: () => kind, blocked: () => false }, random(seed));
+function setup(kind: BlockKind = 'buildings', seed = 3, returnShare = 0) {
+  return new Pigeons({ kindAt: () => kind, blocked: () => false }, random(seed), returnShare);
 }
 
 /** Run until the flocks have settled (a few settle intervals). */
@@ -60,6 +60,41 @@ describe('pigeons', () => {
     const alive: Pigeon[] = [];
     p.collect(alive);
     for (const b of birds) expect(alive).not.toContain(b);
+  });
+
+  it('a flock that lands again comes down a little way off, away from the scare, and can be spooked again', () => {
+    const p = setup('plaza', 3, 1);
+    settle(p);
+    const f = p.flocks[0];
+    const birds = [...f.birds];
+    const from = { x: f.x - 4, z: f.z };
+    p.step(DT, world([{ x: from.x, z: from.z, speed: 12, car: true, player: false }]));
+    expect(f.spooked).toBe(true);
+    expect(f.returning).toBe(true);
+    // Further from the scare than it was.
+    expect(Math.hypot(f.landX - from.x, f.landZ - from.z)).toBeGreaterThan(Math.hypot(f.x - from.x, f.z - from.z) + 8);
+    for (let i = 0; i < 60; i++) p.step(DT, world());
+    for (const b of birds) expect(b.state).toBe('fly');
+    let maxY = 0;
+    for (let i = 0; i < 60 * 12 && f.spooked; i++) {
+      p.step(DT, world());
+      for (const b of birds) maxY = Math.max(maxY, b.y);
+    }
+    expect(maxY).toBeGreaterThan(3);
+    expect(f.spooked).toBe(false);
+    expect(p.flocks).toContain(f);
+    expect(f.x).toBe(f.landX);
+    for (const b of birds) {
+      expect(b.state).toBe('ground');
+      expect(b.y).toBeLessThan(0.05);
+      expect(b.scale).toBe(1);
+      expect(Math.hypot(b.x - f.x, b.z - f.z)).toBeLessThan(4);
+    }
+    // Pecking about there; a runner sends them up again.
+    for (let i = 0; i < 60; i++) p.step(DT, world());
+    for (const b of birds) expect(b.state).toBe('ground');
+    p.step(DT, world([{ x: f.x + 2, z: f.z, speed: 5, car: false, player: false }]));
+    expect(f.spooked).toBe(true);
   });
 
   it('a slow car or a walker going by leaves them be; running at them or walking right up does not', () => {

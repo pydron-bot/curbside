@@ -697,7 +697,7 @@ export class GameAudio {
     }
   }
 
-  /** The city's own happenings: a chime as the ice cream van opens, doors, a bus's brakes, a hose, a winch. */
+  /** The city's own happenings: a chime as the ice cream van opens, doors, a bus's brakes, a hose, a winch, a dog. */
   private onStreet(e: EventOf<'street'>): void {
     switch (e.what) {
       case 'iceCream':
@@ -711,6 +711,10 @@ export class GameAudio {
         return this.oneShot('door', e, FALLOFF.near, 0.55, 0.25, sfx.spray);
       case 'tow':
         return this.oneShot('crash', e, FALLOFF.crash, 0.45, 0.2, (v) => sfx.crash(v, 4, true));
+      case 'bark':
+        return this.oneShot('ambient', e, FALLOFF.punch, 0.5, 0.25, sfx.bark);
+      case 'yelp':
+        return this.oneShot('ambient', e, FALLOFF.punch, 0.45, 0.2, sfx.yelp);
       default:
         // Sirens are continuous (StreetLife); the rest is heard through what it causes (shots, crashes, horns).
         return;
