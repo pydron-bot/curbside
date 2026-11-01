@@ -1228,8 +1228,15 @@ Tuning hostility needs real play.
 `driverFor()` (systems/traffic.ts) and stays pinned; a test drives every story car spot through
 two crossings. After the story the phones ring with its jobs in order as REPEAT JOB
 (`replayJob` / `replayReward` in systems/missions.ts): half pay rounded to $50 (`REPLAY_PAY`),
-no completion credit, `stats.jobsReplayed` keeps the rotation. Still open: chapter 2 (needs the
-story direction below); no story job uses `drive` yet.
+no completion credit, `stats.jobsReplayed` keeps the rotation.
+
+**Status (2026-11-01):** part 3 done. Chapter 2, *The Ledger*: five jobs ($12,500) against
+Commissioner Clamp, the city's Parking Commissioner, with Pike back as a broke informant. The
+script, cast and tone are in `docs/STORY.md`. TOW-AWAY ZONE is the first job with driven
+targets. MissionDef has an optional `chapter`, and LAST CALL now debriefs CHAPTER 1 COMPLETE.
+Decided: comic tone, chapter 1's pay scale, the story stays 30% of completion over all
+thirteen jobs (a finished chapter-1 save drops to ~18% for the story part), no fifth payphone.
+Still open: tune the timers from real play.
 
 **Findings:** **The engine** (src/systems/missions.ts) is pure and tested:
 - 10 step kinds (:57-74);

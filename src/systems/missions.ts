@@ -84,6 +84,8 @@ export interface MissionDef {
   reward: number;
   /** Pin the clock to this hour for the mission (a night job). */
   hour?: number;
+  /** Story chapter (1 if left out); the last job of one says CHAPTER n COMPLETE. */
+  chapter?: number;
   steps: MissionStep[];
 }
 
@@ -283,6 +285,12 @@ export function replayReward(def: MissionDef): number {
 export function replayJob(missions: readonly MissionDef[], passed: readonly string[], replays: number): MissionDef | null {
   if (missions.length === 0 || missions.some((m) => !passed.includes(m.id))) return null;
   return missions[Math.max(0, Math.floor(replays)) % missions.length];
+}
+
+/** The job closes its chapter and another chapter follows it (the story's very last job doesn't). */
+export function endsChapter(missions: readonly MissionDef[], def: MissionDef): boolean {
+  const next = missions[missions.indexOf(def) + 1];
+  return missions.includes(def) && next !== undefined && (next.chapter ?? 1) !== (def.chapter ?? 1);
 }
 
 /** Every tag a mission spawns (cars and people), for clean-up. */

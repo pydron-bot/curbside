@@ -5,10 +5,11 @@ import { collideVehicleStatic } from '../src/systems/physics';
 import { driveAi, driverFor } from '../src/systems/traffic';
 import { StaticGrid } from '../src/world/collision';
 import { random } from './helpers';
-import { COLLECT_RADIUS, LOST_RANGE, MissionRun, REPLAY_PAY, missionTags, replayJob, replayReward, type MissionDef, type MissionSignal, type MissionView } from '../src/systems/missions';
+import { COLLECT_RADIUS, LOST_RANGE, MissionRun, REPLAY_PAY, endsChapter, missionTags, replayJob, replayReward, type MissionDef, type MissionSignal, type MissionView } from '../src/systems/missions';
 import { buildMissions } from '../src/systems/missionsData';
 import { generateCity } from '../src/world/city';
 import { MAX_NODE } from '../src/world/roads';
+import { districtAt, type District } from '../src/world/districts';
 
 type Car = { x: number; z: number; wrecked: boolean };
 type Ped = { x: number; z: number; down: boolean };
@@ -195,9 +196,11 @@ describe('the story', () => {
   const phones = new Set(placePayphones().map((p) => p.id));
   const blocked = (x: number, z: number, m: number) => city.obstacles.some((o) => x > o.minX - m && x < o.maxX + m && z > o.minZ - m && z < o.maxZ + m);
 
-  it('eight jobs, each from a payphone, each paying, with something to say', () => {
-    expect(missions).toHaveLength(8);
-    expect(new Set(missions.map((m) => m.id)).size).toBe(8);
+  it('thirteen jobs (eight in chapter 1, five in chapter 2), each from a payphone, each paying, with something to say', () => {
+    expect(missions).toHaveLength(13);
+    expect(new Set(missions.map((m) => m.id)).size).toBe(13);
+    const chapter = (n: number) => missions.filter((m) => (m.chapter ?? 1) === n).length;
+    expect([chapter(1), chapter(2)]).toEqual([8, 5]);
     for (const m of missions) {
       expect(phones.has(m.phone), m.id).toBe(true);
       expect(m.reward, m.id).toBeGreaterThan(0);
@@ -206,6 +209,40 @@ describe('the story', () => {
       expect(m.steps.length, m.id).toBeGreaterThan(0);
       for (const s of m.steps) expect(s.text.length, m.id).toBeGreaterThan(0);
     }
+  });
+
+  it('chapters run in order, and only the last job of a chapter with another after it ends one', () => {
+    for (let i = 1; i < missions.length; i++) expect(missions[i].chapter ?? 1).toBeGreaterThanOrEqual(missions[i - 1].chapter ?? 1);
+    expect(missions.filter((m) => endsChapter(missions, m)).map((m) => m.id)).toEqual(['m8-lastcall']);
+    expect(endsChapter(missions, { ...missions[7] })).toBe(false); // not one of the story's
+  });
+
+  it('every call fits the card: at most three lines (it staggers three)', () => {
+    for (const m of missions) {
+      expect(m.intro.length, m.id).toBeLessThanOrEqual(3);
+      expect(m.outro.length, m.id).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("chapter 2's people and cars are in the districts its dialogue names", () => {
+    const want: Record<string, District> = {
+      shifttruck: 'downtown', // "the city impound in Glass Heights"
+      pike: 'residential', // "a Maple Flats bus shelter"
+      tow1: 'arts', // "working the Mile"
+      tow2: 'arts',
+      tow3: 'arts',
+      limo: 'downtown', // "his office in Glass Heights"
+      clamp: 'downtown',
+    };
+    const found = new Set<string>();
+    for (const m of missions.filter((d) => d.chapter === 2))
+      for (const s of m.steps)
+        for (const a of s.start ?? [])
+          if ((a.do === 'spawnCar' || a.do === 'spawnPed') && want[a.tag]) {
+            expect(districtAt(a.x, a.z), `${m.id} ${a.tag}`).toBe(want[a.tag]);
+            found.add(a.tag);
+          }
+    expect([...found].sort()).toEqual(Object.keys(want).sort());
   });
 
   it('two jobs in a row never ring the same phone', () => {

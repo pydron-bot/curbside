@@ -209,7 +209,7 @@ bake in as new constants.
   with cash, lifetime stats, bests and medals; chains bank into cash (lose
   the chain if WASTED or BUSTED, plus a hospital bill or fine); a CHAOS RUN
   2:00 mode with medals and a results card; frenzies, hidden packages,
-  checkpoint races, hot-car exports, taxi fares and eight payphone missions
+  checkpoint races, hot-car exports, taxi fares and thirteen payphone missions in two chapters
   in free roam; a safehouse shop; PROGRESS in the pause menu.
 - **Feel** (`src/entities/vehicle.ts`, `src/game/combat.ts`,
   `src/systems/projectiles.ts`, `src/world/ramps.ts`, see *Driving and
@@ -651,16 +651,20 @@ are `src/game/modes/*Mode.ts`.
   fail conditions (a tagged car wrecked or left behind) and actions on start
   / end (spawn a car, parked or with `drive: true` pulling out into traffic
   with a lane-following driver while staying pinned, or a person; set the
-  wanted level, hand over a gun, a passenger boards / alights). Eight jobs for the Graveyard Shift — VEX's
-  tow crew, her mechanic LIL' TUNA, against DEACON PIKE's Chrome Saints —
-  from four payphones; the one with a job waiting rings (a ripple of light,
+  wanted level, hand over a gun, a passenger boards / alights). Thirteen jobs for the Graveyard Shift — VEX's
+  tow crew and her mechanic LIL' TUNA — in two chapters: eight against
+  DEACON PIKE's Chrome Saints, then five (*The Ledger*) against
+  COMMISSIONER CLAMP and his city impound (script and cast in
+  `docs/STORY.md`) — from four payphones; the one with a job waiting rings (a ripple of light,
   the bell within 55 m, 'M' on the radar with an arrow). Answer on foot or
   by stopping beside it: the call is a card, the job runs with its objective
   on the activity card and its targets marked (a step any sedan will do
   for rings and blips the three nearest, and the wrong car says NOT A
-  SEDAN); MIDNIGHT EXPRESS pins the clock at night (a fail or quit puts the
-  hour back). Pay $500–$5,000; fail and the phone rings again. Once all
-  eight are passed the phones ring with them again in story order as
+  SEDAN); MIDNIGHT EXPRESS, PAPER TRAIL and NO PARKING pin the clock at night (a fail or quit puts the
+  hour back). Pay $500–$5,000; fail and the phone rings again. The last
+  job of a chapter debriefs CHAPTER n COMPLETE (`chapter`, `endsChapter`),
+  the very last STORY COMPLETE. Once all
+  thirteen are passed the phones ring with them again in story order as
   REPEAT JOBs (`replayJob` / `replayReward`): half pay rounded to $50, no
   completion credit, the debrief says JOB DONE; `stats.jobsReplayed` counts
   them, keeps the rotation across sessions and shows as *Repeat jobs* on

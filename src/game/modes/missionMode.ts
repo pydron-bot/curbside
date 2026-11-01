@@ -17,7 +17,7 @@ import { driverDoorPosition, speed, type VehicleArchetype } from '../../entities
 import type { GlowSprites } from '../../render/glowSprites';
 import { MARK, beacon, gate, groundRing, nearView, type ProgressProps } from '../../render/progressLook';
 import { provoke, resumeWalking, spawnPed } from '../../systems/crowd';
-import { MissionRun, replayJob, replayReward, type MissionAction, type MissionDef, type MissionSignal, type MissionStep, type MissionView } from '../../systems/missions';
+import { endsChapter, MissionRun, replayJob, replayReward, type MissionAction, type MissionDef, type MissionSignal, type MissionStep, type MissionView } from '../../systems/missions';
 import { buildMissions } from '../../systems/missionsData';
 import type { DialogueCard } from '../../ui/progressScreens';
 import type { BlipOptions } from '../../ui/radar';
@@ -292,7 +292,8 @@ export class MissionMode implements Mode {
         // A step's objective line can still be up (a quick last step): not behind the debrief.
         ctx.ui.clearBanner();
         ctx.openModal(this.card);
-        this.card.show(replay ? 'JOB DONE' : last ? 'STORY COMPLETE' : 'MISSION PASSED', m.title, m.outro, `+$${fmt(paid)}`, 'CONTINUE', ctx.focusRing, () => ctx.closeModal(this.card));
+        const head = replay ? 'JOB DONE' : last ? 'STORY COMPLETE' : endsChapter(this.missions, m) ? `CHAPTER ${m.chapter ?? 1} COMPLETE` : 'MISSION PASSED';
+        this.card.show(head, m.title, m.outro, `+$${fmt(paid)}`, 'CONTINUE', ctx.focusRing, () => ctx.closeModal(this.card));
         return;
       }
       case 'failed':
