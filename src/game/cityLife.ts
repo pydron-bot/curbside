@@ -80,6 +80,7 @@ import { Accidents } from './scenes/accidents';
 import { DoubleParking } from './scenes/doubleParking';
 import { len2 } from '../core/len';
 import type { LabelSink } from './debugLabels';
+import type { SimLod } from '../systems/simLod';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
 export const SCENE_RANGE = 150;
@@ -144,6 +145,8 @@ export interface CityLifeDeps {
   callIn?(crime: Crime): void;
   /** Hand a scene's officer to the police (the player turned on them): normal heat rules from there. */
   enlist?(officer: CrowdPed): void;
+  /** The sim's level of detail: off screen, stray dogs think less often (without it, every step). */
+  lod?: SimLod;
 }
 
 /** A scene's view of the director. */

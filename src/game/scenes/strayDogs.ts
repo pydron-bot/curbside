@@ -9,6 +9,7 @@
  */
 import { DogPack, type Dog, type DogCar, type DogRunner, type DogWorld } from '../../systems/dogs';
 import { cornerPoint } from '../../systems/crowd';
+import { newSimClock } from '../../systems/simLod';
 import { StaticGrid } from '../../world/collision';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT } from '../../world/city';
 import { districtAt, type District } from '../../world/districts';
@@ -88,8 +89,24 @@ export class StrayDogs implements Scene {
     const want = Math.max(1, Math.round(MAX_DOGS * AREA[districtAt(at.x, at.z)]));
     if (dogs.length < want && life.due('dog', dogs.length)) this.putDown(at.x, at.z);
     if (dogs.length === 0) return;
+    const lod = life.d.lod;
+    if (!lod) {
+      this.gather(at.x, at.z);
+      this.pack.step(dt, this.world);
+      return;
+    }
+    // Off screen each on its own tick (a chase every step); nobody due, nothing to gather.
+    let due = false;
+    for (let i = 0; i < dogs.length; i++) {
+      const d = dogs[i];
+      if (lod.due((d.lod ??= newSimClock()), lod.tier(d.x, d.z), dt, d.mode === 'chase') > 0) due = true;
+    }
+    if (!due) return;
     this.gather(at.x, at.z);
-    this.pack.step(dt, this.world);
+    for (let i = 0; i < dogs.length; i++) {
+      const d = dogs[i];
+      if (d.lod!.dt > 0) this.pack.stepDog(d, d.lod!.dt, this.world);
+    }
   }
 
   reset(): void {

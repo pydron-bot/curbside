@@ -51,7 +51,8 @@ import { createRenderer, precompile } from './render/post';
 import { getQuality, setQualityTier } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
 import { charVehicle, restoreVehicleLook } from './render/vehicleLooks';
-import { knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
+import { fullRatePed, knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
+import { LOD_FAR, LOD_NEAR, SimLod, newSimClock } from './systems/simLod';
 import { WEAPONS, WEAPON_ORDER, type WeaponKind } from './systems/weapons';
 import { PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
@@ -79,7 +80,7 @@ import {
   type CarContact,
 } from './systems/physics';
 import { Score, rammed, smashCredit, type Award } from './systems/score';
-import { vehicleObstacles, type Obstacle } from './systems/traffic';
+import { fullRateDriver, holdAi, nearJunction, vehicleObstacles, type Obstacle } from './systems/traffic';
 import type { PauseReason } from './ui/pauseOverlay';
 import { loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
@@ -217,6 +218,9 @@ signals.setRoadworks(dressing.street.roadworks);
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
+/** Off screen, the street's drivers, walkers and dogs think less often (systems/simLod.ts). */
+const simLod = new SimLod();
+const lodView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 
 function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation): Vehicle {
   const sim = createVehicleState(0, 0, 0);
@@ -233,6 +237,7 @@ function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation):
     damage: createDamage(VEHICLE_HEALTH[archetype]),
     wreckAge: 0,
     charred: false,
+    lod: newSimClock(),
   };
 }
 
@@ -432,6 +437,7 @@ const cityLife = new CityLife({
   now: () => simTime,
   view: (out) => rig.visibleGround(out),
   playing: () => !attract.active,
+  lod: simLod,
   // Any activity (a mission, a race, a frenzy, a fare) or a Chaos Run holds the loud scenes off.
   activity: () => progress.busy !== null || progress.chaos.active,
   stars: () => heat.wanted.level,
@@ -734,6 +740,8 @@ function simulate(dt: number) {
   if (playerControls !== NO_CONTROLS) playerControls.boost = boosting;
 
   prof.begin(P_SIM);
+  const focus = attract.active ? attract : player.position;
+  simLod.begin(focus.x, focus.z, rig.visibleGround(lodView));
   // What AI drivers need to avoid this step.
   prof.begin(P_OBSTACLES);
   obstacles.length = 0;
@@ -759,7 +767,7 @@ function simulate(dt: number) {
     // Traffic, police and road ragers, or a city scene's driver. (A car's own entry sits at distance 0, which clearDistance ignores.)
     else if (v.ai || v.pursuit) {
       prof.begin(P_DRIVE);
-      controls = (v.scene ? v.scene.drive(v, obstacles, dt) : null) ?? heat.drive(v, obstacles, dt);
+      controls = driveCar(v, dt);
       prof.end(P_DRIVE);
     }
     prof.begin(P_PHYSICS);
@@ -792,9 +800,13 @@ function simulate(dt: number) {
   for (let i = 0; i < population.crowd.length; i++) {
     const c = population.crowd[i];
     copyPedState(c.prev, c.agent.s);
+    // Off screen, on their own tick with all the time since the last (their collisions below wait for it too).
+    const s = c.agent.s;
+    const pedDt = c.lod ? simLod.due(c.lod, simLod.tier(s.x, s.z), dt, fullRatePed(c.agent)) : dt;
+    if (pedDt === 0) continue;
     // Someone a city scene set on someone else (a scuffle, a suspect and the officers) fights them, not the player.
     const own = cityLife.targetFor(c);
-    const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, own ?? target);
+    const event = stepCrowdPed(c.agent, vehicleStates, rand, pedDt, own ?? target);
     if (event?.kind === 'struck') pedHitByCar(c, driving !== null && event.car === driving.sim ? driving : null);
     else if (event?.kind === 'punch') {
       if (own) cityLife.punch(c);
@@ -954,6 +966,7 @@ function simulate(dt: number) {
   prof.begin(P_PEDCOLLIDE);
   for (let i = 0; i < population.crowd.length; i++) {
     const c = population.crowd[i];
+    if (c.lod && c.lod.dt === 0) continue;
     if (c.agent.mode !== 'down') {
       for (let j = 0; j < vehicleStates.length; j++) {
         const s = vehicleStates[j];
@@ -968,6 +981,31 @@ function simulate(dt: number) {
   prof.end(P_COLLIDE);
   syncWeapon();
   prof.end(P_SIM);
+}
+
+/**
+ * A driven car's controls this step. Calm traffic off screen thinks on its
+ * tick (systems/simLod.ts) and holds its last decision between (steering
+ * and braking every step); a scene's or a chase's car, the police, and
+ * anyone reacting to the player think every step.
+ */
+function driveCar(v: Vehicle, dt: number): VehicleControls {
+  const ai = v.ai;
+  const clock = v.lod;
+  let step = dt;
+  if (clock) {
+    const pinned = ai === null || v.scene != null || v.pursuit != null || v.police === true || fullRateDriver(ai);
+    let tier = simLod.tier(v.sim.x, v.sim.z);
+    // Lights and cross traffic don't wait for a 5 Hz tick.
+    if (tier === LOD_FAR && !pinned && nearJunction(ai, v.sim)) tier = LOD_NEAR;
+    step = simLod.due(clock, tier, dt, pinned);
+    if (step === 0) {
+      const held = holdAi(ai!, v.sim);
+      if (held) return held;
+      step = simLod.settle(clock);
+    }
+  }
+  return (v.scene ? v.scene.drive(v, obstacles, step) : null) ?? heat.drive(v, obstacles, step);
 }
 
 /** A car knocked street furniture flying: it's gone from its spot, a copy tumbles away, and the hit is heard. */
@@ -1695,6 +1733,8 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   },
   /** JS ms per frame by system: start(), then summary() (mean, p95, max per section). */
   simProfile: prof,
+  /** The sim's level of detail (systems/simLod.ts): enabled = false runs everything every step. */
+  simLod,
   /** One whole frame (sim, effects, render) `ms` after the last: for harnesses that stub requestAnimationFrame. */
   stepFrame(ms = 1000 / 60) {
     frame(last + ms);
