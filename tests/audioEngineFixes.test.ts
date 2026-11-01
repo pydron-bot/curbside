@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CHASE, CHASE_STATION } from '../src/audio/music/chase';
-import { MusicPlayer } from '../src/audio/music/musicPlayer';
+import { MusicPlayer, WARM_GAP_PLAY } from '../src/audio/music/musicPlayer';
 import { Arranger, STEPS_PER_BAR, type NoteEvent } from '../src/audio/music/sequencer';
 import { STATIONS, type Station } from '../src/audio/music/stations';
 import { THEME } from '../src/audio/music/themes';
@@ -591,13 +591,35 @@ describe('drum kits', () => {
   /** Every take rendered so far (a shared crash counted once). */
   const takes = (music: MusicPlayer) => new Set([...kits(music).values()].flatMap((k) => Object.values(k).flat())).size;
   const complete = (k: Kit) => k.kick.length === 3 && k.snare.length === 3 && k.hat.length === 3 && k.openHat.length === 2 && k.crash.length === 1;
-  const idle: Array<() => void> = [];
-  const fireIdle = () => idle.splice(0).forEach((fn) => fn());
+  /** Idle slots asked for, by handle; fireIdle() gives them their turn. */
+  const idle = new Map<number, () => void>();
+  let handles = 0;
+  const stubIdle = () => {
+    vi.stubGlobal('requestIdleCallback', (fn: () => void) => (idle.set(++handles, fn), handles));
+    vi.stubGlobal('cancelIdleCallback', (h: number) => idle.delete(h));
+  };
+  const fireIdle = () => {
+    const due = [...idle.values()];
+    idle.clear();
+    due.forEach((fn) => fn());
+  };
+  /** Every take from now on: its kit, part, whether its kit was wanted (urgent), and when (the fake clock). */
+  function logTakes(music: MusicPlayer) {
+    const log: Array<{ key: string; part: string; urgent: boolean; at: number }> = [];
+    const m = music as unknown as Record<string, unknown>;
+    const take = (m.renderTake as (r: { kit: Kit; jobs: Array<{ part: string }>; urgent: boolean }, i?: number) => void).bind(music);
+    m.renderTake = (r: { kit: Kit; jobs: Array<{ part: string }>; urgent: boolean }, i = 0) => {
+      const key = [...kits(music)].find(([, k]) => k === r.kit)?.[0] ?? '?';
+      log.push({ key, part: r.jobs[i].part, urgent: r.urgent, at: Date.now() });
+      take(r, i);
+    };
+    return log;
+  }
 
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
-    idle.length = 0;
+    idle.clear();
   });
 
   it('render the crash take once per context and share it (the 14-24 ms job, never mid-play again)', () => {
@@ -615,52 +637,117 @@ describe('drum kits', () => {
     music.dispose();
   });
 
-  it('warm behind the title a take per idle slot: never while a kit that plays is rendering, not once the game is on, not after dispose', () => {
+  it('warm a take per idle slot behind the title and on into play: never while a kit that plays is rendering, gently in play, not after dispose', () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    vi.stubGlobal('requestIdleCallback', (fn: () => void) => idle.push(fn));
+    stubIdle();
     const { music } = player(STATIONS[0]); // its kit renders at once (between frames)
     music.setMode('menu');
     music.warmKits([...STATIONS, CHASE_STATION].map((s) => s.sound));
     expect(takes(music)).toBe(0);
-    fireIdle(); // the radio's kit is still rendering: nothing warms
-    expect(idle).toHaveLength(0);
+    expect(idle.size).toBe(0); // the radio's kit is still rendering: nothing warms
     vi.runAllTimers();
     const booted = takes(music);
     expect(complete(kits(music).values().next().value!)).toBe(true);
-    // Now a take per idle slot.
+    // Now a take per idle slot, each a short gap after the last.
     for (let n = 1; n <= 3; n++) {
-      expect(idle).toHaveLength(1);
+      expect(idle.size).toBe(1);
       fireIdle();
       expect(takes(music)).toBe(booted + n);
+      vi.runOnlyPendingTimers();
     }
-    // A kit wanted now goes first; warming waits for it.
+    // A kit wanted now goes first: the slot booked for warming is dropped until it's in.
     music.warmKit(SIDEWAYS.sound);
     const sideways = kits(music).get(kitKey(SIDEWAYS.sound))!;
     expect(sideways.kick).toHaveLength(0);
-    fireIdle();
-    expect(takes(music)).toBe(booted + 3);
+    expect(idle.size).toBe(0);
     vi.runAllTimers();
     expect(complete(sideways)).toBe(true);
-    // The game on: warming pauses; back on the title it carries on.
+    // In play it carries on, gently: an idle slot no sooner than WARM_GAP_PLAY after the last take.
     music.setMode('game');
+    fireIdle(); // the slot booked behind the title
     const playing = takes(music);
-    fireIdle();
-    expect(takes(music)).toBe(playing);
-    expect(idle).toHaveLength(0);
-    music.setMode('menu');
-    fireIdle();
-    expect(takes(music)).toBe(playing + 1);
-    // Disposed: nothing more.
+    for (let n = 1; n <= 3; n++) {
+      vi.advanceTimersByTime(WARM_GAP_PLAY - 1);
+      expect(idle.size).toBe(0);
+      vi.advanceTimersByTime(1);
+      fireIdle();
+      expect(takes(music)).toBe(playing + n);
+    }
+    // Disposed: nothing more, nothing left booked.
     music.dispose();
-    fireIdle();
+    expect(vi.getTimerCount()).toBe(0);
     vi.runAllTimers();
-    expect(takes(music)).toBe(playing + 1);
-    expect(idle).toHaveLength(0);
+    fireIdle();
+    expect(takes(music)).toBe(playing + 3);
+    expect(idle.size).toBe(0);
   });
+
+  it("warm every kit in play when PLAY was the first tap (Safari, no idle slots): the radio's, the other crash, the chase's, then the rest, WARM_GAP_PLAY apart", () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const { music } = player(STATIONS[0]); // NIGHTDRIVE: its kit has the plain crash
+    music.setMode('game'); // the title never had a turn
+    const log = logTakes(music);
+    music.warmKits([CHASE_STATION, ...STATIONS].map((s) => s.sound));
+    vi.runAllTimers();
+    for (const k of kits(music).values()) expect(complete(k)).toBe(true);
+    const radio = log.filter((e) => e.urgent);
+    const warm = log.filter((e) => !e.urgent);
+    expect(radio).toHaveLength(18);
+    expect(radio.every((e) => e.key === kitKey(STATIONS[0].sound))).toBe(true);
+    expect(log.slice(0, radio.length)).toEqual(radio); // nothing warms before the radio's kit is in
+    expect(warm[0]).toMatchObject({ key: kitKey(INSERTCOIN.sound), part: 'crash' }); // the chip crash: the other shared take
+    const chase = warm.map((e) => e.key).lastIndexOf(kitKey(CHASE_STATION.sound));
+    expect(chase).toBe(17); // then the chase's whole kit (its crash is the radio's)
+    expect(warm.slice(1, chase + 1).every((e) => e.key === kitKey(CHASE_STATION.sound))).toBe(true);
+    for (let i = 1; i < warm.length; i++) expect(warm[i].at - warm[i - 1].at).toBeGreaterThanOrEqual(WARM_GAP_PLAY);
+    music.dispose();
+  });
+
+  for (const idleSlots of [true, false]) {
+    it(`never render two takes in a frame, stalled frames too: a wanted kit a take a frame, warming a gap after the last take, whichever it was (${idleSlots ? 'idle slots' : 'Safari'})`, () => {
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+      if (idleSlots) stubIdle();
+      const frames = new Map<number, () => void>();
+      vi.stubGlobal('requestAnimationFrame', (fn: () => void) => (frames.set(++handles, fn), handles));
+      vi.stubGlobal('cancelAnimationFrame', (h: number) => frames.delete(h));
+      const { music } = player(STATIONS[0]);
+      music.setMode('game');
+      const log = logTakes(music);
+      music.warmKits([CHASE_STATION, ...STATIONS].map((s) => s.sound));
+      const renders = inner<Array<{ kit: Kit; jobs: unknown[] }>>(music, 'renders');
+      const chase = kits(music).get(kitKey(CHASE_STATION.sound))!;
+      let wanted = -1;
+      for (let f = 0; f < 3000 && renders.length > 0; f++) {
+        // A frame (16 ms, every 50th stalled for half a second): its callbacks, the tasks after it, an idle slot.
+        const before = log.length;
+        const due = [...frames.values()];
+        frames.clear();
+        due.forEach((fn) => fn());
+        vi.advanceTimersByTime(f % 50 === 49 ? 500 : 16);
+        fireIdle();
+        expect(log.length - before, `takes in frame ${f}`).toBeLessThanOrEqual(1);
+        // The first star with two of the chase kit's takes left, just after a warming take (its next slot booked).
+        const r = renders.find((x) => x.kit === chase);
+        if (wanted < 0 && r?.jobs.length === 2) {
+          music.warmKit(CHASE_STATION.sound);
+          wanted = log.length;
+        }
+      }
+      expect(renders).toHaveLength(0);
+      expect(wanted).toBeGreaterThan(0);
+      expect(log.slice(wanted, wanted + 2).every((e) => e.urgent)).toBe(true);
+      // The radio's kit a take a frame; every warming take a full gap after the take before it.
+      expect(log[17].at - log[0].at).toBe(17 * 16);
+      log.forEach((e, i) => {
+        if (i > 0 && !e.urgent) expect(e.at - log[i - 1].at, `take ${i}`).toBeGreaterThanOrEqual(WARM_GAP_PLAY);
+      });
+      music.dispose();
+    });
+  }
 
   it("hurry the shared crash into a kit wanted now when a warming kit still has it to render (INSERT COIN's radio, PLAY before any idle slot, then the first star)", () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-    vi.stubGlobal('requestIdleCallback', (fn: () => void) => idle.push(fn)); // no idle slot comes
+    stubIdle(); // and no idle slot comes
     const { music } = player(INSERTCOIN); // the radio's (chip) kit renders between frames
     music.setMode('menu');
     music.warmKits([...STATIONS, CHASE_STATION].map((s) => s.sound));

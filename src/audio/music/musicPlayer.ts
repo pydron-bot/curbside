@@ -70,12 +70,16 @@ type Kit = Record<KitPart, AudioBuffer[]>;
 interface KitRender {
   kit: Kit;
   jobs: KitJob[];
-  /** Its sound plays (or is about to): a take per macrotask, ahead of any warming. */
+  /** Its sound plays (or is about to): a take per frame, ahead of any warming. */
   urgent: boolean;
 }
 
-/** Between warming takes on the title without requestIdleCallback (Safari), ms. */
-const WARM_GAP = 40;
+/** Behind the title a warming take waits this long after the last take (then a frame, and an idle slot where there are any), ms. */
+const WARM_GAP_TITLE = 40;
+/** In play, gently: this long. */
+export const WARM_GAP_PLAY = 150;
+/** The longest a warming take waits for an idle slot, ms. */
+const IDLE_TIMEOUT = 1000;
 
 export class MusicPlayer {
   readonly arranger: Arranger;
@@ -109,9 +113,13 @@ export class MusicPlayer {
    * the longest job by far (2.2 s of audio, 14-24 ms).
    */
   private readonly crashes = new Map<boolean, AudioBuffer[]>();
-  private renderTimer: ReturnType<typeof setTimeout> | null = null;
-  private idleWaiting = false;
-  /** The title is up (the last mode asked for was 'menu'): kits may warm in idle time. */
+  /** A wanted kit's next take is booked. */
+  private renderBooked = false;
+  /** The next warming take, booked: its gap (or the task after its frame), its frame, its idle slot. */
+  private warmTimer: ReturnType<typeof setTimeout> | undefined;
+  private warmFrame: number | undefined;
+  private warmIdle: number | undefined;
+  /** The title is up (the last mode asked for was 'menu'): kits warm at once in idle time, not at play's gentle pace. */
   private onTitle = false;
   private disposed = false;
   /** Round robin over each hit's takes. */
@@ -308,11 +316,12 @@ export class MusicPlayer {
   }
 
   /**
-   * Render these sounds' kits behind the title, a take per idle slot (the
-   * radio's own first: PLAY starts it), so music first heard on foot, or the
-   * chase, doesn't render one mid-play. Only on the title, and never while a
-   * kit that's playing is still rendering; the game starting pauses it (a kit
-   * wanted then renders at once, as before).
+   * Render these sounds' kits ahead of time, a take per idle slot, so music
+   * first heard on foot, or the chase, doesn't render one mid-play: the
+   * radio's own first, then in the order given, the shared crash takes
+   * before anything else. It starts at once, whatever the mode: at the title's
+   * pace behind it, gently in play (WARM_GAP_PLAY apart). Never while a kit
+   * that's playing is still rendering (that one goes first, a take a frame).
    */
   warmKits(sounds: readonly StationSound[]): void {
     this.kitFor(this.arranger.radio.sound, false);
@@ -528,7 +537,7 @@ export class MusicPlayer {
   dispose(): void {
     this.running = false;
     this.disposed = true;
-    if (this.renderTimer !== null) clearTimeout(this.renderTimer);
+    this.cancelWarm();
     this.renders.length = 0;
     for (const v of this.notes) v.dispose();
     this.notes.length = 0;
@@ -603,7 +612,7 @@ export class MusicPlayer {
   /**
    * The kit for a sound. The first time, it's rendered a take at a time
    * (up to ~10 ms each on a laptop, the shared crash aside): between frames
-   * when `urgent` (its sound plays now), else in idle time on the title;
+   * when `urgent` (its sound plays now), else in idle time (warmKits);
    * parts not in yet play on the live voices.
    */
   private kitFor(s: StationSound, urgent = true): Kit {
@@ -643,34 +652,68 @@ export class MusicPlayer {
     }
   }
 
-  /** Book the next take: a wanted kit's at once (between frames), a warming one in an idle slot. */
+  /**
+   * Book the next take, never two in a frame: a wanted kit's just after the
+   * next frame (at once where there are no frames, as offline), a warming
+   * one a gap after the last take, then a frame on, in an idle slot where
+   * there are any.
+   */
   private scheduleRender(): void {
     if (this.disposed || this.renders.length === 0) return;
     if (this.renders.some((r) => r.urgent)) {
-      if (this.renderTimer === null) this.renderTimer = setTimeout(this.renderNow, 0);
-    } else if (this.onTitle && !this.idleWaiting) {
-      this.idleWaiting = true;
-      if (typeof requestIdleCallback === 'function') requestIdleCallback(this.renderIdle, { timeout: 1000 });
-      else setTimeout(this.renderIdle, WARM_GAP);
+      // A slot booked for warming would land too soon after the wanted kit's last take: book afresh after it.
+      this.cancelWarm();
+      if (this.renderBooked) return;
+      this.renderBooked = true;
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(this.afterFrame);
+      else setTimeout(this.renderNow, 0);
+    } else if (this.warmTimer === undefined && this.warmFrame === undefined && this.warmIdle === undefined) {
+      this.warmTimer = setTimeout(this.warmGapOver, this.onTitle ? WARM_GAP_TITLE : WARM_GAP_PLAY);
     }
   }
 
+  private cancelWarm(): void {
+    clearTimeout(this.warmTimer);
+    if (this.warmFrame !== undefined) cancelAnimationFrame(this.warmFrame);
+    if (this.warmIdle !== undefined) cancelIdleCallback(this.warmIdle);
+    this.warmTimer = this.warmFrame = this.warmIdle = undefined;
+  }
+
+  private readonly afterFrame = (): void => void setTimeout(this.renderNow, 0);
+
+  private readonly warmGapOver = (): void => {
+    this.warmTimer = undefined;
+    if (typeof requestAnimationFrame === 'function') this.warmFrame = requestAnimationFrame(this.warmFrameOver);
+    else this.warmFrameOver();
+  };
+
+  private readonly warmFrameOver = (): void => {
+    this.warmFrame = undefined;
+    if (typeof requestIdleCallback === 'function') this.warmIdle = requestIdleCallback(this.renderIdle, { timeout: IDLE_TIMEOUT });
+    else this.warmTimer = setTimeout(this.renderIdle, 0);
+  };
+
   private readonly renderNow = (): void => {
-    this.renderTimer = null;
+    this.renderBooked = false;
+    if (this.disposed) return;
     const r = this.renders.find((x) => x.urgent);
     if (r) this.renderTake(r);
   };
 
   private readonly renderIdle = (): void => {
-    this.idleWaiting = false;
-    // A kit that's playing goes first (its timer is booked), and nothing warms once the game is on.
-    if (this.disposed || !this.onTitle || this.renders.some((r) => r.urgent)) return;
-    const r = this.renders[0];
-    if (r) this.renderTake(r);
+    this.warmTimer = this.warmIdle = undefined;
+    // A kit that's playing goes first (its take is booked).
+    if (this.disposed || this.renders.some((r) => r.urgent)) return;
+    // The shared crash takes before anything else (the longest jobs, and every kit's), then the kits in order.
+    for (const r of this.renders) {
+      const i = r.jobs.findIndex((j) => j.part === 'crash');
+      if (i >= 0) return this.renderTake(r, i);
+    }
+    if (this.renders.length > 0) this.renderTake(this.renders[0]);
   };
 
-  private renderTake(r: KitRender): void {
-    const job = r.jobs.shift();
+  private renderTake(r: KitRender, i = 0): void {
+    const job = r.jobs.splice(i, 1)[0];
     if (job) {
       try {
         const data = job.run();

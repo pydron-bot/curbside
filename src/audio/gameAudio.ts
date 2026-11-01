@@ -973,8 +973,8 @@ export class GameAudio {
     };
     if (this.chase.phase === 'on') this.music.setScore(CHASE);
     if (this.musicMode !== 'off' && !this.dead) this.music.setMode(this.musicMode);
-    // Every kit the street or the chase may want, rendered behind the title rather than mid-play.
-    this.music.warmKits([...STATIONS, CHASE.station].map((s) => s.sound));
+    // Every kit the street or the chase may want, warmed from now on in idle time (the chase's right after the radio's), not mid-play.
+    this.music.warmKits([CHASE.station, ...STATIONS].map((s) => s.sound));
     this.ambient = new AmbientBed(ctx, bank, this.worldIn, ctx.currentTime);
     if (this.paused) {
       this.worldGate.gain.value = 0;

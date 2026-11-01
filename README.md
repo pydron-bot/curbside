@@ -984,9 +984,14 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   from a kit rendered per station sound (`drumKit.ts`: layered, saturated
   hits, 808-style metal hats, a four-hand clap, up to three takes each in
   round robin, one crash take shared by every kit), rendered a take at a
-  time: behind the title in idle time (`MusicPlayer.warmKits`), or between
-  frames when a station is first heard before that; the live drum voices
-  stand in until each part is in. The
+  time and never two in a frame: in idle time from the moment audio
+  unlocks, whatever is on screen (`MusicPlayer.warmKits`: the radio's kit,
+  then the chase's, then the rest, the two shared crash takes before any
+  other; behind the title a take 40 ms after the last, in play gently,
+  150 ms apart, so with PLAY as the first tap every kit is in some 15-20 s
+  into play), or a take a frame when a station is heard before its kit is
+  in (warming waits for it); the live drum voices stand in until each part
+  is in. The
   NOW PLAYING card shows the song and artist (`audio.song`,
   `audio.onSongChange`) and drops in for each new song while you drive.
 - **Station instruments.** Each station's `StationSound` picks its

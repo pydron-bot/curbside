@@ -7,7 +7,8 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GameAudio, createAudioFrame, createCarSound, type AudioFrame, type FireSource } from '../src/audio/gameAudio';
-import type { MusicPlayer } from '../src/audio/music/musicPlayer';
+import { CHASE } from '../src/audio/music/chase';
+import { MusicPlayer } from '../src/audio/music/musicPlayer';
 import { STATIONS } from '../src/audio/music/stations';
 import * as sfx from '../src/audio/sfx';
 import { BOOMBOX_STATION, emitterGain, parkedStation } from '../src/audio/streetMusic';
@@ -633,5 +634,21 @@ describe('GameAudio: parked cars on foot', () => {
     car.sim.x += 0.6;
     g.run(2, () => expect(g.heard()).toBeGreaterThan(level * 0.6));
     expect(g.music.station).toBe(STATIONS[station]);
+  });
+});
+
+describe('GameAudio: drum kits', () => {
+  it("queues every kit to warm as audio unlocks, in play too (PLAY was the first tap), the chase's next after the radio's", () => {
+    const warm = vi.spyOn(MusicPlayer.prototype, 'warmKits');
+    try {
+      const g = game(); // built in 'game': nothing of the title
+      expect(g.music.mode).toBe('game');
+      expect(warm).toHaveBeenCalledTimes(1);
+      const sounds = warm.mock.calls[0][0];
+      expect(sounds[0]).toBe(CHASE.station.sound);
+      expect(new Set(sounds)).toEqual(new Set([CHASE.station.sound, ...STATIONS.map((s) => s.sound)]));
+    } finally {
+      warm.mockRestore();
+    }
   });
 });
