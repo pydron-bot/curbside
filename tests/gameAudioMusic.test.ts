@@ -585,6 +585,30 @@ describe('GameAudio: the car radio', () => {
     g.audio.countIn(0);
     expect(dropIn).toHaveBeenCalledTimes(1);
   });
+
+  for (const over of ['the chase on foot', 'a boombox on foot', 'the radio in a car']) {
+    it(`GO lets go of the count-in's duck at once, whatever drops in (${over})`, () => {
+      const g = game();
+      g.walk();
+      g.run(3);
+      if (over === 'the chase on foot') g.emit({ type: 'wanted', level: 3, prev: 0, reason: 'crime' });
+      else if (over === 'a boombox on foot') g.emit({ type: 'boombox', id: 'vipers-0', x: QUIET.x + 3, z: QUIET.z, on: true });
+      else g.drive();
+      g.run(6);
+      if (over === 'the chase on foot') expect(g.music.playingScore).toBe(true);
+      if (over === 'a boombox on foot') expect(g.music.station).toBe(STATIONS[BOOMBOX_STATION]);
+      expect(g.heard()).toBeGreaterThan(0.3);
+      const duck = (g.music as unknown as { duckGain: { gain: Param } }).duckGain.gain;
+      for (const n of [3, 2, 1]) {
+        g.audio.countIn(n);
+        g.run(1);
+      }
+      const go = g.clock.currentTime;
+      expect(duck.at(go)).toBeLessThan(0.35); // held down under the count...
+      g.audio.countIn(0);
+      expect(duck.at(go + 0.1)).toBeGreaterThan(0.95); // ...and up again on GO, not ~0.5 s later
+    });
+  }
 });
 
 describe('GameAudio: parked cars on foot', () => {

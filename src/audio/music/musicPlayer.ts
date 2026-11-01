@@ -440,8 +440,7 @@ export class MusicPlayer {
    */
   dropIn(when: number, intensity: number): void {
     // GO lets go of the count-in's duck even when nothing drops in (a frenzy counted in over the chase).
-    this.duckDip.release(when, 0.04);
-    automateDip(this.duckGain.gain, this.duckDip, this.ctx.currentTime, 0.015);
+    this.unduck(when);
     if (!this.running || this.off || this.dormant || this.arranger.mode !== 'game' || this.arranger.playing) return;
     this.cutAt(when);
     this.arranger.dropIn(intensity);
@@ -487,6 +486,12 @@ export class MusicPlayer {
     const now = this.ctx.currentTime;
     this.duckDip.add(now, depth, hold, Math.max(0.15, release));
     automateDip(this.duckGain.gain, this.duckDip, now, 0.015);
+  }
+
+  /** Let go of any duck at `when`, at once (GO after a count-in, whatever plays then). */
+  unduck(when: number): void {
+    this.duckDip.release(when, 0.04);
+    automateDip(this.duckGain.gain, this.duckDip, this.ctx.currentTime, 0.015);
   }
 
   /** Paused: the music drops back and goes muffled, like it's in the next room. */

@@ -491,6 +491,8 @@ export class GameAudio {
     // Play takes over from here; the next frames ask for the same level, so the drop sticks.
     this.chaos.add(GO_ENERGY);
     this.chaos.step(0);
+    // GO lets go of the count's duck whatever drops in: on foot too, under the chase or the street.
+    music.unduck(v.t);
     // On foot the street plays on: a shop's radio doesn't jump to its chorus for you.
     if (this.walking) return;
     const level = this.autoIntensity ? Math.min(MAX_INTENSITY, (this.inCar ? 1 : 0) + this.chaos.level) : 0;
