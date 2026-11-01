@@ -73,6 +73,7 @@ const TIPS = [
   ['Heat', "Crimes the police see earn stars. Get out of sight until they fade, or pay for a Pay 'n' Spray ('S' on the radar)."],
   ['Busted', 'Caught by the police: a fine, your guns gone and the chain lost. Stand still with empty hands and they cuff you rather than shoot.'],
   ['Survive', 'Grab health and armour crates. WASTED costs the chain, your guns and a hospital bill; your best score is kept.'],
+  ['CRED', 'Every life earns CRED: points, time, stars and cash. Fill a level and the WASTED or BUSTED screen offers three perks; pick one, it stays for good. Perks are off in the Chaos Run and races.'],
   ['Cash & shop', "Spend it at the safehouse door ('H' on the radar): armour, ammo, upgrades. SHOP is in the pause menu nearby."],
   ['Activities', "Purple gems start frenzies; ringing payphones ('M') give jobs; 'R' starts a race; '$' buys the cars on its list; a taxi earns fares; 40 packages hide in alleys. PROGRESS in the pause menu tracks it all."],
   ['Radar', RADAR_LEGEND_LINE],

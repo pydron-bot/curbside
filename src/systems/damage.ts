@@ -16,6 +16,8 @@ export interface DamageState {
   wrecked: boolean;
   /** Sim time the player last damaged it (rammed, shot, blew up next to it); -Infinity if never. */
   lastPlayerHit: number;
+  /** Share of each hit it takes (the BODYWORK perk on the player's car); 1 if left out. */
+  taken?: number;
 }
 
 export type DamageStage = 'ok' | 'smoking' | 'burning' | 'wrecked';
@@ -86,7 +88,7 @@ export function landingDamage(vy: number): number {
 
 export function applyDamage(d: DamageState, amount: number): void {
   if (d.wrecked || amount <= 0) return;
-  d.health = Math.max(0, d.health - amount);
+  d.health = Math.max(0, d.health - amount * (d.taken ?? 1));
   if (d.health <= d.maxHealth * FIRE_AT) d.burning = true;
 }
 

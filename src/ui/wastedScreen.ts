@@ -29,6 +29,11 @@ export class WastedScreen {
   private readonly title: HTMLElement;
   private readonly bar: HTMLElement;
   private readonly badge: HTMLElement;
+  private readonly credBox: HTMLElement;
+  private readonly credGain: HTMLElement;
+  private readonly credLevel: HTMLElement;
+  private readonly credBar: HTMLElement;
+  private readonly levelUp: HTMLElement;
 
   constructor(root: HTMLElement) {
     const el = document.createElement('div');
@@ -45,6 +50,10 @@ export class WastedScreen {
         <div class="ws-row"><span>CARS WRECKED</span><b data-k="wrecks"></b></div>
         <div class="ws-row ws-fine" hidden><span>POINTS LOST</span><b data-k="fine"></b></div>
         <div class="ws-row ws-bill" hidden><span></span><b data-k="bill"></b></div>
+        <div class="ws-cred" hidden>
+          <div class="ws-row"><span>CRED</span><b data-k="cred"></b><em class="ws-badge ws-lvlup">LEVEL UP</em></div>
+          <div class="ws-level"><small data-k="lvl"></small><span class="ws-bar"><i></i></span></div>
+        </div>
       </div>
       <div class="wasted-timer"><i></i></div>`;
     root.append(el);
@@ -55,6 +64,11 @@ export class WastedScreen {
     this.title = el.querySelector('.wasted-title')!;
     this.bar = el.querySelector('.wasted-timer > i')!;
     this.badge = el.querySelector('.ws-badge')!;
+    this.credBox = el.querySelector('.ws-cred')!;
+    this.credGain = k('cred');
+    this.credLevel = k('lvl');
+    this.credBar = el.querySelector('.ws-bar > i')!;
+    this.levelUp = el.querySelector('.ws-lvlup')!;
   }
 
   get visible(): boolean {
@@ -90,8 +104,18 @@ export class WastedScreen {
     this.rows.bill.parentElement!.hidden = amount <= 0;
   }
 
+  /** What the life earned toward the next level (game/cred.ts): +CRED, the level and how far into the next. */
+  cred(gained: number, level: number, into: number, need: number, levelUp: boolean): void {
+    this.credGain.textContent = `+${fmt(gained)}`;
+    this.credLevel.textContent = `LV ${level}`;
+    this.credBar.style.setProperty('--fill', String(Math.max(0, Math.min(1, into / need))));
+    this.levelUp.hidden = !levelUp;
+    this.credBox.hidden = false;
+  }
+
   hide(): void {
     this.el.hidden = true;
     this.rows.bill.parentElement!.hidden = true;
+    this.credBox.hidden = true;
   }
 }

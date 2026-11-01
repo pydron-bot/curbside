@@ -88,6 +88,8 @@ export class Wanted {
   unseen = 0;
   /** Highest level reached in the current chase (for the EVADED bonus); 0 when clean. */
   peak = 0;
+  /** Time out of sight to lose a star is multiplied by this (the GHOST perk). */
+  evadeScale = 1;
   private time = 0;
   private lastCrime = -Infinity;
   /** Seconds left of RESPONSE_GRACE. */
@@ -118,7 +120,7 @@ export class Wanted {
   /** 0..1 progress toward losing the current star. */
   get evadeProgress(): number {
     const lvl = this.level;
-    return lvl > 0 ? Math.min(1, this.unseen / evadeSeconds(lvl)) : 0;
+    return lvl > 0 ? Math.min(1, this.unseen / (evadeSeconds(lvl) * this.evadeScale)) : 0;
   }
 
   /**
@@ -170,7 +172,7 @@ export class Wanted {
       return;
     }
     this.unseen += dt;
-    if (this.unseen < evadeSeconds(lvl)) return;
+    if (this.unseen < evadeSeconds(lvl) * this.evadeScale) return;
     // Lost them for now: one star down, and the clock starts on the next.
     this.unseen = 0;
     this.heat = lvl - 1;

@@ -49,6 +49,8 @@ const TOUCH_SLOP = 0.35;
 export class BustMeter {
   /** 0..1; at 1 the player is busted. */
   progress = 0;
+  /** Grab times are multiplied by this (the SLIPPERY perk). */
+  slow = 1;
 
   /** Advance one step; true when the arrest completes (the meter then resets). */
   step(dt: number, s: ArrestSituation): boolean {
@@ -57,7 +59,7 @@ export class BustMeter {
       this.progress = Math.max(0, this.progress - ESCAPE_RATE * dt);
       return false;
     }
-    this.progress += dt / seconds;
+    this.progress += dt / (seconds * this.slow);
     if (this.progress < 1) return false;
     this.progress = 0;
     return true;

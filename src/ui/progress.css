@@ -1102,3 +1102,111 @@ body:not([data-scene='play']) #area-card {
 #area-card[data-tone='friendly'] small {
   color: var(--cash);
 }
+
+/* --- LEVEL UP: three perks over the death screen (perkCard.ts) --- */
+.perk-card {
+  width: min(600px, 100%);
+}
+
+.perk-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.perk-choice {
+  --group: var(--neon-cyan);
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  gap: 6px;
+  padding: 12px 8px 14px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--group);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.05);
+  color: var(--ink);
+  text-align: center;
+  cursor: pointer;
+  animation: perk-in 0.32s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  transition:
+    transform 0.12s,
+    background 0.12s;
+}
+
+.perk-choice[data-group='survive'] {
+  --group: var(--neon-green);
+}
+
+.perk-choice[data-group='heat'] {
+  --group: var(--neon-pink);
+}
+
+.perk-choice[data-group='money'] {
+  --group: var(--neon-yellow);
+}
+
+.perk-choice:active,
+.nav-visible .perk-choice.nav-focus {
+  transform: translateY(-2px);
+  background: rgb(255 255 255 / 0.12);
+  box-shadow: 0 0 0 2px var(--group);
+}
+
+@media (hover: hover) {
+  .perk-choice:hover {
+    background: rgb(255 255 255 / 0.1);
+  }
+}
+
+.perk-choice small {
+  font: 800 10px/1 var(--hud-font);
+  letter-spacing: 0.22em;
+  color: var(--group);
+}
+
+.perk-choice b {
+  font: italic 900 clamp(14px, 4.4vmin, 18px)/1.05 var(--display-font);
+  letter-spacing: 0.06em;
+}
+
+.perk-pips {
+  display: flex;
+  gap: 5px;
+}
+
+.perk-pips i {
+  width: 14px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.18);
+}
+
+.perk-pips i.on {
+  background: var(--group);
+}
+
+/* The rank this pick adds. */
+.perk-pips i.next {
+  background: #fff;
+  box-shadow: 0 0 8px var(--group);
+  animation: perk-next 0.9s ease-in-out infinite alternate;
+}
+
+.perk-says {
+  font: 700 clamp(11px, 3.3vmin, 13px)/1.3 var(--hud-font);
+  color: var(--ink-dim);
+}
+
+@keyframes perk-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.92);
+  }
+}
+
+@keyframes perk-next {
+  to {
+    opacity: 0.45;
+  }
+}

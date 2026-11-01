@@ -45,6 +45,11 @@ export class RaceMode implements Mode {
     ctx.deps.bus.on('busted', () => this.run && this.end(false, 'BUSTED'));
   }
 
+  /** A race is on (from its 3-2-1 to the finish): perks are off. */
+  get running(): boolean {
+    return this.run !== null;
+  }
+
   step(dt: number): void {
     const ctx = this.ctx;
     this.syncBlips();
