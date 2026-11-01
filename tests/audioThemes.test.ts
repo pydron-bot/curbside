@@ -387,6 +387,12 @@ describe('stings', () => {
           ['bass', s.bass, 28, 60],
         ] as const) {
           expect(sorted(notes.map((n) => n.t)), `${label} ${part}`).toBe(true);
+          // One voice: a note releases (playSting: at 0.9 / 0.88 of its length) before the next starts, or slurs into a note that glides.
+          const hold = part === 'melody' ? 0.9 : 0.88;
+          for (let k = 1; k < notes.length; k++) {
+            const [a, b] = [notes[k - 1], notes[k]];
+            expect(a.t + a.len * hold < b.t || b.glide !== undefined, `${label} ${part} ${k - 1} runs into ${k}`).toBe(true);
+          }
           for (const n of notes) {
             for (const x of [n.t, n.note, n.len, n.vel]) expect(Number.isFinite(x), `${label} ${part}`).toBe(true);
             expect(n.t).toBeGreaterThanOrEqual(0);

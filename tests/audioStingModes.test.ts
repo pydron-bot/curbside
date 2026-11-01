@@ -311,6 +311,52 @@ describe('stings in a major key', () => {
   });
 });
 
+describe('playSting', () => {
+  /**
+   * Each mono part's gain (only ever moved by setTargetAtTime) in time order:
+   * two releases in a row mean a note's release landed inside the next note.
+   */
+  function overlaps(s: Sting): string[] {
+    const { log, voice } = recordingContext();
+    sfx.playSting(voice(1), s);
+    const byParam = new Map<string, Array<{ t: number; to: number; other: boolean }>>();
+    for (const line of log) {
+      const m = /^(\d+)\.gain\.(\w+)\(([^)]*)\)$/.exec(line);
+      if (!m) continue;
+      const [, id, method, args] = m;
+      const [to, t] = args.split(',').map(Number);
+      const list = byParam.get(id) ?? [];
+      list.push({ t, to, other: method !== 'setTargetAtTime' });
+      byParam.set(id, list);
+    }
+    const out: string[] = [];
+    for (const [id, events] of byParam) {
+      if (events.some((e) => e.other)) continue; // not a mono synth's gain
+      const sorted = [...events].sort((a, b) => a.t - b.t);
+      for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i].to === 0 && sorted[i - 1].to === 0) out.push(`gain ${id}: release at ${sorted[i - 1].t.toFixed(3)} inside the note before ${sorted[i].t.toFixed(3)}`);
+      }
+    }
+    return out;
+  }
+
+  it("never lets a mono note's release cut into the next note (MISSION FAILED lands on its tonic)", () => {
+    for (const key of [40, 45, 50, 53, 57]) {
+      for (const major of [false, true]) {
+        const scores: Array<[string, Sting]> = [
+          ['wasted', wastedSting(key)],
+          ['busted', bustedSting(key)],
+          ...[3, 2, 1, 0].map((n): [string, Sting] => [`count ${n}`, countInSting(n, key, major)]),
+        ];
+        for (let i = 0; i < 4; i++) {
+          scores.push([`start ${i}`, missionStartSting(key, i, major)], [`passed ${i}`, missionPassedSting(key, i)], [`failed ${i}`, missionFailedSting(key, i, major)]);
+        }
+        for (const [name, s] of scores) expect(overlaps(s), `${name} in ${key}${major ? ' major' : ''}`).toEqual([]);
+      }
+    }
+  });
+});
+
 describe('minor output', () => {
   it('is unchanged: every sting score as before the modes came in', () => {
     expect(hash(minorScores())).toBe('13psthz8jms');
