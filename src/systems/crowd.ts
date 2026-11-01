@@ -73,6 +73,8 @@ export interface PedAgent {
   burning: number;
   /** Seconds left crouched with their arms over their head (scared stiff), then they run. */
   cower: number;
+  /** A gang member: the gang's id (game/gangs.ts). */
+  gang?: string;
 }
 
 /** Hit points everyone starts with. */

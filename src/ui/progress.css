@@ -1043,3 +1043,57 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
     animation: none;
   }
 }
+
+/* --- Area card: the district's name under the radar (ui/areaCard.ts) --- */
+#area-card {
+  position: fixed;
+  top: calc(var(--edge-t) + var(--radar) + 10px);
+  left: var(--edge-l);
+  z-index: 19;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-width: calc(var(--radar) + 80px);
+  pointer-events: none;
+  color: var(--ink);
+  text-shadow: var(--hud-shadow);
+  opacity: 0;
+  transform: translateX(-10px);
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s ease;
+}
+
+#area-card.in {
+  opacity: 1;
+  transform: none;
+}
+
+#area-card[hidden],
+body:not([data-scene='play']) #area-card {
+  display: none;
+}
+
+#area-card b {
+  font: italic 900 clamp(14px, 4.4vmin, 20px)/1.05 var(--display-font);
+  letter-spacing: 0.04em;
+}
+
+#area-card small {
+  font: 800 clamp(9px, 2.6vmin, 11px)/1.2 var(--hud-font);
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: var(--ink-dim);
+}
+
+#area-card[data-tone='turf'] small {
+  color: #b9ff7a;
+}
+
+#area-card[data-tone='hostile'] small {
+  color: #ff6b7d;
+}
+
+#area-card[data-tone='friendly'] small {
+  color: var(--cash);
+}

@@ -111,6 +111,8 @@ export type GameEvent =
       isPlayer?: boolean;
       /** The one knocked over was a police officer. */
       cop?: boolean;
+      /** The one knocked over was a gang member: the gang's id. */
+      gang?: string;
     }
   | { type: 'carjack'; x: number; z: number }
   /** police: the car belongs to the police (a unit's, or the police model). */

@@ -225,7 +225,7 @@ still get the offline shell.
    chatter [`police-chatter`]; missions after the eighth [`missions-store`]: driven
    target cars (`drive: true`) and REPEAT JOB replays at half pay are done
    2026-10-31; chapter 2 waits on Derek's story direction;
-   gangs [`gangs-respect`]; leaderboard needs a decision on any backend
+   gangs [`gangs-respect`]: district names (placeholders), the area card and one gang (VIPERS, NEON MILE, respect) done 2026-10-31 on `claude/gangs`; leaderboard needs a decision on any backend
    [`online-leaderboard`].
 
 Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
