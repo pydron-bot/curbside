@@ -17,8 +17,14 @@ export const CHANGELOG: readonly Release[] = [
   {
     version: '0.11.0',
     date: '2026-11-01',
-    title: 'Version numbers',
-    notes: ['The version shows on the title screen.', 'Settings → Version history lists every release.'],
+    title: 'Version numbers, bug reports and smoother mayhem',
+    notes: [
+      'The version shows on the title screen.',
+      'Settings → Version history lists every release.',
+      'REPORT BUG (the bug on the pause card, with test tools or the perf overlay on): a screenshot, where you are and what just happened, shared from your phone with a note.',
+      'The performance log notes what was on screen (particles, fires, glows, people, cars, scenes) and catches every slow stretch.',
+      'Heavy mayhem keeps its frame rate better on phones: smoke thins sooner when the screen fills, and many fires share their flames.',
+    ],
   },
   {
     version: '0.10.0',
