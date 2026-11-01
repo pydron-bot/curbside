@@ -112,6 +112,7 @@ describe('street-lamp short lists', () => {
       lampList(p.x, p.z, 1, out, 0);
       if (out[0] !== LAMPS_ALL) short++;
     }
-    expect(short / props.length).toBeGreaterThan(0.6);
+    // Lamps stand 16 m apart and never at a corner: at most two reach any one spot.
+    expect(short / props.length).toBeGreaterThan(0.95);
   });
 });
