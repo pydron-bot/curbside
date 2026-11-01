@@ -110,6 +110,7 @@ import { StreetLife } from './game/streetLife';
 import { CityLife } from './game/cityLife';
 import { TUTORIAL_DONE } from './game/tutorial';
 import { CityLifeLook } from './render/cityLifeLook';
+import { peopleLook } from './render/peopleLook';
 import { mountRadioToast } from './ui/radioToast';
 import { publicUrl } from './core/paths';
 import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
@@ -363,6 +364,7 @@ const heat = new Heat({
   held: () => progress.holdControls,
   bustFine: () => progress.bustShare(),
   signals,
+  witnesses: (crime, x, z) => cityLife.witnesses.report(crime, x, z),
 });
 addHeatLook(look, heat, {
   scene,
@@ -422,10 +424,14 @@ const cityLife = new CityLife({
   npcShoot: (x, z, dx, dz) => npcShoot(x, z, dx, dz),
   collect: (kind) => combat.collect(kind),
   focus: () => (attract.active ? attract : player.position),
+  hour: () => look.time.hour,
+  reward: (cash, label) => progress.pay(cash, 'street', label),
+  callIn: (crime) => heat.called(crime),
 });
 maintainCity = (seed) => cityLife.maintain(seed);
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
 look.addGlowSource((g, view) => cityLook.draw(g, view));
+cityLook.add(peopleLook(cityLife));
 const cityView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 // Everyone's place, pose and clip each frame (and the player ducking into cars, cheering wins).
 const people = new PeoplePose({

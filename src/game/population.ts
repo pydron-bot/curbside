@@ -73,6 +73,8 @@ export interface CrowdPed {
   model: CharacterModel;
   /** The gun this person draws when they shoot (a pistol if unset; SWAT carry SMGs). */
   gun?: WeaponKind;
+  /** On their phone (a witness calling or filming, game/scenes/witnesses.ts): held up in the one-handed aim pose. */
+  phone?: boolean;
 }
 
 // --- Tunables -------------------------------------------------------------

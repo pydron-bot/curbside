@@ -45,6 +45,8 @@ export interface GatherSpec {
   /** crowd: the first ring's radius, m, and the arc (rad, centred on the heading) it fills. */
   radius?: number;
   arc?: number;
+  /** Where the `i`th member stands, written into `out` (a shelter's line, a cart's queue), instead of the queue or ring above. */
+  place?(i: number, out: { x: number; z: number; heading: number }): { x: number; z: number; heading: number };
 }
 
 /** The front of a queue counts as at the hatch this close, m. */
@@ -147,6 +149,14 @@ export class Gathering {
     return done;
   }
 
+  /** Take `c` out without handing them back (another scene takes them on: a scuffle, the bus door). */
+  release(c: CrowdPed): boolean {
+    const i = this.members.indexOf(c);
+    if (i < 0) return false;
+    this.drop(i);
+    return true;
+  }
+
   /** Everyone walks off. */
   close(): void {
     for (const c of this.members) if (this.life.present(c) && c.agent.scene) this.life.giveBack(c);
@@ -158,6 +168,7 @@ export class Gathering {
   /** Where the `i`th member stands. */
   private place(i: number): { x: number; z: number; heading: number } {
     const s = this.spec;
+    if (s.place) return s.place(i, this.spot);
     if (this.queue) return queueSpot(this.x, this.z, this.heading, s.side ?? 2, i, this.spot);
     return crowdSpot(this.x, this.z, s.radius ?? 3, i, this.spot, this.heading, s.arc ?? Math.PI * 2);
   }

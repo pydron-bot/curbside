@@ -39,6 +39,7 @@ import { SceneClock, type SceneWorld } from '../systems/cityScenes';
 import { PUNCH_REACH, hurtPed, resumeWalking, spawnPed, type PedAgent, type Target } from '../systems/crowd';
 import { policeSpawnPoint } from '../systems/police';
 import { driverFor } from '../systems/traffic';
+import type { Crime } from '../systems/wanted';
 import type { WeaponKind } from '../systems/weapons';
 import type { Rect } from '../world/city';
 import { WeaponDrops } from '../world/drops';
@@ -58,6 +59,14 @@ import type { BusStop, VendorSpot } from '../world/streetStops';
 import type { City } from '../world/city';
 import type { Player } from './player';
 import { Medics } from './scenes/medics';
+import { Buses } from './scenes/buses';
+import { Buskers } from './scenes/buskers';
+import { Fights } from './scenes/fights';
+import { IceCream } from './scenes/iceCream';
+import { Muggings } from './scenes/muggings';
+import { Pavement } from './scenes/pavement';
+import { Vendors } from './scenes/vendors';
+import { Witnesses } from './scenes/witnesses';
 import { len2 } from '../core/len';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
@@ -113,6 +122,12 @@ export interface CityLifeDeps {
   collect(kind: WeaponKind): boolean;
   /** Who's looking: the focus of the camera (attract cruise or player). */
   focus(): { x: number; z: number; vx: number; vz: number };
+  /** The hour of the day, 0–24 (the food carts' rushes; 13 if left out). */
+  hour?(): number;
+  /** Pay the player a small reward for a good turn (a bag handed back), with its feed label. */
+  reward?(cash: number, label: string): void;
+  /** A witness's call about the player's `crime` got through (heat.called). */
+  callIn?(crime: Crime): void;
 }
 
 /** A scene's view of the director. */
@@ -142,6 +157,8 @@ export class CityLife {
   readonly bays: Bay[];
   readonly drops = new WeaponDrops();
   readonly medics: Medics;
+  /** Heat's witnesses hook (scenes/witnesses.ts). */
+  readonly witnesses: Witnesses;
   readonly scenes: Scene[] = [];
   /** Vehicles the scenes brought in (ambient): retired here once far and unseen. */
   readonly owned: Vehicle[] = [];
@@ -169,6 +186,13 @@ export class CityLife {
     this.bays = carParkBays(d.city);
     // The scenes: one line each.
     this.medics = this.add(new Medics(this));
+    this.add(new Buses(this));
+    const fights = this.add(new Fights(this));
+    this.add(new IceCream(this, fights));
+    this.add(new Vendors(this, fights));
+    this.add(new Buskers(this));
+    this.witnesses = this.add(new Witnesses(this, this.add(new Muggings(this))));
+    this.add(new Pavement(this));
   }
 
   /** Register a scene (stepped, reset with the rest). */

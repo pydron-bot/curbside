@@ -227,7 +227,12 @@ export type StreetWhat =
   | 'iceCreamServed'
   | 'busStop'
   | 'tow'
-  | 'fight';
+  | 'fight'
+  // People (scenes/buskers.ts, muggings.ts, witnesses.ts): a busker sets up, a bag snatched, handed back, a crime called in.
+  | 'busker'
+  | 'mugging'
+  | 'bagReturned'
+  | 'witnessCall';
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;
