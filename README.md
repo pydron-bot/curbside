@@ -679,11 +679,12 @@ stand-in models built in code (`render/critterModels.ts`: `dog`,
 contract in `docs/BLENDER_TODO.md` §8): that family's call and its shadow
 pass (+2) when nothing else of it is in view, else nothing; the turf crews
 wear the crowd's own bodies. Measured on the iPhone profile, the fixed
-seed's seven places after 20 s each (afternoon / 23:00 / 23:00 in rain):
-42.4 / 44.0 / 45.6 calls on average (53 / 47 / 50 at most) before the
-atmosphere work, 40.3 / 44.3 / 42.4 (54 / 50 / 46) with it (rain and
-the quiet districts thin the crowd); umbrellas or dogs alone in view
-+2. Live cars rise by the parked target (10 on
+seed's seven places after 20 s each (afternoon / 23:00 / 23:00 in rain),
+two runs each: 41.0–42.4 / 44.0–44.7 / 44.3–45.6 calls on average (53 /
+47–51 / 46–50 at most) before the atmosphere work, 40.3–42.9 / 42.6–44.3
+/ 42.4–45.4 (54–55 / 45–50 / 46–51) with it (rain and the quiet
+districts thin the crowd); taking the umbrellas and dogs out of a frozen
+frame where they were the only `things` in view: −2. Live cars rise by the parked target (10 on
 'high'/'medium', 8 on 'low') plus whatever scenes bring in; people by
 those a scene holds. iPhone profile ('medium'), a fixed seed at seven
 places round the city after 20 s each: 40.3 draw calls on average (54 at
