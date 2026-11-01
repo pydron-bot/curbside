@@ -132,13 +132,13 @@ export class ChaosRunMode implements Mode {
       if (n !== this.shownCount && n > 0) {
         this.shownCount = n;
         this.ctx.ui.banner(String(n), 'count', '', 0.9);
-        this.ctx.deps.audio.ui('countdown');
+        this.ctx.deps.audio.countIn(n);
       }
       if (this.countdown <= 0) {
         this.phase = 'live';
         this.ctx.holdControls = false;
         this.ctx.ui.banner('GO!', 'go', '', 0.8);
-        this.ctx.deps.audio.ui('go');
+        this.ctx.deps.audio.countIn(0);
       }
       return;
     }

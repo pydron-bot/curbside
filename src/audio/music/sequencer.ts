@@ -12,6 +12,9 @@
  *   chords and melody. While calm the form shapes the arrangement (a drumless
  *   intro, the melody saved for the chorus, a breakdown); in a chase
  *   (intensity FORM_FULL_FROM and up) every section plays in full.
+ *   While the mode is 'menu' a title Theme (themes.ts) can play instead of
+ *   the radio: a station of its own through its own looping form; the radio
+ *   comes back with its next song.
  */
 import { clamp, lerp } from '../mix';
 import { STATIONS, type Song, type Station, type Tier } from './stations';
@@ -55,8 +58,11 @@ export class StepClock {
 
 export type Section = 'intro' | 'verse' | 'chorus' | 'break' | 'outro';
 
+/** A song form: its sections in order and their lengths in bars. */
+export type Form = ReadonlyArray<readonly [Section, number]>;
+
 /** A song: its sections and their lengths in bars. */
-export const FORM: ReadonlyArray<readonly [Section, number]> = [
+export const FORM: Form = [
   ['intro', 4],
   ['verse', 8],
   ['chorus', 8],
@@ -64,7 +70,8 @@ export const FORM: ReadonlyArray<readonly [Section, number]> = [
   ['chorus', 8],
   ['outro', 4],
 ];
-export const FORM_BARS = FORM.reduce((n, [, bars]) => n + bars, 0);
+export const formBars = (form: Form) => form.reduce((n, [, bars]) => n + bars, 0);
+export const FORM_BARS = formBars(FORM);
 /** From this intensity up (a chase) the form no longer thins the arrangement out. */
 export const FORM_FULL_FROM = 3;
 
@@ -75,17 +82,43 @@ export interface SectionAt {
   bars: number;
   /** The section after this one (the next song's intro after the outro). */
   next: Section;
+  /** Index of the section in the form. */
+  part: number;
 }
 
 /** Where bar `songBar` of a song falls in the form. */
-export function sectionAt(songBar: number): SectionAt {
-  let b = ((songBar % FORM_BARS) + FORM_BARS) % FORM_BARS;
-  for (let i = 0; i < FORM.length; i++) {
-    const [section, bars] = FORM[i];
-    if (b < bars) return { section, bar: b, bars, next: FORM[(i + 1) % FORM.length][0] };
+export function sectionAt(songBar: number, form: Form = FORM): SectionAt {
+  const total = formBars(form);
+  let b = ((songBar % total) + total) % total;
+  for (let i = 0; i < form.length; i++) {
+    const [section, bars] = form[i];
+    if (b < bars) return { section, bar: b, bars, next: form[(i + 1) % form.length][0], part: i };
     b -= bars;
   }
-  return { section: 'verse', bar: 0, bars: 8, next: 'chorus' };
+  return { section: 'verse', bar: 0, bars: 8, next: 'chorus', part: 0 };
+}
+
+/** The first bar of `section` in a form (0 if it has none). */
+export function firstBar(section: Section, form: Form = FORM): number {
+  let b = 0;
+  for (const [s, bars] of form) {
+    if (s === section) return b;
+    b += bars;
+  }
+  return 0;
+}
+
+/**
+ * A title theme (themes.ts): a station of its own that plays while the mode
+ * is 'menu', at its own tempo, through its own looping form with each part
+ * at a set tier (no intensity, no shaping), so it builds a little and loops.
+ */
+export interface Theme {
+  station: Station;
+  bpm: number;
+  form: Form;
+  /** The station tier each part of the form plays. */
+  levels: readonly number[];
 }
 
 /**
@@ -155,7 +188,12 @@ export interface ArrangerOptions {
 }
 
 export class Arranger {
+  /** The station playing: the radio's, or the theme's while that plays. */
   station: Station;
+  /** The radio station: what plays in 'game' (and in 'menu' when there's no theme). */
+  radio: Station;
+  /** Played instead of the radio while the mode is 'menu' (null: the radio's menu tier). */
+  theme: Theme | null = null;
   /** The song playing, its bar in the form, and a count of songs started (listeners compare it). */
   song: Song;
   songBar = 0;
@@ -169,7 +207,6 @@ export class Arranger {
   /** Position of the next step to produce. */
   bar = 0;
   step = 0;
-  private pendingStation: Station | null = null;
   private pendingMode: MusicMode | null = null;
   private voicing: number[] | null = null;
   private classes: number[] = [];
@@ -189,6 +226,7 @@ export class Arranger {
   constructor(station: Station = STATIONS[0], opts: ArrangerOptions = {}) {
     this.form = opts.form ?? true;
     this.station = station;
+    this.radio = station;
     this.song = station.songs[0];
     this.bpm = targetBpm(station, 0, 'game');
     this.shaped = station.tiers[0];
@@ -197,21 +235,37 @@ export class Arranger {
 
   /** The section playing (`verse` throughout without the form). */
   get section(): Section {
-    return this.form ? this.at.section : 'verse';
+    return this.formed ? this.at.section : 'verse';
+  }
+
+  /** The title theme is what's playing. */
+  get playingTheme(): boolean {
+    return this.theme !== null && this.station === this.theme.station;
+  }
+
+  /** Songs run through a form (the theme always does). */
+  private get formed(): boolean {
+    return this.form || this.playingTheme;
   }
 
   setIntensity(level: number): void {
     this.target = clamp(Math.round(level), 0, 5);
   }
 
-  /** Switch station at the next bar line (the phrase restarts). */
+  /** Tune the radio: it switches at the next bar line (the phrase restarts), or when the theme gives way. */
   setStation(station: Station): void {
-    this.pendingStation = station === this.station ? null : station;
+    this.radio = station;
   }
 
   /** The station playing, or the one about to. */
   get upcomingStation(): Station {
-    return this.pendingStation ?? this.station;
+    return this.stationFor(this.pendingMode ?? this.mode);
+  }
+
+  /** What plays in `mode`: the theme in 'menu' if there is one, else the radio; silence keeps what was on. */
+  private stationFor(mode: MusicMode): Station {
+    if (mode === 'off') return this.station;
+    return mode === 'menu' && this.theme ? this.theme.station : this.radio;
   }
 
   setMode(mode: MusicMode): void {
@@ -227,8 +281,23 @@ export class Arranger {
   }
 
   tier(): Tier {
-    if (this.mode === 'menu') return this.station.menu;
-    return this.form ? this.shaped : this.station.tiers[this.intensity];
+    if (this.mode === 'menu' && !this.playingTheme) return this.station.menu;
+    return this.formed ? this.shaped : this.station.tiers[this.intensity];
+  }
+
+  /**
+   * GO after a count-in: from the next step the radio plays the top of the
+   * song's first chorus at `intensity` or more, with no wait for a bar line.
+   */
+  dropIn(intensity: number): void {
+    if (this.mode !== 'game' || this.pendingMode || this.playingTheme) return;
+    this.target = Math.max(this.target, clamp(Math.round(intensity), 0, 5));
+    this.intensity = this.target;
+    this.bar = 0;
+    this.step = 0;
+    this.songBar = firstBar('chorus');
+    this.voicing = null;
+    this.fill = false;
   }
 
   /** Fill `out` with the events of the current step, then move on. Returns that step's index in its bar. */
@@ -259,33 +328,37 @@ export class Arranger {
   }
 
   private startBar(): void {
-    if (this.pendingStation) {
-      this.station = this.pendingStation;
-      this.pendingStation = null;
-      this.bar = 0;
-      this.voicing = null;
-      this.startSong(this.station);
-    } else if (this.form && this.songBar >= FORM_BARS) {
-      this.startSong(this.station);
-    }
     if (this.pendingMode) {
       this.mode = this.pendingMode;
       this.pendingMode = null;
     }
+    const wasTheme = this.playingTheme;
+    const want = this.stationFor(this.mode);
+    if (want !== this.station) {
+      this.station = want;
+      this.bar = 0;
+      this.voicing = null;
+      this.startSong(want);
+    } else if (this.formed && this.songBar >= (this.playingTheme ? formBars(this.theme!.form) : FORM_BARS)) {
+      this.startSong(this.station);
+    }
+    const theme = this.playingTheme ? this.theme! : null;
     this.rose = this.target > this.intensity;
     this.intensity = this.target;
     this.fill = false;
     this.arpCount = 0;
-    const want = targetBpm(this.station, this.intensity, this.mode);
-    this.bpm += clamp(want - this.bpm, -BPM_GLIDE, BPM_GLIDE);
+    const bpm = theme ? theme.bpm : targetBpm(this.station, this.intensity, this.mode);
+    // Into or out of the theme the tempo jumps (it starts afresh); otherwise it glides.
+    this.bpm = theme || wasTheme ? bpm : this.bpm + clamp(bpm - this.bpm, -BPM_GLIDE, BPM_GLIDE);
 
     const s = this.station;
     const song = this.song;
-    this.at = sectionAt(this.form ? this.songBar : FORM[0][1]); // without the form: always the verse
-    const base = s.tiers[this.intensity];
-    this.shaped = this.form ? shapeTier(base, this.at.section, this.intensity) : base;
+    // Without the form: always the verse.
+    this.at = theme ? sectionAt(this.songBar, theme.form) : sectionAt(this.form ? this.songBar : FORM[0][1]);
+    const base = s.tiers[theme ? theme.levels[this.at.part] : this.intensity];
+    this.shaped = this.form && !theme ? shapeTier(base, this.at.section, this.intensity) : base;
     const chords = this.at.section === 'chorus' && song.chorus ? song.chorus : song.verse;
-    const chord = chords[(this.form ? this.at.bar : this.bar) % chords.length];
+    const chord = chords[(this.formed ? this.at.bar : this.bar) % chords.length];
     const key = s.key + song.transpose;
     this.voicing = voiceChord(key, chord, this.voicing, s.padCenter);
     this.classes = chordClasses(key, chord);
@@ -296,8 +369,9 @@ export class Arranger {
     const s = this.station;
     const at = this.at;
     // The phrase the melody, crash and riser follow: the section's bars with the form, else 8-bar phrases.
-    const phraseBar = this.form ? at.bar % BARS_PER_PHRASE : this.bar % BARS_PER_PHRASE;
-    const lastBar = this.form ? at.bar === at.bars - 1 : phraseBar === BARS_PER_PHRASE - 1;
+    const formed = this.formed;
+    const phraseBar = formed ? at.bar % BARS_PER_PHRASE : this.bar % BARS_PER_PHRASE;
+    const lastBar = formed ? at.bar === at.bars - 1 : phraseBar === BARS_PER_PHRASE - 1;
     const drum = (part: Part, vel: number) => {
       if (vel > 0) out.push({ part, note: 0, notes: null, vel, len: 1 });
     };
@@ -317,7 +391,7 @@ export class Arranger {
     if (step === 0 && tier.crash && (phraseBar === 0 || this.rose)) drum('crash', 1);
     // Rise into the next section (calm intros and breaks rise into the drums coming back in too).
     const rise = tier.riser || (this.form && this.mode === 'game' && (at.section === 'intro' || at.section === 'break'));
-    if (step === 0 && rise && lastBar && (!this.form || at.next !== 'intro')) {
+    if (step === 0 && rise && lastBar && (!formed || at.next !== 'intro')) {
       out.push({ part: 'riser', note: 0, notes: null, vel: 1, len: STEPS_PER_BAR });
     }
 
@@ -350,7 +424,9 @@ export class Arranger {
     if (tier.lead) {
       const m = this.lead[phraseBar * STEPS_PER_BAR + step];
       if (m) {
-        const note = avoidClash(scaleNote(s.leadTonic + this.song.transpose, s.leadScale, m.degree), this.classes);
+        const n = scaleNote(s.leadTonic + this.song.transpose, s.leadScale, m.degree);
+        // A hand-written melody's tensions are meant: only composed ones are kept off clashes.
+        const note = this.song.melody ? n : avoidClash(n, this.classes);
         out.push({ part: 'lead', note, notes: null, vel: 0.9, len: m.len });
       }
     }
@@ -376,6 +452,6 @@ export class Arranger {
 
   private composeLead(): void {
     this.lead = [];
-    for (const m of composeLead(this.song.leadSeed, this.station.leadScale.length)) this.lead[m.step] = m;
+    for (const m of this.song.melody ?? composeLead(this.song.leadSeed, this.station.leadScale.length)) this.lead[m.step] = m;
   }
 }
