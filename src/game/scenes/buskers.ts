@@ -12,6 +12,7 @@ import { BLOCK_SIZE, isCarPark, lotBytes } from '../../world/city';
 import { blockSide } from '../../world/kerbs';
 import type { CrowdPed } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
+import { secs, labelMembers, type LabelSink } from '../debugLabels';
 import { Gathering } from './gathering';
 import { roomFor, streetBody } from './people';
 import { len2 } from '../../core/len';
@@ -110,6 +111,14 @@ export class Buskers implements Scene {
     for (const b of this.buskers) this.end(b);
     this.buskers.length = 0;
     for (const t of this.tips) t.age = TIP_FLIGHT;
+  }
+
+  describe(out: LabelSink): void {
+    for (const b of this.buskers) {
+      const s = b.ped.agent.s;
+      if (out.wants(s.x, s.z)) out.ped(b.ped, `BUSKER ${secs(b.until - this.life.now)}`, 'people');
+      labelMembers(out, b.crowd.members, 'WATCHING', false);
+    }
   }
 
   /** Debug (__ub): a busker at the spot nearest the player, with a few watching already. */

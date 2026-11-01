@@ -15,12 +15,14 @@
  * story characters are other systems' and get up as before.
  */
 import type { VehicleState } from '../../entities/vehicle';
+import { hurtPed } from '../../systems/crowd';
 import type { CrowdPed } from '../population';
 import { STORY_BODIES } from '../bodies';
 import { IN_PLAY } from '../../systems/cityScenes';
 import type { Scene, SceneCtx } from '../cityLife';
 import { ServiceRun, type ServiceSpec } from './service';
 import { len2 } from '../../core/len';
+import { secs, type LabelSink } from '../debugLabels';
 
 /** Most people held down waiting at once. */
 export const MAX_PATIENTS = 6;
@@ -116,6 +118,50 @@ export class Medics implements Scene {
       p.ped.agent.scene = false;
     }
     this.patients.length = 0;
+  }
+
+  /** Debug (TEST menu): the passer-by nearest the player is knocked out cold and an ambulance comes for them now. */
+  force(): boolean {
+    const life = this.life;
+    if (this.patients.length >= MAX_PATIENTS) return false;
+    let ped: CrowdPed | null = null;
+    let best = 45;
+    for (const c of life.d.population.crowd) {
+      const a = c.agent;
+      if (a.mode === 'down' || !a.street || a.scene || a.role !== 'civilian' || STORY_BODIES.includes(c.model.bodyKind)) continue;
+      const d = life.distance(a.s.x, a.s.z);
+      if (d > 4 && d < best) {
+        best = d;
+        ped = c;
+      }
+    }
+    if (!ped) return false;
+    const a = ped.agent;
+    hurtPed(a, a.hp + 1, a.s.x + 1, a.s.z);
+    a.injured = true;
+    life.borrow(ped);
+    const p: Patient = { ped, since: life.now - CALL_DELAY, claimed: false };
+    this.patients.push(p);
+    // No ambulance free yet: dispatch() sends the next one.
+    const run = this.crews.length < 2 ? ServiceRun.call(life, AMBULANCE, a.s.x, a.s.z) : null;
+    if (run) {
+      p.claimed = true;
+      this.crews.push({ run, patient: p, paramedic: null, care: 'walk', timer: 0 });
+      life.emit('ambulance', run.v.sim.x, run.v.sim.z);
+    }
+    return true;
+  }
+
+  describe(out: LabelSink): void {
+    for (const c of this.crews) {
+      const leaving = c.run.phase === 'leave';
+      out.car(c.run.v, leaving ? 'AMBULANCE (to hospital)' : c.patient ? 'AMBULANCE → patient' : 'AMBULANCE', 'emergency');
+      if (c.paramedic) out.ped(c.paramedic, c.care === 'treat' ? 'MEDIC (treating)' : c.care === 'carry' ? 'MEDIC (stretcher)' : 'MEDIC', 'emergency');
+    }
+    for (const p of this.patients) {
+      const s = p.ped.agent.s;
+      if (out.wants(s.x, s.z)) out.ped(p.ped, p.claimed ? 'PATIENT' : `PATIENT (waits ${secs(PATIENT_WAIT - (this.life.now - p.since))})`, 'emergency');
+    }
   }
 
   /** Passers-by knocked out cold near the player stay down as patients (up to the cap). */

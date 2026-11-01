@@ -103,6 +103,8 @@ export class CharacterBatch {
   readonly models: CharacterModel[] = [];
   /** The people drawn by the last flush(), in row order (for what they hold). */
   readonly shown: CharacterModel[] = [];
+  /** People shown (on screen or not) at the last flush: drawn ones are `shown`. */
+  live = 0;
   private template: Template | null = null;
   private boneCount = 1;
   private rowTexels = 4 + EXTRA_TEXELS;
@@ -183,10 +185,12 @@ export class CharacterBatch {
    */
   flush(shadows?: ContactShadows, view?: Rect): void {
     let row = 0;
+    let live = 0;
     const shown = this.shown;
     shown.length = 0;
     for (const model of this.models) {
       if (!isShown(model.root)) continue;
+      live++;
       model.root.updateWorldMatrix(true, false);
       const w = model.root.matrixWorld.elements;
       if (view && (w[12] < view.minX - CULL_MARGIN || w[12] > view.maxX + CULL_MARGIN || w[14] < view.minZ - CULL_MARGIN || w[14] > view.maxZ + CULL_MARGIN)) continue;
@@ -213,6 +217,7 @@ export class CharacterBatch {
       shown.push(model);
       row++;
     }
+    this.live = live;
     this.mesh.count = row;
     this.mesh.visible = row > 0;
     if (row === 0) return;

@@ -16,6 +16,7 @@ import type { Crime } from '../../systems/wanted';
 import { CALL_SECONDS, DELAYED_CRIMES, react, sees, stepCall, type CallState } from '../../systems/witnesses';
 import type { CrowdPed } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
+import { witnessText, type LabelSink } from '../debugLabels';
 import { handBack } from './people';
 import type { Muggings } from './muggings';
 import { len2 } from '../../core/len';
@@ -125,6 +126,13 @@ export class Witnesses implements Scene {
   reset(): void {
     for (const p of this.phones) this.putAway(p);
     this.phones.length = 0;
+  }
+
+  describe(out: LabelSink): void {
+    for (const p of this.phones) {
+      const s = p.ped.agent.s;
+      if (out.wants(s.x, s.z)) out.ped(p.ped, witnessText(p.role, p.call.phase, p.call.needs - p.call.time), 'people');
+    }
   }
 
   /** Debug (__ub): the passers-by nearest the player react as if they'd seen a crime right there (a call that counts for nothing). */

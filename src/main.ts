@@ -121,6 +121,16 @@ import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
 import { Destruction } from './render/destruction';
 import { BlowWall } from './ui/blowWall';
 import { len2 } from './core/len';
+import { TestTools } from './game/testTools';
+import { mountTestMenu } from './ui/testMenu';
+import { LabelsOverlay, toggleLabels } from './ui/labelsOverlay';
+import { describeWorld, type LabelWorld } from './game/debugLabels';
+import { emptyCounts, formatCounts } from './core/sceneCounts';
+import { EventTrail } from './core/eventTrail';
+import { SceneCensus } from './render/sceneCensus';
+import { snapshotView } from './render/snapshot';
+import { worldUniforms } from './render/shaderLib';
+import { addBugReportButton, BugReportSheet } from './ui/bugReport';
 
 const app = document.getElementById('app')!;
 
@@ -272,7 +282,7 @@ const player = new Player(events, SPAWN_POINT.x, SPAWN_POINT.z);
 const playerModel = look.characters.create({}, playerBody(settings.character));
 scene.add(playerModel.root);
 onSettingsChange((s) => look.characters.setBody(playerModel, playerBody(s.character)));
-// God mode (Settings → Controls), for mayhem testing.
+// God mode (TEST menu), for mayhem testing.
 player.invulnerable = settings.godMode;
 onSettingsChange((s) => (player.invulnerable = s.godMode));
 
@@ -547,6 +557,20 @@ const destruction = new Destruction({
   carDims: (a) => look.cars.dims(a),
 });
 look.addGlowSource((_g, view) => destruction.draw(view));
+// What is on screen, for the perf overlay, the session log and bug reports (render/sceneCensus.ts).
+const census = new SceneCensus({
+  effects,
+  look,
+  life: cityLife,
+  vehicles,
+  bus: events,
+  rubble: () => destruction.stats(),
+  now: () => performance.now() / 1000,
+});
+const censusOut = emptyCounts();
+// The last moments of game events, for bug reports (on the sim clock: a pause doesn't age them).
+const trail = new EventTrail();
+events.onAny((e) => trail.record(simTime, e));
 new BreachSystem(events, breaches, { enabled: () => destruction.mode !== 'off', playing: () => !attract.active });
 events.on('enterVehicle', () => {
   // PeoplePose hides the body once it has ducked into the car.
@@ -1109,7 +1133,9 @@ function frame(now: number) {
   // BLOW A WALL from the Diagnostics sheet goes off now that play has resumed (sound, hit-stop and all).
   blowWall.update();
   // Computed once: fx.simScale advances the hit-stop.
-  const simDt = frameSeconds * fx.simScale(frameSeconds) * progress.simScale();
+  // TEST's slow motion scales it like a hit-stop (people, pigeons and combat effects too, below).
+  const slow = testTools.timeScale;
+  const simDt = frameSeconds * fx.simScale(frameSeconds) * progress.simScale() * slow;
   const alpha = loop.advance(simDt, simulate);
 
   // Interpolate render state between the last two sim steps.
@@ -1122,7 +1148,7 @@ function frame(now: number) {
     for (const w of v.mesh.frontWheels) w.rotation.y = v === player.driving ? -steer * 0.5 : 0;
   }
   // People: placed, holding what they hold, playing the clip for what they're doing (hit-stop freezes them too).
-  people.update(frameSeconds * fx.hitStop.scale, alpha, aimHeadingNow);
+  people.update(frameSeconds * fx.hitStop.scale * slow, alpha, aimHeadingNow);
   const ped = player.ped;
   const prev = player.prev;
   const px = lerp(prev.x, ped.x, alpha);
@@ -1130,7 +1156,7 @@ function frame(now: number) {
 
   // Body motion, tyre marks, damaged-car smoke and fire, weather, particles.
   const focus = attract.active ? attract : player.position;
-  pigeons.update(frameSeconds * fx.hitStop.scale, focus.x, focus.z, rig, vehicles, population.crowd, attract.active ? null : player);
+  pigeons.update(frameSeconds * fx.hitStop.scale * slow, focus.x, focus.z, rig, vehicles, population.crowd, attract.active ? null : player);
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
   cityMood.set(look.time.hour, fx.weather.rain);
   // Rubble on the sim's clock: frozen by pause, cards and hit-stop like the world.
@@ -1139,7 +1165,7 @@ function frame(now: number) {
   cityLook.update(simDt, rig.visibleGround(cityView));
   // Bikes lean and carry their riders; emergency sirens and the ice cream chime.
   streetLife.update(frameSeconds, focus.x, focus.z, !attract.active);
-  combatLook.update(frameSeconds * fx.hitStop.scale);
+  combatLook.update(frameSeconds * fx.hitStop.scale * slow);
   updateHud(frameSeconds);
   progress.update(frameSeconds);
   heatPresenter.update(frameSeconds, focus.x, focus.z, playing);
@@ -1168,8 +1194,10 @@ function frame(now: number) {
 
   look.update(frameSeconds, viewOfPlayer());
   look.render(rig.camera);
+  labels.update(frameSeconds, viewW, viewH, playing);
   resolution.sample(elapsed);
   frameStats.sample(elapsed * 1000, performance.now() - t0);
+  diagnostics.frame(elapsed * 1000);
 }
 
 /** This frame's aim, for Combat (reused). */
@@ -1214,6 +1242,7 @@ function updateHud(frameSeconds: number) {
   hudFrame.nearBike = nearCar !== null && isBike(nearCar.archetype);
   hudFrame.mouseAim = !v && !attract.active && input.mouseAimLive();
   hudFrame.driveBy = v !== null && gun !== null && WEAPONS[gun].driveBy;
+  hudFrame.cheated = player.tainted;
   hud.update(frameSeconds, hudFrame);
   combatHud.update(player.armour, nitro.charge, nitro.boosting, nitro.charge >= NITRO_MIN);
   carButtons.update(v ? (gun && WEAPONS[gun].driveBy ? gun : player.arsenal.driveByGun()) : null, nitro.charge, nitro.charge >= NITRO_MIN || nitro.boosting);
@@ -1238,7 +1267,8 @@ const hud = new Hud(document.body, score, events, {
   debugText: (full) => {
     const f = frameStats.summarize(frameSummary);
     const head = full ? `${formatFrameStats(f)}\n` : `${formatFps(f.fps)} fps · `;
-    return `${head}${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc${full ? destruction.overlayText() : ''}`;
+    const line = `${head}${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc${full ? destruction.overlayText() : ''}`;
+    return full ? `${line}\n${formatCounts(census.fill(censusOut))}` : line;
   },
 });
 const combatHud = new CombatHud(document.getElementById('hud')!);
@@ -1248,6 +1278,23 @@ radar.setBlip('hospital', { x: cityLife.hospital.x, z: cityLife.hospital.z, kind
 const wantedHud = new WantedHud(document.body, events);
 const heatPresenter = new HeatPresenter(heat, audio, radar, wantedHud, hud.score, events);
 const threats = new ThreatIndicators(document.body);
+// Playtest labels (settings.debugLabels, Shift+L): what the people and cars round the player are up to.
+const labelWorld: LabelWorld = { crowd: population.crowd, vehicles, police: heat.police, drops: cityLife.drops.list, now: 0, driving: null, lastDriven: null, pinned: activityCars };
+const labels = new LabelsOverlay(app, {
+  camera: () => rig.camera,
+  focus: () => player.position,
+  view: (out) => rig.visibleGround(out),
+  collect: (board) => {
+    progress.missions.describe(board);
+    progress.taxi.describe(board);
+    cityLife.describe(board);
+    labelWorld.now = simTime;
+    labelWorld.driving = player.driving;
+    labelWorld.lastDriven = player.lastDriven;
+    describeWorld(board, labelWorld);
+  },
+});
+labels.bindKey(window);
 const frontDoor = new FrontDoor(document.body, document.getElementById('paused')!, input, audio, {
   startGame,
   enterTitle,
@@ -1439,8 +1486,70 @@ const diagnostics = new Diagnostics(document.body, {
     // Checked now (paused); it goes off as play resumes, which closes the sheet.
     blowWall: () => blowWall.request(),
   },
+  counts: (out) => census.fill(out),
+  reportBug: () => openBugReport(),
 });
 addDiagnosticsButton(diagnostics, frontDoor, () => input.lastDevice !== 'touch');
+
+// TEST in the pause menu (Settings → Test tools): cheats, spawns, teleports, scenes and save tools for playtesting.
+const testTools = new TestTools({
+  bus: events,
+  player,
+  vehicles,
+  population,
+  heat,
+  cityLife,
+  progress,
+  city,
+  time: look.time,
+  weather: fx.weather,
+  grids: [collision, rampGrid],
+  rand,
+  explode,
+  repair: (v) => resetVehicle(v, false),
+  // Like a release from custody: the camera there, the streets filled round it.
+  moved: () => {
+    rig.snapTo(player.position.x, player.position.z);
+    maintainPopulation(true, false);
+  },
+  reload: () => location.reload(),
+});
+mountTestMenu(testTools, frontDoor, audio, city, {
+  resume: () => setPaused(false),
+  showFocus: () => input.lastDevice !== 'touch',
+  at: () => player.position,
+  notice: (text) => hud.score.notice(text, 'progress'),
+});
+// REPORT BUG (pause card corner and the Diagnostics sheet, with test tools or the perf overlay on).
+const bugReport = new BugReportSheet(document.body, {
+  snapshot: (maxWidth) => snapshotView(look, rig.camera, renderer.domElement, renderer.getContext(), maxWidth),
+  state: () => {
+    const v = player.driving;
+    const at = player.position;
+    const h = v ? v.sim.heading : player.ped.heading;
+    return {
+      x: at.x,
+      z: at.z,
+      heading: (((h * 180) / Math.PI) % 360 + 360) % 360,
+      vehicle: v ? v.archetype : null,
+      health: player.health,
+      alive: player.alive,
+      wanted: heat.wanted.level,
+      hour: look.time.hour,
+      night: worldUniforms.uNight.value,
+      rain: fx.weather.rain,
+      wetness: fx.weather.wetness,
+      tier: getQuality().name,
+      ratio: resolution.pixelRatio,
+      activity: progress.busy ?? (progress.chaos.active ? 'chaos' : attract.active ? 'title' : null),
+      simTime,
+    };
+  },
+  events: () => trail.entries(simTime),
+  diagnostics: () => diagnostics.reportData(),
+  counts: () => ({ ...census.fill(censusOut) }),
+});
+const openBugReport = addBugReportButton(bugReport, frontDoor, () => input.lastDevice !== 'touch');
 
 // iOS drops the GL context of backgrounded or memory-starved pages. Say so,
 // hold the game, and carry on once three.js has rebuilt its GPU resources.
@@ -1504,6 +1613,16 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   combat,
   /** The city's own life (game/cityLife.ts): clock, scenes, medics, drops, people, owned, hospital, bays. */
   cityLife,
+  /** The TEST menu's actions (game/testTools.ts): scene(id), spawn(archetype), teleport(x, z), timeScale... */
+  testTools,
+  /** Playtest labels: toggle(on?), list() (nearest first), stats() (JS ms per frame), resetStats(). */
+  labels: {
+    toggle: (on?: boolean) => toggleLabels(on),
+    list: () => labels.list(),
+    stats: () => ({ ...labels.stats }),
+    resetStats: () => labels.resetStats(),
+    overlay: labels,
+  },
   nitro,
   ramps,
   stunts,
@@ -1515,6 +1634,9 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   radar,
   frontDoor,
   diagnostics,
+  bugReport,
+  census,
+  trail,
   attract,
   touch,
   haptics,
@@ -1528,6 +1650,10 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   playLog,
   get simTime() {
     return simTime;
+  },
+  /** One whole frame (sim, effects, render) `ms` after the last: for harnesses that stub requestAnimationFrame. */
+  stepFrame(ms = 1000 / 60) {
+    frame(last + ms);
   },
   /**
    * Run the simulation `seconds` ahead in fixed steps without rendering, for

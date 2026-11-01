@@ -90,6 +90,23 @@ body:not([data-scene='play']) #wasted {
   color: #ffd23f;
 }
 
+/* A cheat this life (TEST menu, god mode): it earns no CRED or bests. */
+.hp-test {
+  display: none;
+  flex: none;
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #ffd23f;
+  color: #1a1408;
+  font: 900 9px/1.1 var(--hud-font);
+  letter-spacing: 0.08em;
+  text-shadow: none;
+}
+
+.hud-status.test .hp-test {
+  display: block;
+}
+
 .hud-status.critical .hp-icon {
   animation: hp-beat 0.8s ease-in-out infinite;
 }

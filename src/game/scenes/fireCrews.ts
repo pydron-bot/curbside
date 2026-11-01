@@ -20,6 +20,7 @@ import type { CrowdPed, Vehicle } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
 import { ServiceRun, type ServiceSpec } from './service';
 import { len2 } from '../../core/len';
+import { secs, type LabelSink } from '../debugLabels';
 
 /** Most trucks out at once. */
 export const MAX_TRUCKS = 2;
@@ -132,6 +133,31 @@ export class FireCrews implements Scene {
     this.crews.length = 0;
     this.board.clear();
     this.cars.fill(null);
+  }
+
+  /** Debug (TEST menu): a truck for the burning fire nearest the player now, whatever holds them off. */
+  force(): boolean {
+    const life = this.life;
+    if (this.crews.length >= MAX_TRUCKS) return false;
+    const at = life.d.focus();
+    const f = this.board.toCall(at.x, at.z, CALL_RANGE, 0, MIN_LEFT);
+    const run = f && ServiceRun.call(life, FIRE_TRUCK, f.x, f.z);
+    if (!f || !run) return false;
+    f.claimed = true;
+    this.crews.push({ run, fire: f, fireId: f.id, work: 'walk', timer: 0, out: false, men: [null, null], hosing: [false, false] });
+    life.emit('fireTruck', run.v.sim.x, run.v.sim.z);
+    return true;
+  }
+
+  describe(out: LabelSink): void {
+    for (const c of this.crews) {
+      out.car(c.run.v, c.run.phase === 'drive' ? 'FIRE TRUCK → fire' : 'FIRE TRUCK', 'emergency');
+      for (let i = 0; i < c.men.length; i++) {
+        const m = c.men[i];
+        if (m) out.ped(m, c.hosing[i] ? 'FIREFIGHTER (hosing)' : 'FIREFIGHTER', 'emergency');
+      }
+    }
+    for (const f of this.board.fires) if (f.alive && out.wants(f.x, f.z)) out.spot(f, `FIRE ${secs(f.life - f.age)}${f.claimed ? ' (called)' : ''}`, 'emergency');
   }
 
   /** A car went up at (x, z): its wreck burns on. */

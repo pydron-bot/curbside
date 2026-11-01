@@ -20,6 +20,7 @@ import { near, type CityLookPart } from './cityLifeLook';
 import type { Effects } from './effects';
 import { FLAG, FRAME, RAMP } from './fxParticles';
 import { GLOW, type GlowSprites } from './glowSprites';
+import { getQuality } from './quality';
 import { worldUniforms } from './shaderLib';
 
 /** Fires further than this outside the view emit nothing, m. */
@@ -36,6 +37,8 @@ const NOZZLE_Y = 1.15;
 const GRAVITY = 9;
 /** Hoses tracked for their particle debt (trucks × crew). */
 const MAX_HOSES = 8;
+/** Steam puffs a second where a hose lands (times the tier's scale). */
+const STEAM = 8;
 
 /** The fires, and the crews' hoses on them. */
 export function fireLook(life: CityLife): CityLookPart {
@@ -48,7 +51,10 @@ export function fireLook(life: CityLife): CityLookPart {
   return {
     update(dt: number, view: Rect, fx: Effects): void {
       time += dt;
-      const scale = fx.scale;
+      // Many fires on screen share the tier's full-rate budget (fullFires): flames, smoke and embers alike.
+      let seen = 0;
+      for (const f of fires) if (f.alive && near(view, f.x, f.z, MARGIN)) seen++;
+      const scale = fx.scale * Math.min(1, getQuality().fullFires / Math.max(1, seen));
       for (let i = 0; i < fires.length; i++) {
         const f = fires[i];
         if (!f.alive || !near(view, f.x, f.z, MARGIN)) {
@@ -80,7 +86,7 @@ export function fireLook(life: CityLife): CityLookPart {
             hoseDebt[h] = 0;
             continue;
           }
-          hoseDebt[h] = jet(fx, man.agent.s.x, man.agent.s.z, c.fire.x, c.fire.z, c.fire.building ? 1.4 : 0.9, hoseDebt[h] + dt * WATER * scale, dt);
+          hoseDebt[h] = jet(fx, man.agent.s.x, man.agent.s.z, c.fire.x, c.fire.z, c.fire.building ? 1.4 : 0.9, hoseDebt[h] + dt * WATER * fx.scale, dt, fx.scale);
         }
       }
     },
@@ -119,7 +125,7 @@ function flame(fx: Effects, x: number, z: number, y: number, size: number): void
  * Each drop starts somewhere in the last `dt` of its flight, so a slow
  * frame still draws a stream, not a clump at the nozzle.
  */
-function jet(fx: Effects, x: number, z: number, tx: number, tz: number, ty: number, debt: number, dt: number): number {
+function jet(fx: Effects, x: number, z: number, tx: number, tz: number, ty: number, debt: number, dt: number, scale: number): number {
   const pool = fx.soft;
   const dx = tx - x;
   const dz = tz - z;
@@ -148,7 +154,7 @@ function jet(fx: Effects, x: number, z: number, tx: number, tz: number, ty: numb
     pool.flags[i] = FLAG.stretch;
     pool.stretch[i] = 0.07;
   }
-  if (Math.random() < dt * 8) fx.puff(tx + (Math.random() - 0.5) * 1.6, ty, tz + (Math.random() - 0.5) * 1.6, 0.92, 0.8, 3, 0.4, 0, 1.4, 0, 1.6);
+  if (Math.random() < dt * STEAM * scale) fx.puff(tx + (Math.random() - 0.5) * 1.6, ty, tz + (Math.random() - 0.5) * 1.6, 0.92, 0.8, 3, 0.4, 0, 1.4, 0, 1.6);
   return debt;
 }
 

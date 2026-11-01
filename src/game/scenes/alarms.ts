@@ -12,6 +12,7 @@ import { IN_PLAY } from '../../systems/cityScenes';
 import type { Vehicle } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
 import { len2 } from '../../core/len';
+import { secs, type LabelSink } from '../debugLabels';
 
 /** A crash or bullet within this of a parked car's body is a hit on it, m. */
 const HIT_MARGIN = 0.6;
@@ -64,6 +65,31 @@ export class CarAlarms implements Scene {
 
   reset(): void {
     this.board.clear();
+  }
+
+  /** Debug (TEST menu): the parked car nearest the player (`car`, if given) goes off now. */
+  force(car: Vehicle | null = null): boolean {
+    let best = 80;
+    if (!car) {
+      for (const v of this.life.d.vehicles) {
+        if (!v.parked || v.damage.wrecked) continue;
+        const d = this.life.distance(v.sim.x, v.sim.z);
+        if (d < best) {
+          best = d;
+          car = v;
+        }
+      }
+    }
+    if (!car) return false;
+    this.board.trigger(car, alarmPattern(car.sim.x, car.sim.z));
+    return true;
+  }
+
+  describe(out: LabelSink): void {
+    for (const a of this.board.alarms) {
+      const v = a.car;
+      if (a.alive && v && out.wants(v.sim.x, v.sim.z)) out.car(v, `ALARM ${secs(a.left)}`, 'emergency');
+    }
   }
 
   /** A crash or a bullet at (x, z): any parked car it touched goes off. */

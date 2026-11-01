@@ -37,8 +37,12 @@ export interface Settings {
   destruction: DestructionMode;
   /** The player's body: picked on the title screen (CHARACTER). */
   character: PlayerCharacter;
-  /** Testing: the player can't die or be busted; such a life earns no CRED and sets no bests. */
+  /** Testing (TEST menu): the player can't die or be busted; such a life earns no CRED and sets no bests. */
   godMode: boolean;
+  /** Settings → Test tools: TEST in the pause menu (cheats, spawns, teleports, scenes, save tools). */
+  testTools: boolean;
+  /** Testing: labels over the people and cars doing something notable (ui/labelsOverlay.ts; Shift+L). */
+  debugLabels: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -54,6 +58,8 @@ export const DEFAULT_SETTINGS: Settings = {
   destruction: 'off',
   character: 'male',
   godMode: false,
+  testTools: false,
+  debugLabels: false,
 };
 
 const KEY = 'curbside.settings';
@@ -77,10 +83,12 @@ export function sanitizeSettings(raw: unknown): Settings {
     const v = raw[k];
     if (typeof v === 'number' && Number.isFinite(v)) out[k] = Math.min(1, Math.max(0, v));
   }
-  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics', 'godMode'] as const) {
+  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics', 'godMode', 'testTools', 'debugLabels'] as const) {
     const v = raw[k];
     if (typeof v === 'boolean') out[k] = v;
   }
+  // God mode moved into the TEST menu: a save from before it with god mode on gets the menu, so it can be turned off.
+  if (typeof raw.testTools !== 'boolean' && out.godMode) out.testTools = true;
   if (QUALITY_PRESETS.includes(raw.quality as QualityPreset)) out.quality = raw.quality as QualityPreset;
   if (STEERING_MODES.includes(raw.steering as SteeringMode)) out.steering = raw.steering as SteeringMode;
   // The old Show FPS switch becomes the one-line overlay (its key is carried through for older builds).

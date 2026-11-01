@@ -79,6 +79,7 @@ import { StreetRaces } from './scenes/streetRaces';
 import { Accidents } from './scenes/accidents';
 import { DoubleParking } from './scenes/doubleParking';
 import { len2 } from '../core/len';
+import type { LabelSink } from './debugLabels';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
 export const SCENE_RANGE = 150;
@@ -160,6 +161,8 @@ export interface Scene {
   readonly running: number;
   /** Stop everything now (a fresh run, the title): hand back what it holds. */
   reset(): void;
+  /** Debug labels (settings.debugLabels, ~5 Hz): what its people and cars are doing. */
+  describe?(out: LabelSink): void;
 }
 
 export class CityLife {
@@ -182,6 +185,9 @@ export class CityLife {
   readonly accidents: Accidents;
   readonly doubleParking: DoubleParking;
   readonly scenes: Scene[] = [];
+  /** Each scene's name for diagnostics (scenes order). */
+  readonly sceneLabels: string[] = [];
+  private labelled = 0;
   /** Vehicles the scenes brought in (ambient): retired here once far and unseen. */
   readonly owned: Vehicle[] = [];
   /** People the scenes put on the street or borrowed (scene): handed back or removed here. */
@@ -216,7 +222,7 @@ export class CityLife {
     this.add(new IceCream(this, fights));
     this.add(new Vendors(this, fights));
     this.add(new Buskers(this));
-    this.witnesses = this.add(new Witnesses(this, this.add(new Muggings(this))));
+    this.witnesses = this.add(new Witnesses(this, this.add(new Muggings(this))), 'witness');
     this.add(new FireCrews(this));
     this.add(new Tows(this));
     this.add(new CarAlarms(this));
@@ -224,13 +230,27 @@ export class CityLife {
     this.races = this.add(new StreetRaces(this, this.chases));
     this.accidents = this.add(new Accidents(this));
     this.doubleParking = this.add(new DoubleParking(this));
-    this.add(new Pavement(this));
+    this.add(new Pavement(this), 'pavement');
   }
 
-  /** Register a scene (stepped, reset with the rest). */
-  add<T extends Scene>(scene: T): T {
+  /**
+   * Register a scene (stepped, reset with the rest). Its label for
+   * diagnostics is the clock kinds its constructor (just run) defined, or
+   * `label`.
+   */
+  add<T extends Scene>(scene: T, label?: string): T {
+    const kinds = this.clock.kinds;
     this.scenes.push(scene);
+    this.sceneLabels.push(label ?? (kinds.slice(this.labelled).join('/') || `scene${this.scenes.length}`));
+    this.labelled = kinds.length;
     return scene;
+  }
+
+  /** Each scene's running count into `out` (parallel to sceneLabels; diagnostics). */
+  sceneRunning(out: number[]): number[] {
+    out.length = this.scenes.length;
+    for (let i = 0; i < this.scenes.length; i++) out[i] = this.scenes[i].running;
+    return out;
   }
 
   /** Sim time, s. */
@@ -311,6 +331,11 @@ export class CityLife {
     this.looks.clear();
     this.drops.clear();
     this.clock.reset(this.now);
+  }
+
+  /** Debug labels: every scene describes what it holds. */
+  describe(out: LabelSink): void {
+    for (const s of this.scenes) s.describe?.(out);
   }
 
   /** May a `kind` start now, with `running` of them going (its clock, cap and holds)? */

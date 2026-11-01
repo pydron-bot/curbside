@@ -1,0 +1,56 @@
+/* --- Playtest labels (src/ui/labelsOverlay.ts): over the canvas, under the HUD and touch controls --- */
+#labels {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+
+/* Moved by transform only: the outer box across, the row down, the pill
+   centred over its anchor and sitting on it. */
+.lbl {
+  position: absolute;
+  left: 0;
+  top: 0;
+  will-change: transform;
+}
+
+.lbl > div > span {
+  --c: #ffb02e;
+  display: block;
+  transform: translate(-50%, -100%);
+  padding: 1px 5px 1px 4px;
+  border-left: 2px solid var(--c);
+  border-radius: 6px;
+  background: rgb(8 8 12 / 0.8);
+  color: var(--c);
+  font: 600 10.5px/1.3 var(--hud-font, system-ui, sans-serif);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.lbl .lbl-emergency {
+  --c: #ff5865;
+}
+
+.lbl .lbl-police {
+  --c: #5aa9ff;
+}
+
+/* A gang's own colour comes inline (--c); this is the fallback. */
+.lbl .lbl-gang {
+  --c: #8dff2e;
+}
+
+.lbl .lbl-people {
+  --c: #ffb02e;
+}
+
+.lbl .lbl-traffic {
+  --c: #b9bec8;
+}
+
+.lbl .lbl-mission {
+  --c: #ff7ad9;
+}

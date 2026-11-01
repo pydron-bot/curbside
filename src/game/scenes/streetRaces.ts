@@ -30,6 +30,7 @@ import { forwardSpeed, type VehicleArchetype, type VehicleControls } from '../..
 import type { SceneDriver, Vehicle } from '../population';
 import { SCENE_DROP, type Scene, type SceneCtx } from '../cityLife';
 import { incident, type Chases } from './chases';
+import { raceRank, racing, type LabelSink } from '../debugLabels';
 
 /** Racers: how many, how fast (cruise on the straights / through corners), m/s. */
 const RACERS = [3, 5] as const;
@@ -131,6 +132,18 @@ export class StreetRaces implements Scene {
   reset(): void {
     for (const r of this.races) for (const racer of r.racers) this.letGo(racer);
     this.races.length = 0;
+  }
+
+  describe(out: LabelSink): void {
+    for (const r of this.races) {
+      const n = racing(r.racers);
+      for (let i = 0; i < r.racers.length; i++) {
+        const v = r.racers[i].v;
+        if (r.racers[i].done) {
+          if (v === r.winner) out.car(v, 'RACE WINNER', 'traffic');
+        } else if (out.wants(v.sim.x, v.sim.z)) out.car(v, `RACER ${raceRank(r.racers, i)}/${n}`, 'traffic');
+      }
+    }
   }
 
   /** Line one up now (tests, __ub): false if there was nowhere to. */

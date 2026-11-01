@@ -1,4 +1,5 @@
 import './tokens.css';
+import { VERSION } from '../core/changelog';
 import './title.css';
 import type { GameAudio } from '../audio/gameAudio';
 import type { InputDevice } from '../core/input';
@@ -73,6 +74,7 @@ export class TitleScreen implements Panel {
         <a class="title-hub" href="${HUB_URL}" tabindex="-1">MORE AT DEEEK.ORG</a>
       </div>
       <div class="title-hints"></div>
+      <div class="title-version">v${VERSION}</div>
       <div class="a2hs" hidden>
         <span class="a2hs-icon">${ICONS.share}</span>
         <span class="a2hs-text"><b>Play full screen</b>Tap <span class="inline-icon">${ICONS.share}</span> then <em>Add to Home Screen</em></span>

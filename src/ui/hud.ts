@@ -32,6 +32,8 @@ export interface HudFrame {
   mouseAim: boolean;
   /** In a car with a gun that fires out of the window (the weapon shows). */
   driveBy: boolean;
+  /** God mode or a TEST cheat this life (Player.tainted): a TEST tag by the heart. */
+  cheated: boolean;
 }
 
 export interface CarHud {
@@ -45,7 +47,7 @@ export interface CarHud {
 }
 
 export function createHudFrame(): HudFrame {
-  return { health: 100, weapon: null, ammo: 0, car: null, nearCar: null, nearBike: false, device: 'keyboard', mouseAim: false, driveBy: false };
+  return { health: 100, weapon: null, ammo: 0, car: null, nearCar: null, nearBike: false, device: 'keyboard', mouseAim: false, driveBy: false, cheated: false };
 }
 
 /**
@@ -115,6 +117,7 @@ export class Hud {
   private promptDevice: InputDevice | '' = '';
   private shownCritical = false;
   private shownMouseAim = false;
+  private shownCheated = false;
   private debugTimer = 0;
   private debugFull = false;
   private bestAtStart: number;
@@ -131,7 +134,7 @@ export class Hud {
     root.id = 'hud';
     root.innerHTML = `
       <div class="hud-status">
-        <div class="hp"><span class="hp-icon">${ICONS.heart}</span><div class="hp-bar"><i class="hp-ghost"></i><i class="hp-fill"></i><i class="hp-gaps"></i></div></div>
+        <div class="hp"><span class="hp-icon">${ICONS.heart}</span><b class="hp-test">TEST</b><div class="hp-bar"><i class="hp-ghost"></i><i class="hp-fill"></i><i class="hp-gaps"></i></div></div>
         <div class="weapon"><span class="weapon-icon"></span><b class="weapon-ammo"></b></div>
       </div>
       <div class="speedo" hidden>
@@ -265,6 +268,7 @@ export class Hud {
     if (this.playing) this.stats.tick(dt);
     this.score.update(dt);
     this.updateHealth(f.health);
+    if (f.cheated !== this.shownCheated) this.status.classList.toggle('test', (this.shownCheated = f.cheated));
 
     const car = f.car;
     this.setSpeedoHidden(!car);

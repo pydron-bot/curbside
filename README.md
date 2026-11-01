@@ -60,9 +60,47 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 Settings (title or pause menu): master / effects / music volume, sound with
 the iPhone silent switch on, graphics quality, touch steering
 (point / classic), left-handed layout (mirrors the controls and the HUD),
-vibration, god mode (for testing: hits land but take no health, the police
-never cuff you, the heart turns gold; a life with it on earns no CRED and
-sets no free-roam or Chaos Run best), perf overlay (Off / FPS / Full).
+perf overlay (Off / FPS / Full); under TESTING, Test tools (TEST in the
+pause menu, below). In the
+header, VERSION HISTORY: every release from `core/changelog.ts`, newest
+first (the version also shows top right on the title screen and on the
+pause card). Playtest labels over what the city's people and cars are
+doing: `settings.debugLabels`, Shift+L (see *City life*).
+
+**TEST menu** (Settings → Test tools; `game/testTools.ts` the actions,
+`ui/testMenu.ts` the sheet, `ui/teleportMap.ts` the map): a TEST chip in
+the pause card's corner (it costs the card no row) opens a tabbed sheet of
+big buttons, keyboard / pad navigable, Back to the pause menu, ▶ to play.
+Each button acts at once and says what it did (a strip on the sheet and the
+HUD feed). PLAYER: god mode (hits land but take no health, the police never
+cuff you, the heart turns gold; it moved here from Settings, same
+`settings.godMode`), heal and full armour, every weapon full, wanted 0–5,
+clear. CARS: spawn any of the 19 vehicles beside you (on the nearest lane;
+GET IN puts you in it), repair the car you're in, flip / unstick (onto the
+nearest clear lane). WORLD: dawn / noon / golden hour / dusk / midnight,
+freeze the clock, rain on / off / auto (at once, not over the ramp), slow
+motion 0.25× / 0.5× / 1× (it scales the sim's time like a hit-stop, people,
+pigeons and combat effects with it; the camera and audio keep real time),
+LABELS (`settings.debugLabels`). MAP: the whole city (the radar's
+drawing); tap a spot to go to the nearest road or pavement there (with the
+car: the nearer lane, facing its traffic, out of the junction), or SAFEHOUSE,
+HOSPITAL, NEON MILE, DOCKS. SCENES: start any city scene near you now (the
+scenes' `force()` / `begin()` / `soon()`; the fire blows up a car 11–24 m
+off and calls the truck; the tow leaves a car for the truck; RAIN CROWD
+turns the rain on; TURF WAR still waits for its holds). SAVE: +1 CRED
+level, max perks, reset CRED, +$10,000, unlock all jobs, jump to any story
+job (it becomes the next job; you land by its payphone), tutorial done /
+reset, reset the save, export (share sheet, else clipboard) and import (a
+pasted save, sanitised like a loaded one: `migrateSave`, `pruneSave`);
+reset and import write the save and reload. Destructive ones take a second
+press. Anything but LABELS and EXPORT is a cheat: `player.markCheated()`
+taints the life like god mode (`Player.tainted`: CredKeeper pays no CRED,
+no free-roam or Chaos Run best or medal), a TEST tag shows by the heart, and
+respawning clears it (slow motion or god mode left on taint the next life
+too). Turning Test tools off turns god mode and slow motion off. Pure and
+tested: `game/testSpots.ts` (teleport snapping, spawn spots), `game/saveTools.ts`
+(the save edits, export / import). Nothing drawn in normal play: the
+spawned cars and scenes are the usual batches.
 
 **Touch tuning** (for the device session): with the Perf overlay on (or
 `?debug`), pause → DIAGNOSTICS → TOUCH TUNING has −/+ steppers for stick
@@ -74,6 +112,37 @@ every value is clamped to a range. Tuning applies only while the overlay is
 on: turn it off and the shipped feel is back. The report's `TUNE` line and
 `tune` JSON list the values that differ from the defaults, the numbers to
 bake in as new constants.
+
+**Perf log** (`ui/diagnostics.ts`, `core/sessionLog.ts`): every 10 s the
+session log samples frame times, tier, ratio and draw calls, and `n`: what
+was on screen (`core/sceneCounts.ts`, filled by `render/sceneCensus.ts`
+from counters the pools and batches already keep): live fire / smoke
+particles, big ones (over 2.5 m) and their **fill** (quad area over the
+visible ground, nearer the camera counting bigger: screens of overdraw),
+glows drawn and their fill, fires (in view / burning), burning cars,
+explosions in the last 10 s, rubble drawn / live, people and cars drawn /
+shown, and the city scenes running by kind. Frames are also judged in 1 s
+windows: one whose p95 is over 25 ms logs a **dip** with the same counts
+(at most one per 5 s; the newest 60 kept in `dips`), so a drop names what
+was on screen. The Full overlay shows the counts on two more lines
+(`fx hot/soft big fill · glow n (fill) · fire seen/all burn boom`,
+`ppl · cars · scenes`), the Diagnostics summary an `ON SCREEN` line and the
+recent dips. Nothing is allocated per frame.
+
+**Report bug** (`ui/bugReport.ts`): with test tools on
+(`settings.testTools`), the Perf overlay on or `?debug`, a bug button sits
+in the pause card's top corner (the Diagnostics sheet has a REPORT BUG tab
+too). It captures the moment: the game view (one frame rendered through
+`Look` and copied in the same task, 960 px wide JPEG; no
+`preserveDrawingBuffer`), position, heading, vehicle, health, wanted level,
+time of day, weather, tier and activity, the on-screen counts, the last
+30 s of bus events (a preallocated 600-slot ring, `core/eventTrail.ts`,
+rows `[secondsAgo, type, x, z, value, word, byPlayer]`) and the whole
+Diagnostics report. Type a note, then SHARE: the JPEG and a JSON file go
+to the share sheet (`navigator.share` with files; `.txt` if JSON is
+refused). Cancelling is just noted; no share API or a refusal saves both
+files instead; COPY copies the JSON. The smoke test runs the flow with the
+share sheet mocked.
 
 ## Status
 
@@ -885,9 +954,43 @@ vehicles with `ServiceRun` (or your own `SceneDriver` on `v.scene`), people
 with `Gathering`, `walkTo` / `setOn`; emit `street` events; hand everything
 back in `reset()`. Register it with one line in `CityLife`'s constructor
 (`this.add(new YourScene(this))`) and, if it draws, one `cityLook.add(...)`
-in `main.ts`. Only borrow `street` people, only take vehicles that are
+in `main.ts`. For the playtest labels add a `describe(out)` (below). Only borrow `street` people, only take vehicles that are
 `ai`-driven, unpinned (`life.d.keep`), not `police`, not the player's. No
 per-step allocation (reuse records; no closures in `drive`).
+
+**Playtest labels** (`settings.debugLabels`, default off; **Shift+L** on a
+keyboard, `__ub.labels.toggle()`): small text over the people and cars
+within 60 m in view that are doing something notable, nearest first, at
+most 24. Each scene's optional `describe(out)` labels what it holds
+(`MEDIC (treating)`, `PATIENT (waits 54s)`, `FIRE 54s (called)`,
+`FIREFIGHTER (hosing)`, `TOW → car`, `ALARM 12s`, `CHASE: SUSPECT (car)`,
+`CHASE COP`, `RACER 2/4`, `DRIVER (arguing)`, `DELIVERY 31s`, `COURIER
+(parcel)`, `BUS → stop`, `BUS STOP 2`, `QUEUE 3`, `ICE CREAM (open 36s)`,
+`VENDOR`, `BUSKER 80s`, `WATCHING`, `FIGHTER`, `ONLOOKER`, `MUGGER
+(running)`, `VICTIM`, `BAG 31s`, `WITNESS (calling 2.1s)`, `DOG (chasing)`,
+`SHELTERING`, `HANGING OUT`), the missions theirs (`MISSION: tag`, `VEX`,
+`MISSION CAR: tag`, `FARE`), then `describeWorld` the rest by their flags
+(the player's police `COP (pursuit)` / `POLICE (roadblock)`, gangs and turf
+crews in their colours `VIPERS (fighting)`, `INJURED`, `ON PHONE`, `KO`,
+`FLEEING`, `PARKED`, `CRASHED (towable)`, `WRECK`, `EMPTY`, `DROP: pistol
+31s`). Colours by category: emergency red, police blue, gangs their own,
+people amber, traffic grey, missions pink. Text logic is pure and tested
+(`game/debugLabels.ts`: `LabelBoard`, `pedLabel`, `carLabel`, `raceRank`);
+the layer (`ui/labelsOverlay.ts`) is a fixed pool of DOM pills over the
+canvas (`pointer-events: none`, no draw calls): collected and their text
+written at 5 Hz only where it changed, projected every frame and moved by
+`translate3d` from cached strings (no allocation, no layout reads), stepped
+up clear of nearer ones. Off, the layer is hidden and nothing runs. Cost
+(Chromium, iPhone profile, 24 labels, camera moving every frame): ~0.02 ms
+of JS a frame (median), a refresh ~0.05 ms. `__ub.labels.list()` /
+`.stats()` show what's up and the time taken.
+
+```ts
+describe(out: LabelSink): void {   // a Scene's, ~5 Hz while the labels are on
+  for (const c of this.crews) out.car(c.run.v, 'FIRE TRUCK', 'emergency');
+  if (out.wants(f.x, f.z)) out.spot(f, `FIRE ${secs(f.life - f.age)}`, 'emergency');   // build changing text only if wanted
+}
+```
 
 **Budget.** No new mesh, program or draw call: the vehicles and people are
 the usual batches, the drops go in the props' `things` family, light in
@@ -1258,6 +1361,16 @@ Playwright isn't a game dependency: run with
   On foot: a parked car peaks at gain 0.2 against the car radio (−14 dB)
   2.5 m off, a shop 0.19 at 3.5 m, the boombox 0.6 at 4 m and still 0.05 at
   26 m; a switch is silent for about 0.5 s.
+- **`mayhem.mjs [--tier medium|low|high|all] [--time day|night|both] [--scenario mayhem|single] [--no-city-fires] [--step 50] [--dpr 3] [--shot dir]`**:
+  heavy mayhem on the iPhone profile (unlike the others it renders: real
+  frames stepped by `__ub.stepFrame(ms)`, Rapier loaded, god mode and the
+  destruction test on). Blows up four cars and three walls round the
+  player, two more cars at 8 s, two more and a wall at 16 s, and runs to
+  36 s (fires, fire trucks, hoses); `single` is one car. Reports peak live
+  particles, the transparent fill projected from the camera (screens of
+  overdraw; SwiftShader can't time the GPU), glows and their fill, draw
+  calls, fires and rubble. `--dpr 1` is faster and gives the same fill
+  (a share of the screen). Numbers under *Effects and camera*.
 
 ## Layout
 
@@ -1941,6 +2054,53 @@ then desktop 'high'):
 
 A five-car chain peaks at ~280 fire, ~180 smoke and ~60 debris particles
 on the phone tier (pools hold 900 / 700 / 128).
+
+**Particle budgets** (`quality.ts`, applied by `Effects.applyBudget`). On a
+phone the cost of mayhem is fill, not draw calls or JS: big translucent
+quads stacked over the screen. `Effects.fill` estimates it each frame
+(each drawn quad's area over the visible ground's, a quad counting bigger
+the nearer it is to the camera: screens of overdraw). It matches a count
+projected through the camera for one blast (5.6 vs 5.4) and reads high
+while a chain's smoke is high up (8.7 vs 5.7), which only makes the
+budget act a little early. Over the tier's fill budget, big particles
+(over 2.5 m) age up to 4× as fast (fully at 1.5× the budget) and new
+smoke is held to `smokeMaxOver`; in a chain (another blast within ~¼ s)
+the later blasts' smoke and their fireballs' after-smoke are held to it
+at once and live 0.65 of their life, since a chain's smoke peaks seconds
+after the budget could see it. Fires on screen beyond `fullFires` share
+that many fires' flames, smoke and embers, and only the first
+`chainLights` blasts of a chain get fake lights. High is the look as
+designed (no budget); one car blowing up stays under the medium budget,
+so normal play looks the same.
+
+| Tier | particleScale | live fire / smoke | fill budget | smoke max (always / over) | full-rate fires | chain lights |
+|---|---|---|---|---|---|---|
+| high | 1 | 900 / 700 | none | – / – | all | all |
+| medium | 0.75 | 700 / 500 | 7 screens | – / 5 m | 3 | 3 |
+| low | 0.5 | 480 / 340 | 4 screens | 4.5 / 3.5 m | 2 | 2 |
+
+Measured with `tools/tune/mayhem.mjs` (iPhone profile, 36 s: four cars and
+three walls at once, two cars at 8 s, two cars and a wall at 16 s; six
+fires, fire trucks; god mode, destruction test on; peaks unless noted).
+Fill is projected through the camera, in screens (`--dpr 1`: fill and
+draw calls don't depend on it); before = 0.11.0 with the logging only:
+
+| Tier, time | live fire / smoke | fill peak | fill mean | glows (fill) | draw calls |
+|---|---|---|---|---|---|
+| medium, day | 327 / 295 → 277 / 256 | 15.2 → 5.7 | 2.32 → 1.25 | 46 (9.7) → 42 (4.9) | 56 → 56 |
+| medium, night | 317 / 295 → 277 / 256 | 15.2 → 5.7 | 2.39 → 1.32 | 50 (9.8) → 50 (5.0) | 59 → 59 |
+| low, day | 186 / 133 → 169 / 115 | 8.7 → 2.4 | 1.57 → 0.69 | 43 (8.4) → 39 (3.6) | 32 → 32 |
+| low, night | 197 / 133 → 169 / 115 | 8.7 → 2.4 | 1.57 → 0.70 | 52 (8.5) → 52 (3.8) | 35 → 35 |
+| one car, medium | 66 / 50 → same | 5.4 → 5.4 | 1.33 → 1.33 | 27 (1.6) → same | 47 |
+| one car, low | 46 / 33 → same | 3.8 → 1.6 | 0.95 → 0.56 | 27 (1.6) → same | 27 |
+
+Nearly all of it is smoke: the blasts' columns and the fireballs'
+after-smoke (up to ~10 m quads, rising toward the camera); flames are
+under 0.1 screens even with six fires. Without the living city's fires
+(`--no-city-fires`, medium, night) the same run peaks at 14.5 with a mean
+of 1.96: its fires (each wreck and hit wall burns 75 s) add ~20% to the
+mean fill, ~20% more live fire particles and eight glows, but the peak is
+the blasts', as it was before the city.
 
 API for other systems:
 

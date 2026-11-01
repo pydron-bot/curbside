@@ -5,7 +5,9 @@
  * showing): it must boot, start a run and simulate 30 s with no page or
  * console errors, and draw under the 150-call budget. Then the PWA: the
  * manifest is installable, and once the service worker has the game cached,
- * it boots and plays offline. Catches the wiring crashes `npm test` can't.
+ * it boots and plays offline. On the 852×393 profile, REPORT BUG too: the
+ * screenshot, the report and the share sheet (mocked: shared, cancelled,
+ * refused). Catches the wiring crashes `npm test` can't.
  *
  *   npx -y -p playwright@1.63.0 node tools/smoke.mjs [--no-build] [--port 4318] [--out smoke-out]
  *
@@ -81,6 +83,48 @@ async function play(page, label) {
   return r;
 }
 
+/**
+ * REPORT BUG from the pause card (test tools on): a screenshot is taken, the
+ * share sheet gets a JPEG and the JSON report, and a cancelled or refused
+ * share never throws (refused falls back to saving the files).
+ */
+async function bugReport(page, label) {
+  await page.evaluate(() => {
+    window.__shareMode = 'ok';
+    navigator.canShare = () => true;
+    navigator.share = async (data) => {
+      window.__shared = await Promise.all(
+        data.files.map(async (f) => ({ name: f.name, type: f.type, report: f.type.startsWith('image/') ? null : JSON.parse(await f.text()) })),
+      );
+      if (window.__shareMode === 'cancel') throw new DOMException('Share canceled', 'AbortError');
+      if (window.__shareMode === 'deny') throw new DOMException('Not allowed', 'NotAllowedError');
+    };
+    window.__ub.setPaused(true);
+  });
+  await page.click('.pause-corner-btn', { timeout: 30000 });
+  await page.waitForSelector('#bug-report .bug-shot img:not([hidden])', { timeout: 60000 });
+  await page.fill('#bug-report .bug-note', 'smoke test');
+  const share = async (mode) => {
+    await page.evaluate((m) => {
+      window.__shareMode = m;
+      document.querySelector('#bug-report .diag-status').textContent = '';
+    }, mode);
+    await page.locator('#bug-report .tabs button', { hasText: 'SHARE' }).click();
+    await page.waitForFunction(() => document.querySelector('#bug-report .diag-status').textContent !== '', null, { timeout: 30000 });
+    return page.evaluate(() => document.querySelector('#bug-report .diag-status').textContent);
+  };
+  const shared = await share('ok');
+  const files = await page.evaluate(() => window.__shared);
+  const report = files?.find((f) => f.report)?.report;
+  check(
+    /Shared/.test(shared) && files.length === 2 && files[0].type === 'image/jpeg' && report?.note === 'smoke test' && report.events.length > 0 && report.diagnostics?.build,
+    `${label}: REPORT BUG shares a screenshot and the report (${files?.map((f) => f.name).join(', ')})`,
+  );
+  check(/cancelled/.test(await share('cancel')), `${label}: a cancelled share is just noted`);
+  check(/Saved/.test(await share('deny')), `${label}: a refused share saves the files instead`);
+  await page.click('#bug-report .sheet-close');
+}
+
 let server = null;
 let browser = null;
 try {
@@ -93,16 +137,18 @@ try {
 
   const profiles = [
     ['desktop-1280x720', { viewport: { width: 1280, height: 720 } }],
-    ['iphone-852x393', { ...iphone, viewport: { width: 852, height: 393 } }],
+    ['iphone-852x393', { ...iphone, viewport: { width: 852, height: 393 } }, { testTools: true }],
     ['iphone-852x340', { ...iphone, viewport: { width: 852, height: 340 } }],
   ];
-  for (const [label, ctxOpt] of profiles) {
+  for (const [label, ctxOpt, saved] of profiles) {
     console.log(label);
-    const ctx = await browser.newContext({ ...ctxOpt, serviceWorkers: 'block' });
+    const ctx = await browser.newContext({ ...ctxOpt, serviceWorkers: 'block', acceptDownloads: true });
     const page = await ctx.newPage();
     const errors = watch(page, label);
+    if (saved) await page.addInitScript((s) => localStorage.setItem('curbside.settings', JSON.stringify(s)), saved);
     try {
       await play(page, label);
+      if (saved?.testTools) await bugReport(page, label);
     } catch (e) {
       check(false, `${label}: ${e.message.split('\n')[0]}`);
     }

@@ -28,6 +28,22 @@ export interface QualityTier {
   /** Multipliers on Population's CROWD_COUNT / TRAFFIC_COUNT. */
   readonly crowdScale: number;
   readonly trafficScale: number;
+  /** Live particles at most in the fire (hot) and smoke (soft) pools (their capacity is 900 / 700). */
+  readonly hotCap: number;
+  readonly softCap: number;
+  /**
+   * Transparent particle fill budget, screens of overdraw (Effects.fill).
+   * Over it, big particles fade sooner and new smoke is held to
+   * smokeMaxOver, so heavy mayhem degrades instead of piling up. Infinity: off.
+   */
+  readonly fillBudget: number;
+  /** Largest smoke or dust puff always, and while over the fill budget, m. */
+  readonly smokeMax: number;
+  readonly smokeMaxOver: number;
+  /** Fires on screen drawn at the full rate; more share it (emergencyLook.ts). */
+  readonly fullFires: number;
+  /** Blasts at once that get their own fake lights (later ones in a chain are dim anyway). */
+  readonly chainLights: number;
 }
 
 export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
@@ -40,6 +56,14 @@ export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
     particleScale: 1,
     crowdScale: 1,
     trafficScale: 1,
+    // The look as designed: no fill budget.
+    hotCap: 900,
+    softCap: 700,
+    fillBudget: Infinity,
+    smokeMax: Infinity,
+    smokeMaxOver: Infinity,
+    fullFires: Infinity,
+    chainLights: Infinity,
   },
   // Phones: 1.5x is ~44% fewer pixels than 2x and still sharp at 460 ppi,
   // which leaves GPU headroom for when the A17 Pro throttles.
@@ -52,6 +76,13 @@ export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
     particleScale: 0.75,
     crowdScale: 1,
     trafficScale: 1,
+    hotCap: 700,
+    softCap: 500,
+    fillBudget: 7,
+    smokeMax: Infinity,
+    smokeMaxOver: 5,
+    fullFires: 3,
+    chainLights: 3,
   },
   low: {
     name: 'low',
@@ -62,6 +93,13 @@ export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
     particleScale: 0.5,
     crowdScale: 0.8,
     trafficScale: 0.8,
+    hotCap: 480,
+    softCap: 340,
+    fillBudget: 4,
+    smokeMax: 4.5,
+    smokeMaxOver: 3.5,
+    fullFires: 2,
+    chainLights: 2,
   },
 };
 

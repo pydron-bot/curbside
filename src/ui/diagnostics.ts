@@ -1,5 +1,6 @@
 import { BUILD_ID } from '../core/build';
 import { emptySummary, type FrameSummary } from '../core/frameStats';
+import { countsSummary, DipDetector, emptyCounts, type SceneCounts } from '../core/sceneCounts';
 import { loadPreviousLog, SAMPLE_EVERY_MS, SessionLog, type KeyValueStore, type SessionLogData } from '../core/sessionLog';
 import { onSettingsChange, settings } from '../core/settings';
 import { changedTune, loadTune, setTuneEnabled, tuneSummary } from '../core/touchTuning';
@@ -30,6 +31,10 @@ export interface DiagnosticsDeps {
   haptics?: Haptics;
   /** The destruction test's switch, BLOW A WALL and readout. */
   destruction?: DestructionProbeDeps;
+  /** What is on screen (render/sceneCensus.ts): fills and returns `out`. */
+  counts?: (out: SceneCounts) => SceneCounts;
+  /** The REPORT BUG tab (ui/bugReport.ts). */
+  reportBug?: () => void;
 }
 
 /** Rapier's files as loaded (Resource Timing): did Pages gzip the wasm, did it come from cache? */
@@ -81,6 +86,8 @@ export class Diagnostics implements Panel {
   private readonly destruction: DestructionProbe | null = null;
   private readonly tuning: TuningProbe;
   private readonly frameOut = emptySummary();
+  private readonly countsOut = emptyCounts();
+  private readonly dips = new DipDetector();
   private onClose: () => void = () => {};
   private tier = '';
   private ratio = 0;
@@ -116,6 +123,7 @@ export class Diagnostics implements Panel {
     };
     this.firstBtn = button('SHARE', () => this.share());
     button('COPY', () => this.copy());
+    if (deps.reportBug) button('REPORT BUG', deps.reportBug);
     const close = document.createElement('button');
     close.type = 'button';
     close.tabIndex = -1;
@@ -187,10 +195,40 @@ export class Diagnostics implements Panel {
     this.destruction?.stop();
   }
 
+  /**
+   * Every frame (not paused): its interval, ms. A slow stretch (DipDetector)
+   * logs a dip with what was on screen, at most once per DIP_COOLDOWN_MS.
+   */
+  frame(intervalMs: number): void {
+    if (!this.dips.sample(intervalMs)) return;
+    const w = this.dips.last;
+    this.log.addDip(performance.now(), {
+      fps: w.fps,
+      p95: w.p95,
+      max: w.max,
+      tier: getQuality().name,
+      ratio: this.deps.ratio(),
+      dc: this.deps.drawCalls(),
+      n: this.counts() ?? emptyCounts(),
+    });
+  }
+
+  /** What is on screen now (shared object: read at once), or null without a census. */
+  counts(): SceneCounts | null {
+    return this.deps.counts ? this.deps.counts(this.countsOut) : null;
+  }
+
   /** The whole report: a few readable lines, then JSON with the session log and the play log. */
   report(): string {
+    const f = this.deps.frame(this.frameOut);
+    return `${this.summaryText(f)}\n\n${JSON.stringify(this.reportData())}`;
+  }
+
+  /** The report's data (the bug report carries it too). */
+  reportData(): Record<string, unknown> {
     const now = performance.now();
     const f = this.deps.frame(this.frameOut);
+    const n = this.counts();
     const s = safeInsets();
     let playlog: unknown = null;
     try {
@@ -221,6 +259,7 @@ export class Diagnostics implements Panel {
       audioState: this.deps.audioState(),
       settings: { ...settings },
       frame: { ...f },
+      counts: n ? { ...n } : null,
       tune: changedTune(),
       destruction: this.deps.destruction?.stats() ?? null,
       rapierFiles: rapierFiles(),
@@ -228,7 +267,7 @@ export class Diagnostics implements Panel {
       previous: this.previous,
       playlog,
     };
-    return `${this.summaryText(f)}\n\n${JSON.stringify(data)}`;
+    return data;
   }
 
   private summaryText(f: FrameSummary): string {
@@ -242,8 +281,9 @@ export class Diagnostics implements Panel {
       `SAFE t${s.top} r${s.right} b${s.bottom} l${s.left} · ${standalone() ? 'home-screen app' : 'browser tab'}`,
       `TIER ${getQuality().name} @ ${this.deps.ratio().toFixed(2)}x · ${this.deps.drawCalls()} dc · audio ${this.deps.audioState()}`,
       ...(this.deps.destruction ? [destructionSummary(this.deps.destruction.stats())] : []),
+      ...(this.deps.counts ? [countsSummary(this.deps.counts(this.countsOut))] : []),
       `FRAMES ${f.fps.toFixed(1)} fps · p50 ${f.p50.toFixed(1)} p95 ${f.p95.toFixed(1)} p99 ${f.p99.toFixed(1)} ms · js p95 ${f.jsP95.toFixed(1)} · ${f.hitchesPerMin.toFixed(1)} hitch/min`,
-      `SESSION ${this.log.seconds(performance.now()).toFixed(0)} s · ${d.samples.length} samples (every ${SAMPLE_EVERY_MS / 1000} s) · ${this.log.eventCount} events`,
+      `SESSION ${this.log.seconds(performance.now()).toFixed(0)} s · ${d.samples.length} samples (every ${SAMPLE_EVERY_MS / 1000} s) · ${this.log.eventCount} events · ${this.log.dipCount} dips`,
       tuneSummary(),
       `PREVIOUS ${this.previous ? `${this.previous.samples.length} samples from ${this.previous.started}` : 'none'}`,
     ].join('\n');
@@ -251,11 +291,14 @@ export class Diagnostics implements Panel {
 
   private refresh(): void {
     const f = this.deps.frame(this.frameOut);
-    const tail = this.log
-      .data()
-      .events.slice(-8)
-      .map((e) => `${e.t.toFixed(0).padStart(5)} s  ${e.kind}${e.detail ? ` ${e.detail}` : ''}`);
-    this.summaryEl.textContent = `${this.summaryText(f)}\n\nRECENT EVENTS\n${tail.join('\n')}`;
+    const data = this.log.data();
+    const tail = data.events.slice(-8).map((e) => `${e.t.toFixed(0).padStart(5)} s  ${e.kind}${e.detail ? ` ${e.detail}` : ''}`);
+    const dips = (data.dips ?? []).slice(-4).map(
+      (d) =>
+        `${d.t.toFixed(0).padStart(5)} s  ${d.fps.toFixed(0)} fps p95 ${d.p95.toFixed(0)} ms · ${d.tier} @${d.ratio}x · fx ${d.n.hot}/${d.n.soft} fill ${d.n.fill} · glow ${d.n.glows} · fire ${d.n.firesSeen}/${d.n.fires} boom ${d.n.booms} · ppl ${d.n.peopleSeen} cars ${d.n.carsSeen}`,
+    );
+    this.summaryEl.textContent =
+      `${this.summaryText(f)}\n\nRECENT EVENTS\n${tail.join('\n')}` + (dips.length ? `\n\nRECENT DIPS (slow frames: what was on screen)\n${dips.join('\n')}` : '');
   }
 
   private share(): void {
@@ -334,6 +377,7 @@ export class Diagnostics implements Panel {
         audioState: audio,
         paused: this.deps.paused(),
         ...(d && d.mode !== 'off' ? { rubble: d.live, physP95: d.stepP95 } : {}),
+        ...(this.deps.counts ? { n: this.deps.counts(this.countsOut) } : {}),
       });
     }
     this.log.persist(now, storage());

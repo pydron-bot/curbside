@@ -44,6 +44,11 @@ CURBSIDE_BASE=/curbside/ npx vite build   # what the Pages deploy builds
 
 ## Shipping
 
+Every release to `main` gets a version: add an entry at the top of
+`src/core/changelog.ts` (Major.Minor.Patch: minor for features, patch for
+fixes; player-facing notes) and set `package.json`'s version to match (a
+test checks). The title screen and Settings → Version history show it.
+
 Pushing to `main` deploys to https://deeek.org/curbside/ via
 `.github/workflows/pages.yml` (it runs the tests first); other branches and
 pull requests run `ci.yml` (tests, types, GLB contracts, smoke test). Before

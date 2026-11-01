@@ -16,6 +16,7 @@ import { blockAt, cornerPoint, hurtPed } from '../../systems/crowd';
 import { nextCorner } from '../../systems/streetPeople';
 import type { CrowdPed } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
+import { secs, type LabelSink } from '../debugLabels';
 import { handBack, roomFor } from './people';
 import { len2 } from '../../core/len';
 
@@ -104,6 +105,15 @@ export class Muggings implements Scene {
       b.until = 0;
       b.owner = null;
     }
+  }
+
+  describe(out: LabelSink): void {
+    for (const m of this.muggings) {
+      out.ped(m.mugger, m.phase === 'run' ? 'MUGGER (running)' : 'MUGGER', 'people');
+      out.ped(m.victim, m.shout > 0 && m.shout < SHOUT_SECONDS ? 'VICTIM (shouting)' : 'VICTIM', 'people');
+    }
+    const now = this.life.now;
+    for (const b of this.bags) if (b.until > now && out.wants(b.x, b.z)) out.spot(b, `BAG ${secs(b.until - now)}`, 'people');
   }
 
   /** Is the one knocked down at (x, z) a mugger on the run (nobody calls that in)? */
