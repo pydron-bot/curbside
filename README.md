@@ -776,6 +776,19 @@ Playwright isn't a game dependency: run with
   passed −19.4, failed −21.2 (peaks −5.7, −4.7, −7.7); the count's hits
   peak at −10, −8 and −5.5 and GO at −4.7.
 
+- **`reactive.mjs <out-dir> [chase|on-foot …]`**: the music that reacts
+  to play, through the same modules: `chase` is the radio (NIGHTDRIVE) at
+  1 star, then wanted 3, 4, 5 and lost (`SCRIPT` "seconds:stars,…",
+  `RADIO`); `on-foot` walks past a parked car, a shopfront and a boombox
+  (cut with its scratch) through the street chain. Baseline 2026-11-01
+  (raw): the chase −14.5 dBFS at 3 stars, −15.2 at 4 (its verse), −13.7 at
+  5, peaks −1 dBFS; on music.mjs's default intensity script −15.9 overall
+  (−16 to −18 at 1, −14.4 to −16 at 3, −13.6 to −15 at 5, the stations
+  −18, −15, −13), its hook −5 to −6 dB against the rest (the theme's −4).
+  On foot: a parked car peaks at gain 0.2 against the car radio (−14 dB)
+  2.5 m off, a shop 0.19 at 3.5 m, the boombox 0.6 at 4 m and still 0.05 at
+  26 m; a switch is silent for about 0.5 s.
+
 ## Layout
 
 ```
@@ -853,6 +866,60 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   drops the radio back in hard on a chorus, a few layers up. Scores are
   pure data (`stings.ts`), played by one gliding lead and bass per sting,
   chord stabs and takes of the radio's own drum kit.
+- **The chase.** From 3 stars the radio gives way to a score of the game's
+  own (`music/chase.ts`), off the dial like the theme: the hook on a brass
+  lead over a breakbeat, a reese bass pushing octaves and saw stabs on the
+  hook's 3+3+2, E minor, 141 BPM at 3 stars up to 150 at 5 (two cues, the
+  second a minor third up, alternating each time round its 36-bar loop: the
+  hook in every chorus, a driving verse, a two-bar breath). It comes in on
+  the next bar line, risen into over what's left of the bar and landing on
+  a crash, with no static (it's score, not a retune), and follows the
+  wanted level and play through the usual intensity floor; at one or two
+  stars it carries on, calmer. When the police lose you (back to 0 stars:
+  evaded, resprayed) it calms down, two drumless bars of the hook, and
+  hands back to the radio's next song; caught again during those, it
+  carries on. WASTED and BUSTED stop the music as before and drop the
+  chase; after respawn it's the radio. R (or tapping the card) during a
+  chase is the player's call: the chase drops for the next station and
+  stays away for the rest of that chase, until the stars are back to 0 and
+  up to 3 again. It plays in your ears on foot too, never through the street
+  below; no NOW PLAYING for it. The mechanism is the theme's: an `Arranger`
+  plays a `Theme` instead of the radio (`theme` in 'menu', `score` in
+  'game'), and a Theme without a set tempo or tiers follows the intensity
+  under its own form, section rules (`shape`) and `outro`.
+- **Music on foot.** Out of the car the radio isn't in your ears: you hear
+  music faintly from the street as you pass it (`streetMusic.ts`), one
+  station at a time on the one music player, through a street chain on the
+  music path (`StreetChain` in `loops.ts`: a lowpass, a pan and a gain;
+  open in the car, the chase and the title). The car you got out of plays
+  your station where you left it, so its radio fades as you walk away (and
+  comes back as you walk back); about one in three parked cars has its radio
+  on (nobody in it, not police, not wrecked or burning; the station a hash
+  of where it's parked: the van by the spawn point plays the first
+  station); half the neon-lit shopfronts and a quarter of those with
+  awnings play their district (NEON MILE funk or phonk, GLASS HEIGHTS
+  synthwave or breaks, COBBLE ROW lo-fi, RUSTWATER DOCKS dub, MAPLE FLATS
+  chiptune or lo-fi, a fifth of each with something else; 591 in the city,
+  in a 32 m grid built once); and each VIPERS hangout's boombox plays
+  SIDEWAYS 808 while its crew stands about calm, loud enough to carry 30 m
+  or so. When the crew turns on you or gets knocked about it's cut with a
+  record scratch, and back once they've settled for 12 s (`gangMode` emits
+  `'boombox'` events, `{ id, x, z, on, cut }`; `stepBoombox` in `gangs.ts`).
+  Each emitter falls off with distance to silence at its range and is
+  muffled, as if through a car body or a shop door, until you're close, and
+  panned by where it is; levels against the car radio (1): your car 0.5,
+  parked cars and shops 0.34 up close (about −14 dB at a few metres), the
+  boombox 0.62. The loudest is heard, but another station takes over only
+  when it's 1.6× louder than the loudest playing the current one, so
+  walking between two doesn't flap; the change fades out, retunes quietly
+  from the top of a phrase and fades back in. Nothing in range for 4 s and
+  the music goes dormant (no notes booked) until something is. Getting into
+  a car puts the radio back on your station (with the usual static when
+  that's a change, seamless when it's already playing it) and NOW PLAYING
+  as usual; songs heard from the street never pop the card. R on foot
+  retunes the car radio for next time and shows the card with its name
+  (by your own car you hear it retune). The street is scanned every 0.2 s
+  with nothing allocated.
 - **Music.** A look-ahead scheduler (25 ms timer, 0.12 s ahead on the audio
   clock) plays original songs in seven styles: NIGHTDRIVE FM (synthwave),
   BREAKNECK 99.1 (breakbeat), LOW TIDE (lo-fi), SIDEWAYS 808 (phonk),
@@ -901,11 +968,14 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
 | `synth.ts` | noise buffers, node-tracking `Voice`, envelopes, reverb impulse |
 | `sfx.ts`, `loops.ts`, `music/musicPlayer.ts` | one-shot recipes, continuous voices (engine, tyres, fire, ambience, sirens), music instruments |
 | `music/themes.ts`, `music/stings.ts` | the title theme and its hook; the stings built on it as scores (pure, tested), played by `sfx.playSting` |
+| `music/chase.ts`, `streetMusic.ts` | the chase score and when it plays; music on foot: emitters, falloff, muffle and pan, stations by district and hash, the switch with its hysteresis, the shop grid, the boomboxes (pure, tested) |
 
 API for other systems:
 
 ```ts
 audio.update(dt, frame)              // per frame: listener x/z, player car (describeCar) or null, footSpeed, health, vehicles (fires)
+                                     // and the cars driven and last got out of (playerCar, lastCar: radios on foot)
+audio.streetShops(buildings, plans)  // once at wiring: the shopfronts that play music on foot
 audio.siren(id, x, z, on, style?)    // call every frame while it sounds; 'twoTone' | 'wail' | 'yelp'; stale ids fade out after 1 s
 audio.horn(x, z, duration?)
 audio.ui('click' | 'confirm' | 'back' | 'countdown' | 'go' | 'success' | 'fail' | 'cash' | 'star')
