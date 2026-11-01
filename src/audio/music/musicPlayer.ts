@@ -70,12 +70,16 @@ type Kit = Record<KitPart, AudioBuffer[]>;
 interface KitRender {
   kit: Kit;
   jobs: KitJob[];
-  /** Its sound plays (or is about to): a take per macrotask, ahead of any warming. */
+  /** Its sound plays (or is about to): a take per frame, ahead of any warming. */
   urgent: boolean;
 }
 
-/** Between warming takes on the title without requestIdleCallback (Safari), ms. */
-const WARM_GAP = 40;
+/** Behind the title a warming take waits this long after the last take (then a frame, and an idle slot where there are any), ms. */
+const WARM_GAP_TITLE = 40;
+/** In play, gently: this long. */
+export const WARM_GAP_PLAY = 150;
+/** The longest a warming take waits for an idle slot, ms. */
+const IDLE_TIMEOUT = 1000;
 
 export class MusicPlayer {
   readonly arranger: Arranger;
@@ -109,9 +113,13 @@ export class MusicPlayer {
    * the longest job by far (2.2 s of audio, 14-24 ms).
    */
   private readonly crashes = new Map<boolean, AudioBuffer[]>();
-  private renderTimer: ReturnType<typeof setTimeout> | null = null;
-  private idleWaiting = false;
-  /** The title is up (the last mode asked for was 'menu'): kits may warm in idle time. */
+  /** A wanted kit's next take is booked. */
+  private renderBooked = false;
+  /** The next warming take, booked: its gap (or the task after its frame), its frame, its idle slot. */
+  private warmTimer: ReturnType<typeof setTimeout> | undefined;
+  private warmFrame: number | undefined;
+  private warmIdle: number | undefined;
+  /** The title is up (the last mode asked for was 'menu'): kits warm at once in idle time, not at play's gentle pace. */
   private onTitle = false;
   private disposed = false;
   /** Round robin over each hit's takes. */
@@ -308,11 +316,12 @@ export class MusicPlayer {
   }
 
   /**
-   * Render these sounds' kits behind the title, a take per idle slot (the
-   * radio's own first: PLAY starts it), so music first heard on foot, or the
-   * chase, doesn't render one mid-play. Only on the title, and never while a
-   * kit that's playing is still rendering; the game starting pauses it (a kit
-   * wanted then renders at once, as before).
+   * Render these sounds' kits ahead of time, a take per idle slot, so music
+   * first heard on foot, or the chase, doesn't render one mid-play: the
+   * radio's own first, then in the order given, the shared crash takes
+   * before anything else. It starts at once, whatever the mode: at the title's
+   * pace behind it, gently in play (WARM_GAP_PLAY apart). Never while a kit
+   * that's playing is still rendering (that one goes first, a take a frame).
    */
   warmKits(sounds: readonly StationSound[]): void {
     this.kitFor(this.arranger.radio.sound, false);
@@ -440,8 +449,7 @@ export class MusicPlayer {
    */
   dropIn(when: number, intensity: number): void {
     // GO lets go of the count-in's duck even when nothing drops in (a frenzy counted in over the chase).
-    this.duckDip.release(when, 0.04);
-    automateDip(this.duckGain.gain, this.duckDip, this.ctx.currentTime, 0.015);
+    this.unduck(when);
     if (!this.running || this.off || this.dormant || this.arranger.mode !== 'game' || this.arranger.playing) return;
     this.cutAt(when);
     this.arranger.dropIn(intensity);
@@ -452,7 +460,7 @@ export class MusicPlayer {
   private cutAt(when: number): void {
     for (const v of this.notes) {
       v.kill(when);
-      // Booked to start after the cut, its own envelope (set at its start) would outrank kill's fade: silence it outright.
+      // Booked to start after the cut, it would still blip through kill's fade: silence it outright.
       if (v.t >= when) {
         v.out.gain.cancelScheduledValues(when);
         v.out.gain.setValueAtTime(0, when);
@@ -489,6 +497,12 @@ export class MusicPlayer {
     automateDip(this.duckGain.gain, this.duckDip, now, 0.015);
   }
 
+  /** Let go of any duck at `when`, at once (GO after a count-in, whatever plays then). */
+  unduck(when: number): void {
+    this.duckDip.release(when, 0.04);
+    automateDip(this.duckGain.gain, this.duckDip, this.ctx.currentTime, 0.015);
+  }
+
   /** Paused: the music drops back and goes muffled, like it's in the next room. */
   setPaused(paused: boolean): void {
     this.paused = paused;
@@ -514,6 +528,7 @@ export class MusicPlayer {
     }
     this.duckGain.connect(this.out);
     if (this.running && !this.off) this.start(this.ctx.currentTime + 0.05);
+    this.scheduleRender(); // warming waited while nothing could be heard
   }
 
   get isDormant(): boolean {
@@ -523,7 +538,7 @@ export class MusicPlayer {
   dispose(): void {
     this.running = false;
     this.disposed = true;
-    if (this.renderTimer !== null) clearTimeout(this.renderTimer);
+    this.cancelWarm();
     this.renders.length = 0;
     for (const v of this.notes) v.dispose();
     this.notes.length = 0;
@@ -598,7 +613,7 @@ export class MusicPlayer {
   /**
    * The kit for a sound. The first time, it's rendered a take at a time
    * (up to ~10 ms each on a laptop, the shared crash aside): between frames
-   * when `urgent` (its sound plays now), else in idle time on the title;
+   * when `urgent` (its sound plays now), else in idle time (warmKits);
    * parts not in yet play on the live voices.
    */
   private kitFor(s: StationSound, urgent = true): Kit {
@@ -638,34 +653,68 @@ export class MusicPlayer {
     }
   }
 
-  /** Book the next take: a wanted kit's at once (between frames), a warming one in an idle slot. */
+  /**
+   * Book the next take, never two in a frame: a wanted kit's just after the
+   * next frame (at once where there are no frames, as offline), a warming
+   * one a gap after the last take, then a frame on, in an idle slot where
+   * there are any.
+   */
   private scheduleRender(): void {
     if (this.disposed || this.renders.length === 0) return;
     if (this.renders.some((r) => r.urgent)) {
-      if (this.renderTimer === null) this.renderTimer = setTimeout(this.renderNow, 0);
-    } else if (this.onTitle && !this.idleWaiting) {
-      this.idleWaiting = true;
-      if (typeof requestIdleCallback === 'function') requestIdleCallback(this.renderIdle, { timeout: 1000 });
-      else setTimeout(this.renderIdle, WARM_GAP);
+      // A slot booked for warming would land too soon after the wanted kit's last take: book afresh after it.
+      this.cancelWarm();
+      if (this.renderBooked) return;
+      this.renderBooked = true;
+      if (typeof requestAnimationFrame === 'function') requestAnimationFrame(this.afterFrame);
+      else setTimeout(this.renderNow, 0);
+    } else if (!this.dormant && this.warmTimer === undefined && this.warmFrame === undefined && this.warmIdle === undefined) {
+      this.warmTimer = setTimeout(this.warmGapOver, this.onTitle ? WARM_GAP_TITLE : WARM_GAP_PLAY);
     }
   }
 
+  private cancelWarm(): void {
+    clearTimeout(this.warmTimer);
+    if (this.warmFrame !== undefined) cancelAnimationFrame(this.warmFrame);
+    if (this.warmIdle !== undefined) cancelIdleCallback(this.warmIdle);
+    this.warmTimer = this.warmFrame = this.warmIdle = undefined;
+  }
+
+  private readonly afterFrame = (): void => void setTimeout(this.renderNow, 0);
+
+  private readonly warmGapOver = (): void => {
+    this.warmTimer = undefined;
+    if (typeof requestAnimationFrame === 'function') this.warmFrame = requestAnimationFrame(this.warmFrameOver);
+    else this.warmFrameOver();
+  };
+
+  private readonly warmFrameOver = (): void => {
+    this.warmFrame = undefined;
+    if (typeof requestIdleCallback === 'function') this.warmIdle = requestIdleCallback(this.renderIdle, { timeout: IDLE_TIMEOUT });
+    else this.warmTimer = setTimeout(this.renderIdle, 0);
+  };
+
   private readonly renderNow = (): void => {
-    this.renderTimer = null;
+    this.renderBooked = false;
+    if (this.disposed) return;
     const r = this.renders.find((x) => x.urgent);
     if (r) this.renderTake(r);
   };
 
   private readonly renderIdle = (): void => {
-    this.idleWaiting = false;
-    // A kit that's playing goes first (its timer is booked), and nothing warms once the game is on.
-    if (this.disposed || !this.onTitle || this.renders.some((r) => r.urgent)) return;
-    const r = this.renders[0];
-    if (r) this.renderTake(r);
+    this.warmTimer = this.warmIdle = undefined;
+    // A kit that's playing goes first (its take is booked); music nobody can hear (volume 0) warms nothing.
+    if (this.disposed || this.dormant || this.renders.some((r) => r.urgent)) return;
+    // The shared crash takes before anything else (the longest jobs, and every kit's), then the kits in order.
+    for (const r of this.renders) {
+      const i = r.jobs.findIndex((j) => j.part === 'crash');
+      if (i >= 0) return this.renderTake(r, i);
+    }
+    if (this.renders.length > 0) this.renderTake(this.renders[0]);
   };
 
-  private renderTake(r: KitRender): void {
-    const job = r.jobs.shift();
+  private renderTake(r: KitRender, i = 0): void {
+    const job = r.jobs.splice(i, 1)[0];
     if (job) {
       try {
         const data = job.run();
@@ -716,6 +765,17 @@ export class MusicPlayer {
     v.out.connect(dest);
     this.notes.push(v);
     return v;
+  }
+
+  /**
+   * A note's envelope stage, ahead of `v.out`. A cut fades `out` (cutAt,
+   * Voice.kill), and that must be the only automation there: a ramp still
+   * to come on `out` would take over from the fade and swell back up.
+   */
+  private env(v: Voice): GainNode {
+    const g = v.gain(0);
+    g.connect(v.out);
+    return g;
   }
 
   private play(e: NoteEvent, t: number, step: number): void {
@@ -772,18 +832,19 @@ export class MusicPlayer {
       this.sidechain(t);
       return;
     }
-    const v = this.voice(t, this.drums, 0);
+    const v = this.voice(t, this.drums);
+    const env = this.env(v);
     const o = v.osc('sine', s.kickTune * 3, t, t + s.kickDecay + 0.1);
     sweep(o.frequency, t, s.kickTune * 3.2, s.kickTune, 0.07);
     o.frequency.setTargetAtTime(s.kickTune * 0.85, t + 0.07, s.kickDecay);
-    o.connect(v.out);
-    const g = v.out.gain;
+    o.connect(env);
+    const g = env.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(vel * 0.7, t + 0.002);
     g.setTargetAtTime(0, t + 0.012, s.kickDecay * 0.3);
     const click = v.noise(this.bank.white, t, t + 0.02);
     const cg = v.gain();
-    v.chain(click, cg, this.drums);
+    v.chain(click, cg, v.out);
     perc(cg.gain, t, vel * 0.1, 0.0005, 0.003);
     this.sidechain(t);
   }
@@ -855,18 +916,19 @@ export class MusicPlayer {
   private hat(t: number, vel: number, open: boolean): void {
     if (this.hit(open ? 'openHat' : 'hat', t, vel, this.drums)) return;
     const shaker = this.sound.hat === 'shaker';
-    const v = this.voice(t, this.hatBus, 0);
+    const v = this.voice(t, this.hatBus);
+    const env = this.env(v);
     const n = v.noise(this.bank.white, t, t + (open ? 0.5 : 0.12));
     if (shaker) {
       const bp = v.filter('bandpass', 6500, 1.2);
-      v.chain(n, bp, v.out);
-      const g = v.out.gain;
+      v.chain(n, bp, env);
+      const g = env.gain;
       g.setValueAtTime(0, t);
       g.linearRampToValueAtTime(vel * 0.22, t + 0.012);
       g.setTargetAtTime(0, t + 0.014, 0.02);
     } else {
-      n.connect(v.out);
-      perc(v.out.gain, t, vel * (open ? 0.2 : 0.26), 0.0005, open ? 0.09 : 0.012);
+      n.connect(env);
+      perc(env.gain, t, vel * (open ? 0.2 : 0.26), 0.0005, open ? 0.09 : 0.012);
     }
   }
 
@@ -875,31 +937,34 @@ export class MusicPlayer {
     if (this.hit('perc', t, vel, this.drums, rim ? 0.3 : 0.15, this.sound.throws ?? 0)) return;
     if (rim) return this.rim(t, vel * 0.7);
     // A tuned bongo-ish knock.
-    const v = this.voice(t, this.drums, 0);
+    const v = this.voice(t, this.drums);
+    const env = this.env(v);
     const o = v.osc('sine', 330, t, t + 0.15);
     sweep(o.frequency, t, 360, 290, 0.05);
-    o.connect(v.out);
-    perc(v.out.gain, t, vel * 0.35, 0.001, 0.03);
+    o.connect(env);
+    perc(env.gain, t, vel * 0.35, 0.001, 0.03);
   }
 
   private crash(t: number): void {
     if (this.hit('crash', t, 1, this.drums, 0.4)) return;
-    const v = this.voice(t, this.drums, 0);
+    const v = this.voice(t, this.drums);
+    const env = this.env(v);
     const n = v.noise(this.bank.white, t, t + 2.4);
     const hp = v.filter('highpass', 4200, 0.5);
-    v.chain(n, hp, v.out);
-    perc(v.out.gain, t, 0.2, 0.002, 0.42);
+    v.chain(n, hp, env);
+    perc(env.gain, t, 0.2, 0.002, 0.42);
     const send = v.gain(0.4);
     v.chain(v.out, send, this.verbSend);
   }
 
   private riser(t: number, dur: number): void {
-    const v = this.voice(t, this.mix, 0);
+    const v = this.voice(t, this.mix);
+    const env = this.env(v);
     const n = v.noise(this.bank.pink, t, t + dur + 0.05);
     const bp = v.filter('bandpass', 300, 2.5);
     sweep(bp.frequency, t, 300, 5200, dur);
-    v.chain(n, bp, v.out);
-    const g = v.out.gain;
+    v.chain(n, bp, env);
+    const g = env.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(0.2, t + dur - 0.02);
     g.linearRampToValueAtTime(0, t + dur + 0.02);
@@ -979,11 +1044,12 @@ export class MusicPlayer {
   }
 
   private slapClick(t: number, level: number, ghost: boolean): void {
-    const v = this.voice(t, this.synth, 0);
+    const v = this.voice(t, this.synth);
+    const env = this.env(v);
     const n = v.noise(this.bank.white, t, t + 0.03);
     const bp = v.filter('bandpass', ghost ? 1800 : 3000, 0.9);
-    v.chain(n, bp, v.out);
-    perc(v.out.gain, t, level, 0.0005, ghost ? 0.008 : 0.005);
+    v.chain(n, bp, env);
+    perc(env.gain, t, level, 0.0005, ghost ? 0.008 : 0.005);
   }
 
   /**
@@ -992,7 +1058,8 @@ export class MusicPlayer {
    */
   private cowbell(t: number, note: number, level: number, verb: number): void {
     const hz = midiToHz(note);
-    const v = this.voice(t, this.arpBus, 0);
+    const v = this.voice(t, this.arpBus);
+    const env = this.env(v);
     const bp = v.filter('bandpass', hz * 2.2, 1.4);
     const lo = v.osc('square', hz, t, t + 0.6);
     lo.detune.value = -6;
@@ -1000,8 +1067,8 @@ export class MusicPlayer {
     hi.detune.value = 6;
     lo.connect(bp);
     hi.connect(bp);
-    bp.connect(v.out);
-    const g = v.out.gain;
+    bp.connect(env);
+    const g = env.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(level, t + 0.001);
     g.setTargetAtTime(level * 0.35, t + 0.001, 0.012);
@@ -1050,7 +1117,8 @@ export class MusicPlayer {
     const s = this.sound;
     if (s.pad === 'chip') return this.chipPad(t, notes, dur);
     const soft = s.pad === 'soft';
-    const v = this.voice(t, this.padLp, 0);
+    const v = this.voice(t, this.padLp);
+    const env = this.env(v);
     const attack = soft ? 0.6 : 0.3;
     const release = 0.6;
     const stop = t + dur + release * 4;
@@ -1060,11 +1128,11 @@ export class MusicPlayer {
       a.detune.value = -7;
       const b = v.osc(soft ? 'sine' : s.pad === 'dark' ? 'square' : 'sawtooth', hz, t, stop);
       b.detune.value = 7;
-      a.connect(v.out);
-      b.connect(v.out);
+      a.connect(env);
+      b.connect(env);
     }
     const level = (PAD_LEVEL * (soft ? 1.6 : 1)) / Math.sqrt(notes.length);
-    const g = v.out.gain;
+    const g = env.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(level, t + attack);
     g.setValueAtTime(level, t + dur);
@@ -1073,15 +1141,16 @@ export class MusicPlayer {
 
   /** One 25% pulse per chord note, an 8-bit envelope (a quick drop to a held level). */
   private chipPad(t: number, notes: readonly number[], dur: number): void {
-    const v = this.voice(t, this.padLp, 0);
+    const v = this.voice(t, this.padLp);
+    const env = this.env(v);
     const stop = t + dur + 0.3;
     for (const n of notes) {
       const o = v.osc('square', midiToHz(n), t, stop);
       o.setPeriodicWave(this.wave('pulse25'));
-      o.connect(v.out);
+      o.connect(env);
     }
     const level = (PAD_LEVEL * 1.2) / Math.sqrt(notes.length);
-    const g = v.out.gain;
+    const g = env.gain;
     g.setValueAtTime(0, t);
     g.linearRampToValueAtTime(level, t + 0.01);
     g.setTargetAtTime(level * 0.55, t + 0.02, 0.2);
@@ -1092,11 +1161,12 @@ export class MusicPlayer {
     const s = this.sound;
     if (s.keys === 'skank') {
       // Reggae skank: a short, bright chop high up; the echo picks it up.
-      const v = this.voice(t, this.keysBus, 0);
+      const v = this.voice(t, this.keysBus);
+      const env = this.env(v);
       const bp = v.filter('bandpass', 1900, 0.8);
       for (const n of notes) v.osc('square', midiToHz(n + 12), t, t + dur + 0.15).connect(bp);
-      bp.connect(v.out);
-      perc(v.out.gain, t, (KEYS_LEVEL * vel * 1.5) / Math.sqrt(notes.length), 0.002, Math.max(0.06, dur * 0.35));
+      bp.connect(env);
+      perc(env.gain, t, (KEYS_LEVEL * vel * 1.5) / Math.sqrt(notes.length), 0.002, Math.max(0.06, dur * 0.35));
       if (s.throws) {
         const send = v.gain(s.throws);
         v.chain(v.out, send, this.echoSend);
@@ -1105,31 +1175,33 @@ export class MusicPlayer {
     }
     if (s.keys === 'wah') {
       // Funk guitar chop through an auto-wah: the filter opens with the pick and falls back.
-      const v = this.voice(t, this.keysBus, 0);
+      const v = this.voice(t, this.keysBus);
+      const env = this.env(v);
       const wah = v.filter('bandpass', 450, 3);
       const f = wah.frequency;
       f.setValueAtTime(450, t);
       f.exponentialRampToValueAtTime(700 + 1900 * vel, t + 0.04);
       f.setTargetAtTime(550, t + 0.04, 0.08);
       for (const n of notes) v.osc('sawtooth', midiToHz(n), t, t + dur + 0.25).connect(wah);
-      wah.connect(v.out);
-      perc(v.out.gain, t, (KEYS_LEVEL * vel * 4) / Math.sqrt(notes.length), 0.003, Math.max(0.03, dur * 0.4));
+      wah.connect(env);
+      perc(env.gain, t, (KEYS_LEVEL * vel * 4) / Math.sqrt(notes.length), 0.003, Math.max(0.03, dur * 0.4));
       return;
     }
     if (s.keys === 'epiano') {
       // Electric piano: a sine body and a quick bell an octave up, with a slow fade.
-      const v = this.voice(t, this.keysBus, 0);
+      const v = this.voice(t, this.keysBus);
+      const env = this.env(v);
       const stop = t + dur + 1.2;
       for (const n of notes) {
         const hz = midiToHz(n);
-        v.osc('sine', hz, t, stop).connect(v.out);
+        v.osc('sine', hz, t, stop).connect(env);
         const bell = v.osc('sine', hz * 2, t, t + 0.5);
         const bg = v.gain();
-        v.chain(bell, bg, v.out);
+        v.chain(bell, bg, env);
         perc(bg.gain, t, 0.5, 0.002, 0.06);
       }
       const level = (KEYS_LEVEL * vel) / Math.sqrt(notes.length);
-      const g = v.out.gain;
+      const g = env.gain;
       g.setValueAtTime(0, t);
       g.linearRampToValueAtTime(level, t + 0.006);
       g.setTargetAtTime(level * 0.45, t + 0.01, 0.35);
@@ -1137,15 +1209,16 @@ export class MusicPlayer {
       return;
     }
     // Synth stab: a saw chord through a snapping filter.
-    const v = this.voice(t, this.keysBus, 0);
+    const v = this.voice(t, this.keysBus);
+    const env = this.env(v);
     const lp = v.filter('lowpass', 3000, 3);
     sweep(lp.frequency, t, 3200, 600, 0.12);
     for (const n of notes) {
       const o = v.osc('sawtooth', midiToHz(n + 12), t, t + dur + 0.3);
       o.connect(lp);
     }
-    lp.connect(v.out);
-    perc(v.out.gain, t, (KEYS_LEVEL * vel * 1.2) / Math.sqrt(notes.length), 0.003, Math.max(0.03, dur * 0.3));
+    lp.connect(env);
+    perc(env.gain, t, (KEYS_LEVEL * vel * 1.2) / Math.sqrt(notes.length), 0.003, Math.max(0.03, dur * 0.3));
     v.chain(v.out, this.echoSend);
   }
 
@@ -1154,41 +1227,44 @@ export class MusicPlayer {
     if (kind === 'cowbell') return this.cowbell(t, note, COWBELL_LEVEL * vel, 0);
     if (kind === 'pulse') {
       // Downbeats a fat square, the rest a thin buzz: the chip's duty-cycle colour.
-      const v = this.voice(t, this.arpBus, 0);
+      const v = this.voice(t, this.arpBus);
+      const env = this.env(v);
       const o = v.osc('square', midiToHz(note), t, t + 0.3);
       o.setPeriodicWave(this.wave(vel >= 1 ? 'pulse50' : 'pulse12'));
-      o.connect(v.out);
-      perc(v.out.gain, t, ARP_LEVEL * vel * (vel >= 1 ? 1.1 : 1.5), 0.001, 0.07);
+      o.connect(env);
+      perc(env.gain, t, ARP_LEVEL * vel * (vel >= 1 ? 1.1 : 1.5), 0.001, 0.07);
       return;
     }
     const pluck = kind === 'pluck';
-    const v = this.voice(t, this.arpBus, 0);
+    const v = this.voice(t, this.arpBus);
+    const env = this.env(v);
     const hz = midiToHz(note);
     const o = v.osc(pluck ? 'triangle' : 'square', hz, t, t + 0.4);
-    o.connect(v.out);
+    o.connect(env);
     if (pluck) {
       const o2 = v.osc('sine', hz * 2, t, t + 0.2);
       const g2 = v.gain();
-      v.chain(o2, g2, v.out);
+      v.chain(o2, g2, env);
       perc(g2.gain, t, 0.6, 0.001, 0.03);
     }
-    perc(v.out.gain, t, ARP_LEVEL * vel * (pluck ? 1.5 : 1), 0.002, pluck ? 0.09 : 0.06);
+    perc(env.gain, t, ARP_LEVEL * vel * (pluck ? 1.5 : 1), 0.002, pluck ? 0.09 : 0.06);
   }
 
   /** Radio static between stations. */
   private tuneStatic(now: number): void {
-    const v = new Voice(this.ctx, this.bank, now, 0);
+    const v = new Voice(this.ctx, this.bank, now);
     v.out.connect(this.duckGain);
     this.notes.push(v);
+    const env = this.env(v);
     const n = v.noise(this.bank.white, now, now + 0.4);
     const bp = v.filter('bandpass', 900, 3);
     sweep(bp.frequency, now, 600, 3400, 0.3);
-    v.chain(n, bp, v.out);
+    v.chain(n, bp, env);
     const whistle = v.osc('sine', 1800, now, now + 0.35);
     sweep(whistle.frequency, now, 2400, 900, 0.3);
     const wg = v.gain(0.05);
-    v.chain(whistle, wg, v.out);
-    const g = v.out.gain;
+    v.chain(whistle, wg, env);
+    const g = env.gain;
     g.setValueAtTime(0, now);
     g.linearRampToValueAtTime(0.16, now + 0.03);
     g.setValueAtTime(0.16, now + 0.24);

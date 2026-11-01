@@ -229,15 +229,15 @@ still get the offline shell.
    [`music-reactive`]. `tools/tune/music.mjs`, `stings.mjs` and
    `reactive.mjs` render it all offline to MP3 (seeded, repeatable).
    Reviewed adversarially (36 verified findings, all fixed, each with a
-   test); 955 tests; smoke test passes. **For the device pass:** listen to
+   test); 964 tests; smoke test passes. **For the device pass:** listen to
    every station, the theme, the chase and the stings on the phone (nothing
    has been heard by a person yet); walk NEON MILE past a hangout; check
    the levels on foot (cars and shops sit ~14 dB under the car radio, the
    boombox ~4 dB) and that the chase card fits; watch the Perf overlay
-   while walking past shops (kits now warm behind the title; ~7 MB of drum
-   buffers per session). Still kept for later: a living radio (DJ, idents,
-   ads) [`music-radio-life`], recorded tracks [`music-recorded`], a police
-   scanner station (with [`police-chatter`]).
+   while walking past shops (kits now warm from the unlock, gently in play;
+   ~7 MB of drum buffers per session). Still kept for later: a living
+   radio (DJ, idents, ads) [`music-radio-life`], recorded tracks
+   [`music-recorded`], a police scanner station (with [`police-chatter`]).
 8. **Ideas:** district names + an area card first [`districts-landmarks`
    phase A], since chatter and gang turf need them; then police radio
    chatter [`police-chatter`]; missions after the eighth [`missions-store`]: driven

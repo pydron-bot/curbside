@@ -61,7 +61,7 @@ export async function renderOffline(page, { setup, modules, args = {}, seconds, 
       for (const [k, url] of Object.entries(urls)) mods[k] = await import(url);
       globalThis.__seed(seed);
       const ctx = new OfflineAudioContext(2, Math.ceil(rate * seconds), rate);
-      /** Render `sounds`' drum kits (and any already asked for), a take per task, and wait until every part of every kit is in. */
+      /** Render `sounds`' drum kits (and any already asked for), a take a frame, and wait until every part of every kit is in. */
       const warmKits = async (music, sounds = []) => {
         for (const s of sounds) music.warmKit(s);
         if (!(music.kits instanceof Map)) throw new Error('warmKits: MusicPlayer has no `kits` map any more; update audioLib.mjs');

@@ -7,7 +7,8 @@
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GameAudio, createAudioFrame, createCarSound, type AudioFrame, type FireSource } from '../src/audio/gameAudio';
-import type { MusicPlayer } from '../src/audio/music/musicPlayer';
+import { CHASE } from '../src/audio/music/chase';
+import { MusicPlayer } from '../src/audio/music/musicPlayer';
 import { STATIONS } from '../src/audio/music/stations';
 import * as sfx from '../src/audio/sfx';
 import { BOOMBOX_STATION, emitterGain, parkedStation } from '../src/audio/streetMusic';
@@ -585,6 +586,30 @@ describe('GameAudio: the car radio', () => {
     g.audio.countIn(0);
     expect(dropIn).toHaveBeenCalledTimes(1);
   });
+
+  for (const over of ['the chase on foot', 'a boombox on foot', 'the radio in a car']) {
+    it(`GO lets go of the count-in's duck at once, whatever drops in (${over})`, () => {
+      const g = game();
+      g.walk();
+      g.run(3);
+      if (over === 'the chase on foot') g.emit({ type: 'wanted', level: 3, prev: 0, reason: 'crime' });
+      else if (over === 'a boombox on foot') g.emit({ type: 'boombox', id: 'vipers-0', x: QUIET.x + 3, z: QUIET.z, on: true });
+      else g.drive();
+      g.run(6);
+      if (over === 'the chase on foot') expect(g.music.playingScore).toBe(true);
+      if (over === 'a boombox on foot') expect(g.music.station).toBe(STATIONS[BOOMBOX_STATION]);
+      expect(g.heard()).toBeGreaterThan(0.3);
+      const duck = (g.music as unknown as { duckGain: { gain: Param } }).duckGain.gain;
+      for (const n of [3, 2, 1]) {
+        g.audio.countIn(n);
+        g.run(1);
+      }
+      const go = g.clock.currentTime;
+      expect(duck.at(go)).toBeLessThan(0.35); // held down under the count...
+      g.audio.countIn(0);
+      expect(duck.at(go + 0.1)).toBeGreaterThan(0.95); // ...and up again on GO, not ~0.5 s later
+    });
+  }
 });
 
 describe('GameAudio: parked cars on foot', () => {
@@ -609,5 +634,21 @@ describe('GameAudio: parked cars on foot', () => {
     car.sim.x += 0.6;
     g.run(2, () => expect(g.heard()).toBeGreaterThan(level * 0.6));
     expect(g.music.station).toBe(STATIONS[station]);
+  });
+});
+
+describe('GameAudio: drum kits', () => {
+  it("queues every kit to warm as audio unlocks, in play too (PLAY was the first tap), the chase's next after the radio's", () => {
+    const warm = vi.spyOn(MusicPlayer.prototype, 'warmKits');
+    try {
+      const g = game(); // built in 'game': nothing of the title
+      expect(g.music.mode).toBe('game');
+      expect(warm).toHaveBeenCalledTimes(1);
+      const sounds = warm.mock.calls[0][0];
+      expect(sounds[0]).toBe(CHASE.station.sound);
+      expect(new Set(sounds)).toEqual(new Set([CHASE.station.sound, ...STATIONS.map((s) => s.sound)]));
+    } finally {
+      warm.mockRestore();
+    }
   });
 });

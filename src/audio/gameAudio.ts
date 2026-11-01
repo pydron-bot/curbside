@@ -491,6 +491,8 @@ export class GameAudio {
     // Play takes over from here; the next frames ask for the same level, so the drop sticks.
     this.chaos.add(GO_ENERGY);
     this.chaos.step(0);
+    // GO lets go of the count's duck whatever drops in: on foot too, under the chase or the street.
+    music.unduck(v.t);
     // On foot the street plays on: a shop's radio doesn't jump to its chorus for you.
     if (this.walking) return;
     const level = this.autoIntensity ? Math.min(MAX_INTENSITY, (this.inCar ? 1 : 0) + this.chaos.level) : 0;
@@ -971,8 +973,8 @@ export class GameAudio {
     };
     if (this.chase.phase === 'on') this.music.setScore(CHASE);
     if (this.musicMode !== 'off' && !this.dead) this.music.setMode(this.musicMode);
-    // Every kit the street or the chase may want, rendered behind the title rather than mid-play.
-    this.music.warmKits([...STATIONS, CHASE.station].map((s) => s.sound));
+    // Every kit the street or the chase may want, warmed from now on in idle time (the chase's right after the radio's), not mid-play.
+    this.music.warmKits([CHASE.station, ...STATIONS].map((s) => s.sound));
     this.ambient = new AmbientBed(ctx, bank, this.worldIn, ctx.currentTime);
     if (this.paused) {
       this.worldGate.gain.value = 0;
