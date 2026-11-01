@@ -2,14 +2,16 @@
  * Pigeons: little flocks pecking about plazas, parks and pavements near the
  * player that scatter when a car comes through, someone runs at them, you
  * walk right up, or a gun goes off. Each bird takes off on its own beat,
- * flaps up and away from whatever spooked it, and dwindles out of sight;
- * new flocks settle somewhere out of view. Pure ambient life: nothing in
+ * flaps up and away from whatever spooked it, and dwindles out of sight,
+ * or (most flocks) wheels round and glides down again a little way off,
+ * away from the scare; new flocks settle somewhere out of view. Pure ambient life: nothing in
  * the game reacts to them. No three.js (render/pigeonMesh.ts draws them).
  */
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type BlockKind, type Rect } from '../world/city';
 import { len2 } from '../core/len';
 
-export type PigeonState = 'ground' | 'fly';
+/** Pecking about, flying, or gliding back down to land. */
+export type PigeonState = 'ground' | 'fly' | 'land';
 
 export interface Pigeon {
   x: number;
@@ -39,6 +41,9 @@ export interface Pigeon {
   cruise: number;
   /** Drawn size 0..1 (shrinks to nothing as it flies off). */
   scale: number;
+  /** Where it's coming down (a flock that lands again). */
+  tx: number;
+  tz: number;
 }
 
 export interface Flock {
@@ -46,6 +51,10 @@ export interface Flock {
   z: number;
   birds: Pigeon[];
   spooked: boolean;
+  /** Spooked, but coming down again at (landX, landZ) rather than flying off. */
+  returning: boolean;
+  landX: number;
+  landZ: number;
 }
 
 /** Something that can spook a flock this step. */
@@ -100,6 +109,11 @@ const FLY = [5, 7.5] as const;
 /** In the air this long they shrink out of sight over FADE seconds. */
 const FLIGHT = 3.2;
 const FADE = 0.7;
+/** Share of spooked flocks that come down again; how far off (away from the scare), m; how long up first, s; gliding in, m/s. */
+export const RETURN_SHARE = 0.6;
+const RETURN_DIST = [14, 26] as const;
+const RETURN_AFTER = [1.8, 2.6] as const;
+const LAND_SPEED = 5.5;
 /** One wing beat (the Flap clip), s. */
 export const FLAP_SECONDS = 0.25;
 /** Pecking about: walking pace, m/s; how long a peck takes, s. */
@@ -118,6 +132,8 @@ export class Pigeons {
   constructor(
     private readonly ground: PigeonGround,
     private readonly rand: () => number,
+    /** Share of spooked flocks that land again (the rest fly off for good). */
+    private readonly returnShare = RETURN_SHARE,
   ) {}
 
   /** Every bird alive (flock or leaving), for drawing. Fills `out` (cleared first). */
@@ -173,7 +189,15 @@ export class Pigeons {
     for (let i = this.flocks.length - 1; i >= 0; i--) {
       const f = this.flocks[i];
       const far = len2(f.x - w.x, f.z - w.z) > FLOCK_DROP && !inRect(f.x, f.z, w.view, 4);
-      if (f.spooked && allFlying(f)) {
+      if (f.returning && landed(f)) {
+        // Down again: a flock like any other (it can be spooked again).
+        f.spooked = false;
+        f.returning = false;
+        f.x = f.landX;
+        f.z = f.landZ;
+        for (const b of f.birds) b.airborne = 0;
+      }
+      if (f.spooked && !f.returning && allFlying(f)) {
         for (const b of f.birds) this.leaving.push(b);
         this.flocks.splice(i, 1);
       } else if (far) {
@@ -191,7 +215,31 @@ export class Pigeons {
     f.spooked = true;
     const r = this.rand;
     const away = Math.atan2(f.x - fromX, f.z - fromZ);
+    // Most flocks come down again a little way off, away from the scare (somewhere they could settle).
+    f.returning = false;
+    let open = false;
+    let alongX = true;
+    if (r() < this.returnShare) {
+      const d = RETURN_DIST[0] + r() * (RETURN_DIST[1] - RETURN_DIST[0]);
+      const spot = this.spotNear(f.x + Math.sin(away) * d, f.z + Math.cos(away) * d);
+      if (spot && !this.flocks.some((o) => o !== f && len2(o.x - spot.x, o.z - spot.z) < 10)) {
+        f.returning = true;
+        f.landX = spot.x;
+        f.landZ = spot.z;
+        open = spot.open;
+        alongX = spot.alongX;
+      }
+    }
     for (const b of f.birds) {
+      b.airborne = 0;
+      if (f.returning) {
+        const ox = (r() * 2 - 1) * (open ? 2.2 : 1.6);
+        const oz = (r() * 2 - 1) * (open ? 2.2 : 0.5);
+        b.tx = f.landX + (alongX ? ox : oz);
+        b.tz = f.landZ + (alongX ? oz : ox);
+        // Up for a while first (the airborne clock runs from take-off), each on its own beat.
+        b.airborne = -(RETURN_AFTER[0] + r() * (RETURN_AFTER[1] - RETURN_AFTER[0]));
+      }
       b.delay = r() * TAKEOFF_SPREAD;
       // Away from the scare, fanning out.
       const h = away + (r() * 2 - 1) * 0.9;
@@ -206,7 +254,8 @@ export class Pigeons {
   private stepBird(b: Pigeon, f: Flock | null, dt: number): void {
     const r = this.rand;
     if (b.state === 'ground') {
-      if (f?.spooked && (b.delay -= dt) <= 0) {
+      // (A bird already down again from a returning flight waits for the rest.)
+      if (f?.spooked && b.airborne <= 0 && (b.delay -= dt) <= 0) {
         b.state = 'fly';
         b.heading = Math.atan2(b.vx, b.vz);
         b.peck = 0;
@@ -230,8 +279,8 @@ export class Pigeons {
       b.z += Math.cos(b.heading) * pace * dt;
       // Stay with the flock.
       if (f) {
-        const dx = b.x - f.x;
-        const dz = b.z - f.z;
+        const dx = b.x - (f.returning ? f.landX : f.x);
+        const dz = b.z - (f.returning ? f.landZ : f.z);
         if (dx * dx + dz * dz > 6.25) b.heading = Math.atan2(-dx, -dz);
       }
       b.y = walking ? Math.abs(Math.sin(b.idle * 18)) * 0.03 : 0;
@@ -239,8 +288,16 @@ export class Pigeons {
       b.flap = (b.flap + dt / FLAP_SECONDS) % 1;
       return;
     }
-    // Flying: climb to a cruising height, level off, flap, then dwindle away.
+    if (b.state === 'land') {
+      this.glide(b, dt);
+      return;
+    }
+    // Flying: climb to a cruising height, level off, flap, then dwindle away (or wheel round to land).
     b.airborne += dt;
+    if (f?.returning && b.airborne >= 0) {
+      b.state = 'land';
+      return;
+    }
     b.spread = Math.min(1, b.spread + dt * 10);
     if (b.y > b.cruise) b.vy += (0.3 - b.vy) * Math.min(1, dt * 2);
     b.x += b.vx * dt;
@@ -251,6 +308,39 @@ export class Pigeons {
     // Beat faster climbing out, then a little slower.
     b.flap = (b.flap + (dt / FLAP_SECONDS) * (b.vy > 1 ? 1.15 : 0.85)) % 1;
     if (b.airborne > FLIGHT) b.scale = Math.max(0, b.scale - dt / FADE);
+  }
+
+  /** Gliding in to its landing spot: slowing as it nears, coming down to arrive on the ground. */
+  private glide(b: Pigeon, dt: number): void {
+    const dx = b.tx - b.x;
+    const dz = b.tz - b.z;
+    const d = len2(dx, dz);
+    b.airborne += dt;
+    if (d < 0.25 || (b.y <= 0.05 && d < 1.5)) {
+      b.state = 'ground';
+      b.x = d < 1.5 ? b.tx : b.x;
+      b.z = d < 1.5 ? b.tz : b.z;
+      b.y = 0;
+      b.vx = b.vy = b.vz = 0;
+      b.pitch = 0;
+      b.peck = 0;
+      b.idle = 0.3 + this.rand();
+      // Still counts as having been up (landed() reads it).
+      b.airborne = Math.max(b.airborne, 0.01);
+      return;
+    }
+    const sp = Math.min(LAND_SPEED, 0.8 + d * 1.2);
+    b.vx = (dx / d) * sp;
+    b.vz = (dz / d) * sp;
+    b.vy = -b.y / Math.max(0.25, d / sp);
+    b.x += b.vx * dt;
+    b.y = Math.max(0, b.y + b.vy * dt);
+    b.z += b.vz * dt;
+    b.heading = Math.atan2(b.vx, b.vz);
+    b.pitch = -Math.atan2(b.vy, sp) * 0.5;
+    // Wings out to brake, folding as it touches down.
+    b.spread = Math.min(1, 0.35 + b.y * 0.4);
+    b.flap = (b.flap + (dt / FLAP_SECONDS) * 0.7) % 1;
   }
 
   /** A new flock somewhere near the action, out of view, on open ground or pavement. */
@@ -264,7 +354,7 @@ export class Pigeons {
       const spot = this.spotNear(tx, tz);
       if (!spot || inRect(spot.x, spot.z, w.view, 4)) continue;
       if (this.flocks.some((f) => len2(f.x - spot.x, f.z - spot.z) < 15)) continue;
-      const flock: Flock = { x: spot.x, z: spot.z, birds: [], spooked: false };
+      const flock: Flock = { x: spot.x, z: spot.z, birds: [], spooked: false, returning: false, landX: 0, landZ: 0 };
       const n = FLOCK_SIZE[0] + Math.floor(r() * (FLOCK_SIZE[1] - FLOCK_SIZE[0] + 1));
       for (let i = 0; i < n; i++) {
         const b = this.spare.pop() ?? newBird();
@@ -289,6 +379,8 @@ export class Pigeons {
           airborne: 0,
           cruise: CRUISE[0],
           scale: 1,
+          tx: 0,
+          tz: 0,
         } satisfies Pigeon);
         flock.birds.push(b);
       }
@@ -340,7 +432,13 @@ export class Pigeons {
 }
 
 function newBird(): Pigeon {
-  return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, state: 'ground', delay: 0, flap: 0, spread: 0, pitch: 0, peck: 0, idle: 0, airborne: 0, cruise: CRUISE[0], scale: 1 };
+  return { x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0, heading: 0, state: 'ground', delay: 0, flap: 0, spread: 0, pitch: 0, peck: 0, idle: 0, airborne: 0, cruise: CRUISE[0], scale: 1, tx: 0, tz: 0 };
+}
+
+/** Every bird of a returning flock has been up and is down again. */
+function landed(f: Flock): boolean {
+  for (const b of f.birds) if (b.state !== 'ground' || b.airborne <= 0) return false;
+  return true;
 }
 
 function allFlying(f: Flock): boolean {
