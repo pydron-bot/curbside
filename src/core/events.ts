@@ -238,7 +238,10 @@ export type StreetWhat =
   | 'busker'
   | 'mugging'
   | 'bagReturned'
-  | 'witnessCall';
+  | 'witnessCall'
+  // Traffic: two cars collided on their own, a truck double-parked in the lane.
+  | 'accident'
+  | 'doublePark';
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;

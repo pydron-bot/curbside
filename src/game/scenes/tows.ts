@@ -163,7 +163,8 @@ export class Tows implements Scene, SceneDriver {
       if (isBike(v.archetype) || (v.sim.body?.reach ?? 2.4) > MAX_REACH || life.d.keep(v) || this.towing(v)) continue;
       // The car the player just left stays put for them, unless it's a wreck.
       if (v === p.lastDriven && !v.damage.wrecked) continue;
-      look.wrecked = v.damage.wrecked;
+      // A crash left in the lane (scenes/accidents.ts, a dumped getaway car) goes first, like a wreck.
+      look.wrecked = v.damage.wrecked || v.towable === true;
       look.burning = v.damage.burning || (fires?.burningNear(v.sim.x, v.sim.z, 6) ?? false);
       look.parked = v.parked === true;
       look.distance = life.distance(v.sim.x, v.sim.z);

@@ -74,6 +74,10 @@ import { Witnesses } from './scenes/witnesses';
 import { FireCrews } from './scenes/fireCrews';
 import { Tows } from './scenes/tows';
 import { CarAlarms } from './scenes/alarms';
+import { Chases } from './scenes/chases';
+import { StreetRaces } from './scenes/streetRaces';
+import { Accidents } from './scenes/accidents';
+import { DoubleParking } from './scenes/doubleParking';
 import { len2 } from '../core/len';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
@@ -131,12 +135,14 @@ export interface CityLifeDeps {
   focus(): { x: number; z: number; vx: number; vz: number };
   /** The hour, the rain and the nightlife (game/cityMood.ts; main.ts keeps it up to date). */
   mood?: CityMood;
-  /** The hour of the day, 0–24 (the food carts' rushes; 13 if left out). */
+  /** The game hour, 0..24 (render/timeOfDay.ts): the food carts' rushes (13 if left out), street races mostly at night. */
   hour?(): number;
   /** Pay the player a small reward for a good turn (a bag handed back), with its feed label. */
   reward?(cash: number, label: string): void;
   /** A witness's call about the player's `crime` got through (heat.called). */
   callIn?(crime: Crime): void;
+  /** Hand a scene's officer to the police (the player turned on them): normal heat rules from there. */
+  enlist?(officer: CrowdPed): void;
 }
 
 /** A scene's view of the director. */
@@ -171,6 +177,10 @@ export class CityLife {
   readonly turfWar: TurfWar;
   /** Heat's witnesses hook (scenes/witnesses.ts). */
   readonly witnesses: Witnesses;
+  readonly chases: Chases;
+  readonly races: StreetRaces;
+  readonly accidents: Accidents;
+  readonly doubleParking: DoubleParking;
   readonly scenes: Scene[] = [];
   /** Vehicles the scenes brought in (ambient): retired here once far and unseen. */
   readonly owned: Vehicle[] = [];
@@ -210,6 +220,10 @@ export class CityLife {
     this.add(new FireCrews(this));
     this.add(new Tows(this));
     this.add(new CarAlarms(this));
+    this.chases = this.add(new Chases(this));
+    this.races = this.add(new StreetRaces(this, this.chases));
+    this.accidents = this.add(new Accidents(this));
+    this.doubleParking = this.add(new DoubleParking(this));
     this.add(new Pavement(this));
   }
 

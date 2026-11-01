@@ -359,6 +359,27 @@ still get the offline shell.
    objects starting scuffles (no event carries who a knocked prop hit),
    people carrying a visible bag, a busker's music.
 
+13. **City traffic: done 2026-11-01** on `claude/city-traffic` (README
+   *City life*, *Traffic scenes*). Ambient police chases (car, scooter or
+   on foot; arrested, taken down for the ambulance, or escaped) that never
+   touch the player's heat (attack the officers and the usual crimes
+   apply; any star breaks the chase off and its officers join the police
+   as strays); night-weighted street races with nitro, sometimes chased;
+   rear-end accidents (smoke, hazards, an argument, sometimes a fight, a
+   patrol car breaks it up; the cars stay flagged `Vehicle.towable` for
+   the tow-truck stream); double-parked delivery vans and garbage trucks
+   with a queue that honks and goes round. One incident (chase, race,
+   accident) at a time; a forced scene costs at most +9 draw calls on the
+   iPhone profile; smoke OK (56 / 56 iPhone, 68 desktop). Merged with the
+   others: races read the mood's nightlife where the player is
+   (`nightlife()` in `scenes/streetRaces.ts`), and tows take `towable`
+   crashes first.
+   **For the device pass:** are the sirens of a chase you're not in too
+   much; does a cuffed suspect read at phone scale; are races too fast to
+   follow on foot; how often the queue behind a truck blocks your own run.
+   Not done: a proper motorcycle model (the scooter stands in); ambient
+   police cars aren't on the radar.
+
 Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
 launch ramp landing at a corner checkpoint (is that a feature?).
 

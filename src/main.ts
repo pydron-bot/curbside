@@ -114,6 +114,7 @@ import { CityMood } from './game/cityMood';
 import { atmosphereLook } from './render/atmosphereLook';
 import { peopleLook } from './render/peopleLook';
 import { alarmLook, fireLook, towLook } from './render/emergencyLook';
+import { RaceLook, RoadsideLook } from './render/trafficLook';
 import { mountRadioToast } from './ui/radioToast';
 import { publicUrl } from './core/paths';
 import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
@@ -437,6 +438,7 @@ const cityLife = new CityLife({
   hour: () => look.time.hour,
   reward: (cash, label) => progress.pay(cash, 'street', label),
   callIn: (crime) => heat.called(crime),
+  enlist: (officer) => heat.police.strays.push(officer),
 });
 maintainCity = (seed) => cityLife.maintain(seed);
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
@@ -446,6 +448,8 @@ cityLook.add(peopleLook(cityLife));
 cityLook.add(fireLook(cityLife));
 cityLook.add(towLook(cityLife));
 cityLook.add(alarmLook(cityLife));
+cityLook.add(new RaceLook(cityLife.races));
+cityLook.add(new RoadsideLook(cityLife.accidents, cityLife.doubleParking));
 const cityView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 // Everyone's place, pose and clip each frame (and the player ducking into cars, cheering wins).
 const people = new PeoplePose({
