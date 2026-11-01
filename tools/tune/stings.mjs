@@ -48,7 +48,7 @@ try {
       args: { name, key, index, radio, major },
       seconds,
       window: name === 'theme' ? 5 : 0.5,
-      setup: async (ctx, { player, synth, sfx, stings, themes, stations }, { name, key, index, radio, major }) => {
+      setup: async (ctx, { player, synth, sfx, stings, themes, stations }, { name, key, index, radio, major }, { warmKits }) => {
         const bank = new synth.NoiseBank(ctx);
         const impulse = synth.makeImpulse(ctx);
         const log = [];
@@ -62,7 +62,7 @@ try {
         musicBus.connect(ctx.destination);
         // A player for the theme, the radio, or just the radio's drum kit the stings borrow.
         const music = new player.MusicPlayer(ctx, bank, musicBus, impulse, station);
-        await new Promise((r) => setTimeout(r, 2500)); // the kit renders a take per task
+        await warmKits(music, name === 'theme' ? [themes.THEME.station.sound] : []);
         const kit = (part) => music.kitTake(part);
         const voices = [];
         const voice = (at, level) => {

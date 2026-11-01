@@ -71,6 +71,12 @@ body:not([data-scene='play']) #radio {
   --radio-b: #4fb8ff;
 }
 
+/* The chase: the lights of the cars behind you. */
+#radio[data-station='chase'] {
+  --radio-a: #ff3b4f;
+  --radio-b: #3b8bff;
+}
+
 .radio-eq {
   display: flex;
   align-items: flex-end;

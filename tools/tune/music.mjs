@@ -27,12 +27,12 @@ try {
       modules: { player: 'src/audio/music/musicPlayer.ts', synth: 'src/audio/synth.ts', stations: 'src/audio/music/stations.ts' },
       args: { id, script, mode },
       seconds,
-      setup: async (ctx, { player, synth, stations }, { id, script, mode }) => {
+      setup: async (ctx, { player, synth, stations }, { id, script, mode }, { warmKits }) => {
         const station = stations.STATIONS.find((s) => s.id === id);
         if (!station) throw new Error(`no station '${id}' (have ${stations.STATIONS.map((s) => s.id).join(', ')})`);
         const music = new player.MusicPlayer(ctx, new synth.NoiseBank(ctx), ctx.destination, synth.makeImpulse(ctx), station);
-        // The drum kit renders a take per task (setTimeout): let it finish so the kit, not the live voices, plays.
-        await new Promise((r) => setTimeout(r, 2500));
+        // The drum kit renders a take per task: all of it in first, so the kit (not the live voices) plays every time.
+        await warmKits(music, [station.sound]);
         const log = [];
         music.onSong = (song) => log.push(`${ctx.currentTime.toFixed(1)}s  ${song.title} (${song.artist})`);
         const level = (t) => script.reduce((l, [s, v]) => (t >= s ? v : l), script[0][1]);

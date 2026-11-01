@@ -40,10 +40,10 @@ import * as sfx from './sfx';
 import {
   Boomboxes,
   EMITTERS,
+  ParkedRadios,
   ShopEmitters,
   StreetMusic,
   isParked,
-  parkedStation,
   type ShopBuilding,
   type ShopPlan,
   type StreetCar,
@@ -235,10 +235,13 @@ export class GameAudio {
   private readonly street = new StreetMusic();
   private shops: ShopEmitters | null = null;
   private readonly boomboxes = new Boomboxes();
+  private readonly parked = new ParkedRadios();
   private streetIn = 0;
   private streetDt = 0;
-  /** The street chain is open (the radio in your ears). */
-  private chainOpen = true;
+  /** The street chain: 'open' (the radio, the chase or the theme in your ears), 'street' (on foot), 'shut' (silent: WASTED, the chase's last bar on foot). */
+  private chainState: 'open' | 'street' | 'shut' = 'open';
+  /** WASTED or BUSTED is over: the respawn sting waits for the next frame, to be in the key of the music that comes back. */
+  private respawnSting = false;
   /** Music volume at zero: the music sleeps whatever else happens. */
   private volumeSilent = false;
   /** When the chase plays instead of the radio. */
@@ -259,6 +262,9 @@ export class GameAudio {
   private readonly chaos = new ChaosMeter();
   private readonly stationListeners: Array<(s: Station) => void> = [];
   private readonly songListeners: Array<(song: Song, s: Station) => void> = [];
+  private readonly scoreListeners: Array<(playing: boolean) => void> = [];
+  /** The chase as the listeners last heard of it. */
+  private scoreHeard = false;
   private readonly cleanups: Array<() => void> = [];
   /** The world muffle as one merged state (a hurt can't cut short a blast's or WASTED's). */
   private readonly muffleDip = new Dip(OPEN);
@@ -360,6 +366,7 @@ export class GameAudio {
     this.updateAmbience(f.car !== null, dt, now);
     this.updateIntensity(f.car, dt);
     this.updateMusicRoute(f, dt, now);
+    if (this.respawnSting) this.playRespawnSting();
   }
 
   /** The city's shopfronts that play music on foot (planned once, at wiring time). */
@@ -464,7 +471,8 @@ export class GameAudio {
    * The 3-2-1-GO before a run (Chaos Run, races, frenzies): call with each
    * number as it shows (3, 2, 1), then 0 on GO. The counts are hits that
    * build over a riser in the music's key with the radio held down under
-   * them; GO lands a big hit and the radio drops back in hard on a chorus.
+   * them; GO lands a big hit and, in a car, the radio drops back in hard on
+   * a chorus (on foot the street plays on: it isn't the radio in your ears).
    */
   countIn(n: number): void {
     const ctx = this.ctx;
@@ -483,6 +491,8 @@ export class GameAudio {
     // Play takes over from here; the next frames ask for the same level, so the drop sticks.
     this.chaos.add(GO_ENERGY);
     this.chaos.step(0);
+    // On foot the street plays on: a shop's radio doesn't jump to its chorus for you.
+    if (this.walking) return;
     const level = this.autoIntensity ? Math.min(MAX_INTENSITY, (this.inCar ? 1 : 0) + this.chaos.level) : 0;
     music.dropIn(v.t, Math.max(this.intensityFloor, level));
     music.pump(ctx.currentTime);
@@ -531,7 +541,7 @@ export class GameAudio {
     this.intensityFloor = clamp(level, 0, MAX_INTENSITY);
   }
 
-  /** 'game' plays the adaptive soundtrack, 'menu' a sparse title arrangement, 'off' fades it out. */
+  /** 'game' plays the adaptive soundtrack, 'menu' the title theme, 'off' fades it out. */
   setMusicMode(mode: MusicMode): void {
     this.musicMode = mode;
     if (!this.dead) this.music?.setMode(mode);
@@ -568,6 +578,20 @@ export class GameAudio {
     return () => {
       const i = this.songListeners.indexOf(fn);
       if (i >= 0) this.songListeners.splice(i, 1);
+    };
+  }
+
+  /** The chase is what plays instead of the radio (its outro included). */
+  get playingScore(): boolean {
+    return this.music?.playingScore ?? false;
+  }
+
+  /** The chase came in (true, as its first bar is booked) or gave way to the radio (false). */
+  onScoreChange(fn: (playing: boolean) => void): () => void {
+    this.scoreListeners.push(fn);
+    return () => {
+      const i = this.scoreListeners.indexOf(fn);
+      if (i >= 0) this.scoreListeners.splice(i, 1);
     };
   }
 
@@ -610,6 +634,8 @@ export class GameAudio {
       case 'carjack':
         return this.oneShot('door', e, FALLOFF.near, 0.85, 0.15, sfx.carjack, 0.4);
       case 'enterVehicle':
+        // Back on your station before anything keyed to it (a run's count-in follows at once).
+        this.syncRadio();
         return this.oneShot('door', null, FALLOFF.near, 0.8, 0.1, (v) => sfx.door(v, true));
       case 'exitVehicle':
         return this.oneShot('door', null, FALLOFF.near, 0.65, 0.1, (v) => sfx.door(v, true));
@@ -934,6 +960,11 @@ export class GameAudio {
     this.music = new MusicPlayer(ctx, bank, this.streetChain.input, impulse, STATIONS[this.stationIndex]);
     this.music.setTheme(THEME);
     this.music.onSong = (song, station) => {
+      const score = this.music!.playingScore;
+      if (score !== this.scoreHeard) {
+        this.scoreHeard = score;
+        for (const fn of this.scoreListeners) fn(score);
+      }
       // Only the car radio's station gets NOW PLAYING (not the title theme, the chase or another station heard on foot).
       if (station !== STATIONS[this.stationIndex]) return;
       for (const fn of this.songListeners) fn(song, station);
@@ -1230,7 +1261,7 @@ export class GameAudio {
   private onPlayerDied(): void {
     this.dead = true;
     this.chaos.reset();
-    if (!this.ctx || !this.bank) return;
+    if (!this.ctx || !this.bank) return this.endChase();
     const now = this.ctx.currentTime;
     const v = this.voice(null, FALLOFF.near, STING_LEVELS.wasted, 0, 0, 'ui');
     if (v) {
@@ -1254,7 +1285,7 @@ export class GameAudio {
   private onBusted(): void {
     this.dead = true;
     this.chaos.reset();
-    if (!this.ctx || !this.bank) return;
+    if (!this.ctx || !this.bank) return this.endChase();
     const now = this.ctx.currentTime;
     const v = this.voice(null, FALLOFF.near, STING_LEVELS.busted, 0.1, 0, 'ui');
     if (v) {
@@ -1289,12 +1320,18 @@ export class GameAudio {
     const now = this.ctx.currentTime;
     this.muffleDip.release(now, 0.9);
     automateDip(this.worldMuffle.frequency, this.muffleDip, now, 0.01);
-    const v = fromDeath ? this.voice(null, FALLOFF.near, 0.9, 0, 0, 'ui') : null;
-    if (v) {
-      sfx.respawn(v, this.musicKey);
-      this.commit('player', v);
-    }
     if (this.musicMode !== 'off') this.music?.setMode(this.musicMode);
+    // Next frame, once the street has picked what plays (you respawn on foot), so the sting is in its key.
+    this.respawnSting = fromDeath && this.ctx.state === 'running';
+  }
+
+  private playRespawnSting(): void {
+    this.respawnSting = false;
+    if (this.musicMode !== 'game') return; // quit to the title meanwhile
+    const v = this.voice(null, FALLOFF.near, 0.9, 0, 0, 'ui');
+    if (!v) return;
+    sfx.respawn(v, this.musicKey);
+    this.commit('player', v);
   }
 
   // --- Continuous voices ---
@@ -1459,6 +1496,8 @@ export class GameAudio {
     this.setIntensity(e.level);
     // A chase may be coming: its drum kit renders between frames now, not as it starts.
     if (e.level > 0 && e.prev === 0) this.music?.warmKit(CHASE.station.sound);
+    // WASTED and BUSTED end the chase once the music is off (a death clears the stars first: dropping it here would fade it back up).
+    if (e.reason === 'died' || e.reason === 'busted') return;
     this.cueChase(this.chase.wanted(e.level, e.reason));
   }
 
@@ -1485,7 +1524,9 @@ export class GameAudio {
    * Where the music is heard. The car radio, the chase and the title theme
    * play in your ears (the street chain open); on foot it's the street: the
    * loudest emitter's station, faint, muffled and panned, or nothing. Back in
-   * a car the radio is the player's station again.
+   * a car the radio is the player's station again. While the music is off
+   * (WASTED, BUSTED), and over the chase's last bar on foot, the chain is
+   * shut: what plays next on foot starts from silence, not in your ears.
    */
   private updateMusicRoute(f: AudioFrame, dt: number, now: number): void {
     const music = this.music;
@@ -1495,28 +1536,45 @@ export class GameAudio {
       if (this.street.onFoot) this.street.leave();
       this.streetIn = 0;
       this.streetDt = 0;
-      // In a car the radio is the player's station (a silent retune under the chase, the usual retune otherwise).
-      if (f.car && this.musicMode === 'game' && !this.dead && music.arranger.radio !== STATIONS[this.stationIndex]) music.setStation(this.stationIndex);
-      if (!this.chainOpen) {
+      // In a car the radio is the player's station (a silent retune under the chase, the usual retune otherwise); off the game too (silent under the theme).
+      if (f.car || this.musicMode !== 'game') this.syncRadio();
+      const a = music.arranger;
+      if (this.dead) {
+        // Held until the music's own fade is done (no swell from a faint street), then shut.
+        if (this.chainState !== 'shut') chain.apply(0, OPEN, 0, 0.1, now + 0.5);
+        this.chainState = 'shut';
+      } else if (this.walking && a.section === 'outro' && a.lastBar && a.scoreEnding) {
+        // The chase hands back to the street: faded out across its last bar.
+        if (this.chainState !== 'shut') chain.apply(0, OPEN, 0, 48 / a.bpm, now);
+        this.chainState = 'shut';
+      } else if (this.chainState !== 'open') {
         // The chase slams in on its bar line; a car door opens the radio up a little slower.
         chain.open(now, music.playingScore ? 0.03 : 0.3);
-        this.chainOpen = true;
+        this.chainState = 'open';
       }
       this.syncDormant();
       return;
     }
-    this.chainOpen = false;
+    // Stepping out carries on from the radio in your ears; from a shut chain the street starts from silence.
+    const audible = this.chainState === 'open';
+    this.chainState = 'street';
     this.streetDt += dt;
     this.streetIn -= dt;
     if (this.streetIn > 0) return;
     this.streetIn = STREET_SCAN;
     const s = this.street;
     this.scanStreet(f);
-    s.end(this.streetDt, this.heardStation());
+    s.end(this.streetDt, this.heardStation(), audible);
     this.streetDt = 0;
     if (s.tune >= 0 && music.arranger.radio !== STATIONS[s.tune]) music.tune(s.tune, true);
     this.syncDormant();
     chain.apply(s.gain, s.cutoff, s.pan, s.tau, now);
+  }
+
+  /** The music's radio back on the car radio's station, after the street retuned it (silent under the theme and the chase). */
+  private syncRadio(): void {
+    const music = this.music;
+    if (music && !this.dead && music.arranger.radio !== STATIONS[this.stationIndex]) music.setStation(this.stationIndex);
   }
 
   /** Offer the street every emitter that could be heard: the car you left, parked cars, shops, boomboxes. */
@@ -1526,9 +1584,10 @@ export class GameAudio {
     const own = f.lastCar ?? null;
     const driving = f.playerCar ?? null;
     if (own && own !== driving && isParked(own)) s.offer('own', this.stationIndex, own.sim.x, own.sim.z);
+    const r = EMITTERS.car.max;
     for (const v of f.vehicles) {
-      if (v === own || v === driving || !isParked(v)) continue;
-      s.offer('car', parkedStation(v.sim.x, v.sim.z), v.sim.x, v.sim.z);
+      if (v === own || v === driving || Math.abs(v.sim.x - f.x) > r || Math.abs(v.sim.z - f.z) > r || !isParked(v)) continue;
+      s.offer('car', this.parked.stationOf(v), v.sim.x, v.sim.z);
     }
     this.shops?.offerNear(s, f.x, f.z);
     this.boomboxes.offerTo(s);

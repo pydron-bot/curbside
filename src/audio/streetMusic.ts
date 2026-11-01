@@ -7,7 +7,7 @@
  *    radio fades as you walk away (and comes back up as you walk back).
  *  - Parked cars (nobody in them, not police, not wrecked or burning): about
  *    one in three has its radio on, its station picked by a hash of where
- *    it's parked.
+ *    it's parked, and kept while it stays about there (ParkedRadios).
  *  - Shopfronts: half the neon-lit ones and a quarter of those with awnings
  *    play, each district its own music (DISTRICT_STATIONS).
  *  - A VIPERS hangout's boombox (gangMode raises 'boombox' events) plays
@@ -68,7 +68,7 @@ export function emitterCutoff(kind: EmitterKind, d: number): number {
   return e.near * Math.pow(e.far / e.near, t);
 }
 
-/** What the shops in each district play: a hash picks one, so the main two each get 2 in 5 and the fifth some variety. */
+/** What the shops in each district play: a hash picks one of the five, so a district's own sound (two stations twice each, or one three times) with a fifth or two of something else. */
 export const DISTRICT_STATIONS: Readonly<Record<District, readonly string[]>> = {
   // NEON MILE: funk and phonk out of the bars and clubs.
   arts: ['getaway', 'sideways', 'getaway', 'sideways', 'breakneck'],
@@ -103,13 +103,42 @@ export function hash01(a: number, b: number): number {
 /** Share of parked cars with the radio on. */
 export const PARKED_PLAYING = 1 / 3;
 
-/** The station a car parked at (x, z) plays, or −1 if its radio is off (a hash of where it stands, so it doesn't change). */
+/** The station a car parked at (x, z) plays, or −1 if its radio is off: a hash of the 4 m cell it stands in (ParkedRadios keeps it when the car is nudged). */
 export function parkedStation(x: number, z: number): number {
   // Salted so the van parked by the spawn point has its radio on, on the first station.
   const cx = Math.round(x / 4) + 1010;
   const cz = Math.round(z / 4);
   if (hash01(cx, cz) >= PARKED_PLAYING) return -1;
   return Math.floor(hash01(cz + 7919, cx - 104729) * STATIONS.length);
+}
+
+/** A parked car moved this far from where its station was picked has been re-parked (driven off, recycled), m: it picks again. */
+export const REPARKED = 6;
+
+/**
+ * Each parked car's station, picked where it's first heard and kept while it
+ * stays about there: a nudge (traffic, a blast, your shoulder) mustn't turn
+ * its radio off or retune it. One record per car, made the first time.
+ */
+export class ParkedRadios {
+  private readonly picked = new WeakMap<object, { x: number; z: number; station: number }>();
+
+  /** The station `car` plays (−1: its radio is off). */
+  stationOf(car: StreetCar): number {
+    const { x, z } = car.sim;
+    const p = this.picked.get(car);
+    if (!p) {
+      const station = parkedStation(x, z);
+      this.picked.set(car, { x, z, station });
+      return station;
+    }
+    if (Math.abs(x - p.x) > REPARKED || Math.abs(z - p.z) > REPARKED) {
+      p.x = x;
+      p.z = z;
+      p.station = parkedStation(x, z);
+    }
+    return p.station;
+  }
 }
 
 /** The bits of a car (the game's Vehicle fits) that say whether it can be playing a radio at the kerb. */
@@ -327,6 +356,8 @@ export class StreetMusic {
   private readonly same = pick();
   private active = false;
   private stepOut = false;
+  /** Stepped out with the music in your ears (not from silence). */
+  private carry = false;
   private fading = 0;
   private silent = 0;
 
@@ -351,15 +382,18 @@ export class StreetMusic {
   /**
    * Decide, `dt` s after the last call. `heard`: the station the music is
    * playing (an index into STATIONS; −1 for anything off the dial).
+   * `audible`, read on the first call after leave(): the music was in your
+   * ears (false after WASTED, or the chase's last bar on foot).
    */
-  end(dt: number, heard: number): void {
+  end(dt: number, heard: number, audible = true): void {
     this.tune = -1;
     if (!this.active) {
-      // Out of the car (or the chase, the title): carry on from what's playing, at the level it plays.
+      // Out of the car: carry on from the radio, at the level it plays. Out of the chase, the title or silence: start from nothing.
       this.active = true;
       this.stepOut = true;
+      this.carry = audible && heard >= 0;
       this.station = heard;
-      this.gain = heard >= 0 ? 1 : 0;
+      this.gain = this.carry ? 1 : 0;
       this.fading = 0;
     }
     const best = this.best;
@@ -368,7 +402,8 @@ export class StreetMusic {
     if (!follow) {
       this.kind = null;
       this.gain = 0;
-      this.tau = this.stepOut ? STEP_OUT_TAU : FOLLOW_TAU;
+      // Not carrying the radio on (the chase or the theme was in your ears): down before the radio's next song comes in.
+      this.tau = this.stepOut ? (this.carry ? STEP_OUT_TAU : FADE_TAU) : FOLLOW_TAU;
       this.fading = 0;
       this.silent += dt;
       this.dormant = this.silent >= DORMANT_AFTER;

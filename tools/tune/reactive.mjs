@@ -44,7 +44,7 @@ try {
       modules,
       args: { name, script, radio },
       seconds,
-      setup: async (ctx, { player, synth, stations, chase, street, loops, sfx }, { name, script, radio }) => {
+      setup: async (ctx, { player, synth, stations, chase, street, loops, sfx }, { name, script, radio }, { warmKits }) => {
         const bank = new synth.NoiseBank(ctx);
         const impulse = synth.makeImpulse(ctx);
         const log = [];
@@ -52,9 +52,8 @@ try {
         if (index < 0) throw new Error(`no station '${radio}'`);
         if (name === 'chase') {
           const music = new player.MusicPlayer(ctx, bank, ctx.destination, impulse, stations.STATIONS[index]);
-          music.warmKit(chase.CHASE.station.sound);
-          // The drum kits render a take per task (setTimeout): let them finish so the kits, not the live voices, play.
-          await new Promise((r) => setTimeout(r, 4000));
+          // The drum kits render a take per task: all in first, so the kits (not the live voices) play every time.
+          await warmKits(music, [chase.CHASE.station.sound]);
           const cue = new chase.ChaseMusic();
           music.onSong = (song, st) => log.push(`${ctx.currentTime.toFixed(1)}s  ${song.title} (${st.name})`);
           let stars = 0;
@@ -86,7 +85,7 @@ try {
         // On foot: the street chain between the music and the output, as in GameAudio.
         const chain = new loops.StreetChain(ctx, bank, ctx.destination, ctx.currentTime);
         const music = new player.MusicPlayer(ctx, bank, chain.input, impulse, stations.STATIONS[index]);
-        await new Promise((r) => setTimeout(r, 4000));
+        await warmKits(music, stations.STATIONS.map((s) => s.sound));
         const mix = new street.StreetMusic();
         const ids = (id) => stations.STATIONS.findIndex((s) => s.id === id);
         // Walking east along a pavement at 1.6 m/s: a parked car (its radio on GETAWAY), a shop (LOW TIDE), then a
