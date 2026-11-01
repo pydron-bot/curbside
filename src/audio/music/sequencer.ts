@@ -6,7 +6,8 @@
  *   so timing stays sample-accurate however janky the main thread is.
  * - Arranger: what plays on each 16th. Intensity, station and mode changes
  *   wait for a bar line; stepping up gets a drum fill, tempo glides a few BPM
- *   per bar, pads are voice-led, and the lead melody repeats per phrase.
+ *   per bar (a new station starts at its own), pads are voice-led, and the
+ *   lead melody repeats per phrase.
  *   Each station plays its songs in turn through a song FORM (intro, verse,
  *   chorus, break, chorus, outro), every song in its own key with its own
  *   chords and melody. While calm the form shapes the arrangement (a drumless
@@ -286,6 +287,7 @@ export class Arranger {
   }
 
   private startBar(): void {
+    const retuned = this.pendingStation !== null;
     if (this.pendingStation) {
       this.station = this.pendingStation;
       this.pendingStation = null;
@@ -305,7 +307,8 @@ export class Arranger {
     this.fill = false;
     this.arpCount = 0;
     const want = targetBpm(this.station, this.intensity, this.mode);
-    this.bpm += clamp(want - this.bpm, -BPM_GLIDE, BPM_GLIDE);
+    // Intensity glides the tempo; a new station starts at its own (dub after chiptune is half the speed).
+    this.bpm = retuned ? want : this.bpm + clamp(want - this.bpm, -BPM_GLIDE, BPM_GLIDE);
 
     const s = this.station;
     const song = this.song;

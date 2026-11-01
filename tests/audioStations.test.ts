@@ -189,6 +189,16 @@ describe('pattern language: slides, ghosts, fourths, rolls', () => {
     expect(gaps).toBeGreaterThan(0);
   });
 
+  it('a retune starts the new station at its own tempo (the glide is for intensity)', () => {
+    const a = new Arranger(byId('insertcoin'), LOOP);
+    a.setIntensity(5);
+    play(a, 12);
+    expect(a.bpm).toBe(targetBpm(byId('insertcoin'), 5, 'game'));
+    a.setStation(byId('dubwise'));
+    play(a, 1);
+    expect(a.bpm).toBe(targetBpm(byId('dubwise'), 5, 'game'));
+  });
+
   it('knows the last bar of each section (dub throws its echo there)', () => {
     const a = new Arranger(STATIONS[0]);
     const last: number[] = [];
