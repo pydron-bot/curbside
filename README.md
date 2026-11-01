@@ -149,7 +149,7 @@ bake in as new constants.
 - **Audio** (`src/audio/`): fully synthesised Web Audio, no sound files —
   engine with a gearbox, tyres, guns, impacts, explosions, fire, sirens,
   city ambience, stingers tuned to the music, and an adaptive procedural
-  soundtrack on three radio stations. See *Audio* below.
+  soundtrack on seven radio stations. See *Audio* below.
 - **Look** (`src/render/look.ts` and friends): ACES tone mapping with a
   light grade, a sun shadow map fitted to the view every frame, a 12-minute
   day/night cycle (starts late afternoon → golden hour → night), analytic
@@ -741,7 +741,10 @@ Playwright isn't a game dependency: run with
   Baseline 2026-11-01 (90 s, default script, raw music output): every
   station at −14.6 to −14.7 dBFS overall, about −18 at intensity 1, −15 at
   3 and −13 at 5; peaks at about 0 dBFS (the music bus and limiter follow in
-  the game). New stations should land within a dB of that.
+  the game). New stations should land within a dB of that. The four added
+  2026-11-01 do: SIDEWAYS 808 −14.6, GETAWAY 104.3 −15.1, DUBWISE 88.8
+  −15.2 and INSERT COIN −14.8 overall, peaks at most +0.7 dBFS (as
+  NIGHTDRIVE's +0.6). `MODE=menu` renders sit at −15.3 to −18.6.
 
 ## Layout
 
@@ -800,8 +803,10 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
 - **Events.** It subscribes to every `GameEvent` on the bus (`src/core/events.ts`);
   nothing in the simulation calls it directly.
 - **Music.** A look-ahead scheduler (25 ms timer, 0.12 s ahead on the audio
-  clock) plays original songs in three styles: NIGHTDRIVE FM (synthwave),
-  BREAKNECK 99.1 (breakbeat), LOW TIDE (lo-fi), four songs each (made-up
+  clock) plays original songs in seven styles: NIGHTDRIVE FM (synthwave),
+  BREAKNECK 99.1 (breakbeat), LOW TIDE (lo-fi), SIDEWAYS 808 (phonk),
+  GETAWAY 104.3 (funk and disco), DUBWISE 88.8 (dub) and INSERT COIN
+  (chiptune), four songs each (made-up
   titles and artists, `stations.ts` `songs`), each in its own key with its
   own verse and chorus chords and melody. A song runs through a form (intro
   4 bars, verse 8, chorus 8, break 4, chorus 8, outro 4; `sequencer.ts`
@@ -819,12 +824,29 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   first heard; the live drum voices stand in until each part is in. The
   NOW PLAYING card shows the song and artist (`audio.song`,
   `audio.onSongChange`) and drops in for each new song while you drive.
+- **Station instruments.** Each station's `StationSound` picks its
+  timbres; the mono bass and lead are reshaped per station (no extra
+  oscillators): an 808 (sine boom, slides, a drive patched into the bass
+  chain only while it plays), slap bass (thumb, popped octaves, ghost notes
+  and a fret click), a deep sub, the 8-bit stepped triangle; pulse-wave,
+  brass and melodica leads; per-note cowbell, pulse arps, reggae skanks,
+  auto-wah guitar chops and an 8-bit pad. Custom oscillator shapes
+  (`waves.ts`) are built once per context. Patterns add `~` (hold and
+  slide into the next note, across the bar line too), `g` (ghost note) and
+  `4` (fourth) for bass and `r` / `t` (32nd and triplet rolls) for drums;
+  phonk's arp yields to the lead so one cowbell plays riff and melody. Dub
+  sets its own echo (send, feedback, a darker repeat) and throws the
+  rimshot, skanks and each section's last bar into it. The kits add a hard
+  kick, a reggae rimshot and the chip kit (an LFSR noise channel, its
+  93-step metallic mode for hats, a stepped-triangle kick, 4-bit volume).
+  New stations go on the end of `STATIONS`: the saved station is an index.
 
 | Module | What |
 |---|---|
 | `carSound.ts` | 5-speed gearbox / RPM model, per-archetype engine profiles, squeal and road-noise amounts (pure, tested) |
 | `mix.ts`, `voices.ts`, `chaos.ts` | falloff/pan/doppler math, voice limiter and rate gate, chaos → intensity (pure, tested) |
 | `music/theory.ts`, `music/stations.ts`, `music/sequencer.ts` | chords, voice leading, lead composer, station data, step clock and arranger (pure, tested) |
+| `music/drumKit.ts`, `music/waves.ts` | rendered drum kits and the chip noise channel, custom oscillator shapes (pure, tested) |
 | `synth.ts` | noise buffers, node-tracking `Voice`, envelopes, reverb impulse |
 | `sfx.ts`, `loops.ts`, `music/musicPlayer.ts` | one-shot recipes, continuous voices (engine, tyres, fire, ambience, sirens), music instruments |
 
