@@ -284,6 +284,19 @@ still get the offline shell.
    `parked` flags), `audio/gameAudio.ts` (`onStreet`). **For the device
    pass:** does a knocked-out body lying there read on the phone; are the
    parked cars in the way on foot or in a chase; the drop ring at night.
+   **Emergency services: done 2026-11-01** on `claude/city-emergency`
+   (README *City life*): fires on exploded cars and on walls hit by a
+   grenade or rocket, put out by a fire truck's two firefighters with
+   hoses (or burning out by themselves); tow trucks taking wrecks,
+   abandoned and parked cars away on the hook; car alarms from a bump, a
+   shot or a blast (flashing indicators, a synthesised alarm). Rules pure
+   and tested (`systems/emergency.ts`, `tests/emergency.test.ts`); a new
+   `StreetWhat` member, `alarm`. No new mesh or program; worst case +6
+   draw calls on the iPhone profile (fire truck and tow truck in view,
+   with the firefighters' body). **For the device pass:** the flames and
+   the hose jets in daylight and at night, the alarm's level against the
+   radio, a tow in a tight car park (the car on the hook can clip a
+   neighbour: it's carried, not simulated).
 
 Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
 launch ramp landing at a corner checkpoint (is that a feature?).

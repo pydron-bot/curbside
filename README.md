@@ -558,6 +558,53 @@ director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
   over (`systems/crowd.ts` hurtPed / `game/combat.ts` resolve), and guns
   came from the sidewalk crates (`world/pickups.ts`), a frenzy's gift, a
   mission's hand-out or the Chaos Run's loadout.*
+- **Fires and fire trucks** (`scenes/fireCrews.ts`; rules in
+  `systems/emergency.ts` FireBoard): a car that blows up leaves its wreck
+  burning (the fire follows it if it's shoved), a grenade or rocket within
+  4.5 m of a building sets the wall alight. A fire flares up over 2.5 s,
+  burns 75 s and dies down over the last 12 (a blast within 5 m feeds it
+  instead); 6 at most (a new one takes the oldest's place). After 4 s a
+  fire within 150 m with 20 s still to burn calls a fire truck
+  (ServiceRun, `#c3191c`, lights and siren). It pulls up, the siren stops
+  (lights on), two firefighters (`ped_stocky`, tan coat, yellow helmet)
+  step down, walk to either side of the fire and hose it: 7 s for a full
+  fire with one hose, half that with two (hosed down, it never flares
+  back); then back in and off as traffic. 2 trucks at most; none behind
+  the title, in an activity or the tutorial (fires there burn out by
+  themselves). The look (`render/emergencyLook.ts` fireLook): bigger
+  flame particles than a burning car's, smoke from 3 m downwind (it's
+  drawn over the flames), embers, a flickering orange pool on the ground
+  (brighter at night); arcing water drops (streaks in the smoke pool,
+  started along their flight so a slow frame still shows a jet) and steam
+  where they land. Nothing hurts anyone (a molotov's fire still does).
+  Street events: `fire`, `fireTruck`, `hose` (the pump's hiss), `fireOut`.
+- **Tow trucks** (`scenes/tows.ts`; `towPose`, `towPriority`, `winch` in
+  `systems/emergency.ts`): every 45–90 s (none in an activity, while
+  wanted, in the tutorial or behind the title) a tow truck (`tow_truck`,
+  `#e8b923`, claimed in traffic within 140 m or brought in) comes for a
+  car within 110 m: a wreck whose fire is out (the player's included)
+  first, then an abandoned car, then, one pick in two, a parked one;
+  never a car still burning, a bike or anything longer than a pickup, an
+  activity's car, or the car the player just left unless it's a wreck. It
+  drives over, then lines up 3 m to the side of the car and just beyond
+  it, tail to it, facing the way it came (`pullIn`), so the car goes on
+  the hook by its nose or its back; winches it up over 2.5 s (`tow`
+  event) and drives off as calm traffic with the car trailing like a
+  trailer (no speed of its own, so no skids). The amber beacon on the cab
+  turns throughout (towLook). Both are retired once far and unseen (or
+  40 s towing unseen). Take the truck, knock its driver out or get into
+  the towed car and the tow's off: the car stays, an ordinary abandoned
+  car. One at a time.
+- **Car alarms** (`scenes/alarms.ts`, `AlarmBoard`): a crash against a
+  parked car (any car's: the contact point on its body, ±0.6 m), a bullet
+  into one, or a blast within 14 m sets its alarm off: the four
+  indicators flash amber at 2 Hz with a wash on the road (alarmLook), and
+  a `street` event `alarm` every 1.6 s plays one cycle of its siren
+  (`sfx.carAlarm`: whoops, a hi-lo two-tone, or chirps and two honks, one
+  per spot, through a little distorted horn speaker). It stops after
+  20 s, or when the car's driven off (getting in clears `parked`), towed,
+  wrecked or recycled; set off again, it starts over. 4 at once; not
+  behind the title.
 
 **The director.** `main.ts` creates one and calls `step(dt)` every sim step
 (after combat), `maintain(seed)` with population upkeep, `reset()` with a
@@ -631,6 +678,14 @@ places round the city after 20 s each: 40.3 draw calls on average (54 at
 most) before, 41.3 (50) with the base (a parked model not otherwise in
 view costs its call and shadow pass). Smoke test (random seeds) 56 / 57 →
 61 / 51 on the iPhone sizes, 74 → 70 on desktop: within run-to-run spread.
+The emergency scenes keep to that: flames, smoke, water and steam in
+Effects' pools, the fire pools, beacon and indicators in the glow batch.
+Same measure (its own seed and places): 40.7 (56) before, 40.1 (54)
+with them. Worst case, a fire with its truck and crew, a tow truck with
+a car on the hook and an alarm all in view: +6 (the fire truck's and tow
+truck's batches, a call and a shadow pass each, and the firefighters'
+`ped_stocky` body when no passer-by of that build is in view). Smoke
+test 53 / 59 on the iPhone sizes, 69 on desktop.
 
 ## Progression
 
