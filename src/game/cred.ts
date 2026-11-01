@@ -61,17 +61,18 @@ export interface LifeSummary {
   seconds: number;
   /** Highest wanted level reached. */
   peakStars: number;
-  /** Cash earned this life (jobs, banked chains, fares...). */
+  /** Cash earned this life from jobs, fares, races... (not banked chains: their points already count). */
   cash: number;
 }
 
 /**
- * CRED for a life: about 250 for a good three minutes (20,000 points, a
- * 3-star chase and a $1,000 job), a dozen for a quick death.
+ * CRED for a life: about 130 for a good three minutes (20,000 points, a
+ * 3-star chase and a $1,000 job), about 250 for a wild five minutes at 5
+ * stars, a handful for a quick death.
  */
 export function credForLife(l: LifeSummary): number {
   const s = Math.max(0, Math.min(5, Math.floor(l.peakStars)));
-  const raw = Math.max(0, l.points) / 150 + Math.max(0, l.seconds) / 6 + Math.max(0, l.cash) / 25 + (10 * s * (s + 1)) / 2;
+  const raw = Math.max(0, l.points) / 400 + Math.max(0, l.seconds) / 6 + Math.max(0, l.cash) / 50 + (5 * s * (s + 1)) / 2;
   return Number.isFinite(raw) ? Math.round(raw) : 0;
 }
 

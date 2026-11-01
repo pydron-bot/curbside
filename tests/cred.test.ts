@@ -22,13 +22,20 @@ import {
 const totalFor = (level: number) => Array.from({ length: level }, (_, i) => levelCost(i + 1)).reduce((a, b) => a + b, 0);
 
 describe('CRED for a life', () => {
-  it('a good three minutes earns about 250; a quick death a dozen; nothing is never negative', () => {
+  it('a good three minutes earns about 130; a quick death a handful; nothing is never negative', () => {
     const good = credForLife({ points: 20_000, seconds: 180, peakStars: 3, cash: 1000 });
-    expect(good).toBeGreaterThan(200);
-    expect(good).toBeLessThan(300);
+    expect(good).toBeGreaterThan(110);
+    expect(good).toBeLessThan(160);
     expect(credForLife({ points: 1200, seconds: 25, peakStars: 0, cash: 0 })).toBeLessThan(20);
     expect(credForLife({ points: -5, seconds: -1, peakStars: -2, cash: -100 })).toBe(0);
     expect(credForLife({ points: NaN, seconds: 0, peakStars: 0, cash: 0 })).toBe(0);
+  });
+
+  it('a wild five minutes at 5 stars is about 250, so level 5 takes several such lives', () => {
+    const wild = credForLife({ points: 52_000, seconds: 300, peakStars: 5, cash: 0 });
+    expect(wild).toBeGreaterThan(200);
+    expect(wild).toBeLessThan(300);
+    expect(totalFor(5) / wild).toBeGreaterThan(3.5);
   });
 
   it('every part counts, and stars count more the higher they go', () => {
@@ -52,7 +59,7 @@ describe('levels', () => {
     expect(levelFor(260)).toEqual({ level: 2, into: 10, need: 200 });
   });
 
-  it('maxing every perk takes about a hundred good lives', () => {
+  it('maxing every perk takes about a hundred wild lives', () => {
     const levels = PERKS.length * PERK_RANKS;
     const cred = totalFor(levels);
     expect(levelFor(cred).level).toBe(levels);

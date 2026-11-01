@@ -562,7 +562,9 @@ are `src/game/modes/*Mode.ts`.
 - **CRED and perks** (`game/cred.ts` rules, `game/credKeeper.ts`,
   `ui/perkCard.ts`; design in `docs/CRED.md`): every life earns CRED when
   it ends, from its points (a bust's fine still counts), time alive, peak
-  stars and cash earned: about 250 for a good three minutes. The WASTED /
+  stars and cash earned from jobs, fares and races (not banked chains, whose
+  points already count): about 130 for a good three minutes, about 250 for
+  a wild five minutes at 5 stars. The WASTED /
   BUSTED card shows +CRED and a level bar (LEVEL UP stamped on a new one).
   Levels cost 100 CRED, then 50 more each. A level reached holds the respawn:
   1.7 s into the death screen LEVEL UP freezes the game and offers three of
