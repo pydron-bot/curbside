@@ -120,6 +120,10 @@ export default defineConfig({
           },
         ],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
+        // The shell answers navigations to the game only: opening a file by URL
+        // (og.jpg, anything added under /curbside/ later) goes to the network
+        // instead of loading the game. Matched against path + query.
+        navigateFallbackDenylist: [/^[^?]*\.(?!html?\b)\w+(?:\?.*)?$/],
         // The default skips revisions for everything under assets/, assuming
         // hashed names, but the GLBs are copied there unhashed from public/:
         // with no revision an installed copy never re-downloads changed art.
