@@ -171,8 +171,9 @@ These streams are largely independent and can run in parallel:
 
 Full list with context in `docs/HANDOFF.md`. In short:
 
-1. Real-device pass on an iPhone 15 Pro (frame rate, audio/silent switch, haptics, controller, touch feel) and tuning from it.
-2. Tune from real play: Chaos Run medals, race times, 5-star difficulty.
-3. Blender adjustment pass from in-game readability (notes at the end of `docs/BLENDER_TODO.md`).
-4. ~~A landing page at the root of deeek.org for all projects (`pydron-bot/pydron-bot.github.io`; Curbside first).~~ Done 2026-10-31.
-5. The minor known issues listed in `docs/HANDOFF.md`.
+1. Real-device pass on an iPhone 15 Pro (frame rate, audio/silent switch, haptics, controller, touch feel), with the destruction-test soak and a look at the new art on the phone.
+2. Tune from real play: medals and the 5-star escape (the race bot test and the seeded harnesses are in place).
+3. Music: new stations, a living radio, chase music, themes (ideas in `docs/BACKLOG.md` *Music*).
+4. Ideas: district names first, then police chatter, mission chapter 2, gangs, an online leaderboard.
+
+Done 2026-10-31: the Blender adjustment pass, the deeek.org landing page (`pydron-bot/pydron-bot.github.io`) and the minor known issues.
