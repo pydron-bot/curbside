@@ -46,3 +46,57 @@ export function generateStreetLamps(): StreetLamp[] {
   }
   return out;
 }
+
+/**
+ * The lamps' light reaches this far (squared, m², from the head): the shaders'
+ * falloff (render/shaderLib.ts `ubLampTerm`) is zero beyond it.
+ */
+export const LAMP_REACH2 = 132;
+/** A head hangs this far from its road's centreline (the post's offset less the arm). */
+const HEAD_OFFSET = LAMP_OFFSET - LAMP_ARM;
+const REACH = Math.sqrt(LAMP_REACH2);
+
+/**
+ * The lamp heads whose light can reach anything within `radius` of (x, z)
+ * (horizontally: the reach is in 3D, so this errs wide). Writes the first
+ * `max` as x, z pairs into `out` from `o` and returns how many there are in
+ * all (more than `max`: the caller can't use the short list). The same
+ * layout as generateStreetLamps, the heads `LAMP_ARM` out over the road; it
+ * only looks beside the two road lines either side of the point, so a radius
+ * past half a block would miss lamps. Allocates nothing.
+ */
+export function lampsNear(x: number, z: number, radius: number, out: Float32Array, o: number, max: number): number {
+  const r = REACH + radius;
+  const r2 = r * r;
+  let n = 0;
+  // dir 0: lamps beside the north-south roads (u = x across them, v = z along); dir 1: east-west.
+  for (let dir = 0; dir < 2; dir++) {
+    const u = dir === 0 ? x : z;
+    const v = dir === 0 ? z : x;
+    const first = Math.floor((u + HALF_EXTENT) / BLOCK_SIZE);
+    for (let line = first; line <= first + 1; line++) {
+      if (line < 0 || line > BLOCKS_PER_SIDE) continue;
+      for (let side = -1; side <= 1; side += 2) {
+        // A road's lamps stand on the blocks either side of it (none beyond the city's edge).
+        const block = side < 0 ? line - 1 : line;
+        if (block < 0 || block >= BLOCKS_PER_SIDE) continue;
+        const du = line * BLOCK_SIZE - HALF_EXTENT + side * HEAD_OFFSET - u;
+        if (du * du >= r2) continue;
+        const b0 = Math.max(0, Math.floor((v - r + HALF_EXTENT) / BLOCK_SIZE));
+        const b1 = Math.min(BLOCKS_PER_SIDE - 1, Math.floor((v + r + HALF_EXTENT) / BLOCK_SIZE));
+        for (let b = b0; b <= b1; b++) {
+          for (let k = 1; k * LAMP_SPACING < BLOCK_SIZE; k++) {
+            const dv = b * BLOCK_SIZE - HALF_EXTENT + k * LAMP_SPACING - v;
+            if (du * du + dv * dv >= r2) continue;
+            if (n < max) {
+              out[o + n * 2] = dir === 0 ? u + du : v + dv;
+              out[o + n * 2 + 1] = dir === 0 ? v + dv : u + du;
+            }
+            n++;
+          }
+        }
+      }
+    }
+  }
+  return n;
+}
