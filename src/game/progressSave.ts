@@ -64,6 +64,8 @@ export interface SaveData {
   unlocks: string[];
   /** First-run pointers: the step reached (game/tutorial.ts; 3 = done). */
   tutorial: number;
+  /** Each gang's respect for the player, -100..100 by gang id (game/gangs.ts); missing is 0. */
+  respect: Record<string, number>;
 }
 
 export function defaultStats(): LifetimeStats {
@@ -101,6 +103,7 @@ export function defaultSave(): SaveData {
     missions: [],
     unlocks: [],
     tutorial: 0,
+    respect: {},
   };
 }
 
@@ -159,6 +162,12 @@ export function migrateSave(raw: unknown, legacyBest = 0): SaveData {
     save.unlocks = strings(raw.unlocks);
     const veteran = save.stats.playTime >= TUTORIAL_SKIP_PLAYED;
     save.tutorial = Math.min(TUTORIAL_STEPS, num(raw.tutorial, veteran ? TUTORIAL_STEPS : 0));
+    if (isObj(raw.respect)) {
+      save.respect = {};
+      for (const [k, r] of Object.entries(raw.respect)) {
+        if (typeof r === 'number' && Number.isFinite(r)) save.respect[k] = Math.max(-100, Math.min(100, Math.round(r)));
+      }
+    }
   }
   // The free-roam best predates the save: carry it over.
   save.best.free = Math.max(save.best.free ?? 0, num(legacyBest));

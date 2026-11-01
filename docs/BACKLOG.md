@@ -1111,6 +1111,10 @@ Later extensions: positional chatter from parked units within about 25 m, and th
 
 ### districts-landmarks: More districts and landmarks (name the districts first, then one signature landmark per district) [M, you]
 
+**Status (2026-10-31):** phase A done with placeholder names (DISTRICT_NAMES in world/districts.ts:
+GLASS HEIGHTS, COBBLE ROW, NEON MILE, RUSTWATER DOCKS, MAPLE FLATS), `districtAt`, and the area card.
+The radar tint was already fixed. Phase B (landmarks) still open.
+
 **Findings:** - **The districts:** five (src/world/districts.ts:11-14), styled in DISTRICT_STYLES (:49-140). districtOf (:150-161) assigns them: downtown within 3.1 blocks of the centre, then wobbly NW/NE/SE/SW quarters.
 - **The order of DISTRICTS is a shader index:**
   - buildings: src/world/cityMesh.ts:128, :454-496 (uniform arrays sized by DISTRICTS.length), :529 (STYLE; industrial has its own GLSL branch);
@@ -1157,6 +1161,11 @@ Later extensions: positional chatter from parked units within about 25 m, and th
 Phase A (names, area card, radar tint) is cloud-doable on its own.
 
 ### gangs-respect: Gangs and respect (one rival gang with turf, respect saved, hostile on sight below a threshold) [L, cloud]
+
+**Status (2026-10-31):** parts 1–4 done with placeholder choices: the VIPERS (new crew, lime/black)
+on NEON MILE (arts), five hangouts of three, respect rules in game/gangs.ts, GangMode, `save.respect`,
+the area card's turf line and a PROGRESS bar. Respect only gates hostility so far. Still open: gang
+cars, gang jobs, what high respect unlocks, a second gang (Saints remnants?), and Derek's names.
 
 **Findings:** - **Gangs exist only in the story data.** The Graveyard Shift (Vex, Lil' Tuna) and Deacon Pike's Chrome Saints live in mission data (src/systems/missionsData.ts:1-8, :45-47). The last mission's outro says 'The Saints are scattering' (:286-289), so a post-story gang needs a story decision.
 - **No faction concept in the crowd:**

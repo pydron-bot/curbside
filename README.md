@@ -667,6 +667,21 @@ are `src/game/modes/*Mode.ts`.
   PROGRESS. A banner
   raised while WASTED / BUSTED is up (MISSION FAILED, RACE OVER) waits for
   the respawn.
+- **Districts and the area card** (`world/districts.ts` DISTRICT_NAMES /
+  districtAt, `modes/areaMode.ts`, `ui/areaCard.ts`): settle in a new
+  district for 1.2 s and its name shows under the radar for ~3 s (GLASS
+  HEIGHTS, COBBLE ROW, NEON MILE, RUSTWATER DOCKS, MAPLE FLATS:
+  placeholders), with whose turf it is (red while they're hostile).
+- **Gangs** (`game/gangs.ts` rules, `modes/gangMode.ts`): the VIPERS (lime
+  shirts) run NEON MILE from five pavement hangouts of three (one armed),
+  put on the street within 70 m in crowd bodies (no extra draw calls).
+  Respect −100..100 per gang, saved (`save.respect`): −6 for knocking one
+  over, −10 for a knockout (and that crew comes for you); +2 / +3 for an
+  officer down / a police car blown up on their turf, up to +40; a grudge
+  fades a point every 20 s. Below −25 they attack on sight; from +50 they
+  let anything go. Feed lines on each change and standing; a respect bar on
+  PROGRESS. Free roam only. Members carry `agent.gang`, and `pedDown`
+  carries `gang`.
 - **Activity HUD** (`ui/progressHud.ts`, `progress.css`): a compact card top
   centre under the pause button (what, a big timer, the goal and counter;
   the wanted stars step down under it, the radio card pushes it down), a

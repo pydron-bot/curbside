@@ -902,7 +902,7 @@ function carLanded(v: Vehicle, impact: number, isPlayer: boolean) {
  */
 function pedHitByCar(c: CrowdPed, playerCar: Vehicle | null) {
   const s = c.agent.s;
-  events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'vehicle', byPlayer: playerCar !== null, cop: c.agent.role === 'cop' });
+  events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'vehicle', byPlayer: playerCar !== null, cop: c.agent.role === 'cop', gang: c.agent.gang });
   if (playerCar) {
     award(score.award('hitAndRun'));
     provoke(c.agent, playerCar.sim.x, playerCar.sim.z);
