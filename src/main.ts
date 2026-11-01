@@ -1587,6 +1587,10 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   get simTime() {
     return simTime;
   },
+  /** One whole frame (sim, effects, render) `ms` after the last: for harnesses that stub requestAnimationFrame. */
+  stepFrame(ms = 1000 / 60) {
+    frame(last + ms);
+  },
   /**
    * Run the simulation `seconds` ahead in fixed steps without rendering, for
    * automated checks on slow (software) GPUs where frames take seconds.
