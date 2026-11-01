@@ -186,6 +186,8 @@ const pigeons = new PigeonLook(scene, look, city, collision, events, mulberry32(
 /** Traffic lights: their clock runs with the sim; traffic stops on red, the lenses show it. */
 const signals = new TrafficSignals();
 look.props.signals = signals;
+// Drivers pulling over for a siren stay in lane past road works at the kerb.
+signals.setRoadworks(dressing.street.roadworks);
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];

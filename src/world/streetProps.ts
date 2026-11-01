@@ -1,25 +1,35 @@
 /**
  * Street furniture, decided from the city seed so the same city always has
  * the same streets: the lamps and traffic lights, hydrants, benches, bins,
- * newspaper boxes and mailboxes along the kerbs (the mix by district),
- * bollards along the plazas, dumpsters at the mouths of alleys, and the
- * parks' trees as one of three models by district. Pure data, no three.js:
- * render/worldProps.ts draws it, and the solid parts go into the collision
- * grid (lamp posts, signal poles, bollards, dumpsters). The small things a
- * car can knock flying (hydrants, bins, benches...) are listed separately
- * for systems/knockables.ts.
+ * newspaper boxes, mailboxes, parking meters, planters, bike racks and
+ * recycling bins along the kerbs (the mix by district), bollards along the
+ * plazas, dumpsters at the mouths of alleys, and the parks' trees as one of
+ * three models by district; and, from their own modules, road-works sites
+ * at the kerb (roadworks.ts), bus shelters and food carts (streetStops.ts)
+ * and café tables, vending machines and ATMs against shopfronts
+ * (frontages.ts). Pure data, no three.js: render/worldProps.ts draws it, and
+ * the solid parts go into the collision grid (lamp posts, signal poles,
+ * bollards, dumpsters, planters, carts, shelters...). The small things a
+ * car can knock flying (hydrants, bins, benches, cones...) are listed
+ * separately for systems/knockables.ts.
  *
  * Everything at the kerb stands within a metre of the road edge, clear of
- * the line people walk down the middle of the pavement; benches back onto
- * the building side. Nothing goes within `avoid` points (pickups, payphones,
- * activity markers) or `keepOut` rects (Pay 'n' Spray bays and their mouths:
- * not even a lamp post, whose light pool then stands alone).
+ * the line people walk down the middle of the pavement; benches and
+ * shelters back onto the building side. Nothing goes within `avoid` points
+ * (pickups, payphones, activity markers) or `keepOut` rects (Pay 'n' Spray
+ * bays and their mouths: not even a lamp post, whose light pool then stands
+ * alone), nor on top of anything placed before it.
  */
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, blockInterior, type Building, type City, type Rect } from './city';
+import { planBuildings, type BuildingPlan } from './buildingPlans';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, blockInterior, type Building, type City, type Rect } from './city';
 import type { District } from './districts';
+import { placeFrontages } from './frontages';
 import { mulberry32 } from './random';
+import { placeRoadworks, type Roadworks } from './roadworks';
 import { signalPoles } from './signals';
+import { BENCH_LINE, KERB_LINE, blockSide, type Placer } from './kerbs';
 import { generateStreetLamps } from './streetLamps';
+import { placeBusStops, placeVendors, type BusStop, type VendorSpot } from './streetStops';
 import { len2 } from '../core/len';
 
 export type StreetPropKind =
@@ -34,7 +44,28 @@ export type StreetPropKind =
   | 'dumpster'
   | 'tree_round'
   | 'tree_tall'
-  | 'palm';
+  | 'palm'
+  | 'parking_meter'
+  | 'planter'
+  | 'bike_rack'
+  | 'recycling_bin'
+  | 'shopping_cart'
+  | 'cafe_table'
+  | 'vending_machine'
+  | 'atm'
+  | 'bus_shelter'
+  | 'food_cart_hotdog'
+  | 'food_cart_coffee'
+  | 'fruit_stand'
+  | 'traffic_cone'
+  | 'traffic_barrel'
+  | 'work_barrier'
+  | 'roadwork_sign'
+  | 'steel_plate'
+  | 'work_trench'
+  | 'skip'
+  | 'mini_digger'
+  | 'portable_toilet';
 
 export interface StreetProp {
   kind: StreetPropKind;
@@ -43,9 +74,11 @@ export interface StreetProp {
   /** Facing (vehicle convention: the model's +Z toward (sin, cos)). */
   heading: number;
   scale: number;
-  /** Traffic lights: the junction's cycle offset (s) and whether these lenses face east-west traffic. */
+  /** Traffic lights: the junction's cycle offset (s) and whether these lenses face east-west traffic. Others: a blink phase. */
   phase: number;
   eastWest: boolean;
+  /** Colour (sRGB hex) for the model's `paint` surfaces (a vending machine's body). */
+  tint?: string;
 }
 
 /** Something a car knocks flying instead of stopping dead at: where, how far it reaches, which prop. */
@@ -62,9 +95,15 @@ export interface Knockable {
 
 export interface StreetProps {
   props: StreetProp[];
-  /** Solid footprints for the collision grid (lamp posts, signal poles, bollards, dumpsters). */
+  /** Solid footprints for the collision grid (lamp posts, signal poles, bollards, dumpsters...). */
   solids: Rect[];
   knockables: Knockable[];
+  /** Road-works sites at the kerb (roadworks.ts): traffic keeps to its lane past them. */
+  roadworks: Roadworks[];
+  /** Food carts and fruit stands, with where their customers stand (streetStops.ts). */
+  vendors: VendorSpot[];
+  /** Bus shelters, with where people wait and where a bus pulls in (streetStops.ts). */
+  busStops: BusStop[];
 }
 
 export interface StreetPropOptions {
@@ -72,47 +111,64 @@ export interface StreetPropOptions {
   avoid?: ReadonlyArray<{ x: number; z: number; r: number }>;
   /** Areas to keep clear (spray bays, the docks' bay). */
   keepOut?: readonly Rect[];
+  /** Points that things in the road keep clear of (mission cars at the kerb, ramps and their run-ups, the spawn corner). */
+  reserve?: ReadonlyArray<{ x: number; z: number; r: number }>;
+  /** Roads (roads.ts segmentKey) that get no road works (race legs). */
+  quietRoads?: ReadonlySet<number>;
+  /** The building plans (for the shopfronts), if already made. */
+  plans?: readonly BuildingPlan[];
 }
 
-/** Kerb line (lamps, hydrants, bins): this far from the road centreline, m. */
-const KERB_LINE = ROAD_WIDTH / 2 + 0.5;
-/** Benches stand back against the building side of the pavement, m from the centreline. */
-const BENCH_LINE = ROAD_WIDTH / 2 + SIDEWALK - 0.45;
-/** Furniture slots along a block side (m from the block's corner), clear of the lamps at 16, 32, 48. */
-const SLOTS = [12, 20.5, 24, 27.5, 36.5, 40, 43.5, 52];
+/** Furniture slots along a block side (m from the block's corner), 3 m apart and clear of the lamps at 16, 32, 48. */
+const SLOTS = [12, 19.5, 22.5, 25.5, 28.5, 35.5, 38.5, 41.5, 44.5, 52];
 /** Furniture per block side, on average, by district. */
-const DENSITY: Readonly<Record<District, number>> = { downtown: 2.6, arts: 2.2, oldtown: 1.9, residential: 1.5, industrial: 1.1 };
+const DENSITY: Readonly<Record<District, number>> = { downtown: 3.8, arts: 3.0, oldtown: 2.7, residential: 2.1, industrial: 1.6 };
 const MIX: Readonly<Record<District, ReadonlyArray<readonly [StreetPropKind, number]>>> = {
   downtown: [
     ['trash_bin', 3],
     ['newspaper_box', 2.2],
+    ['parking_meter', 2.2],
     ['bench', 1.5],
     ['hydrant', 1.5],
+    ['planter', 1.2],
     ['mailbox', 1],
+    ['bike_rack', 0.8],
+    ['recycling_bin', 0.6],
   ],
   oldtown: [
     ['hydrant', 2],
     ['bench', 2],
     ['trash_bin', 2],
     ['mailbox', 1.5],
+    ['parking_meter', 1.5],
     ['newspaper_box', 1],
+    ['planter', 1],
   ],
   arts: [
     ['bench', 2.5],
     ['trash_bin', 2],
     ['newspaper_box', 1.6],
+    ['bike_rack', 1.6],
     ['hydrant', 1],
+    ['planter', 1],
+    ['recycling_bin', 0.8],
+    ['parking_meter', 0.6],
   ],
   industrial: [
     ['hydrant', 2.6],
     ['trash_bin', 1.2],
     ['bollard', 1.4],
+    ['traffic_barrel', 0.5],
+    ['shopping_cart', 0.3],
   ],
   residential: [
     ['hydrant', 2],
     ['mailbox', 2],
+    ['recycling_bin', 1.6],
     ['trash_bin', 1.5],
     ['bench', 1],
+    ['bike_rack', 0.4],
+    ['shopping_cart', 0.3],
   ],
 };
 /** Park trees by district: [round, tall, palm] weights. */
@@ -126,12 +182,33 @@ const TREES: Readonly<Record<District, readonly [number, number, number]>> = {
 /** Canopy radius of each tree model at scale 1, m. */
 const TREE_RADIUS = { tree_round: 1.43, tree_tall: 1.5, palm: 2.6 } as const;
 
-/** Footprints (half-sizes, m) for collision and knocking; a prop not listed is neither. */
+/**
+ * Footprints for collision and knocking, in the model's frame (x across,
+ * z along its facing): solid boxes as half-sizes, or rects for things made
+ * of several walls (a bus shelter's back and ends, open at the front).
+ * A prop not listed is neither (lying flat: plates, a trench).
+ */
 const SOLID_HALF: Partial<Record<StreetPropKind, readonly [number, number]>> = {
   streetlamp: [0.2, 0.2],
   traffic_light: [0.2, 0.2],
   bollard: [0.14, 0.14],
   dumpster: [1.02, 0.68],
+  planter: [0.6, 0.35],
+  vending_machine: [0.5, 0.4],
+  atm: [0.4, 0.3],
+  food_cart_hotdog: [0.8, 0.4],
+  food_cart_coffee: [0.75, 0.4],
+  fruit_stand: [1.0, 0.5],
+  skip: [0.8, 1.3],
+  portable_toilet: [0.55, 0.55],
+};
+const SOLID_RECTS: Partial<Record<StreetPropKind, readonly Rect[]>> = {
+  bus_shelter: [
+    { minX: -1.72, minZ: -0.45, maxX: 1.72, maxZ: -0.33 },
+    { minX: -1.72, minZ: -0.45, maxX: -1.6, maxZ: 0.33 },
+    { minX: 1.6, minZ: -0.45, maxX: 1.72, maxZ: 0.33 },
+  ],
+  mini_digger: [{ minX: -0.75, minZ: -1.3, maxX: 0.75, maxZ: 1.45 }],
 };
 const KNOCK_RADIUS: Partial<Record<StreetPropKind, number>> = {
   hydrant: 0.25,
@@ -139,11 +216,55 @@ const KNOCK_RADIUS: Partial<Record<StreetPropKind, number>> = {
   newspaper_box: 0.32,
   mailbox: 0.32,
   bench: 0.95,
+  parking_meter: 0.18,
+  recycling_bin: 0.34,
+  bike_rack: 0.92,
+  shopping_cart: 0.45,
+  cafe_table: 0.85,
+  traffic_cone: 0.3,
+  traffic_barrel: 0.3,
+  work_barrier: 0.92,
+  roadwork_sign: 0.58,
 };
-/** Long furniture people walk around as a box (half-sizes, m), clear of the walk line. */
+/** Long furniture people (and cars) meet as a box (half-sizes, m), clear of the walk line or the lane. */
 const KNOCK_BOX: Partial<Record<StreetPropKind, readonly [number, number]>> = {
   bench: [0.9, 0.3],
+  bike_rack: [0.9, 0.25],
+  cafe_table: [0.8, 0.4],
+  work_barrier: [0.9, 0.12],
+  roadwork_sign: [0.55, 0.3],
 };
+/** How much room a prop takes for later placements (radius, m); 0.4 if not listed, trees take none. */
+const ROOM: Partial<Record<StreetPropKind, number>> = {
+  streetlamp: 0.3,
+  traffic_light: 0.3,
+  bollard: 0.2,
+  hydrant: 0.3,
+  parking_meter: 0.2,
+  bench: 0.95,
+  bike_rack: 0.95,
+  planter: 0.65,
+  cafe_table: 0.9,
+  dumpster: 1.2,
+  bus_shelter: 1.0,
+  food_cart_hotdog: 1.0,
+  food_cart_coffee: 0.95,
+  fruit_stand: 1.15,
+  vending_machine: 0.6,
+  atm: 0.5,
+  traffic_cone: 0.3,
+  traffic_barrel: 0.3,
+  work_barrier: 0.9,
+  roadwork_sign: 0.6,
+  steel_plate: 1.3,
+  work_trench: 1.8,
+  skip: 1.4,
+  mini_digger: 1.4,
+  portable_toilet: 0.7,
+};
+const NO_ROOM: ReadonlySet<StreetPropKind> = new Set(['tree_round', 'tree_tall', 'palm']);
+/** Bucket size for the taken-room lookup, m. */
+const ROOM_CELL = 4;
 
 export function placeStreetProps(city: City, opts: StreetPropOptions = {}): StreetProps {
   const props: StreetProp[] = [];
@@ -151,11 +272,35 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
   const knockables: Knockable[] = [];
   const avoid = opts.avoid ?? [];
   const keepOut = opts.keepOut ?? [];
+  const reserve = opts.reserve ?? [];
+  // Room taken by what's placed so far, bucketed: [x, z, r] triples per cell.
+  const taken = new Map<number, number[]>();
+  const roomKey = (cx: number, cz: number) => (cx + 4096) * 8192 + cz + 4096;
+  const free = (x: number, z: number, r: number) => {
+    const reach = Math.ceil((r + 2) / ROOM_CELL);
+    const cx = Math.floor(x / ROOM_CELL);
+    const cz = Math.floor(z / ROOM_CELL);
+    for (let i = cx - reach; i <= cx + reach; i++) {
+      for (let j = cz - reach; j <= cz + reach; j++) {
+        const list = taken.get(roomKey(i, j));
+        if (!list) continue;
+        for (let k = 0; k < list.length; k += 3) if (len2(list[k] - x, list[k + 1] - z) < list[k + 2] + r) return false;
+      }
+    }
+    return true;
+  };
   const outside = (x: number, z: number, r: number) => !keepOut.some((k) => x > k.minX - r && x < k.maxX + r && z > k.minZ - r && z < k.maxZ + r);
-  const clear = (x: number, z: number, r: number) => outside(x, z, r) && !avoid.some((a) => len2(a.x - x, a.z - z) < a.r + r);
+  const clear = (x: number, z: number, r: number) => outside(x, z, r) && !avoid.some((a) => len2(a.x - x, a.z - z) < a.r + r) && free(x, z, r);
+  const clearRoad = (x: number, z: number, r: number) => clear(x, z, r) && !reserve.some((a) => len2(a.x - x, a.z - z) < a.r + r);
 
-  const put = (kind: StreetPropKind, x: number, z: number, heading: number, scale = 1, phase = 0, eastWest = false) => {
-    const i = props.push({ kind, x, z, heading, scale, phase, eastWest }) - 1;
+  const claim = (x: number, z: number, r: number) => {
+    const key = roomKey(Math.floor(x / ROOM_CELL), Math.floor(z / ROOM_CELL));
+    let list = taken.get(key);
+    if (!list) taken.set(key, (list = []));
+    list.push(x, z, r);
+  };
+  const put = (kind: StreetPropKind, x: number, z: number, heading: number, scale = 1, phase = 0, eastWest = false, tint?: string) => {
+    const i = props.push(tint ? { kind, x, z, heading, scale, phase, eastWest, tint } : { kind, x, z, heading, scale, phase, eastWest }) - 1;
     // Turned a quarter, a footprint swaps.
     const turned = Math.abs(Math.sin(heading)) > 0.5;
     const half = SOLID_HALF[kind];
@@ -164,11 +309,15 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
       const hz = (turned ? half[0] : half[1]) * scale;
       solids.push({ minX: x - hx, minZ: z - hz, maxX: x + hx, maxZ: z + hz });
     }
+    for (const r of SOLID_RECTS[kind] ?? []) solids.push(turnRect(x, z, heading, r));
     const r = KNOCK_RADIUS[kind];
     const box = KNOCK_BOX[kind];
     if (r && box) knockables.push({ prop: i, x, z, radius: r * scale, hx: (turned ? box[1] : box[0]) * scale, hz: (turned ? box[0] : box[1]) * scale });
     else if (r) knockables.push({ prop: i, x, z, radius: r * scale });
+    if (!NO_ROOM.has(kind)) claim(x, z, (ROOM[kind] ?? 0.4) * scale);
+    return i;
   };
+  const placer: Placer = { clear, clearRoad, claim, put: (kind, x, z, heading, scale, phase, tint) => put(kind, x, z, heading, scale, phase, false, tint) };
 
   // Lamps: every one the shaders light, except where one would stand in a
   // bay's mouth (its pool of light stays; better than a post in the way).
@@ -176,20 +325,17 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
   // Traffic lights at the signalled junctions.
   for (const p of signalPoles()) if (outside(p.x, p.z, 0.3)) put('traffic_light', p.x, p.z, p.heading, 1, p.offset, p.eastWest);
 
+  // The bigger things first, each from its own stream, so they get their pick of the kerbs.
+  const roadworks = placeRoadworks(city, mulberry32((city.seed * 2654435761) ^ 0x60ad), placer, opts.quietRoads ?? new Set());
+  const busStops = placeBusStops(city, mulberry32((city.seed * 2654435761) ^ 0xb05), placer, roadworks);
+  const vendors = placeVendors(city, mulberry32((city.seed * 2654435761) ^ 0xf00d), placer);
+  placeFrontages(city, opts.plans ?? planBuildings(city), mulberry32((city.seed * 2654435761) ^ 0xcafe), placer);
+
   const rand = mulberry32((city.seed * 2654435761) ^ 0x7e11);
   for (const b of city.blocks) {
-    const x0 = -HALF_EXTENT + b.bx * BLOCK_SIZE;
-    const z0 = -HALF_EXTENT + b.bz * BLOCK_SIZE;
-    // Sides: [outward toward the road (x, z)], run along x for north/south sides.
     for (let side = 0; side < 4; side++) {
-      const ox = side === 1 ? 1 : side === 3 ? -1 : 0;
-      const oz = side === 0 ? -1 : side === 2 ? 1 : 0;
-      const alongX = oz !== 0;
-      const at = (t: number, inset: number) => ({
-        x: alongX ? x0 + t : ox < 0 ? x0 + inset : x0 + BLOCK_SIZE - inset,
-        z: alongX ? (oz < 0 ? z0 + inset : z0 + BLOCK_SIZE - inset) : z0 + t,
-      });
-      const toRoad = Math.atan2(ox, oz);
+      const s = blockSide(b, side);
+      const { at, toRoad } = s;
       if (b.kind === 'plaza') {
         // A row of bollards along the kerb, keeping the plaza's middle open to the street.
         for (let t = 16; t <= 48; t += 2.4) {
@@ -205,17 +351,34 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
         const t = slots.splice(Math.floor(rand() * slots.length), 1)[0];
         const kind = pick(MIX[b.district], rand());
         const bench = kind === 'bench';
-        const p = at(t + (rand() - 0.5) * 1.5, bench ? BENCH_LINE : KERB_LINE + (kind === 'hydrant' ? -0.05 : 0.1));
-        if (!clear(p.x, p.z, bench ? 1.2 : 0.6)) continue;
-        // Benches and hydrants face the road; boxes face the people walking by.
-        const facing = bench || kind === 'hydrant' || kind === 'bollard' ? toRoad : toRoad + Math.PI;
+        const p = at(t + (rand() - 0.5), bench ? BENCH_LINE : KERB_LINE + (kind === 'hydrant' ? -0.05 : 0.1));
+        // Carts get left at any angle; the rest face the road (benches, hydrants, racks, meters) or the people walking by.
+        const facing =
+          kind === 'shopping_cart'
+            ? rand() * Math.PI * 2
+            : bench || kind === 'hydrant' || kind === 'bollard' || kind === 'bike_rack' || kind === 'parking_meter' || kind === 'planter'
+              ? toRoad
+              : toRoad + Math.PI;
+        if (!clear(p.x, p.z, ROOM[kind] ?? 0.4)) continue;
         put(kind, p.x, p.z, facing);
       }
     }
     if (b.kind === 'park') plantTrees(city, b.bx, b.bz, b.district, put);
   }
   placeDumpsters(city, rand, clear, put);
-  return { props, solids, knockables };
+  return { props, solids, knockables, roadworks, vendors, busStops };
+}
+
+/** A rect in a prop's own frame (x across, z along its facing), turned by a whole number of quarters into the world. */
+export function turnRect(x: number, z: number, heading: number, r: Rect): Rect {
+  const s = Math.round(Math.sin(heading));
+  const c = Math.round(Math.cos(heading));
+  // Local (lx, lz) → world (x + lx·c + lz·s, z - lx·s + lz·c).
+  const ax = x + r.minX * c + r.minZ * s;
+  const az = z - r.minX * s + r.minZ * c;
+  const bx = x + r.maxX * c + r.maxZ * s;
+  const bz = z - r.maxX * s + r.maxZ * c;
+  return { minX: Math.min(ax, bx), minZ: Math.min(az, bz), maxX: Math.max(ax, bx), maxZ: Math.max(az, bz) };
 }
 
 function pick<T>(list: ReadonlyArray<readonly [T, number]>, r: number): T {
@@ -225,7 +388,7 @@ function pick<T>(list: ReadonlyArray<readonly [T, number]>, r: number): T {
   return list[list.length - 1][0];
 }
 
-type Put = (kind: StreetPropKind, x: number, z: number, heading: number, scale?: number) => void;
+type Put = (kind: StreetPropKind, x: number, z: number, heading: number, scale?: number) => number;
 
 /** The park's trees (city.trees, already colliding) as models: the kind by district, sized to the canopy. */
 function plantTrees(city: City, bx: number, bz: number, district: District, put: Put): void {

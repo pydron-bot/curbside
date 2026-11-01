@@ -17,6 +17,11 @@ const ramps = [...big, ...placeKickers(1337, big)];
 const dressing = dressCity(city, pickups, ramps);
 const { street, landmarks } = dressing;
 
+/** The road works' kit, standing in the road. */
+const ROAD_KINDS = new Set(['traffic_cone', 'traffic_barrel', 'work_barrier', 'roadwork_sign', 'steel_plate', 'work_trench', 'skip', 'mini_digger', 'portable_toilet']);
+/** Against the shopfronts. */
+const FRONT_KINDS = new Set(['cafe_table', 'vending_machine', 'atm']);
+
 /** Distance from the nearest road centreline (the road a pavement prop stands beside). */
 function fromCentreline(x: number, z: number): number {
   const dx = Math.abs(x - Math.round(x / BLOCK_SIZE) * BLOCK_SIZE);
@@ -39,19 +44,49 @@ describe('street furniture', () => {
 
   it('keeps kerbside things off the line people walk, and out of the road', () => {
     const walk = ROAD_WIDTH / 2 + SIDEWALK / 2;
+    const lots = new Set(street.vendors.filter((v) => v.setting !== 'kerb').map((v) => `${v.x},${v.z}`));
     for (const p of street.props) {
       if (p.kind === 'tree_round' || p.kind === 'tree_tall' || p.kind === 'palm' || p.kind === 'dumpster') continue;
+      if (ROAD_KINDS.has(p.kind) || lots.has(`${p.x},${p.z}`)) continue;
       const d = fromCentreline(p.x, p.z);
+      if (FRONT_KINDS.has(p.kind)) {
+        // Against a shopfront: a person's width clear of the walking line.
+        expect(d - 0.4, p.kind).toBeGreaterThan(walk + 0.35);
+        continue;
+      }
       expect(d, p.kind).toBeGreaterThan(ROAD_WIDTH / 2);
       expect(d, p.kind).toBeLessThan(ROAD_WIDTH / 2 + SIDEWALK);
-      if (p.kind === 'bench') expect(d - walk).toBeGreaterThan(0.6);
+      if (p.kind === 'bench' || p.kind === 'bus_shelter') expect(d - walk).toBeGreaterThan(0.6);
       else expect(walk - d, p.kind).toBeGreaterThan(0.6);
     }
   });
 
   it('puts every district\'s mix on the streets, dumpsters in alleys and trees in the parks', () => {
     const kinds = new Set(street.props.map((p) => p.kind));
-    for (const k of ['hydrant', 'bench', 'trash_bin', 'bollard', 'newspaper_box', 'mailbox', 'dumpster', 'tree_round', 'tree_tall', 'palm']) {
+    for (const k of [
+      'hydrant',
+      'bench',
+      'trash_bin',
+      'bollard',
+      'newspaper_box',
+      'mailbox',
+      'dumpster',
+      'tree_round',
+      'tree_tall',
+      'palm',
+      'parking_meter',
+      'planter',
+      'bike_rack',
+      'recycling_bin',
+      'shopping_cart',
+      'cafe_table',
+      'vending_machine',
+      'atm',
+      'bus_shelter',
+      'food_cart_hotdog',
+      'food_cart_coffee',
+      'fruit_stand',
+    ]) {
       expect(kinds, k).toContain(k);
     }
     expect(street.props.filter((p) => p.kind === 'dumpster').length).toBeGreaterThan(10);
@@ -63,10 +98,13 @@ describe('street furniture', () => {
       if (p.kind === 'dumpster') continue; // against a wall
       for (const b of buildings.near(p.x, p.z, 0.1)) expect(circleVsRect(p.x, p.z, 0.05, b), p.kind).toBeNull();
     }
-    const solidKinds = new Set(['streetlamp', 'traffic_light', 'bollard', 'dumpster']);
-    expect(street.solids.length).toBe(street.props.filter((p) => solidKinds.has(p.kind)).length);
+    // One rect each, three for a shelter (back and ends, open to the road).
+    const solidKinds = new Set(['streetlamp', 'traffic_light', 'bollard', 'dumpster', 'planter', 'vending_machine', 'atm', 'food_cart_hotdog', 'food_cart_coffee', 'fruit_stand', 'skip', 'portable_toilet', 'mini_digger']);
+    const shelters = street.props.filter((p) => p.kind === 'bus_shelter').length;
+    expect(street.solids.length).toBe(street.props.filter((p) => solidKinds.has(p.kind)).length + 3 * shelters);
     // The knockables are the small things, each a real prop.
-    for (const k of street.knockables) expect(['hydrant', 'trash_bin', 'newspaper_box', 'mailbox', 'bench']).toContain(street.props[k.prop].kind);
+    const light = ['hydrant', 'trash_bin', 'newspaper_box', 'mailbox', 'bench', 'parking_meter', 'recycling_bin', 'bike_rack', 'shopping_cart', 'cafe_table'];
+    for (const k of street.knockables) expect([...light, 'traffic_cone', 'traffic_barrel', 'work_barrier', 'roadwork_sign']).toContain(street.props[k.prop].kind);
     // Benches block people as their box, long side along the kerb, and stay
     // clear of the line walkers follow down the pavement.
     const walkLine = ROAD_WIDTH / 2 + SIDEWALK / 2;

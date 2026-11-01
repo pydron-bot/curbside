@@ -322,7 +322,8 @@ export function driveAi(
     if (ai.yielding > 0 || ai.overtaking > 0) {
       // Pull over (hug the kerb), or pull out into the oncoming lane to pass.
       // Right of travel is (-v.z, v.x) (rightOf() without its allocation).
-      const shift = ai.overtaking > 0 ? -OVERTAKE_SHIFT : YIELD_SHIFT;
+      // Not into road works at the kerb, though: there they slow down in the lane.
+      const shift = ai.overtaking > 0 ? -OVERTAKE_SHIFT : signals?.kerbWorks?.(ai.ix, ai.iz, ai.dir) ? 0 : YIELD_SHIFT;
       aim.x -= v.z * shift;
       aim.z += v.x * shift;
     }
