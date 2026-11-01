@@ -1,6 +1,7 @@
 import {
   BoxGeometry,
   BufferAttribute,
+  BufferGeometry,
   DynamicDrawUsage,
   InstancedBufferAttribute,
   InstancedMesh,
@@ -10,8 +11,8 @@ import {
   Quaternion,
   RGBADepthPacking,
   Vector3,
-  type BufferGeometry,
   type IUniform,
+  type Object3D,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Rect } from '../world/city';
@@ -26,6 +27,12 @@ const STRIDE = 23;
 const CELL = 32;
 /** Static props this far outside the visible ground still draw (their shadows reach in), m. */
 const MARGIN = 14;
+/**
+ * Models per shadow twin (render/sunShadow.ts's cache) up to this many
+ * triangles together (props are ~30–200): a few calls per family instead
+ * of one per model, each instance running a few models' vertices, not all.
+ */
+const TWIN_TRIANGLES = 400;
 
 /** Uniforms every prop family shares (the traffic lights' clock). */
 export const propUniforms = {
@@ -92,6 +99,25 @@ export class PropBatch {
   /** Draw even when empty for a couple of frames, so the programs compile and buffers upload up front. */
   private warm = 2;
   private ready = false;
+  /** Bumped whenever the static props change (placed, knocked, restored, models in): the cached sun shadow redraws. */
+  staticVersion = 0;
+  /**
+   * Kinds in runs of neighbours (their models adjacent in the merged
+   * geometry) of up to TWIN_TRIANGLES: per kind, its run (-1: no model);
+   * per run, its first index and index count.
+   */
+  private readonly runOf: Int32Array;
+  private readonly runs: Int32Array;
+  /**
+   * Per run: the static props over a wider area, for the cached sun shadow
+   * map only (render/sunShadow.ts). Never in the scene, so the scene pass
+   * still draws just the view.
+   */
+  private readonly twins: (InstancedMesh | null)[];
+  private readonly twinProps: (InstancedBufferAttribute | null)[];
+  private readonly twinCount: Int32Array;
+  private twinVersion = -1;
+  private dynTwin: InstancedMesh | null = null;
 
   constructor(
     name: string,
@@ -101,6 +127,11 @@ export class PropBatch {
   ) {
     this.kinds = kinds;
     kinds.forEach((k, i) => this.index.set(k, i));
+    this.runOf = new Int32Array(kinds.length).fill(-1);
+    this.runs = new Int32Array(kinds.length * 2);
+    this.twins = kinds.map(() => null);
+    this.twinProps = kinds.map(() => null);
+    this.twinCount = new Int32Array(kinds.length);
     const material = propMaterial();
     this.mesh = new InstancedMesh(placeholderGeometry(), material, capacity);
     this.mesh.name = `props_${name}`;
@@ -122,16 +153,35 @@ export class PropBatch {
   /** The models arrived: merge the family's geometry (kinds missing from the files draw nothing). */
   setModels(models: PropModels): void {
     const parts: BufferGeometry[] = [];
+    const partKinds: number[] = [];
     this.kinds.forEach((kind, k) => {
       const g = models.geometry(kind);
       if (!g) return;
       const geo = g.clone();
       geo.setAttribute('aKind', new BufferAttribute(new Float32Array(geo.getAttribute('position').count).fill(k), 1));
       parts.push(geo);
+      partKinds.push(k);
     });
     if (!parts.length) return;
     const merged = mergeGeometries(parts);
     if (!merged) return;
+    // mergeGeometries appends the parts in order, so neighbouring kinds are
+    // one index range: group them into runs for the shadow twins.
+    let start = 0;
+    let run = -1;
+    let runLength = Infinity;
+    parts.forEach((g, i) => {
+      const n = merged.index ? g.index!.count : g.getAttribute('position').count;
+      if (runLength + n > TWIN_TRIANGLES * 3) {
+        run++;
+        this.runs[run * 2] = start;
+        runLength = 0;
+      }
+      runLength += n;
+      this.runs[run * 2 + 1] = runLength;
+      this.runOf[partKinds[i]] = run;
+      start += n;
+    });
     merged.setAttribute('aProp', this.prop);
     merged.setAttribute('aTint', this.tint);
     const old = this.mesh.geometry;
@@ -140,6 +190,7 @@ export class PropBatch {
     this.ready = true;
     this.warm = 2;
     this.dirty = true;
+    this.staticVersion++;
   }
 
   /** Has the GLB arrived (until then the city's stand-ins show)? */
@@ -175,6 +226,7 @@ export class PropBatch {
     this.sZ[i] = z;
     this.cells = null;
     this.dirty = true;
+    this.staticVersion++;
     return i;
   }
 
@@ -185,6 +237,7 @@ export class PropBatch {
     if (this.sHidden[handle] === v) return;
     this.sHidden[handle] = v;
     this.dirty = true;
+    this.staticVersion++;
   }
 
   /** Start a frame: bring the static instances in view into the buffers (only if the view changed cells). */
@@ -275,6 +328,128 @@ export class PropBatch {
     this.sHidden.fill(0);
     this.cells = null;
     this.dirty = true;
+    this.staticVersion++;
+  }
+
+  /**
+   * Put the static props within `ground` (plus the usual margin) in the
+   * shadow twins and add those with any to `out`. Only when the cached sun
+   * shadow redraws: it may allocate, growing a twin to its run's count.
+   */
+  fillShadowTwins(ground: Rect, out: Object3D[]): void {
+    if (!this.ready) return;
+    if (!this.cells) this.bucket();
+    const counts = this.twinCount;
+    // Room for every static prop of each kind (found again only when the statics changed).
+    if (this.twinVersion !== this.staticVersion) {
+      this.twinVersion = this.staticVersion;
+      counts.fill(0);
+      for (let i = 0; i < this.sCount; i++) {
+        const r = this.runOf[this.sData[i * STRIDE + 16] | 0];
+        if (r >= 0) counts[r]++;
+      }
+      for (let r = 0; r < counts.length; r++) {
+        if (counts[r] > 0 && (this.twins[r]?.instanceMatrix.count ?? 0) < counts[r]) this.buildTwin(r, counts[r]);
+      }
+    }
+    counts.fill(0);
+    const data = this.sData;
+    const cx0 = Math.floor((ground.minX - MARGIN) / CELL);
+    const cz0 = Math.floor((ground.minZ - MARGIN) / CELL);
+    const cx1 = Math.floor((ground.maxX + MARGIN) / CELL);
+    const cz1 = Math.floor((ground.maxZ + MARGIN) / CELL);
+    for (let cx = cx0; cx <= cx1; cx++) {
+      for (let cz = cz0; cz <= cz1; cz++) {
+        const list = this.cells!.get(cellKey(cx, cz));
+        if (!list) continue;
+        for (let j = 0; j < list.length; j++) {
+          const i = list[j];
+          if (this.sHidden[i]) continue;
+          const o = i * STRIDE;
+          const r = this.runOf[data[o + 16] | 0];
+          const twin = r >= 0 ? this.twins[r] : null;
+          if (!twin) continue;
+          const n = counts[r]++;
+          const mat = twin.instanceMatrix.array as Float32Array;
+          const prop = this.twinProps[r]!.array as Float32Array;
+          for (let e = 0; e < 16; e++) mat[n * 16 + e] = data[o + e];
+          for (let e = 0; e < 4; e++) prop[n * 4 + e] = data[o + 16 + e];
+        }
+      }
+    }
+    for (let r = 0; r < counts.length; r++) {
+      const twin = this.twins[r];
+      if (!twin) continue;
+      twin.count = counts[r];
+      if (counts[r] === 0) continue;
+      uploadRange(twin.instanceMatrix, counts[r]);
+      uploadRange(this.twinProps[r]!, counts[r]);
+      out.push(twin);
+    }
+  }
+
+  /**
+   * (Re)make run `r`'s shadow twin with room for `count`: an instanced mesh
+   * drawing only that run's models out of the family's geometry. The family
+   * mesh runs every model's vertices for each instance; a few calls per
+   * family is far less vertex work for a pass over a wide area.
+   */
+  private buildTwin(r: number, count: number): void {
+    const twin = this.makeTwin(this.twins[r], count, `${this.mesh.name}_shadow${r}`, this.runs[r * 2], this.runs[r * 2 + 1]);
+    this.twins[r] = twin;
+    this.twinProps[r] = twin.geometry.getAttribute('aProp') as InstancedBufferAttribute;
+  }
+
+  /** A shadow-only mesh over (a run of) the family's geometry with its own instances, replacing `old`. */
+  private makeTwin(old: InstancedMesh | null, count: number, name: string, start: number, length: number): InstancedMesh {
+    const cap = 1 << Math.ceil(Math.log2(Math.max(4, count)));
+    let geo = old?.geometry;
+    if (!geo) {
+      const src = this.mesh.geometry;
+      geo = new BufferGeometry();
+      geo.setIndex(src.index);
+      for (const n of Object.keys(src.attributes)) {
+        if (n !== 'aProp' && n !== 'aTint') geo.setAttribute(n, src.getAttribute(n));
+      }
+      geo.setDrawRange(start, length);
+    }
+    old?.dispose(); // its instance matrices
+    geo.setAttribute('aProp', new InstancedBufferAttribute(new Float32Array(cap * 4), 4).setUsage(DynamicDrawUsage));
+    const twin = new InstancedMesh(geo, this.mesh.material, cap);
+    twin.name = name;
+    twin.instanceMatrix.setUsage(DynamicDrawUsage);
+    twin.frustumCulled = false;
+    twin.castShadow = true;
+    twin.customDepthMaterial = this.mesh.customDepthMaterial;
+    twin.count = 0;
+    twin.updateMatrixWorld();
+    return twin;
+  }
+
+  /**
+   * This frame's props only (after the static ones), in a shadow twin for the
+   * per-frame sun shadow pass, while the static ones come from the cache: a
+   * garbage truck's bins cost their own vertices, not the whole family's.
+   * Null when there are none.
+   */
+  dynamicShadowTwin(): InstancedMesh | null {
+    const n = this.dyn;
+    if (n === 0 || !this.ready) return null;
+    if (!this.dynTwin || this.dynTwin.instanceMatrix.count < n) {
+      this.dynTwin = this.makeTwin(this.dynTwin, n, `${this.mesh.name}_moving_shadow`, 0, Infinity);
+    }
+    const twin = this.dynTwin;
+    const prop = twin.geometry.getAttribute('aProp') as InstancedBufferAttribute;
+    const mat = twin.instanceMatrix.array as Float32Array;
+    const srcMat = this.mesh.instanceMatrix.array as Float32Array;
+    const p = prop.array as Float32Array;
+    const srcProp = this.prop.array as Float32Array;
+    for (let e = 0, o = this.shown * 16; e < n * 16; e++) mat[e] = srcMat[o + e];
+    for (let e = 0, o = this.shown * 4; e < n * 4; e++) p[e] = srcProp[o + e];
+    twin.count = n;
+    uploadRange(twin.instanceMatrix, n);
+    uploadRange(prop, n);
+    return twin;
   }
 
   private writeDynamic(i: number, k: number, phase: number, glow: number, r: number, g: number, b: number): void {

@@ -136,6 +136,8 @@ export class WorldProps {
   );
   /** Car parts thrown by explosions (fx debris writes them per frame), tinted with the car's paint; no shadows. */
   readonly debris = new PropBatch('debris', ['door', 'hood', 'bumper', 'wheel', 'panel_a', 'panel_b', 'panel_c'], 96, { shadows: false });
+  /** The families placed once and never moving (a garbage truck's bins aside): the sun shadow caches them. */
+  readonly staticFamilies: readonly PropBatch[] = [this.lamps, this.street, this.roofs, this.trees, this.landmarks];
   /** The traffic lights' clock (set by main.ts); the lenses follow it. */
   signals: SignalClock | null = null;
   models: PropModels | null = null;
