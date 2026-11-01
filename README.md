@@ -219,10 +219,14 @@ bake in as new constants.
   drive-bys; optional character clips; stunt ramps with STUNT awards.
 - **World and vehicle models** (`src/render/propModels.ts`, `propBatch.ts`,
   `worldProps.ts`, `heliModel.ts`; `src/world/streetProps.ts`,
-  `landmarkProps.ts`, `dressing.ts`, `signals.ts`; see *World* below):
+  `landmarkProps.ts`, `dressing.ts`, `signals.ts`, `roadworks.ts`,
+  `streetStops.ts`, `frontages.ts`; see *World* below):
   props.glb, pickups.glb, debris.glb and heli.glb replace the box
   stand-ins — street lamps, traffic lights that traffic obeys, street
-  furniture you can knock flying, rooftop kit, trees by district, booths,
+  furniture you can knock flying (parking meters, planters, bike racks,
+  recycling bins, café tables, vending machines and ATMs too), road-works
+  sites traffic drives past, bus shelters and food carts with spots for
+  queues, rooftop kit, trees by district, booths,
   the station, race gantries, the export bay, the safehouse door, pickups,
   frenzy tokens, ramps and kickers, car-part debris in the car's paint and a
   modelled police helicopter — in seven instanced families. Twelve more
@@ -1235,7 +1239,7 @@ and every new program is compiled behind the current frame.
   models merged into one geometry; each instance says which model it is
   and the vertex shader drops every other model's vertices, so a family is
   one draw call (and one in the shadow pass): `lamps`, `street` (traffic
-  lights and furniture), `roofs`, `trees`, `landmarks`, `things` (pickups,
+  lights, furniture, road works, carts and shelters), `roofs`, `trees`, `landmarks`, `things` (pickups,
   frenzy tokens, packages, roadblock barriers and cones, knocked-over
   props in flight) and `debris`. Static instances are bucketed in 32 m
   cells and the buffers are refilled only when the view crosses a cell;
@@ -1244,8 +1248,12 @@ and every new program is compiled behind the current frame.
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new
   head); traffic lights on 70% of the inner junctions; furniture per block
-  side by district (hydrants, benches, bins, bollards, newspaper boxes,
-  mailboxes, payphones; busiest downtown), dumpsters at alley mouths,
+  side by district, in ten slots 3 m apart (hydrants, benches, bins,
+  bollards, newspaper boxes, mailboxes, parking meters, planters, bike
+  racks, recycling bins, now and then an abandoned shopping cart or a
+  stray traffic barrel; about 3.8 a side downtown, 3.0 in the arts
+  quarter, 2.7 in the old town, 2.1 in the suburbs, 1.6 in the
+  industrial quarter, up from 2.6–1.1), payphones, dumpsters at alley mouths,
   bollards round plazas, park trees by district (round, tall, palms);
   rooftop kit fitted to the building plans (AC units, vents, water tanks,
   dishes, stair huts, antennas with a blinking tip; the huts' tar-grey and
@@ -1253,15 +1261,78 @@ and every new program is compiled behind the current frame.
   their mouth to the street (the roof opens while you're inside), the
   export bay, the police sign and the safehouse door on their walls (both
   lamps glow at night), race-start gantries with barriers and cones, ramp
-  and kicker models. Nothing lands on a pickup, a payphone, a race start,
-  the station or the safehouse door, or in a bay's mouth.
-- **Collision**: lamp posts, signal poles, bollards, dumpsters, payphones,
-  booth and bay walls, gantry pillars and long barriers go into the
-  `StaticGrid`. Hydrants, bins, newspaper boxes, mailboxes, benches and
-  race cones are *knockables* (`systems/knockables.ts`): a car through
-  one at over 3 m/s sends it flying (`render/knockFx.ts`: a tumbling copy,
-  dust and sparks, a 14 s geyser from a hydrant) and it's back 60 s later
-  once out of sight. Roadblock barriers and cones go flying the same way.
+  and kicker models. Against the shopfronts (`world/frontages.ts`, from
+  the building plans): café tables with umbrellas outside shops with no
+  awning (an awning would hide them; most in the old town and the arts
+  quarter), vending machines (four colours, the instance tint) and ATMs at
+  the ends of shop windows. Nothing lands on a pickup, a payphone, a race
+  start, the station or the safehouse door, in a bay's mouth, or on
+  anything placed before it (a bucketed room check, `world/kerbs.ts`
+  `Placer`); kerb things stay a metre off the line people walk down,
+  wall things a person's width.
+- **Road works** (`world/roadworks.ts`): 18 sites round the city, each
+  closing the strip of road between the kerb and a traffic lane for 20–26
+  m of a block: a ROAD WORK A-frame facing the traffic, a taper of four
+  cones out from the kerb, traffic barrels every 3 m (their lamps blink in
+  a run along the line) with plastic barriers between them, two cones
+  closing the far end, and behind them a mix of a trench and its spoil,
+  steel plates, a skip, a mini digger and a portable toilet. The barrels
+  stand `WORKS_EDGE` (5.95 m) from the centreline and a lane's traffic
+  keeps to 4 ± 1.33 m (a bus), so traffic drives past without changing
+  lanes; a driver pulling over for a siren stays in its lane along a
+  closed kerb (`SignalView.kerbWorks`, set from `TrafficSignals.setRoadworks`
+  in `main.ts`). Sites stay 18–46 m into a block (clear of the junctions
+  and of a right-turning bus's swing), off race legs, the spawn corner, the
+  ramps' run-ups and every car a mission parks at the kerb, and off the
+  outer ring. `tests/roadworks.test.ts` drives a car and a bus past every
+  site, straight on, turning in from either side and pulling over for a
+  siren: nothing knocked, nothing hit. `dressing.street.roadworks`:
+  `{ ix, iz, dir, from, to, area }` (the lane, as `roads.ts` names it, how
+  far along it the site runs, the closed strip as a world rect).
+- **Food carts and bus stops** (`world/streetStops.ts`): hot dog carts,
+  coffee carts and fruit stands on the kerb line serving the pavement
+  (about a third of downtown's block sides; a few in the arts quarter and
+  the old town) and just inside the parks and open plazas (not the car
+  parks); 86 bus shelters on the building side of the pavement, open to
+  the road, beside lanes with no works (most downtown and in the suburbs;
+  one where Deacon Pike waits in Maple Flats). For people code (queues, a
+  bus that stops), pure and the same every game:
+  - `dressing.street.vendors: VendorSpot[]` — `{ kind ('food_cart_hotdog'
+    | 'food_cart_coffee' | 'fruit_stand'), x, z, heading` (the serving
+    side's facing, vehicle convention)`, serveX, serveZ` (where the first
+    customer stands, facing the cart)`, queueX, queueZ` (unit step the
+    queue grows along, down the pavement, away from the vendor)`, vendorX,
+    vendorZ` (the vendor's spot, at the cart's end)`, setting ('kerb' |
+    'park' | 'plaza') }`. The first three queue places are clear of
+    anything solid; a kerb cart's queue stands on the walking line, so
+    walkers will need to step round it.
+  - `dressing.street.busStops: BusStop[]` — `{ x, z, heading` (the shelter,
+    facing the road)`, waitX, waitZ` (in front of it under the roof's edge,
+    clear of the walking line)`, stopX, stopZ, stopHeading` (where a bus
+    pulls in, by the kerb beside it)`, dir, ix, iz }` (its lane, travelling
+    `dir` toward junction (ix, iz)).
+- **Stand-ins** (`render/propStandIns.ts`): props.glb has no models yet for
+  the round-2 kinds, so each is a few boxes (five faces each, no bottom)
+  tagged with the material names the GLB will use, so they light the same
+  (`blink_amber` blinks, `ad_panel` / `screen` / `stripe_*` are self-lit,
+  `roadwork_sign` / `barrier_orange` catch the light, `paint` takes the
+  tint); a GLB root of the same name replaces its stand-in. Contracts in
+  `docs/BLENDER_TODO.md` §10.
+- **Collision**: lamp posts, signal poles, bollards, dumpsters, planters,
+  food carts and fruit stands, vending machines, ATMs, bus shelters (back
+  and ends; open at the front, so people can stand inside), skips, mini
+  diggers, portable toilets, payphones, booth and bay walls, gantry pillars
+  and long barriers go into the `StaticGrid`. Hydrants, bins, newspaper
+  boxes, mailboxes, benches, parking meters, recycling bins, bike racks,
+  café tables, shopping carts and the road works' cones, barrels, barriers
+  and signs, and race cones are *knockables* (`systems/knockables.ts`): a
+  car through one at over 3 m/s sends it flying (`render/knockFx.ts`: a
+  tumbling copy, dust and sparks, a 14 s geyser from a hydrant) and it's
+  back 60 s later once out of sight. Long ones (benches, bike racks, café
+  tables, work barriers, signs) meet people and cars as their box, so a
+  barrier beside a lane is only hit by a car that leaves it. Roadblock
+  barriers and cones go flying the same way. Steel plates and trenches are
+  drawn only.
 - **Traffic lights** (`world/signals.ts`, pure, tested): a 24 s two-phase
   cycle (9 s green, 2 s amber, a beat of all-red), offset per junction,
   stepped with the simulation. The lenses are lit in the shader from one
@@ -1326,6 +1397,15 @@ and every new program is compiled behind the current frame.
   helicopter included: it is drawn speck-small for two frames on load). No
   light is ever added; nothing allocates per frame (knock-overs and debris
   write into preallocated buffers).
+  Street props round 2 (iPhone profile, same spots before → after, on foot,
+  2026-11-01): spawn 49 → 49, a road-works site 43 → 43, a downtown street
+  with carts 33 → 33, a plaza 36 → 36; wider views (camera at 32–45 m)
+  31–51 → 32–52 (a call or three either way with the people in view). No
+  new draw call or program; the cost is vertices: the street family went
+  from 3,276 to 5,976 vertices per instance (every instance runs every
+  model's, the others dropped early), and 17–88 street instances are in
+  view (capacity 1,100), so the scene's submitted triangles rose about 1.6×
+  (e.g. 253k → 438k on the plaza).
 
 `dressCity(city, pickups, ramps)` → `{ street, landmarks, solids,
 knockables }` is the one call `main.ts` makes before building the
