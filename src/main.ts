@@ -112,6 +112,7 @@ import { TUTORIAL_DONE } from './game/tutorial';
 import { CityLifeLook } from './render/cityLifeLook';
 import { CityMood } from './game/cityMood';
 import { atmosphereLook } from './render/atmosphereLook';
+import { peopleLook } from './render/peopleLook';
 import { mountRadioToast } from './ui/radioToast';
 import { publicUrl } from './core/paths';
 import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
@@ -371,6 +372,7 @@ const heat = new Heat({
   held: () => progress.holdControls,
   bustFine: () => progress.bustShare(),
   signals,
+  witnesses: (crime, x, z) => cityLife.witnesses.report(crime, x, z),
 });
 addHeatLook(look, heat, {
   scene,
@@ -424,16 +426,22 @@ const cityLife = new CityLife({
     ...dressing.street.roadworks.map(({ area: a }) => ({ x: (a.minX + a.maxX) / 2, z: (a.minZ + a.maxZ) / 2, r: Math.hypot(a.maxX - a.minX, a.maxZ - a.minZ) / 2 + 4 })),
     ...dressing.street.busStops.map((b) => ({ x: b.stopX, z: b.stopZ, r: 13 })),
   ],
+  busStops: dressing.street.busStops,
+  vendors: dressing.street.vendors,
   trafficScale: () => getQuality().trafficScale,
   npcShoot: (x, z, dx, dz) => npcShoot(x, z, dx, dz),
   collect: (kind) => combat.collect(kind),
   focus: () => (attract.active ? attract : player.position),
   mood: cityMood,
+  hour: () => look.time.hour,
+  reward: (cash, label) => progress.pay(cash, 'street', label),
+  callIn: (crime) => heat.called(crime),
 });
 maintainCity = (seed) => cityLife.maintain(seed);
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
 look.addGlowSource((g, view) => cityLook.draw(g, view));
 cityLook.add(atmosphereLook(cityLife));
+cityLook.add(peopleLook(cityLife));
 const cityView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 // Everyone's place, pose and clip each frame (and the player ducking into cars, cheering wins).
 const people = new PeoplePose({

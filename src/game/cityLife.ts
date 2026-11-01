@@ -39,6 +39,7 @@ import { SceneClock, type SceneWorld } from '../systems/cityScenes';
 import { PUNCH_REACH, hurtPed, resumeWalking, spawnPed, type PedAgent, type Target } from '../systems/crowd';
 import { policeSpawnPoint } from '../systems/police';
 import { driverFor } from '../systems/traffic';
+import type { Crime } from '../systems/wanted';
 import type { WeaponKind } from '../systems/weapons';
 import type { Rect } from '../world/city';
 import { WeaponDrops } from '../world/drops';
@@ -48,14 +49,13 @@ import {
   carParkBays,
   pickBay,
   pickParkingSpot,
-  placeBusStops,
   placeHospital,
   type Avoid,
   type Bay,
-  type BusStop,
   type Hospital,
   type RoadSpot,
 } from '../world/streetSpots';
+import type { BusStop, VendorSpot } from '../world/streetStops';
 import type { City } from '../world/city';
 import type { Player } from './player';
 import { Medics } from './scenes/medics';
@@ -63,6 +63,14 @@ import type { CityMood } from './cityMood';
 import { StreetMood } from './scenes/streetMood';
 import { StrayDogs } from './scenes/strayDogs';
 import { TurfWar } from './scenes/turfWar';
+import { Buses } from './scenes/buses';
+import { Buskers } from './scenes/buskers';
+import { Fights } from './scenes/fights';
+import { IceCream } from './scenes/iceCream';
+import { Muggings } from './scenes/muggings';
+import { Pavement } from './scenes/pavement';
+import { Vendors } from './scenes/vendors';
+import { Witnesses } from './scenes/witnesses';
 import { len2 } from '../core/len';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
@@ -104,8 +112,12 @@ export interface CityLifeDeps {
   tutorial(): boolean;
   /** Cars other systems need left where they are (an activity's): no scene may take them. */
   keep(v: Vehicle): boolean;
-  /** Places parked cars keep clear of (landmarks, bays' mouths, ramps, the spawn corner). */
+  /** Places parked cars keep clear of (landmarks, bays' mouths, ramps, the spawn corner, the bus shelters' bays). */
   avoid: readonly Avoid[];
+  /** The bus shelters (dressing.street.busStops): the only bus stops. */
+  busStops: readonly BusStop[];
+  /** The food carts and fruit stands (dressing.street.vendors). */
+  vendors: readonly VendorSpot[];
   /** The quality tier's traffic multiplier. */
   trafficScale(): number;
   /** An NPC fires from (x, z) along unit (dx, dz) (combat's NPC bullet). */
@@ -116,6 +128,12 @@ export interface CityLifeDeps {
   focus(): { x: number; z: number; vx: number; vz: number };
   /** The hour, the rain and the nightlife (game/cityMood.ts; main.ts keeps it up to date). */
   mood?: CityMood;
+  /** The hour of the day, 0–24 (the food carts' rushes; 13 if left out). */
+  hour?(): number;
+  /** Pay the player a small reward for a good turn (a bag handed back), with its feed label. */
+  reward?(cash: number, label: string): void;
+  /** A witness's call about the player's `crime` got through (heat.called). */
+  callIn?(crime: Crime): void;
 }
 
 /** A scene's view of the director. */
@@ -139,8 +157,8 @@ export class CityLife {
   readonly d: CityLifeDeps;
   readonly clock: SceneClock;
   readonly hospital: Hospital;
-  /** Bus stops (world/streetSpots.ts placeBusStops): parked cars keep clear of them. */
-  readonly stops: BusStop[];
+  /** The bus shelters (world/streetStops.ts, via deps.busStops); deps.avoid keeps parked cars out of their bays. */
+  readonly stops: readonly BusStop[];
   /** The car parks' bays. */
   readonly bays: Bay[];
   readonly drops = new WeaponDrops();
@@ -148,6 +166,8 @@ export class CityLife {
   readonly streetMood: StreetMood;
   readonly dogs: StrayDogs;
   readonly turfWar: TurfWar;
+  /** Heat's witnesses hook (scenes/witnesses.ts). */
+  readonly witnesses: Witnesses;
   readonly scenes: Scene[] = [];
   /** Vehicles the scenes brought in (ambient): retired here once far and unseen. */
   readonly owned: Vehicle[] = [];
@@ -170,15 +190,21 @@ export class CityLife {
     this.d = d;
     this.clock = new SceneClock(d.rand);
     this.hospital = placeHospital(d.city);
-    const avoid = [...d.avoid, { x: this.hospital.bayX, z: this.hospital.bayZ, r: 14 }];
-    this.stops = placeBusStops(avoid);
-    this.parkAvoid = [...avoid, ...this.stops.map((s) => ({ x: s.x, z: s.z, r: 13 }))];
+    this.stops = d.busStops;
+    this.parkAvoid = [...d.avoid, { x: this.hospital.bayX, z: this.hospital.bayZ, r: 14 }];
     this.bays = carParkBays(d.city);
     // The scenes: one line each.
     this.medics = this.add(new Medics(this));
     this.streetMood = this.add(new StreetMood(this));
     this.dogs = this.add(new StrayDogs(this));
     this.turfWar = this.add(new TurfWar(this));
+    this.add(new Buses(this));
+    const fights = this.add(new Fights(this));
+    this.add(new IceCream(this, fights));
+    this.add(new Vendors(this, fights));
+    this.add(new Buskers(this));
+    this.witnesses = this.add(new Witnesses(this, this.add(new Muggings(this))));
+    this.add(new Pavement(this));
   }
 
   /** Register a scene (stepped, reset with the rest). */

@@ -1,18 +1,18 @@
 /**
  * Fixed and picked places for the city's everyday life (game/cityLife.ts):
- * the hospital the ambulances drive to, the bus stops, kerbside parking
- * spots and the bays of the car parks, and where people stand in a queue
- * or a crowd. Derived from the road grid and the city layout (pure,
- * deterministic per seed), so the scenes, the markers and the radar agree.
+ * the hospital the ambulances drive to, kerbside parking spots and the
+ * bays of the car parks, and where people stand in a queue or a crowd (the
+ * bus shelters and food carts are world/streetStops.ts). Derived from the
+ * road grid and the city layout (pure, deterministic per seed), so the
+ * scenes, the markers and the radar agree.
  *
  * Roads run between nodes (ix, iz) on the BLOCK_SIZE grid; traffic keeps
  * right, so a car heading `dir` toward node (ix, iz) has its kerb on the
  * right. Parked cars stand against that kerb mid-block (clear of the
- * junctions, their crossings and the lane traffic drives in); a stop sits
- * on the pavement beside it.
+ * junctions, their crossings and the lane traffic drives in).
  */
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, lotBytes, type Block, type City } from './city';
-import { DIR_VEC, MAX_NODE, canLeave, dirHeading, nodeValid, type Dir } from './roads';
+import { DIR_VEC, canLeave, dirHeading, nodeValid, type Dir } from './roads';
 import { len2 } from '../core/len';
 
 /** A parked car's middle from the road centreline, m (a sedan is 1.9 m across: 1 m clear of the lane, 0.15 m off the kerb). */
@@ -21,14 +21,8 @@ export const PARK_OFFSET = ROAD_WIDTH / 2 - 1.1;
 export const PARK_ALONG = [14, 50] as const;
 /** One car length and a gap, m. */
 export const PARK_PITCH = 6;
-/** A bus pulls in this far from the centreline (half a lane toward the kerb), m. */
+/** A van pulls in to the kerb this far from the centreline (half a lane toward the kerb), m. */
 export const BUS_PULL_IN = ROAD_WIDTH / 4 + 1.6;
-/** Bus stops are this far before the node the bus is heading to, m (mid-block). */
-export const STOP_ALONG = 30;
-/** Riders wait this far from the centreline, on the pavement, m. */
-export const STOP_KERB = ROAD_WIDTH / 2 + 1.2;
-/** One segment in this many has a stop (each way). */
-const STOP_EVERY = 5;
 
 /** A point on the road network: on the segment arriving at node (ix, iz) heading `dir`, `along` m before the node. */
 export interface RoadSpot {
@@ -41,13 +35,6 @@ export interface RoadSpot {
   z: number;
   /** Vehicle heading (nose along (sin h, cos h)). */
   heading: number;
-}
-
-export interface BusStop extends RoadSpot {
-  id: number;
-  /** Where riders wait on the pavement (the bus stops beside it). */
-  waitX: number;
-  waitZ: number;
 }
 
 export interface Hospital {
@@ -85,34 +72,6 @@ export function segmentValid(ix: number, iz: number, dir: Dir): boolean {
 function clear(x: number, z: number, avoid: readonly Avoid[]): boolean {
   for (const a of avoid) if (len2(a.x - x, a.z - z) < a.r) return false;
   return true;
-}
-
-/**
- * Bus stops: one segment in STOP_EVERY each way (picked by a hash of the
- * node, so they're spread evenly), mid-block, away from `avoid`.
- */
-export function placeBusStops(avoid: readonly Avoid[] = []): BusStop[] {
-  const out: BusStop[] = [];
-  const p = { x: 0, z: 0 };
-  for (let ix = -MAX_NODE; ix <= MAX_NODE; ix++) {
-    for (let iz = -MAX_NODE; iz <= MAX_NODE; iz++) {
-      for (let d = 0; d < 4; d++) {
-        const dir = d as Dir;
-        if (!segmentValid(ix, iz, dir)) continue;
-        // The outer ring road runs past the boundary wall: no stops there.
-        if (Math.abs(ix) === MAX_NODE && (dir === 0 || dir === 2)) continue;
-        if (Math.abs(iz) === MAX_NODE && (dir === 1 || dir === 3)) continue;
-        if ((((ix * 7 + iz * 13 + d * 3) % STOP_EVERY) + STOP_EVERY) % STOP_EVERY !== 0) continue;
-        roadPoint(ix, iz, dir, STOP_ALONG, STOP_KERB, p);
-        if (!clear(p.x, p.z, avoid)) continue;
-        const wx = p.x;
-        const wz = p.z;
-        roadPoint(ix, iz, dir, STOP_ALONG, BUS_PULL_IN, p);
-        out.push({ id: out.length, ix, iz, dir, along: STOP_ALONG, x: p.x, z: p.z, heading: dirHeading(dir), waitX: wx, waitZ: wz });
-      }
-    }
-  }
-  return out;
 }
 
 /** The hospital goes on a built-up block near here (east of the spawn, away from the police station). */

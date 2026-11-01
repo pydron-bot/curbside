@@ -231,7 +231,12 @@ export type StreetWhat =
   // Atmosphere: a stray dog barking (chasing a runner) or yelping (hit, scared off), a gang turf flare-up.
   | 'bark'
   | 'yelp'
-  | 'turfWar';
+  | 'turfWar'
+  // People (scenes/buskers.ts, muggings.ts, witnesses.ts): a busker sets up, a bag snatched, handed back, a crime called in.
+  | 'busker'
+  | 'mugging'
+  | 'bagReturned'
+  | 'witnessCall';
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;
