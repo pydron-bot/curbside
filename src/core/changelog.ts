@@ -22,6 +22,7 @@ export const CHANGELOG: readonly Release[] = [
       'The version shows on the title screen.',
       'Settings → Version history lists every release.',
       'Settings → Test tools adds TEST to the pause menu for playtesting: god mode, weapons, wanted level, spawn any vehicle, time of day, rain, slow motion, teleport from the city map, start any street scene, and save tools (CRED, cash, story jobs, tutorial, reset, export and import). God mode moved there; any of it marks the life (no CRED, bests or medals).',
+      'For playtesting: labels over the people and cars doing something (medics, chases, queues, gangs...); Shift+L on a keyboard.',
     ],
   },
   {

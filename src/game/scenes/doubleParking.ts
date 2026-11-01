@@ -25,6 +25,7 @@ import type { Scene, SceneCtx } from '../cityLife';
 import { LaneBlock } from './laneBlock';
 import { holdStill, pullIn } from './service';
 import { len2 } from '../../core/len';
+import { secs, type LabelSink } from '../debugLabels';
 
 export type TruckJob = 'delivery' | 'garbage';
 type Phase = 'pullIn' | 'work' | 'back' | 'leave';
@@ -117,6 +118,15 @@ export class DoubleParking implements Scene {
     for (const s of this.stops) this.end(s, true);
     this.stops.length = 0;
     this.pending = null;
+  }
+
+  describe(out: LabelSink): void {
+    for (const s of this.stops) {
+      const job = s.job === 'garbage' ? 'GARBAGE' : 'DELIVERY';
+      const v = s.truck;
+      if (out.wants(v.sim.x, v.sim.z)) out.car(v, s.phase === 'work' ? `${job} ${secs(s.dwell - s.timer)}` : s.phase === 'pullIn' ? `${job} (pulling in)` : job, 'traffic');
+      for (const c of s.crew) out.ped(c.ped, s.job === 'garbage' ? (c.carrying ? 'BIN CREW (bin)' : 'BIN CREW') : c.carrying ? 'COURIER (parcel)' : 'COURIER', 'people');
+    }
   }
 
   /**

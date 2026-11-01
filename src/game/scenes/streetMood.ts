@@ -17,6 +17,7 @@ import { NIGHTLIFE, rainPace } from '../cityMood';
 import type { PedAgent } from '../../systems/crowd';
 import type { CrowdPed } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
+import { labelMembers, type LabelSink } from '../debugLabels';
 import { SpotGrid, inFrontOf, shopSpots, type ShopSpot } from '../../world/shopSpots';
 import { len2 } from '../../core/len';
 
@@ -116,6 +117,11 @@ export class StreetMood implements Scene {
     this.umbrellas.length = 0;
     this.umbrellaColour.length = 0;
     this.taken.fill(0);
+  }
+
+  describe(out: LabelSink): void {
+    for (const s of this.shelterers) out.ped(s.ped, 'SHELTERING', 'people');
+    for (const g of this.groups) labelMembers(out, g.peds, 'HANGING OUT', false);
   }
 
   /** Walkers hurry and put umbrellas up in the rain, slow down again when it stops. */

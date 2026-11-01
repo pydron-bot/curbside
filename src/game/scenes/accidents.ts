@@ -27,6 +27,7 @@ import { incident } from './chases';
 import { LaneBlock } from './laneBlock';
 import { ServiceRun, holdStill, type ServiceSpec } from './service';
 import { len2 } from '../../core/len';
+import type { LabelSink } from '../debugLabels';
 
 type Phase = 'closing' | 'crashed' | 'argue' | 'fight' | 'sorted' | 'left';
 
@@ -114,6 +115,19 @@ export class Accidents implements Scene {
   reset(): void {
     for (const c of this.list) this.drop(c, true);
     this.list.length = 0;
+  }
+
+  describe(out: LabelSink): void {
+    for (const c of this.list) {
+      if (c.phase === 'closing') {
+        out.car(c.a, 'ACCIDENT (not braking)', 'traffic');
+        out.car(c.b, 'ACCIDENT (braking)', 'traffic');
+      }
+      const how = c.phase === 'fight' ? 'DRIVER (fighting)' : c.phase === 'sorted' ? 'DRIVER (statement)' : 'DRIVER (arguing)';
+      for (const p of c.drivers) out.ped(p, how, 'people');
+      if (c.officer) out.ped(c.officer, 'COP (accident)', 'police');
+      if (c.police) out.car(c.police.v, 'POLICE (accident)', 'police');
+    }
   }
 
   /** Cars crashes left in the road for a tow (also flagged Vehicle.towable). */

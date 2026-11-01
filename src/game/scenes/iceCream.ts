@@ -19,6 +19,7 @@ import { dirHeading, type Dir } from '../../world/roads';
 import { BUS_PULL_IN, roadPoint, segmentValid } from '../../world/streetSpots';
 import type { SceneDriver, Vehicle } from '../population';
 import { SCENE_RANGE, type Scene, type SceneCtx } from '../cityLife';
+import { secs, labelMembers, type LabelSink } from '../debugLabels';
 import type { Fights } from './fights';
 import { Gathering } from './gathering';
 import { roomFor, streetBody } from './people';
@@ -115,6 +116,14 @@ export class IceCream implements Scene {
   reset(): void {
     for (const van of this.vans) this.untrack(van);
     this.vans.length = 0;
+  }
+
+  describe(out: LabelSink): void {
+    for (const van of this.vans) {
+      const v = van.v;
+      if (out.wants(v.sim.x, v.sim.z)) out.car(v, van.phase === 'open' ? `ICE CREAM (open ${secs(OPEN_FOR - van.timer)})` : van.phase === 'pull' ? 'ICE CREAM (pulling in)' : 'ICE CREAM', 'traffic');
+      labelMembers(out, van.queue.members, 'QUEUE', true);
+    }
   }
 
   /** Debug (__ub): a van put down at the kerb near the player, open, with a few already queueing. */

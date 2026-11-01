@@ -79,6 +79,7 @@ import { StreetRaces } from './scenes/streetRaces';
 import { Accidents } from './scenes/accidents';
 import { DoubleParking } from './scenes/doubleParking';
 import { len2 } from '../core/len';
+import type { LabelSink } from './debugLabels';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
 export const SCENE_RANGE = 150;
@@ -160,6 +161,8 @@ export interface Scene {
   readonly running: number;
   /** Stop everything now (a fresh run, the title): hand back what it holds. */
   reset(): void;
+  /** Debug labels (settings.debugLabels, ~5 Hz): what its people and cars are doing. */
+  describe?(out: LabelSink): void;
 }
 
 export class CityLife {
@@ -311,6 +314,11 @@ export class CityLife {
     this.looks.clear();
     this.drops.clear();
     this.clock.reset(this.now);
+  }
+
+  /** Debug labels: every scene describes what it holds. */
+  describe(out: LabelSink): void {
+    for (const s of this.scenes) s.describe?.(out);
   }
 
   /** May a `kind` start now, with `running` of them going (its clock, cap and holds)? */

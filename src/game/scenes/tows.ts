@@ -22,6 +22,7 @@ import type { SceneDriver, Vehicle } from '../population';
 import { SCENE_RANGE, type Scene, type SceneCtx } from '../cityLife';
 import { FireCrews } from './fireCrews';
 import { ServiceRun, holdStill, pullIn, stopped, type ServiceSpec } from './service';
+import type { LabelSink } from '../debugLabels';
 
 /** Cars this close to the player may be towed, m. */
 export const TOW_RANGE = 110;
@@ -119,6 +120,13 @@ export class Tows implements Scene, SceneDriver {
     if (!run) return false;
     this.tows.push({ run, truck: run.v, car, stage: 'drive', timer: 0, rear: false, spot: { x: 0, z: 0, heading: 0 }, from: { x: 0, z: 0, heading: 0 }, left: { m: 99 } });
     return true;
+  }
+
+  describe(out: LabelSink): void {
+    for (const t of this.tows) {
+      out.car(t.truck, t.stage === 'drive' ? 'TOW → car' : t.stage === 'line' ? 'TOW (lining up)' : t.stage === 'winch' ? 'TOW (winching)' : 'TOW (towing)', 'emergency');
+      out.car(t.car, t.stage === 'drive' || t.stage === 'line' ? 'TO BE TOWED' : 'ON THE HOOK', 'emergency');
+    }
   }
 
   /** The truck lining up and winching (v.scene once the run has brought it there). */

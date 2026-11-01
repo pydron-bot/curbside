@@ -41,7 +41,7 @@ export interface Settings {
   godMode: boolean;
   /** Settings → Test tools: TEST in the pause menu (cheats, spawns, teleports, scenes, save tools). */
   testTools: boolean;
-  /** TEST menu: debug labels over the world. */
+  /** Testing: labels over the people and cars doing something notable (ui/labelsOverlay.ts; Shift+L). */
   debugLabels: boolean;
 }
 

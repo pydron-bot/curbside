@@ -18,6 +18,7 @@ import { KeyedText, type Mode, type ModeCtx } from './context';
 import { pavement } from './places';
 import { TRIP_RANGE, TaxiDuty, fareFor, type TaxiInput } from './taxi';
 import { len2 } from '../../core/len';
+import type { LabelSink } from '../debugLabels';
 
 /** Where a hail can come from: this far from the cab, m... */
 const HAIL_RANGE = [14, 60] as const;
@@ -252,5 +253,10 @@ export class TaxiMode implements Mode {
     this.duty.phase = 'off';
     this.duty.streak = 0;
     this.cab = null;
+  }
+
+  /** Debug labels: the fare waiting for the cab. */
+  describe(out: LabelSink): void {
+    if (this.fare) out.ped(this.fare, 'FARE', 'mission');
   }
 }

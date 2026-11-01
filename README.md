@@ -64,7 +64,8 @@ perf overlay (Off / FPS / Full); under TESTING, Test tools (TEST in the
 pause menu, below). In the
 header, VERSION HISTORY: every release from `core/changelog.ts`, newest
 first (the version also shows top right on the title screen and on the
-pause card).
+pause card). Playtest labels over what the city's people and cars are
+doing: `settings.debugLabels`, Shift+L (see *City life*).
 
 **TEST menu** (Settings → Test tools; `game/testTools.ts` the actions,
 `ui/testMenu.ts` the sheet, `ui/teleportMap.ts` the map): a TEST chip in
@@ -922,9 +923,43 @@ vehicles with `ServiceRun` (or your own `SceneDriver` on `v.scene`), people
 with `Gathering`, `walkTo` / `setOn`; emit `street` events; hand everything
 back in `reset()`. Register it with one line in `CityLife`'s constructor
 (`this.add(new YourScene(this))`) and, if it draws, one `cityLook.add(...)`
-in `main.ts`. Only borrow `street` people, only take vehicles that are
+in `main.ts`. For the playtest labels add a `describe(out)` (below). Only borrow `street` people, only take vehicles that are
 `ai`-driven, unpinned (`life.d.keep`), not `police`, not the player's. No
 per-step allocation (reuse records; no closures in `drive`).
+
+**Playtest labels** (`settings.debugLabels`, default off; **Shift+L** on a
+keyboard, `__ub.labels.toggle()`): small text over the people and cars
+within 60 m in view that are doing something notable, nearest first, at
+most 24. Each scene's optional `describe(out)` labels what it holds
+(`MEDIC (treating)`, `PATIENT (waits 54s)`, `FIRE 54s (called)`,
+`FIREFIGHTER (hosing)`, `TOW → car`, `ALARM 12s`, `CHASE: SUSPECT (car)`,
+`CHASE COP`, `RACER 2/4`, `DRIVER (arguing)`, `DELIVERY 31s`, `COURIER
+(parcel)`, `BUS → stop`, `BUS STOP 2`, `QUEUE 3`, `ICE CREAM (open 36s)`,
+`VENDOR`, `BUSKER 80s`, `WATCHING`, `FIGHTER`, `ONLOOKER`, `MUGGER
+(running)`, `VICTIM`, `BAG 31s`, `WITNESS (calling 2.1s)`, `DOG (chasing)`,
+`SHELTERING`, `HANGING OUT`), the missions theirs (`MISSION: tag`, `VEX`,
+`MISSION CAR: tag`, `FARE`), then `describeWorld` the rest by their flags
+(the player's police `COP (pursuit)` / `POLICE (roadblock)`, gangs and turf
+crews in their colours `VIPERS (fighting)`, `INJURED`, `ON PHONE`, `KO`,
+`FLEEING`, `PARKED`, `CRASHED (towable)`, `WRECK`, `EMPTY`, `DROP: pistol
+31s`). Colours by category: emergency red, police blue, gangs their own,
+people amber, traffic grey, missions pink. Text logic is pure and tested
+(`game/debugLabels.ts`: `LabelBoard`, `pedLabel`, `carLabel`, `raceRank`);
+the layer (`ui/labelsOverlay.ts`) is a fixed pool of DOM pills over the
+canvas (`pointer-events: none`, no draw calls): collected and their text
+written at 5 Hz only where it changed, projected every frame and moved by
+`translate3d` from cached strings (no allocation, no layout reads), stepped
+up clear of nearer ones. Off, the layer is hidden and nothing runs. Cost
+(Chromium, iPhone profile, 24 labels, camera moving every frame): ~0.02 ms
+of JS a frame (median), a refresh ~0.05 ms. `__ub.labels.list()` /
+`.stats()` show what's up and the time taken.
+
+```ts
+describe(out: LabelSink): void {   // a Scene's, ~5 Hz while the labels are on
+  for (const c of this.crews) out.car(c.run.v, 'FIRE TRUCK', 'emergency');
+  if (out.wants(f.x, f.z)) out.spot(f, `FIRE ${secs(f.life - f.age)}`, 'emergency');   // build changing text only if wanted
+}
+```
 
 **Budget.** No new mesh, program or draw call: the vehicles and people are
 the usual batches, the drops go in the props' `things` family, light in

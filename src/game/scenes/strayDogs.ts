@@ -13,6 +13,7 @@ import { StaticGrid } from '../../world/collision';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT } from '../../world/city';
 import { districtAt, type District } from '../../world/districts';
 import type { Scene, SceneCtx } from '../cityLife';
+import { dogText, type LabelSink } from '../debugLabels';
 import { len2 } from '../../core/len';
 
 /** Most dogs about at once, × the area's share. */
@@ -127,6 +128,10 @@ export class StrayDogs implements Scene {
     if (edge < 0) return false;
     this.pack.add(sx, sz, bx, bz, edge + 1, Math.floor(this.life.d.rand() * DOG_COATS));
     return true;
+  }
+
+  describe(out: LabelSink): void {
+    for (const d of this.pack.dogs) out.spot(d, dogText(d.mode), 'people');
   }
 
   /** A dog somewhere on a pavement in the ring round the player, out of view. */
