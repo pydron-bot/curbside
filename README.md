@@ -403,7 +403,9 @@ burning: `explosion.ownCar`), clearly ramming a police car
 +0.6 (bumps in a chase don't count, nor does smashing through a roadblock
 or a chasing cop driving into you), bullets into one +0.15 (capped),
 knocking down an officer +1 (at most +1 per 5 s), wrecking a police car
-+1; stealing one sets at least 1★. Civilian crimes stop at 3★; 4–5★ need
++1; stealing one sets at least 1★. Knocking a civilian down and carjacking
+seen only by passers-by (no police near) wait for one of them to phone it
+in, 3–5 s, and can be stopped (City life, *Witnesses*). Civilian crimes stop at 3★; 4–5★ need
 attacks on the police. Below a star, heat fades after 10 quiet seconds.
 A new star (or a witnessed crime) is called in: for 8 s dispatch tracks
 you while units respond, and the evasion clock waits. **Evasion:** once no
@@ -508,6 +510,7 @@ heat.wanted.level / .heat / .searching    // read the stars
 heat.wanted.commit(crime, witnessed)      // report a crime ('assault', 'carjack', 'gunfire', ...)
 heat.wanted.force(stars)                  // scripted chases, missions
 heat.wanted.clear(reason)                 // e.g. a mission's reward
+heat.called(crime)                        // a witness's call got through (HeatDeps.witnesses held it: City life, Witnesses)
 heat.police.units / .heli / .seen          // read the response
 heat.shops / heat.station                 // landmarks (world/landmarks.ts)
 // Bus: { type: 'wanted', level, prev, reason } · { type: 'busted', fine } · { type: 'horn', x, z, duration }
@@ -563,6 +566,83 @@ director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
   came from the sidewalk crates (`world/pickups.ts`), a frenzy's gift, a
   mission's hand-out or the Chaos Run's loadout.*
 
+**People** (`scenes/buses.ts`, `iceCream.ts`, `vendors.ts`, `buskers.ts`,
+`fights.ts`, `muggings.ts`, `witnesses.ts`, `pavement.ts`; rules in
+`systems/streetPeople.ts` and `systems/witnesses.ts`, tested). The scenes
+hold at most 24 people between them (`scenes/people.ts` PEOPLE_CAP: on
+top of the crowd's own count, so past it queues and crowds stop drawing
+people in).
+
+- **Bus stops**: the 86 shelters (`dressing.street.busStops`, `life.stops`)
+  are the only stops. The four nearest within 110 m gather riders over
+  time: passers-by drift over and wait in a line along the front facing
+  the road (a Gathering crowd placed by `shelterSpot`, 4–5 each, giving up
+  after 70–150 s), and one coming into range out of view may already have
+  one or two waiting. A bus near the player (in traffic, or brought in
+  every 45–90 s while people wait and none is about) turns at junctions
+  toward the nearest shelter with riders (`routeToward`), pulls in at its
+  bay (`pullIn` to stopX/Z), hisses open (`busStop`): one or two step off
+  the middle door and walk on, the riders walk to the front door and
+  vanish into it, and it pulls out once they're aboard (4–14 s). It stops
+  at an empty shelter 30% of the time.
+- **The ice cream van**: one in traffic within 150 m (or one brought in
+  every 90–180 s) pulls in mid-block at the kerb (`BUS_PULL_IN`), beside a
+  park or open plaza (anywhere else 25% of the time), every 30–60 s;
+  `iceCream` plays the jingle; passers-by queue at the hatch on the
+  pavement side (Gathering queue, 6, one served every 3.2 s: a cheer and
+  `iceCreamServed`); it shuts after 16–40 s and drives on.
+- **Food carts** (`dressing.street.vendors`): the five nearest within 90 m
+  get a vendor at `vendorX/Z` (put there out of view) and a queue at the
+  serving side, served every 4.5 s. How readily people join follows the
+  hour (`cartBusyness`: a lunch peak at 13:00 and an evening one at
+  18:30, near nothing in the small hours); a cart coming into range at a
+  busy hour may already have a customer or two. A kerb cart's first
+  customer stands on the walking line; the rest step off it toward the
+  shopfronts (`cartSpot`), and **walkers step round** anyone a scene holds
+  standing (`Pavement`: eased across their way, `sidestep`, before the
+  static collision), so nobody walks through a queue or jams on it.
+- **Buskers**: every 50–120 s (not while wanted) a busker sets up at the
+  edge of an open plaza or a park 25–90 m off, out of view, facing the
+  pavement, and dances (the Cheer clip, a wave every few beats) for
+  70–110 s; up to 7 passers-by watch in an arc in front (Gathering crowd)
+  for 12–28 s each, and now and then one tips: a coin glints in an arc
+  into the hat (`peopleLook`).
+- **Scuffles** (at most two, LOUD holds): someone running (a ped fleeing,
+  or the player sprinting) barges a walker (`barges`): the player knocks
+  them into whoever's beside them and those two square up; a fleeing ped
+  is gone after by the one they barged (any temper, or a calm one 40% of
+  the time). Also a stray round from someone else's gun (a temper, or one
+  in three, goes for a passer-by who fired it) and someone pushing in at a
+  cart or the ice cream van (`Fights.queueJump`). A shove each way, then
+  the one shoved backs down and walks off (35% if calm, 10% if not), or
+  6–10 s of fists (`setOn` both ways; knocked over, the other stands over
+  them till they're up). 30% end in a knockout (the loser starts low), the
+  ambulance comes for them; otherwise the more hurt walks off and the
+  other raises a fist. Up to 7 watch in a ring (Gathering crowd).
+- **Muggings** (every 90–180 s, LOUD holds): a passer-by on screen 10–40 m
+  off is rushed by someone close by, who snatches their bag (`mugging`)
+  and sprints corner to corner round the blocks, crossing at the corners
+  (`nextCorner`), ringed in red; the victim shouts and points (waving,
+  facing them) for 5 s. Knock the mugger over and the bag drops (a pulsing
+  amber ring, 45 s): walk over it to hand it back (`bagReturned`, the
+  victim cheers, **$50** through `deps.reward` → `progress.pay`; cash, not
+  CRED). Knocking the mugger down isn't called in by passers-by. Ignored,
+  they get away (65 m clear, or 35 s).
+- **Witnesses** (`heat.ts` hook `witnesses`, `scenes/witnesses.ts`): a
+  **lesser crime** (`DELAYED_CRIMES`: knocking a civilian down, a
+  carjacking) that only passers-by saw (on screen, no police within 60 m)
+  goes to whoever saw it: within 26 m and facing within 75° of it (or
+  right beside it), the five nearest. The nearest calls it in on their
+  phone (the one-handed aim pose with nothing in the hand, `CrowdPed.phone`,
+  and a lit screen in the glow batch); one in five of the rest calls too
+  (at most two per crime), half film it, the rest run. The call takes
+  3–5 s; it gets through (`heat.called(crime)`: the heat lands and the
+  police get a fix on you, `witnessCall`) unless every caller is knocked
+  down or scared off, or you get 45 m from them first. A second crime
+  close by while a call is on goes on the same call. With nobody who saw
+  it (or no phone free: 6 at once), heat counts it at once as before.
+  Gunfire, explosions and everything against the police stay immediate.
+
 **The director.** `main.ts` creates one and calls `step(dt)` every sim step
 (after combat), `maintain(seed)` with population upkeep, `reset()` with a
 fresh run; a car with a `scene` is driven by `v.scene.drive(v, obstacles,
@@ -596,6 +676,8 @@ run.end()                                                          // stop now (
 const g = new Gathering(life, { kind: 'queue', capacity: 5, draw: 30, joinChance: 0.6, serveEvery: 3.2, side: 2.2 });
 const c = new Gathering(life, { kind: 'crowd', capacity: 8, draw: 25, joinChance: 0.5, stay: [10, 25], radius: 3, arc?: Math.PI });
 g.at(x, z, heading) · g.recruit() /* ~1×/s */ · g.add(ped) · g.step(dt) /* → the one served / done, handed back */ · g.close()
+g.release(ped)                        // out without handing back (to the bus door, into a scuffle)
+spec.place?(i, out)                   // own places instead of the queue / ring (a shelter's line, a cart's queue)
 
 // People and cars for scenes (cityLife.ts)
 life.addPed(x, z, heading, outfit?, body?) · life.borrow(c) · life.giveBack(c) · life.removePed(c)
@@ -607,10 +689,16 @@ holdStill(sim) · stopped(sim) · pullIn(sim, x, z, heading, cruise, obstacles, 
 // Places (world/streetSpots.ts): roadPoint, pickParkingSpot, carParkBays, pickBay, queueSpot, crowdSpot, BUS_PULL_IN.
 // Bus stops are the shelters only: life.stops = deps.busStops (dressing.street.busStops, world/streetStops.ts
 // BusStop: wait spot, where a bus pulls in, its lane); deps.vendors the food carts (VendorSpot).
+// Deps for the people: hour?() (the carts' rushes), reward?(cash, label) (a bag handed back), callIn?(crime) (heat.called).
 // Flags: PedAgent.street (borrowable passer-by) / .scene (a scene's: upkeep leaves them) / .injured;
-//        Vehicle.ambient (brought in: the director retires it) / .scene (its driver) / .parked.
-// Bus: { type: 'street', what, x, z } (StreetWhat in core/events.ts; members for the planned scenes are reserved).
-// Look (render/cityLifeLook.ts): cityLook.add({ update?(dt, view, fx), draw?(glows, view, props) }).
+//        CrowdPed.phone (a witness on the phone: posed holding it up); Vehicle.ambient (brought in: the director
+//        retires it) / .scene (its driver) / .parked.
+// Bus: { type: 'street', what, x, z } (StreetWhat in core/events.ts; members for the planned scenes are reserved;
+//      the people add 'busker', 'mugging', 'bagReturned', 'witnessCall').
+// Heat: HeatDeps.witnesses?(crime, x, z) → true to hold a lesser crime for a witness's call; heat.called(crime) lands it.
+// Debug: each people scene has a `kind` and force(): __ub.cityLife.scenes.find((s) => s.kind === 'buses').force().
+// Look (render/cityLifeLook.ts): cityLook.add({ update?(dt, view, fx), draw?(glows, view, props) }); the people's
+//      coins, mugger ring, bag and phone screens are render/peopleLook.ts.
 ```
 
 **Adding a scene.** Write `src/game/scenes/<name>.ts` with a class that
@@ -635,7 +723,13 @@ those a scene holds. iPhone profile ('medium'), a fixed seed at seven
 places round the city after 20 s each: 40.3 draw calls on average (54 at
 most) before, 41.3 (50) with the base (a parked model not otherwise in
 view costs its call and shadow pass). Smoke test (random seeds) 56 / 57 →
-61 / 51 on the iPhone sizes, 74 → 70 on desktop: within run-to-run spread.
+61 / 51 on the iPhone sizes, 74 → 70 on desktop: within run-to-run spread. The people (same
+seven places, a run started, tutorial done): 41.9 (57) → 42.1 (56), with
+2–13 people held; every people scene forced at once round one spot 36 →
+43, most of it the bus and ice cream van models in view (forced one at a
+time, each is within the frame-to-frame spread). Scene-made people take
+the body of a passer-by already out (`streetBody`), so no new body batch
+comes in.
 
 ## Progression
 

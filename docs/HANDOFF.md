@@ -296,13 +296,41 @@ still get the offline shell.
    has the models (contracts: `docs/BLENDER_TODO.md` §10). **For the
    people stream:** `dressing.street.vendors` (serve point, queue
    direction, vendor spot) and `dressing.street.busStops` (wait spot, where
-   a bus pulls in, its lane) are ready for queues at carts and buses that
-   stop; nothing uses them yet. A kerb cart's queue stands on the walking
-   line, so walkers will need to step round it. **For the device pass:**
+   a bus pulls in, its lane) are used by item 12 (the shelters are now
+   the only bus stops; walkers step round a kerb cart's queue). **For the device pass:**
    whether the stand-ins read from the phone's camera, and the street
    family's vertex cost (5,976 vertices per instance, was 3,276; every
    instance runs every model's vertices, dropped early) in a busy downtown
    view. Not done: scaffolding, a work van, water barriers.
+
+12. **City people: done 2026-11-01** on `claude/city-people` (README *City
+   life*, *People*; built on item 10's base). The bus shelters are the only
+   bus stops (`placeBusStops` is gone; CityLife takes the shelters and the
+   carts through its deps). Buses pull in at shelters where people have
+   gathered, riders board through the front door and a few get off; the
+   ice cream van stops by parks and plazas and serves a queue; food carts
+   get a vendor and a queue, busiest at lunch and in the evening, and
+   walkers step round people standing on the pavement; buskers draw a
+   crowd that tips; scuffles start from a barge (a fleeing ped, the player
+   sprinting), stray fire or a queue-jumper, with a ring of onlookers and
+   now and then a knockout for the ambulance; muggings, with a bag to win
+   back for $50; and witnesses: knocking a civilian down or a carjacking
+   seen only by passers-by is phoned in after 3–5 s, which knocking the
+   caller down or getting 45 m away stops (`HeatDeps.witnesses`,
+   `heat.called`; no witness, the old immediate heat). No new mesh, program
+   or draw call (iPhone profile, fixed seed, seven places: 41.9 → 42.1
+   on average, 57 → 56 at most; README *City life* budget). **Shared-file edits:** `cityLife.ts` (deps
+   `busStops`, `vendors`, `hour?`, `reward?`, `callIn?`; the `witnesses`
+   field; eight `add` lines), `main.ts` (those deps, the heat hook,
+   `cityLook.add(peopleLook(...))`), `heat.ts` (the hook and `called`),
+   `events.ts` (four `StreetWhat` members), `population.ts`
+   (`CrowdPed.phone`), `peoplePose.ts` (one line), `gathering.ts` (`place`,
+   `release`); the scenes' shared bits are `scenes/people.ts`. **For the device pass:** do the phone screens, the mugger's
+   ring and the coins read on the phone; is a bus at a shelter in the way
+   on foot; how the delayed heat feels (tune `CALL_SECONDS`, `SEE_RANGE`,
+   `CALL_RANGE` in `systems/witnesses.ts`). Not done: thrown or knocked
+   objects starting scuffles (no event carries who a knocked prop hit),
+   people carrying a visible bag, a busker's music.
 
 Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
 launch ramp landing at a corner checkpoint (is that a feature?).
