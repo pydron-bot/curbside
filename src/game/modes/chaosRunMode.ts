@@ -244,8 +244,8 @@ export class ChaosRunMode implements Mode {
     const run = this.run!;
     this.finalScore = Math.max(this.finalScore, deps.score.total);
     const best = progress.best(CHAOS_RUN_ID);
-    // God mode runs don't count.
-    const god = deps.player.invulnerable;
+    // Runs with god mode or a TEST cheat don't count.
+    const god = deps.player.tainted;
     const newBest = !god && progress.recordBest(CHAOS_RUN_ID, this.finalScore);
     const medal = chaosMedal(this.finalScore);
     if (!god) progress.recordMedal(CHAOS_RUN_ID, medal);

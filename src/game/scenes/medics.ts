@@ -15,6 +15,7 @@
  * story characters are other systems' and get up as before.
  */
 import type { VehicleState } from '../../entities/vehicle';
+import { hurtPed } from '../../systems/crowd';
 import type { CrowdPed } from '../population';
 import { STORY_BODIES } from '../bodies';
 import { IN_PLAY } from '../../systems/cityScenes';
@@ -116,6 +117,38 @@ export class Medics implements Scene {
       p.ped.agent.scene = false;
     }
     this.patients.length = 0;
+  }
+
+  /** Debug (TEST menu): the passer-by nearest the player is knocked out cold and an ambulance comes for them now. */
+  force(): boolean {
+    const life = this.life;
+    if (this.patients.length >= MAX_PATIENTS) return false;
+    let ped: CrowdPed | null = null;
+    let best = 45;
+    for (const c of life.d.population.crowd) {
+      const a = c.agent;
+      if (a.mode === 'down' || !a.street || a.scene || a.role !== 'civilian' || STORY_BODIES.includes(c.model.bodyKind)) continue;
+      const d = life.distance(a.s.x, a.s.z);
+      if (d > 4 && d < best) {
+        best = d;
+        ped = c;
+      }
+    }
+    if (!ped) return false;
+    const a = ped.agent;
+    hurtPed(a, a.hp + 1, a.s.x + 1, a.s.z);
+    a.injured = true;
+    life.borrow(ped);
+    const p: Patient = { ped, since: life.now - CALL_DELAY, claimed: false };
+    this.patients.push(p);
+    // No ambulance free yet: dispatch() sends the next one.
+    const run = this.crews.length < 2 ? ServiceRun.call(life, AMBULANCE, a.s.x, a.s.z) : null;
+    if (run) {
+      p.claimed = true;
+      this.crews.push({ run, patient: p, paramedic: null, care: 'walk', timer: 0 });
+      life.emit('ambulance', run.v.sim.x, run.v.sim.z);
+    }
+    return true;
   }
 
   /** Passers-by knocked out cold near the player stay down as patients (up to the cap). */

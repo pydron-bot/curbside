@@ -7,7 +7,7 @@ import { MenuNav, overlay, type Panel } from './menu';
 import { onTap } from './tap';
 
 type SliderKey = 'masterVolume' | 'sfxVolume' | 'musicVolume';
-type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics' | 'godMode';
+type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics' | 'testTools';
 type ChoiceKey = 'quality' | 'steering' | 'perfOverlay';
 
 type Row =
@@ -125,7 +125,7 @@ export class SettingsPanel implements Panel {
       },
     ];
     // Its own section in the shorter column, so both still fit unscrolled on a phone.
-    const testingRows: Row[] = [{ kind: 'toggle', key: 'godMode', label: 'God mode', sub: "Can't die or get busted; no CRED" }];
+    const testingRows: Row[] = [{ kind: 'toggle', key: 'testTools', label: 'Test tools', sub: 'Adds TEST to the pause menu' }];
     for (const r of soundRows) sound.append(this.row(r));
     for (const r of testingRows) testing.append(this.row(r));
     for (const r of controlRows) controls.append(this.row(r));

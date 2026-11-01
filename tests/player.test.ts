@@ -56,6 +56,35 @@ describe('god mode', () => {
   });
 });
 
+describe('cheats taint the life', () => {
+  it('a TEST cheat marks the life until the next respawn', () => {
+    const { player } = setup();
+    expect(player.tainted).toBe(false);
+    player.markCheated();
+    expect(player.tainted).toBe(true);
+    player.step(DT);
+    expect(player.tainted).toBe(true);
+    player.respawn(0, 0);
+    expect(player.cheated).toBe(false);
+    expect(player.tainted).toBe(false);
+  });
+
+  it('god mode on at any point taints the life, even once turned off; left on, it taints the next', () => {
+    const { player } = setup();
+    player.invulnerable = true;
+    player.step(DT);
+    player.invulnerable = false;
+    expect(player.tainted).toBe(true);
+    player.respawn(0, 0);
+    expect(player.tainted).toBe(false);
+    player.invulnerable = true;
+    player.respawn(0, 0);
+    expect(player.cheated).toBe(true);
+    player.invulnerable = false;
+    expect(player.tainted).toBe(true);
+  });
+});
+
 describe('player transitions', () => {
   it('gets in and out, announcing both', () => {
     const { player, types } = setup();

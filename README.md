@@ -60,12 +60,46 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 Settings (title or pause menu): master / effects / music volume, sound with
 the iPhone silent switch on, graphics quality, touch steering
 (point / classic), left-handed layout (mirrors the controls and the HUD),
-perf overlay (Off / FPS / Full); under TESTING, god mode (hits land but
-take no health, the police never cuff you, the heart turns gold; a life
-with it on earns no CRED and sets no free-roam or Chaos Run best). In the
+perf overlay (Off / FPS / Full); under TESTING, Test tools (TEST in the
+pause menu, below). In the
 header, VERSION HISTORY: every release from `core/changelog.ts`, newest
 first (the version also shows top right on the title screen and on the
 pause card).
+
+**TEST menu** (Settings → Test tools; `game/testTools.ts` the actions,
+`ui/testMenu.ts` the sheet, `ui/teleportMap.ts` the map): a TEST chip in
+the pause card's corner (it costs the card no row) opens a tabbed sheet of
+big buttons, keyboard / pad navigable, Back to the pause menu, ▶ to play.
+Each button acts at once and says what it did (a strip on the sheet and the
+HUD feed). PLAYER: god mode (hits land but take no health, the police never
+cuff you, the heart turns gold; it moved here from Settings, same
+`settings.godMode`), heal and full armour, every weapon full, wanted 0–5,
+clear. CARS: spawn any of the 19 vehicles beside you (on the nearest lane;
+GET IN puts you in it), repair the car you're in, flip / unstick (onto the
+nearest clear lane). WORLD: dawn / noon / golden hour / dusk / midnight,
+freeze the clock, rain on / off / auto (at once, not over the ramp), slow
+motion 0.25× / 0.5× / 1× (it scales the sim's time like a hit-stop, people,
+pigeons and combat effects with it; the camera and audio keep real time),
+LABELS (`settings.debugLabels`). MAP: the whole city (the radar's
+drawing); tap a spot to go to the nearest road or pavement there (with the
+car: the nearer lane, facing its traffic, out of the junction), or SAFEHOUSE,
+HOSPITAL, NEON MILE, DOCKS. SCENES: start any city scene near you now (the
+scenes' `force()` / `begin()` / `soon()`; the fire blows up a car 11–24 m
+off and calls the truck; the tow leaves a car for the truck; RAIN CROWD
+turns the rain on; TURF WAR still waits for its holds). SAVE: +1 CRED
+level, max perks, reset CRED, +$10,000, unlock all jobs, jump to any story
+job (it becomes the next job; you land by its payphone), tutorial done /
+reset, reset the save, export (share sheet, else clipboard) and import (a
+pasted save, sanitised like a loaded one: `migrateSave`, `pruneSave`);
+reset and import write the save and reload. Destructive ones take a second
+press. Anything but LABELS and EXPORT is a cheat: `player.markCheated()`
+taints the life like god mode (`Player.tainted`: CredKeeper pays no CRED,
+no free-roam or Chaos Run best or medal), a TEST tag shows by the heart, and
+respawning clears it (slow motion or god mode left on taint the next life
+too). Turning Test tools off turns god mode and slow motion off. Pure and
+tested: `game/testSpots.ts` (teleport snapping, spawn spots), `game/saveTools.ts`
+(the save edits, export / import). Nothing drawn in normal play: the
+spawned cars and scenes are the usual batches.
 
 **Touch tuning** (for the device session): with the Perf overlay on (or
 `?debug`), pause → DIAGNOSTICS → TOUCH TUNING has −/+ steppers for stick

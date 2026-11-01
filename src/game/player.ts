@@ -53,6 +53,12 @@ export class Player {
   health = MAX_HEALTH;
   /** God mode (settings, for testing): hurt() never takes health, the police can't cuff. */
   invulnerable = false;
+  /**
+   * This life used a cheat (god mode, or anything from the TEST menu): like
+   * god mode it earns no CRED and sets no bests or medals. Reset on respawn
+   * (to god mode's state: left on, it taints the next life too).
+   */
+  cheated = false;
   /** Health a life starts with (raised by the shop's TOUGH SKIN upgrade). */
   maxHealth = MAX_HEALTH;
   /** Body armour, 0..MAX_ARMOUR: takes every hit first. Lost on death. */
@@ -77,6 +83,16 @@ export class Player {
 
   get alive(): boolean {
     return this.dead <= 0;
+  }
+
+  /** God mode now, or any cheat earlier this life: the life earns no CRED, bests or medals. */
+  get tainted(): boolean {
+    return this.cheated || this.invulnerable;
+  }
+
+  /** A TEST-menu cheat was used: the rest of this life counts for nothing. */
+  markCheated(): void {
+    this.cheated = true;
   }
 
   /** Busted and being held (lying cuffed until release). */
@@ -219,6 +235,8 @@ export class Player {
    * (after dying) or be released (after an arrest; check `arrested` first).
    */
   step(dt: number): boolean {
+    // God mode on at any point taints the life, even once it's off again.
+    if (this.invulnerable) this.cheated = true;
     this.punchCooldown = Math.max(0, this.punchCooldown - dt);
     // Left alone for a while, a wounded player gets back on their feet a little.
     this.sinceHurt += dt;
@@ -247,6 +265,7 @@ export class Player {
     this.health = this.maxHealth;
     this.armour = 0;
     this.sinceHurt = Infinity;
+    this.cheated = this.invulnerable;
     Object.assign(this.ped, { x, z, vx: 0, vz: 0, heading });
     Object.assign(this.prev, this.ped);
     this.bus.emit({ type: 'respawn' });
