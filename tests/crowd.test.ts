@@ -197,3 +197,20 @@ describe('sidewalk corners', () => {
     expect(p.s.vz).toBeLessThan(0);
   });
 });
+
+describe('the injured', () => {
+  it('stay down (the get-up clip never starts) until let go, then get up as usual', () => {
+    const rand = random(5);
+    const p = spawnPed(3, 3, 0, 0.5, rand);
+    expect(hurtPed(p, 200, p.s.x + 1, p.s.z)).toBe('ko');
+    p.injured = true;
+    for (let t = 0; t < 60; t += 1 / 30) {
+      stepCrowdPed(p, [], rand, 1 / 30);
+      expect(p.mode).toBe('down');
+      expect(p.timer).toBeGreaterThan(2);
+    }
+    p.injured = false;
+    for (let t = 0; t < 5; t += 1 / 30) stepCrowdPed(p, [], rand, 1 / 30);
+    expect(p.mode).not.toBe('down');
+  });
+});

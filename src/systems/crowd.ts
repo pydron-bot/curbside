@@ -75,6 +75,16 @@ export interface PedAgent {
   cower: number;
   /** A gang member: the gang's id (game/gangs.ts). */
   gang?: string;
+  /**
+   * An ordinary passer-by (crowd upkeep, a driver out of their car): the
+   * city's scenes (game/cityLife.ts) may borrow them. Never set on people
+   * other systems own (officers, gangs, story characters, fares).
+   */
+  street?: boolean;
+  /** Borrowed by a city scene, which steers them and takes them off the street itself (crowd upkeep leaves them be). */
+  scene?: boolean;
+  /** Knocked out and waiting for the ambulance: stays down until collected (or let go). */
+  injured?: boolean;
 }
 
 /** Hit points everyone starts with. */
@@ -87,6 +97,8 @@ export const KO_SECONDS = 8;
 export const KNOCKDOWN_SECONDS = 2.5;
 /** Back up after a knockout with this much HP. */
 const KO_RECOVER_HP = 50;
+/** The injured lie still: their down timer never runs below this (the get-up clip waits for it), s. */
+const INJURED_HOLD = 3;
 
 export const NPC_SPEC: PedSpec = { ...PLAYER_ON_FOOT, walkSpeed: 2.2, runSpeed: 5.2 };
 /** Chase speed for fighters: a little slower than a sprinting player, so you can escape. */
@@ -317,6 +329,7 @@ export function stepCrowdPed(
 
   if (p.mode === 'down') {
     p.burning = Math.max(0, p.burning - dt);
+    if (p.injured) p.timer = Math.max(p.timer, INJURED_HOLD);
     const k = Math.exp(-4 * dt);
     p.s.vx *= k;
     p.s.vz *= k;
