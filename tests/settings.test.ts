@@ -28,6 +28,8 @@ describe('settings: sanitising what was stored', () => {
       destruction: 'desktop',
       character: 'female',
       godMode: true,
+      testTools: true,
+      debugLabels: true,
     };
     expect(sanitizeSettings(stored)).toEqual(stored);
   });
@@ -52,6 +54,23 @@ describe('settings: sanitising what was stored', () => {
     expect(c.masterVolume).toBe(1);
     expect(c.sfxVolume).toBe(0);
     expect(c.musicVolume).toBe(DEFAULT_SETTINGS.musicVolume);
+  });
+
+  it('test tools and debug labels are off by default and must be booleans', () => {
+    expect(DEFAULT_SETTINGS.testTools).toBe(false);
+    expect(DEFAULT_SETTINGS.debugLabels).toBe(false);
+    for (const bad of ['true', 1, null, {}]) {
+      expect(sanitizeSettings({ testTools: bad }).testTools).toBe(false);
+      expect(sanitizeSettings({ debugLabels: bad }).debugLabels).toBe(false);
+    }
+    expect(sanitizeSettings({ debugLabels: true }).debugLabels).toBe(true);
+  });
+
+  it('god mode left on from before the TEST menu turns the menu on, so it can be turned off', () => {
+    expect(sanitizeSettings({ godMode: true }).testTools).toBe(true);
+    expect(sanitizeSettings({ godMode: false }).testTools).toBe(false);
+    // Once the player has chosen, it stays as they chose.
+    expect(sanitizeSettings({ godMode: true, testTools: false }).testTools).toBe(false);
   });
 
   it('switches must be booleans', () => {
