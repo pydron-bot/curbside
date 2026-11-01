@@ -241,6 +241,37 @@ kbd.pad.b {
   display: none;
 }
 
+/* TEST (Settings → Test tools): a chip in the card's corner, so the card keeps its rows. */
+.pause-corner {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 210 63 / 0.12);
+  box-shadow: inset 0 0 0 1.5px rgb(255 210 63 / 0.55);
+  color: var(--neon-yellow);
+  font: italic 900 12px/1 var(--display-font);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.pause-corner svg {
+  width: 16px;
+  height: 16px;
+}
+
+.pause-corner[hidden],
+#paused.busy .pause-corner {
+  display: none;
+}
+
 /* Paused because the phone is upright: the rotate card says it all. Back
    in landscape, during the 3-2-1, touches go through to the controls (thumbs
    placed then are live at GO) and the pause button. */

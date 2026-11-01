@@ -2,7 +2,7 @@ import { BUILD_ID } from '../core/build';
 import { VERSION } from '../core/changelog';
 import type { InputDevice } from '../core/input';
 import './core.css';
-import type { IconName } from './icons';
+import { ICONS, type IconName } from './icons';
 import { MenuNav, menuButton, type Panel } from './menu';
 
 /**
@@ -43,6 +43,7 @@ export class PauseOverlay implements Panel {
   private onReload: (() => void) | null = null;
   private readonly resumeBtn: HTMLButtonElement;
   private readonly grid: HTMLElement;
+  private readonly card: HTMLElement;
   private reason: PauseReason = 'paused';
   private armed: HTMLButtonElement | null = null;
   private armTimer = 0;
@@ -55,6 +56,7 @@ export class PauseOverlay implements Panel {
     el.classList.add('ui-overlay');
     const card = document.createElement('div');
     card.className = 'pause-card ui-card';
+    this.card = card;
     this.title = document.createElement('div');
     this.title.className = 'pause-title';
     this.hint = document.createElement('div');
@@ -136,6 +138,22 @@ export class PauseOverlay implements Panel {
   addButton(label: string, icon: IconName, activate: () => void): HTMLButtonElement {
     const b = menuButton(label, { icon });
     this.grid.insertBefore(b, this.grid.querySelector('.risky'));
+    this.nav.add({ el: b, activate });
+    return b;
+  }
+
+  /**
+   * A small button in the card's top corner (TEST): it costs the card no
+   * row, so it still fits at 852×340. Hide it with `hidden`.
+   */
+  addCorner(label: string, icon: IconName, activate: () => void): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.tabIndex = -1;
+    b.className = 'pause-corner';
+    b.innerHTML = `${ICONS[icon]}<b></b>`;
+    b.querySelector('b')!.textContent = label;
+    this.card.append(b);
     this.nav.add({ el: b, activate });
     return b;
   }
