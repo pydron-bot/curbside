@@ -11,9 +11,8 @@ import {
   UnsignedByteType,
 } from 'three';
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms } from '../render/shaderLib';
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type City } from './city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, isCarPark, lotBytes, type City } from './city';
 import { DISTRICTS, DISTRICT_STYLES, PAVINGS } from './districts';
-import { isCarPark, lotRolls } from './streetSpots';
 
 /** Ground extends one block past the city on every side (ring road, walls, then the water). */
 const GROUND_SIZE = 2 * HALF_EXTENT + 2 * BLOCK_SIZE;
@@ -91,19 +90,17 @@ export function createGround(city: City): Mesh {
 function blockTexture(city: City): DataTexture {
   const n = BLOCKS_PER_SIDE;
   const data = new Uint8Array(n * n * 4);
-  // One byte per block, shared with the car parks' bays (world/streetSpots.ts).
-  const rolls = lotRolls(city);
-  for (let k = 0; k < city.blocks.length; k++) {
-    const b = city.blocks[k];
-    const r = rolls[k];
+  const bytes = lotBytes(city);
+  city.blocks.forEach((b, k) => {
+    const r = bytes[k];
     let kind: number = LOT_KIND[b.kind];
-    if (isCarPark(b, r)) kind = LOT_KIND.parking;
+    if (isCarPark(city, bytes, k)) kind = LOT_KIND.parking;
     const i = (b.bz * n + b.bx) * 4;
     data[i] = kind;
     data[i + 1] = DISTRICTS.indexOf(b.district);
     data[i + 2] = r;
     data[i + 3] = PAVINGS.indexOf(DISTRICT_STYLES[b.district].paving);
-  }
+  });
   const tex = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
   tex.minFilter = tex.magFilter = NearestFilter;
   tex.needsUpdate = true;

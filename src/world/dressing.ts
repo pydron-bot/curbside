@@ -14,8 +14,9 @@ import { placeSprayShops, placeStation, shopRect } from './landmarks';
 import { placeLandmarkProps, type Landmarks } from './landmarkProps';
 import type { KnockableItem } from '../systems/knockables';
 import type { Ramp } from './ramps';
-import { dirHeading } from './roads';
+import { dirHeading, segmentKey } from './roads';
 import { placeStreetProps, type StreetProps } from './streetProps';
+import { buildMissions } from '../systems/missionsData';
 
 export interface Dressing {
   street: StreetProps;
@@ -58,7 +59,29 @@ export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: num
       maxZ: Math.max(r.maxZ, r.maxZ + fz * reach),
     };
   });
-  const street = placeStreetProps(city, { avoid, keepOut });
+  // Things in the road keep off the spawn corner (its parked cars), the ramps' run-ups and every car a mission parks.
+  const reserve = [{ x: 0, z: 0, r: 70 }, ...ramps.map((r) => ({ x: r.x, z: r.z, r: 30 }))];
+  for (const m of buildMissions(docks, SAFEHOUSE)) {
+    for (const step of m.steps) {
+      for (const a of [...(step.start ?? []), ...(step.done ?? [])]) if (a.do === 'spawnCar') reserve.push({ x: a.x, z: a.z, r: 6 });
+    }
+  }
+  // No road works on a race's legs.
+  const quietRoads = new Set<number>();
+  for (const race of RACES) {
+    for (let i = 1; i < race.nodes.length; i++) {
+      let [x, z] = race.nodes[i - 1];
+      const [tx, tz] = race.nodes[i];
+      const sx = Math.sign(tx - x);
+      const sz = Math.sign(tz - z);
+      while (x !== tx || z !== tz) {
+        quietRoads.add(segmentKey(x, z, x + sx, z + sz));
+        x += sx;
+        z += sz;
+      }
+    }
+  }
+  const street = placeStreetProps(city, { avoid, keepOut, reserve, quietRoads });
   const knockables: KnockableItem[] = [
     ...street.knockables.map((k) => ({ id: k.prop, kind: street.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius, hx: k.hx, hz: k.hz })),
     ...landmarks.knockables.map((k) => ({ id: LANDMARK_KNOCK_ID + k.prop, kind: landmarks.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius })),

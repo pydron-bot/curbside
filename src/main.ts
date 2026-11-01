@@ -189,6 +189,8 @@ const pigeons = new PigeonLook(scene, look, city, collision, events, mulberry32(
 /** Traffic lights: their clock runs with the sim; traffic stops on red, the lenses show it. */
 const signals = new TrafficSignals();
 look.props.signals = signals;
+// Drivers pulling over for a siren stay in lane past road works at the kerb.
+signals.setRoadworks(dressing.street.roadworks);
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
@@ -410,6 +412,9 @@ const cityLife = new CityLife({
     ...ramps.map((r) => ({ x: r.x, z: r.z, r: 9 })),
     ...heat.shops.map((sh) => ({ x: sh.x, z: sh.z, r: 13 })),
     ...PARKED.map((p) => ({ x: p.x, z: p.z, r: 8 })),
+    // Road works close the kerb strip, and a bus pulls in at a shelter: no parking in either.
+    ...dressing.street.roadworks.map(({ area: a }) => ({ x: (a.minX + a.maxX) / 2, z: (a.minZ + a.maxZ) / 2, r: Math.hypot(a.maxX - a.minX, a.maxZ - a.minZ) / 2 + 4 })),
+    ...dressing.street.busStops.map((b) => ({ x: b.stopX, z: b.stopZ, r: 13 })),
   ],
   trafficScale: () => getQuality().trafficScale,
   npcShoot: (x, z, dx, dz) => npcShoot(x, z, dx, dz),

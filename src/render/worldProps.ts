@@ -1,4 +1,4 @@
-import type { Object3D } from 'three';
+import { Color, type Object3D } from 'three';
 import type { BuildingPlan, RoofProp } from '../world/buildingPlans';
 import { LANDMARK_KNOCK_ID } from '../world/dressing';
 import { signalAt } from '../world/signals';
@@ -8,6 +8,7 @@ import type { StreetProps } from '../world/streetProps';
 import { GLOW, type GlowSprites } from './glowSprites';
 import { PropBatch, propUniforms } from './propBatch';
 import { PropModels } from './propModels';
+import { addStandIns } from './propStandIns';
 import { worldUniforms } from './shaderLib';
 import { publicUrl } from '../core/paths';
 
@@ -46,8 +47,10 @@ export interface SignalClock {
 }
 
 /**
- * Every props.glb model in the world, drawn as six instanced families
- * (PropBatch): street lamps; street furniture and traffic lights; rooftop
+ * Every props.glb model in the world, drawn as seven instanced families
+ * (PropBatch): street lamps; street furniture, traffic lights, road works,
+ * bus shelters and food carts (box stand-ins where props.glb has no model
+ * yet, propStandIns.ts); rooftop
  * kit; trees; landmarks (spray booths, the export garage, the station sign,
  * the safehouse door, payphones, race gantries, ramps); and `things`, the
  * small models that move or come and go each frame (pickup crates, hidden
@@ -65,8 +68,41 @@ export class WorldProps {
   readonly lamps = new PropBatch('lamps', ['streetlamp'], 700);
   readonly street = new PropBatch(
     'street',
-    ['traffic_light', 'hydrant', 'bench', 'trash_bin', 'bollard', 'newspaper_box', 'mailbox', 'dumpster', 'payphone', 'road_barrier_long', 'traffic_cone'],
-    900,
+    [
+      'traffic_light',
+      'hydrant',
+      'bench',
+      'trash_bin',
+      'bollard',
+      'newspaper_box',
+      'mailbox',
+      'dumpster',
+      'payphone',
+      'road_barrier_long',
+      'traffic_cone',
+      // Street props, round 2 (box stand-ins until props.glb has them: propStandIns.ts).
+      'parking_meter',
+      'planter',
+      'bike_rack',
+      'recycling_bin',
+      'shopping_cart',
+      'cafe_table',
+      'vending_machine',
+      'atm',
+      'bus_shelter',
+      'food_cart_hotdog',
+      'food_cart_coffee',
+      'fruit_stand',
+      'traffic_barrel',
+      'work_barrier',
+      'roadwork_sign',
+      'steel_plate',
+      'work_trench',
+      'skip',
+      'mini_digger',
+      'portable_toilet',
+    ],
+    1100,
   );
   readonly roofs = new PropBatch('roofs', ['ac_unit', 'vent', 'water_tank', 'satellite_dish', 'rooftop_door', 'antenna'], 1400);
   readonly trees = new PropBatch('trees', ['tree_round', 'tree_tall', 'palm'], 400, { receiveShadows: false });
@@ -227,6 +263,7 @@ export class WorldProps {
 
   private useModels(models: PropModels): void {
     this.models = models;
+    addStandIns(models);
     for (const f of this.families) f.setModels(models);
     this.addStreet();
     this.addRoofs(models);
@@ -236,9 +273,12 @@ export class WorldProps {
   }
 
   private addStreet(): void {
+    const tint = new Color();
     this.streetProps.props.forEach((p, i) => {
       const f = p.kind === 'streetlamp' ? this.lamps : p.kind === 'tree_round' || p.kind === 'tree_tall' || p.kind === 'palm' ? this.trees : this.street;
-      const h = f.addStatic(p.kind, p.x, 0, p.z, p.heading, p.scale, p.scale, p.scale, p.phase, p.eastWest ? 1 : 0);
+      if (p.tint) tint.set(p.tint);
+      else tint.setRGB(1, 1, 1);
+      const h = f.addStatic(p.kind, p.x, 0, p.z, p.heading, p.scale, p.scale, p.scale, p.phase, p.eastWest ? 1 : 0, 0, tint.r, tint.g, tint.b);
       this.handles.set(i, [f, h]);
     });
   }

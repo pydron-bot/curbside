@@ -285,6 +285,25 @@ still get the offline shell.
    pass:** does a knocked-out body lying there read on the phone; are the
    parked cars in the way on foot or in a chase; the drop ring at night.
 
+11. **Street props, round 2: done 2026-11-01** on `claude/street-props`
+   (README *World*: *Placement*, *Road works*, *Food carts and bus stops*,
+   *Collision*, *Stand-ins*). Denser, more varied kerbs (parking meters,
+   planters, bike racks, recycling bins, shopping carts; café tables,
+   vending machines and ATMs against shopfronts); 18 road-works sites at
+   the kerb that traffic drives past in its lane (pulling over for a siren
+   too); food carts and fruit stands; 86 bus shelters. All in the `street`
+   family, so no new draw call (iPhone profile, same spots before → after: 49 → 49 at the spawn, 43 → 43 at a works site, 33 → 33 downtown); box stand-ins until props.glb
+   has the models (contracts: `docs/BLENDER_TODO.md` §10). **For the
+   people stream:** `dressing.street.vendors` (serve point, queue
+   direction, vendor spot) and `dressing.street.busStops` (wait spot, where
+   a bus pulls in, its lane) are ready for queues at carts and buses that
+   stop; nothing uses them yet. A kerb cart's queue stands on the walking
+   line, so walkers will need to step round it. **For the device pass:**
+   whether the stand-ins read from the phone's camera, and the street
+   family's vertex cost (5,976 vertices per instance, was 3,276; every
+   instance runs every model's vertices, dropped early) in a busy downtown
+   view. Not done: scaffolding, a work van, water barriers.
+
 Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
 launch ramp landing at a corner checkpoint (is that a feature?).
 

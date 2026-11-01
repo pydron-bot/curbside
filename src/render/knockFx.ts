@@ -14,6 +14,10 @@ const GRAVITY = 22;
 const SPRAY_SECONDS = 14;
 const SPRAY_RATE = 28;
 const MAX_SPRAYS = 6;
+/** Light things fly further. */
+const LIGHT: ReadonlySet<string> = new Set(['traffic_cone', 'trash_bin', 'newspaper_box', 'recycling_bin', 'traffic_barrel', 'roadwork_sign', 'shopping_cart']);
+/** Plastic and wood: no sparks. */
+const NO_SPARKS: ReadonlySet<string> = new Set(['traffic_cone', 'bench', 'traffic_barrel', 'work_barrier', 'recycling_bin', 'cafe_table']);
 
 interface Flyer {
   kind: string;
@@ -62,7 +66,7 @@ export class KnockFx {
   hit(kind: string, x: number, z: number, vx: number, vz: number): void {
     const sp = len2(vx, vz);
     if (this.flyers.length >= MAX_FLYERS) this.flyers.shift();
-    const light = kind === 'traffic_cone' || kind === 'trash_bin' || kind === 'newspaper_box';
+    const light = LIGHT.has(kind);
     const k = light ? 0.95 : 0.7;
     const a = (Math.random() - 0.5) * 0.9;
     const c = Math.cos(a);
@@ -86,7 +90,7 @@ export class KnockFx {
       age: 0,
     });
     this.effects.dustRing(x, z, 6, 0.4, 2.5);
-    if (kind !== 'traffic_cone' && kind !== 'bench') this.effects.sparks(x, 0.6, z, 6, 3, 8, vx / (sp || 1), vz / (sp || 1));
+    if (!NO_SPARKS.has(kind)) this.effects.sparks(x, 0.6, z, 6, 3, 8, vx / (sp || 1), vz / (sp || 1));
     if (kind === 'hydrant') {
       if (this.sprays.length >= MAX_SPRAYS) this.sprays.shift();
       this.sprays.push({ x, z, left: SPRAY_SECONDS, debt: 0 });

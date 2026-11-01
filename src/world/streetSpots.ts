@@ -11,9 +11,8 @@
  * junctions, their crossings and the lane traffic drives in); a stop sits
  * on the pavement beside it.
  */
-import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type Block, type City } from './city';
+import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, lotBytes, type Block, type City } from './city';
 import { DIR_VEC, MAX_NODE, canLeave, dirHeading, nodeValid, type Dir } from './roads';
-import { mulberry32 } from './random';
 import { len2 } from '../core/len';
 
 /** A parked car's middle from the road centreline, m (a sedan is 1.9 m across: 1 m clear of the lane, 0.15 m off the kerb). */
@@ -195,11 +194,9 @@ export function queueSpot(x: number, z: number, heading: number, side: number, i
  * under 128 (and uses the byte for its look). Shared so the bays the cars
  * park in are the ones painted on the ground.
  */
+/** One random byte per block, the same the ground paints car parks from (world/city.ts lotBytes). */
 export function lotRolls(city: City): Uint8Array {
-  const rand = mulberry32(city.seed ^ 0x9e3779b9);
-  const out = new Uint8Array(city.blocks.length);
-  for (let i = 0; i < city.blocks.length; i++) out[i] = Math.floor(rand() * 256);
-  return out;
+  return lotBytes(city);
 }
 
 /** Is this block a car park (a plaza the ground paints with bays)? `roll`: its lotRolls byte. */

@@ -1,6 +1,8 @@
 /**
  * Street furniture a car knocks flying instead of stopping dead at:
- * hydrants, bins, newspaper boxes, mailboxes, benches, cones. Each step,
+ * hydrants, bins, newspaper boxes, mailboxes, benches, parking meters, bike
+ * racks, café tables, shopping carts, and the road works' cones, barrels,
+ * barriers and signs. Each step,
  * every moving car's body is checked against the few within reach (a
  * bucket grid); one it touches is knocked (the car loses a little speed,
  * more for a bench) and reported, and it comes back a minute later once
@@ -20,7 +22,7 @@ export interface KnockableItem {
   x: number;
   z: number;
   radius: number;
-  /** Half-sizes of its box (benches): people collide with this instead of the radius, m. */
+  /** Half-sizes of its box (benches, barriers): people and cars collide with this instead of the radius (then at least the box's half-length), m. */
   hx?: number;
   hz?: number;
 }
@@ -30,7 +32,22 @@ export const KNOCK_SPEED = 3;
 /** A knocked prop is back this long after, once out of view, s. */
 export const KNOCK_RESPAWN = 60;
 /** Share of a car's speed a knock costs it. */
-const DRAG: Readonly<Record<string, number>> = { bench: 0.12, mailbox: 0.06, newspaper_box: 0.05, hydrant: 0.05, trash_bin: 0.04, traffic_cone: 0.01 };
+const DRAG: Readonly<Record<string, number>> = {
+  bench: 0.12,
+  bike_rack: 0.08,
+  cafe_table: 0.05,
+  mailbox: 0.06,
+  newspaper_box: 0.05,
+  hydrant: 0.05,
+  parking_meter: 0.05,
+  trash_bin: 0.04,
+  recycling_bin: 0.04,
+  work_barrier: 0.03,
+  roadwork_sign: 0.03,
+  traffic_barrel: 0.02,
+  shopping_cart: 0.02,
+  traffic_cone: 0.01,
+};
 const CELL = 16;
 
 export class Knockables {
@@ -181,6 +198,7 @@ export class Knockables {
     }
   }
 
+  /** Does a body circle touch it: its box if it has one (a bench, a work barrier beside a lane), else its radius? */
   private touches(s: VehicleState, k: KnockableItem, radius: number): boolean {
     const reach = radius + k.radius;
     const body = bodyOf(s);
@@ -188,9 +206,18 @@ export class Knockables {
     const offsets = body.offsets;
     const fx = Math.sin(s.heading);
     const fz = Math.cos(s.heading);
+    const box = k.hx !== undefined && k.hz !== undefined;
     for (let j = 0; j < offsets.length; j++) {
-      const dx = s.x + fx * offsets[j] - k.x;
-      const dz = s.z + fz * offsets[j] - k.z;
+      const cx = s.x + fx * offsets[j];
+      const cz = s.z + fz * offsets[j];
+      if (box) {
+        const dx = cx - Math.max(k.x - k.hx!, Math.min(cx, k.x + k.hx!));
+        const dz = cz - Math.max(k.z - k.hz!, Math.min(cz, k.z + k.hz!));
+        if (dx * dx + dz * dz < radius * radius) return true;
+        continue;
+      }
+      const dx = cx - k.x;
+      const dz = cz - k.z;
       if (dx * dx + dz * dz < reach * reach) return true;
     }
     return false;
