@@ -221,7 +221,7 @@ export class FxDirector {
 
     this.driving.update(dt, d.vehicles, driving, controls, d.score.driftPoints, focusX, focusZ);
     if (this.boosting && driving) this.exhaust(driving, dt);
-    d.effects.update(dt, this.view);
+    d.effects.update(dt, this.view, d.rig.currentHeight);
   }
 
   /** Start or stop a rain shower now (debug, missions). */
