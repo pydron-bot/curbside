@@ -59,6 +59,10 @@ import {
 import type { City } from '../world/city';
 import type { Player } from './player';
 import { Medics } from './scenes/medics';
+import { Chases } from './scenes/chases';
+import { StreetRaces } from './scenes/streetRaces';
+import { Accidents } from './scenes/accidents';
+import { DoubleParking } from './scenes/doubleParking';
 import { len2 } from '../core/len';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
@@ -143,6 +147,10 @@ export class CityLife {
   readonly bays: Bay[];
   readonly drops = new WeaponDrops();
   readonly medics: Medics;
+  readonly chases: Chases;
+  readonly races: StreetRaces;
+  readonly accidents: Accidents;
+  readonly doubleParking: DoubleParking;
   readonly scenes: Scene[] = [];
   /** Vehicles the scenes brought in (ambient): retired here once far and unseen. */
   readonly owned: Vehicle[] = [];
@@ -171,6 +179,10 @@ export class CityLife {
     this.bays = carParkBays(d.city);
     // The scenes: one line each.
     this.medics = this.add(new Medics(this));
+    this.chases = this.add(new Chases(this));
+    this.races = this.add(new StreetRaces(this, this.chases));
+    this.accidents = this.add(new Accidents(this));
+    this.doubleParking = this.add(new DoubleParking(this));
   }
 
   /** Register a scene (stepped, reset with the rest). */
