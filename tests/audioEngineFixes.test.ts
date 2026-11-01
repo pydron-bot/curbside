@@ -1,9 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CHASE, CHASE_STATION } from '../src/audio/music/chase';
 import { MusicPlayer } from '../src/audio/music/musicPlayer';
 import { Arranger, STEPS_PER_BAR, type NoteEvent } from '../src/audio/music/sequencer';
 import { STATIONS, type Station } from '../src/audio/music/stations';
 import { THEME } from '../src/audio/music/themes';
+import { kitKey, type KitPart } from '../src/audio/music/drumKit';
 import type { Voice } from '../src/audio/synth';
 
 /**
@@ -454,5 +455,93 @@ describe('the arranger at GO and into the score', () => {
         expect(a.station).toBe(CHASE_STATION);
       }
     }
+  });
+});
+
+describe('drum kits', () => {
+  type Kit = Record<KitPart, AudioBuffer[]>;
+  const kits = (music: MusicPlayer) => inner<Map<string, Kit>>(music, 'kits');
+  /** Every take rendered so far (a shared crash counted once). */
+  const takes = (music: MusicPlayer) => new Set([...kits(music).values()].flatMap((k) => Object.values(k).flat())).size;
+  const complete = (k: Kit) => k.kick.length === 3 && k.snare.length === 3 && k.hat.length === 3 && k.openHat.length === 2 && k.crash.length === 1;
+  const idle: Array<() => void> = [];
+  const fireIdle = () => idle.splice(0).forEach((fn) => fn());
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    idle.length = 0;
+  });
+
+  it('render the crash take once per context and share it (the 14-24 ms job, never mid-play again)', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { music } = player(STATIONS[0]);
+    for (const s of STATIONS) music.warmKit(s.sound);
+    vi.runAllTimers();
+    const all = [...kits(music).values()];
+    expect(all.length).toBeGreaterThan(4);
+    for (const k of all) expect(complete(k)).toBe(true);
+    const chip = kits(music).get([...kits(music).keys()].find((key) => key.includes('chip'))!)!;
+    const plain = all.filter((k) => k !== chip);
+    for (const k of plain) expect(k.crash).toBe(plain[0].crash);
+    expect(chip.crash).not.toBe(plain[0].crash);
+    music.dispose();
+  });
+
+  it('warm behind the title a take per idle slot: never while a kit that plays is rendering, not once the game is on, not after dispose', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal('requestIdleCallback', (fn: () => void) => idle.push(fn));
+    const { music } = player(STATIONS[0]); // its kit renders at once (between frames)
+    music.setMode('menu');
+    music.warmKits([...STATIONS, CHASE_STATION].map((s) => s.sound));
+    expect(takes(music)).toBe(0);
+    fireIdle(); // the radio's kit is still rendering: nothing warms
+    expect(idle).toHaveLength(0);
+    vi.runAllTimers();
+    const booted = takes(music);
+    expect(complete(kits(music).values().next().value!)).toBe(true);
+    // Now a take per idle slot.
+    for (let n = 1; n <= 3; n++) {
+      expect(idle).toHaveLength(1);
+      fireIdle();
+      expect(takes(music)).toBe(booted + n);
+    }
+    // A kit wanted now goes first; warming waits for it.
+    music.warmKit(SIDEWAYS.sound);
+    const sideways = kits(music).get(kitKey(SIDEWAYS.sound))!;
+    expect(sideways.kick).toHaveLength(0);
+    fireIdle();
+    expect(takes(music)).toBe(booted + 3);
+    vi.runAllTimers();
+    expect(complete(sideways)).toBe(true);
+    // The game on: warming pauses; back on the title it carries on.
+    music.setMode('game');
+    const playing = takes(music);
+    fireIdle();
+    expect(takes(music)).toBe(playing);
+    expect(idle).toHaveLength(0);
+    music.setMode('menu');
+    fireIdle();
+    expect(takes(music)).toBe(playing + 1);
+    // Disposed: nothing more.
+    music.dispose();
+    fireIdle();
+    vi.runAllTimers();
+    expect(takes(music)).toBe(playing + 1);
+    expect(idle).toHaveLength(0);
+  });
+
+  it('warm every kit on the title without requestIdleCallback (Safari) too, a take per timer slot', () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { music } = player(STATIONS[0]);
+    music.setMode('menu');
+    music.warmKits([...STATIONS, CHASE_STATION].map((s) => s.sound));
+    vi.runAllTimers();
+    expect(kits(music).size).toBeGreaterThanOrEqual(7);
+    for (const k of kits(music).values()) expect(complete(k)).toBe(true);
+    // The chase's kit is among them: nothing left to render as it starts.
+    music.warmKit(CHASE_STATION.sound);
+    expect(vi.getTimerCount()).toBe(0);
+    music.dispose();
   });
 });

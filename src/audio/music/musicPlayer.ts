@@ -13,7 +13,7 @@
 import { Dip } from '../mix';
 import { NoiseBank, Voice, automateDip, perc, sweep } from '../synth';
 import { Arranger, StepClock, swingOffset, type MusicMode, type NoteEvent, type Theme } from './sequencer';
-import { kitJobs, kitKey, type KitPart } from './drumKit';
+import { kitJobs, kitKey, type KitJob, type KitPart } from './drumKit';
 import { STATIONS, type Song, type Station, type StationSound } from './stations';
 import { midiToHz } from './theory';
 import { pulseWave, reedWave, steppedTriangle } from './waves';
@@ -64,6 +64,19 @@ const BASS_SHAPES: Record<StationSound['bass'], BassShape> = {
 
 type WaveKind = 'pulse12' | 'pulse25' | 'pulse50' | 'tri' | 'reed';
 
+type Kit = Record<KitPart, AudioBuffer[]>;
+
+/** A kit being rendered, a take at a time. */
+interface KitRender {
+  kit: Kit;
+  jobs: KitJob[];
+  /** Its sound plays (or is about to): a take per macrotask, ahead of any warming. */
+  urgent: boolean;
+}
+
+/** Between warming takes on the title without requestIdleCallback (Safari), ms. */
+const WARM_GAP = 40;
+
 export class MusicPlayer {
   readonly arranger: Arranger;
   readonly clock = new StepClock();
@@ -86,8 +99,20 @@ export class MusicPlayer {
   private dormant = false;
   private readonly duckDip = new Dip(1);
   /** The station sound's drum kit (null: the live voices play the drums). */
-  private kit: Record<KitPart, AudioBuffer[]> | null = null;
-  private readonly kits = new Map<string, Record<KitPart, AudioBuffer[]>>();
+  private kit: Kit | null = null;
+  private readonly kits = new Map<string, Kit>();
+  /** Kits still rendering, in order. */
+  private readonly renders: KitRender[] = [];
+  /**
+   * The crash take, by chip-ness: only the sample rate shapes it (its noise
+   * aside), so it's rendered once per context and shared by every kit. It's
+   * the longest job by far (2.2 s of audio, 14-24 ms).
+   */
+  private readonly crashes = new Map<boolean, AudioBuffer[]>();
+  private renderTimer: ReturnType<typeof setTimeout> | null = null;
+  private idleWaiting = false;
+  /** The title is up (the last mode asked for was 'menu'): kits may warm in idle time. */
+  private onTitle = false;
   private disposed = false;
   /** Round robin over each hit's takes. */
   private take = 0;
@@ -282,6 +307,18 @@ export class MusicPlayer {
     this.kitFor(sound);
   }
 
+  /**
+   * Render these sounds' kits behind the title, a take per idle slot (the
+   * radio's own first: PLAY starts it), so music first heard on foot, or the
+   * chase, doesn't render one mid-play. Only on the title, and never while a
+   * kit that's playing is still rendering; the game starting pauses it (a kit
+   * wanted then renders at once, as before).
+   */
+  warmKits(sounds: readonly StationSound[]): void {
+    this.kitFor(this.arranger.radio.sound, false);
+    for (const s of sounds) this.kitFor(s, false);
+  }
+
   /** Begin playing from the top of a phrase at `when`. */
   start(when: number): void {
     this.running = true;
@@ -343,6 +380,8 @@ export class MusicPlayer {
 
   setMode(mode: MusicMode): void {
     const now = this.ctx.currentTime;
+    this.onTitle = mode === 'menu';
+    this.scheduleRender();
     if (mode === 'off') {
       this.off = true;
       // Drop anything queued first: a fade back up booked by an earlier restart must not undo the silence.
@@ -484,6 +523,8 @@ export class MusicPlayer {
   dispose(): void {
     this.running = false;
     this.disposed = true;
+    if (this.renderTimer !== null) clearTimeout(this.renderTimer);
+    this.renders.length = 0;
     for (const v of this.notes) v.dispose();
     this.notes.length = 0;
     this.rig.dispose();
@@ -556,31 +597,88 @@ export class MusicPlayer {
 
   /**
    * The kit for a sound. The first time, it's rendered a take at a time
-   * between frames (a few ms each); parts not in yet play on the live voices.
+   * (up to ~10 ms each on a laptop, the shared crash aside): between frames
+   * when `urgent` (its sound plays now), else in idle time on the title;
+   * parts not in yet play on the live voices.
    */
-  private kitFor(s: StationSound): Record<KitPart, AudioBuffer[]> | null {
+  private kitFor(s: StationSound, urgent = true): Kit {
     const key = kitKey(s);
-    const have = this.kits.get(key);
-    if (have !== undefined) return have;
-    const kit: Record<KitPart, AudioBuffer[]> = { kick: [], snare: [], clap: [], hat: [], openHat: [], perc: [], crash: [] };
-    this.kits.set(key, kit);
-    const rate = this.ctx.sampleRate;
-    const jobs = kitJobs(s, rate);
-    const next = () => {
-      const job = jobs.shift();
-      if (!job || this.disposed) return;
+    let kit = this.kits.get(key);
+    if (kit === undefined) {
+      kit = { kick: [], snare: [], clap: [], hat: [], openHat: [], perc: [], crash: [] };
+      this.kits.set(key, kit);
+      const chip = s.snare === 'chip';
+      let jobs = kitJobs(s, this.ctx.sampleRate);
+      const crash = this.crashes.get(chip);
+      if (crash) {
+        kit.crash = crash;
+        jobs = jobs.filter((j) => j.part !== 'crash');
+      } else {
+        this.crashes.set(chip, kit.crash);
+      }
+      this.renders.push({ kit, jobs, urgent });
+    }
+    if (urgent) this.hurry(kit);
+    this.scheduleRender();
+    return kit;
+  }
+
+  /** A kit is wanted now: the rest of it renders ahead of any warming, its crash too if a warming kit has that still to do. */
+  private hurry(kit: Kit): void {
+    const r = this.renders.find((x) => x.kit === kit);
+    if (!r) return;
+    r.urgent = true;
+    if (kit.crash.length > 0 || r.jobs.some((j) => j.part === 'crash')) return;
+    for (const other of this.renders) {
+      const i = other.kit.crash === kit.crash ? other.jobs.findIndex((j) => j.part === 'crash') : -1;
+      if (i >= 0) {
+        r.jobs.push(other.jobs.splice(i, 1)[0]);
+        return;
+      }
+    }
+  }
+
+  /** Book the next take: a wanted kit's at once (between frames), a warming one in an idle slot. */
+  private scheduleRender(): void {
+    if (this.disposed || this.renders.length === 0) return;
+    if (this.renders.some((r) => r.urgent)) {
+      if (this.renderTimer === null) this.renderTimer = setTimeout(this.renderNow, 0);
+    } else if (this.onTitle && !this.idleWaiting) {
+      this.idleWaiting = true;
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(this.renderIdle, { timeout: 1000 });
+      else setTimeout(this.renderIdle, WARM_GAP);
+    }
+  }
+
+  private readonly renderNow = (): void => {
+    this.renderTimer = null;
+    const r = this.renders.find((x) => x.urgent);
+    if (r) this.renderTake(r);
+  };
+
+  private readonly renderIdle = (): void => {
+    this.idleWaiting = false;
+    // A kit that's playing goes first (its timer is booked), and nothing warms once the game is on.
+    if (this.disposed || !this.onTitle || this.renders.some((r) => r.urgent)) return;
+    const r = this.renders[0];
+    if (r) this.renderTake(r);
+  };
+
+  private renderTake(r: KitRender): void {
+    const job = r.jobs.shift();
+    if (job) {
       try {
         const data = job.run();
+        const rate = this.ctx.sampleRate;
         const b = this.ctx.createBuffer(1, data.length, rate);
         b.copyToChannel(data as Float32Array<ArrayBuffer>, 0);
-        kit[job.part].push(b);
+        r.kit[job.part].push(b);
       } catch {
-        return; // no kit for this part: the live voice plays it
+        r.jobs.length = 0; // no kit for the rest: the live voices play it
       }
-      setTimeout(next, 0);
-    };
-    setTimeout(next, 0);
-    return kit;
+    }
+    if (r.jobs.length === 0) this.renders.splice(this.renders.indexOf(r), 1);
+    this.scheduleRender();
   }
 
   /** A kit hit into `dest` (and the room by `verb`, the echo by `echo`); false when there's no kit. */
