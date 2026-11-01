@@ -6,7 +6,7 @@
  * yards and pastel suburbs — so the map has landmarks and you can tell where
  * you are from a glance at the roofs and pavements.
  */
-import { BLOCKS_PER_SIDE } from './city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE } from './city';
 import { len2 } from '../core/len';
 
 export type District = 'downtown' | 'oldtown' | 'arts' | 'industrial' | 'residential';
@@ -159,6 +159,23 @@ export function districtOf(bx: number, bz: number): District {
   const wz = dz + Math.sin(bx * 0.8 + 0.4) * 0.9;
   if (wz < 0) return wx < 0 ? 'oldtown' : 'arts';
   return wx < 0 ? 'residential' : 'industrial';
+}
+
+/** What the area card calls each district (placeholders until the names are settled; PLAN §9). */
+export const DISTRICT_NAMES: Readonly<Record<District, string>> = {
+  downtown: 'GLASS HEIGHTS',
+  oldtown: 'COBBLE ROW',
+  arts: 'NEON MILE',
+  industrial: 'RUSTWATER DOCKS',
+  residential: 'MAPLE FLATS',
+};
+
+/** District at world position (x, z): the block it's in (a road goes with the block to its south-east). */
+export function districtAt(x: number, z: number): District {
+  // (Read at call time, as in districtOf.)
+  const half = (BLOCKS_PER_SIDE * BLOCK_SIZE) / 2;
+  const clamp = (v: number) => Math.max(0, Math.min(BLOCKS_PER_SIDE - 1, v));
+  return districtOf(clamp(Math.floor((x + half) / BLOCK_SIZE)), clamp(Math.floor((z + half) / BLOCK_SIZE)));
 }
 
 /** Building height for a district from two uniform random numbers. */

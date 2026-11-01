@@ -33,6 +33,10 @@ import { ORDERS_PER_LIST, exportList } from './modes/exports';
 import { FRENZIES } from './modes/frenzies';
 import { FrenzyMode } from './modes/frenzyMode';
 import { MissionMode } from './modes/missionMode';
+import { AreaMode } from './modes/areaMode';
+import { GangMode } from './modes/gangMode';
+import { GANGS, RESPECT_MAX } from './gangs';
+import { AreaCard } from '../ui/areaCard';
 import { PACKAGE_COUNT } from './modes/packages';
 import { PackageMode } from './modes/packageMode';
 import { SAFEHOUSE } from './modes/places';
@@ -77,6 +81,8 @@ export class ProgressDirector implements ModeCtx {
   readonly exports: ExportMode;
   readonly taxi: TaxiMode;
   readonly missions: MissionMode;
+  readonly gangs: GangMode;
+  readonly area: AreaMode;
   private readonly modes: Mode[];
   private readonly props: ProgressProps;
   private readonly bank = new ChainBank();
@@ -129,8 +135,10 @@ export class ProgressDirector implements ModeCtx {
     this.taxi = new TaxiMode(this);
     this.missions = new MissionMode(this, this.exports.docks, this.dialogue);
     pruneSave(this.progress.data, { missions: this.missions.missions.map((m) => m.id) });
+    this.gangs = new GangMode(this);
+    this.area = new AreaMode(this, new AreaCard(document.body), this.gangs);
     // Card owners first: a running mode claims the activity card before a passive one.
-    this.modes = [this.chaos, this.frenzies, this.races, this.missions, this.taxi, this.exports, this.packages];
+    this.modes = [this.chaos, this.frenzies, this.races, this.missions, this.taxi, this.exports, this.packages, this.gangs, this.area];
 
     // --- Title and pause ---
     d.frontDoor.title.addMode(this.chaosTitleMode());
@@ -513,6 +521,10 @@ export class ProgressDirector implements ModeCtx {
           rows: [
             { label: 'Payphone jobs', value: `${this.missions.passed}/${this.missions.missions.length}`, bar: this.missions.passed / this.missions.missions.length },
             ...(st.jobsReplayed > 0 ? [{ label: 'Repeat jobs', value: n(st.jobsReplayed) }] : []),
+            ...GANGS.map((g) => {
+              const r = this.gangs.respect(g.id);
+              return { label: `${g.name[0]}${g.name.slice(1).toLowerCase()} respect`, value: `${r > 0 ? '+' : ''}${r}`, bar: (r + RESPECT_MAX) / (2 * RESPECT_MAX) };
+            }),
             { label: 'Frenzies beaten', value: `${s.frenzies.length}/${FRENZIES.length}`, bar: s.frenzies.length / FRENZIES.length },
             { label: 'Hidden packages', value: `${s.packages.length}/${PACKAGE_COUNT}`, bar: s.packages.length / PACKAGE_COUNT },
             { label: 'Races with a medal', value: `${medalRaces}/${RACES.length}`, bar: medalRaces / RACES.length },
