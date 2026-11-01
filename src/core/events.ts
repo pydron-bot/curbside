@@ -214,6 +214,8 @@ export type StreetWhat =
   | 'fireTruck'
   | 'hose'
   | 'fireOut'
+  // A parked car's alarm: one cycle of its siren (repeated while it sounds).
+  | 'alarm'
   // Reserved: police chases (started, the suspect on foot, cuffed, taken down).
   | 'chase'
   | 'suspectRuns'

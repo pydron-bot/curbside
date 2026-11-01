@@ -113,6 +113,7 @@ import { CityLifeLook } from './render/cityLifeLook';
 import { CityMood } from './game/cityMood';
 import { atmosphereLook } from './render/atmosphereLook';
 import { peopleLook } from './render/peopleLook';
+import { alarmLook, fireLook, towLook } from './render/emergencyLook';
 import { mountRadioToast } from './ui/radioToast';
 import { publicUrl } from './core/paths';
 import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
@@ -442,6 +443,9 @@ const cityLook = new CityLifeLook(cityLife, effects, look.props);
 look.addGlowSource((g, view) => cityLook.draw(g, view));
 cityLook.add(atmosphereLook(cityLife));
 cityLook.add(peopleLook(cityLife));
+cityLook.add(fireLook(cityLife));
+cityLook.add(towLook(cityLife));
+cityLook.add(alarmLook(cityLife));
 const cityView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 // Everyone's place, pose and clip each frame (and the player ducking into cars, cheering wins).
 const people = new PeoplePose({

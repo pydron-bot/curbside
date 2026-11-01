@@ -6,6 +6,7 @@
  */
 import type { ScoreKind } from '../systems/score';
 import type { WeaponKind } from '../systems/weapons';
+import { ALARM_CYCLE } from '../systems/emergency';
 import { clamp01, semis } from './mix';
 import type { KitPart } from './music/drumKit';
 import { bustedSting, wastedSting, type Sting, type StingDrum, type StingNote } from './music/stings';
@@ -508,6 +509,55 @@ export function horn(v: Voice, duration: number): void {
   g.gain.linearRampToValueAtTime(0.42, t + 0.012);
   g.gain.setValueAtTime(0.42, t + duration);
   g.gain.linearRampToValueAtTime(0, t + duration + 0.05);
+}
+
+/**
+ * One cycle (ALARM_CYCLE s) of a car alarm through its little horn speaker:
+ * pattern 0 whoops (rising sweeps), 1 a hi-lo two-tone, 2 chirps then two
+ * honks. Repeated by the street event while it sounds.
+ */
+export function carAlarm(v: Voice, pattern: number): void {
+  const t = v.t;
+  const end = t + ALARM_CYCLE;
+  const bp = v.filter('bandpass', 1500, 0.8);
+  const sh = v.shaper(2.5);
+  const g = v.gain();
+  v.chain(bp, sh, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.3, t + 0.01);
+  g.gain.setValueAtTime(0.3, end - 0.03);
+  g.gain.linearRampToValueAtTime(0, end);
+  if (pattern === 0) {
+    const o = v.osc('sawtooth', 500, t, end);
+    for (let i = 0; i < 4; i++) sweep(o.frequency, t + i * 0.4, 480, 1500, 0.38);
+    o.connect(bp);
+  } else if (pattern === 1) {
+    const o = v.osc('square', 1050, t, end);
+    for (let i = 0; i < 8; i++) o.frequency.setValueAtTime(i % 2 ? 760 : 1050, t + i * 0.2);
+    o.connect(bp);
+  } else {
+    // Chirps, then the car's own horn twice.
+    const o = v.osc('square', 1800, t, t + 0.6);
+    const k = v.gain(0);
+    for (let i = 0; i < 4; i++) {
+      k.gain.setValueAtTime(1, t + i * 0.14);
+      k.gain.setValueAtTime(0, t + i * 0.14 + 0.07);
+    }
+    v.chain(o, k, bp);
+    for (let n = 0; n < 2; n++) {
+      const at = t + 0.7 + n * 0.45;
+      const e = v.gain(0);
+      e.gain.setValueAtTime(0, at);
+      e.gain.linearRampToValueAtTime(0.9, at + 0.01);
+      e.gain.setValueAtTime(0.9, at + 0.3);
+      e.gain.linearRampToValueAtTime(0, at + 0.33);
+      for (const hz of [349.2, 440]) {
+        const h = v.osc('sawtooth', hz, at, at + 0.35);
+        h.connect(e);
+      }
+      e.connect(bp);
+    }
+  }
 }
 
 // --- Explosions ---

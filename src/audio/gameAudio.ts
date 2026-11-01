@@ -51,6 +51,7 @@ import {
 import { NoiseBank, Voice, automateDip, makeImpulse, nodeStats } from './synth';
 import { RateGate, VoiceLimiter } from './voices';
 import { len2 } from '../core/len';
+import { alarmPattern } from '../systems/emergency';
 
 export { createCarSound, describeCar, type CarSound } from './carSound';
 export type { SirenStyle } from './loops';
@@ -715,6 +716,10 @@ export class GameAudio {
         return this.oneShot('ambient', e, FALLOFF.punch, 0.5, 0.25, sfx.bark);
       case 'yelp':
         return this.oneShot('ambient', e, FALLOFF.punch, 0.45, 0.2, sfx.yelp);
+      case 'alarm': {
+        const pattern = alarmPattern(e.x, e.z);
+        return this.oneShot('horn', e, FALLOFF.horn, 0.4, 0.2, (v) => sfx.carAlarm(v, pattern));
+      }
       default:
         // Sirens are continuous (StreetLife); the rest is heard through what it causes (shots, crashes, horns).
         return;

@@ -71,6 +71,9 @@ import { Muggings } from './scenes/muggings';
 import { Pavement } from './scenes/pavement';
 import { Vendors } from './scenes/vendors';
 import { Witnesses } from './scenes/witnesses';
+import { FireCrews } from './scenes/fireCrews';
+import { Tows } from './scenes/tows';
+import { CarAlarms } from './scenes/alarms';
 import { len2 } from '../core/len';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
@@ -204,6 +207,9 @@ export class CityLife {
     this.add(new Vendors(this, fights));
     this.add(new Buskers(this));
     this.witnesses = this.add(new Witnesses(this, this.add(new Muggings(this))));
+    this.add(new FireCrews(this));
+    this.add(new Tows(this));
+    this.add(new CarAlarms(this));
     this.add(new Pavement(this));
   }
 
