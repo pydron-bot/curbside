@@ -33,6 +33,8 @@ export interface DiagnosticsDeps {
   destruction?: DestructionProbeDeps;
   /** What is on screen (render/sceneCensus.ts): fills and returns `out`. */
   counts?: (out: SceneCounts) => SceneCounts;
+  /** The REPORT BUG tab (ui/bugReport.ts). */
+  reportBug?: () => void;
 }
 
 /** Rapier's files as loaded (Resource Timing): did Pages gzip the wasm, did it come from cache? */
@@ -121,6 +123,7 @@ export class Diagnostics implements Panel {
     };
     this.firstBtn = button('SHARE', () => this.share());
     button('COPY', () => this.copy());
+    if (deps.reportBug) button('REPORT BUG', deps.reportBug);
     const close = document.createElement('button');
     close.type = 'button';
     close.tabIndex = -1;

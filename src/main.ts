@@ -122,7 +122,11 @@ import { Destruction } from './render/destruction';
 import { BlowWall } from './ui/blowWall';
 import { len2 } from './core/len';
 import { emptyCounts, formatCounts } from './core/sceneCounts';
+import { EventTrail } from './core/eventTrail';
 import { SceneCensus } from './render/sceneCensus';
+import { snapshotView } from './render/snapshot';
+import { worldUniforms } from './render/shaderLib';
+import { addBugReportButton, BugReportSheet } from './ui/bugReport';
 
 const app = document.getElementById('app')!;
 
@@ -560,6 +564,9 @@ const census = new SceneCensus({
   now: () => performance.now() / 1000,
 });
 const censusOut = emptyCounts();
+// The last moments of game events, for bug reports (on the sim clock: a pause doesn't age them).
+const trail = new EventTrail();
+events.onAny((e) => trail.record(simTime, e));
 new BreachSystem(events, breaches, { enabled: () => destruction.mode !== 'off', playing: () => !attract.active });
 events.on('enterVehicle', () => {
   // PeoplePose hides the body once it has ducked into the car.
@@ -1455,8 +1462,40 @@ const diagnostics = new Diagnostics(document.body, {
     blowWall: () => blowWall.request(),
   },
   counts: (out) => census.fill(out),
+  reportBug: () => openBugReport(),
 });
 addDiagnosticsButton(diagnostics, frontDoor, () => input.lastDevice !== 'touch');
+
+// REPORT BUG (pause card corner and the Diagnostics sheet, with test tools or the perf overlay on).
+const bugReport = new BugReportSheet(document.body, {
+  snapshot: (maxWidth) => snapshotView(look, rig.camera, renderer.domElement, renderer.getContext(), maxWidth),
+  state: () => {
+    const v = player.driving;
+    const at = player.position;
+    const h = v ? v.sim.heading : player.ped.heading;
+    return {
+      x: at.x,
+      z: at.z,
+      heading: (((h * 180) / Math.PI) % 360 + 360) % 360,
+      vehicle: v ? v.archetype : null,
+      health: player.health,
+      alive: player.alive,
+      wanted: heat.wanted.level,
+      hour: look.time.hour,
+      night: worldUniforms.uNight.value,
+      rain: fx.weather.rain,
+      wetness: fx.weather.wetness,
+      tier: getQuality().name,
+      ratio: resolution.pixelRatio,
+      activity: progress.busy ?? (progress.chaos.active ? 'chaos' : attract.active ? 'title' : null),
+      simTime,
+    };
+  },
+  events: () => trail.entries(simTime),
+  diagnostics: () => diagnostics.reportData(),
+  counts: () => ({ ...census.fill(censusOut) }),
+});
+const openBugReport = addBugReportButton(bugReport, frontDoor, () => input.lastDevice !== 'touch');
 
 // iOS drops the GL context of backgrounded or memory-starved pages. Say so,
 // hold the game, and carry on once three.js has rebuilt its GPU resources.
@@ -1531,7 +1570,9 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   radar,
   frontDoor,
   diagnostics,
+  bugReport,
   census,
+  trail,
   attract,
   touch,
   haptics,

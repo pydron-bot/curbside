@@ -28,6 +28,7 @@ describe('settings: sanitising what was stored', () => {
       destruction: 'desktop',
       character: 'female',
       godMode: true,
+      testTools: true,
     };
     expect(sanitizeSettings(stored)).toEqual(stored);
   });
@@ -55,8 +56,9 @@ describe('settings: sanitising what was stored', () => {
   });
 
   it('switches must be booleans', () => {
-    const s = sanitizeSettings({ haptics: 'false', leftHanded: null, ignoreSilentSwitch: false });
+    const s = sanitizeSettings({ haptics: 'false', leftHanded: null, ignoreSilentSwitch: false, testTools: 1 });
     expect(s.haptics).toBe(true);
+    expect(s.testTools).toBe(false);
     expect(s.leftHanded).toBe(false);
     expect(s.ignoreSilentSwitch).toBe(false);
   });
