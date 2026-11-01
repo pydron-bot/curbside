@@ -1,5 +1,6 @@
 import type { GameAudio } from '../audio/gameAudio';
 import { BUILD_ID } from '../core/build';
+import { VERSION } from '../core/changelog';
 import { onSettingsChange, settings, updateSettings, type Settings } from '../core/settings';
 import { ICONS } from './icons';
 import { MenuNav, overlay, type Panel } from './menu';
@@ -42,6 +43,8 @@ export class SettingsPanel implements Panel {
   constructor(
     parent: HTMLElement,
     private readonly audio: GameAudio,
+    /** VERSION HISTORY opens over the sheet. */
+    onHistory: () => void = () => {},
   ) {
     const { root, card } = overlay('settings', 'ui-sheet');
     this.root = root;
@@ -49,14 +52,17 @@ export class SettingsPanel implements Panel {
     card.innerHTML = `
       <header class="sheet-head"><h2>SETTINGS</h2></header>
       <div class="sheet-body settings-grid" data-scroll>
-        <section><h3>SOUND</h3></section>
+        <div class="settings-col">
+          <section><h3>SOUND</h3></section>
+          <section><h3>TESTING</h3></section>
+        </div>
         <div class="settings-col">
           <section><h3>CONTROLS</h3></section>
           <section><h3>DISPLAY</h3></section>
         </div>
-        <footer class="build-id">Build ${BUILD_ID}</footer>
+        <footer class="build-id">v${VERSION} · Build ${BUILD_ID}</footer>
       </div>`;
-    const [sound, controls, display] = card.querySelectorAll('section');
+    const [sound, testing, controls, display] = card.querySelectorAll('section');
     const head = card.querySelector('.sheet-head')!;
     const close = document.createElement('button');
     close.type = 'button';
@@ -64,7 +70,14 @@ export class SettingsPanel implements Panel {
     close.className = 'sheet-close';
     close.setAttribute('aria-label', 'Close');
     close.innerHTML = ICONS.close;
-    head.append(close);
+    // Version history: in the header, so it costs the sheet no row.
+    const history = document.createElement('button');
+    history.type = 'button';
+    history.tabIndex = -1;
+    history.className = 'sheet-link';
+    history.innerHTML = '<small>VERSION HISTORY</small><b></b>';
+    history.querySelector('b')!.textContent = `v${VERSION} ›`;
+    head.append(history, close);
 
     const soundRows: Row[] = [
       { kind: 'slider', key: 'masterVolume', label: 'Master' },
@@ -87,7 +100,6 @@ export class SettingsPanel implements Panel {
       },
       { kind: 'toggle', key: 'leftHanded', label: 'Left-handed layout', sub: 'Mirror the touch controls' },
       { kind: 'toggle', key: 'haptics', label: 'Vibration', sub: 'Phone and controller rumble' },
-      { kind: 'toggle', key: 'godMode', label: 'God mode', sub: "Testing: can't die or get busted; no CRED or bests" },
     ];
     const displayRows: Row[] = [
       {
@@ -112,10 +124,20 @@ export class SettingsPanel implements Panel {
         ],
       },
     ];
+    // Its own section in the shorter column, so both still fit unscrolled on a phone.
+    const testingRows: Row[] = [{ kind: 'toggle', key: 'godMode', label: 'God mode', sub: "Can't die or get busted; no CRED" }];
     for (const r of soundRows) sound.append(this.row(r));
+    for (const r of testingRows) testing.append(this.row(r));
     for (const r of controlRows) controls.append(this.row(r));
     for (const r of displayRows) display.append(this.row(r));
-    // Registered last so opening focuses the first setting, not the close button.
+    // Registered last so opening focuses the first setting, not the header buttons.
+    this.nav.add({
+      el: history,
+      activate: () => {
+        this.audio.ui('click');
+        onHistory();
+      },
+    });
     this.nav.add({ el: close, activate: () => this.back() });
     parent.append(root);
     onSettingsChange((s) => this.refresh(s));

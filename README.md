@@ -60,9 +60,12 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 Settings (title or pause menu): master / effects / music volume, sound with
 the iPhone silent switch on, graphics quality, touch steering
 (point / classic), left-handed layout (mirrors the controls and the HUD),
-vibration, god mode (for testing: hits land but take no health, the police
-never cuff you, the heart turns gold; a life with it on earns no CRED and
-sets no free-roam or Chaos Run best), perf overlay (Off / FPS / Full).
+perf overlay (Off / FPS / Full); under TESTING, god mode (hits land but
+take no health, the police never cuff you, the heart turns gold; a life
+with it on earns no CRED and sets no free-roam or Chaos Run best). In the
+header, VERSION HISTORY: every release from `core/changelog.ts`, newest
+first (the version also shows top right on the title screen and on the
+pause card).
 
 **Touch tuning** (for the device session): with the Perf overlay on (or
 `?debug`), pause → DIAGNOSTICS → TOUCH TUNING has −/+ steppers for stick

@@ -628,6 +628,88 @@ kbd.pad.b {
   }
 }
 
+/* --- Settings: VERSION HISTORY in the header, beside the close button --- */
+.sheet-link {
+  display: grid;
+  justify-items: end;
+  gap: 3px;
+  margin-left: auto;
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.06);
+  color: inherit;
+  cursor: pointer;
+}
+
+.sheet-link small {
+  font: 800 9px/1 var(--hud-font);
+  letter-spacing: 0.2em;
+  color: var(--ink-dim);
+}
+
+.sheet-link b {
+  font: italic 900 14px/1 var(--display-font);
+  color: var(--neon-yellow);
+}
+
+/* --- Version history --- */
+.versions {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.release {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.05);
+  border-left: 3px solid rgb(255 255 255 / 0.15);
+}
+
+.release.current {
+  border-left-color: var(--neon-pink);
+}
+
+.release header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.release header b {
+  font: italic 900 15px/1 var(--display-font);
+  letter-spacing: 0.04em;
+  color: var(--neon-yellow);
+}
+
+.release header span {
+  flex: 1;
+  font-weight: 800;
+  color: #fff;
+}
+
+.release header time {
+  font: 10px/1 var(--hud-font);
+  letter-spacing: 0.08em;
+  color: var(--ink-dim);
+}
+
+.release ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--ink-dim);
+}
+
+#versions .build-id {
+  display: block;
+  margin: 2px 0 0;
+}
+
 /* --- 3-2-1 --- */
 #countdown {
   position: fixed;

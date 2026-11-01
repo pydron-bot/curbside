@@ -15,6 +15,7 @@ import { PauseOverlay, type PauseReason } from './pauseOverlay';
 import { RotateOverlay } from './rotateOverlay';
 import { SettingsPanel } from './settingsPanel';
 import { TitleScreen, type TitleMode } from './titleScreen';
+import { VersionHistory } from './versionHistory';
 
 export interface FrontDoorHooks {
   /** PLAY on the title: start a fresh game. */
@@ -36,6 +37,7 @@ export class FrontDoor {
   readonly pause: PauseOverlay;
   readonly settings: SettingsPanel;
   readonly howTo: HowToPlay;
+  readonly versions: VersionHistory;
   readonly character: CharacterPicker;
   readonly rotate: RotateOverlay;
   readonly countdown: Countdown;
@@ -73,7 +75,8 @@ export class FrontDoor {
       },
       update: () => hooks.applyUpdate(),
     });
-    this.settings = new SettingsPanel(parent, audio);
+    this.settings = new SettingsPanel(parent, audio, () => this.openVersions());
+    this.versions = new VersionHistory(parent, audio);
     this.howTo = new HowToPlay(parent, audio);
     this.character = new CharacterPicker(parent, audio);
     this.countdown = new Countdown(parent, audio);
@@ -208,6 +211,12 @@ export class FrontDoor {
   private openSettings(): void {
     this.settings.open(() => this.pop(this.settings), this.input.lastDevice !== 'touch');
     this.stack.push(this.settings);
+  }
+
+  /** Over Settings; back returns to it. */
+  private openVersions(): void {
+    this.versions.open(() => this.pop(this.versions), this.input.lastDevice !== 'touch');
+    this.stack.push(this.versions);
   }
 
   private openCharacter(): void {

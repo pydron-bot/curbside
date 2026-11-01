@@ -300,6 +300,19 @@
   }
 }
 
+/* Which version this is: small print in the free top-right corner. */
+.title-version {
+  position: absolute;
+  top: var(--edge-t);
+  right: var(--edge-r);
+  font: 800 10px/1 var(--hud-font);
+  letter-spacing: 0.18em;
+  color: var(--ink-dim);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 0.9);
+  user-select: text;
+  animation: fade-up 0.5s 0.85s ease-out both;
+}
+
 .title-hints {
   position: absolute;
   right: var(--edge-r);
