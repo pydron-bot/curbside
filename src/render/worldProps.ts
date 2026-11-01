@@ -92,6 +92,8 @@ export class WorldProps {
       'traffic_cone',
       'road_barrier_long',
       // Stand-ins built in code unless props.glb has them (critterModels.ts).
+      'dog',
+      'dog_stride',
       'umbrella',
     ],
     192,

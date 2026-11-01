@@ -61,6 +61,7 @@ import type { Player } from './player';
 import { Medics } from './scenes/medics';
 import type { CityMood } from './cityMood';
 import { StreetMood } from './scenes/streetMood';
+import { StrayDogs } from './scenes/strayDogs';
 import { len2 } from '../core/len';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
@@ -144,6 +145,7 @@ export class CityLife {
   readonly drops = new WeaponDrops();
   readonly medics: Medics;
   readonly streetMood: StreetMood;
+  readonly dogs: StrayDogs;
   readonly scenes: Scene[] = [];
   /** Vehicles the scenes brought in (ambient): retired here once far and unseen. */
   readonly owned: Vehicle[] = [];
@@ -173,6 +175,7 @@ export class CityLife {
     // The scenes: one line each.
     this.medics = this.add(new Medics(this));
     this.streetMood = this.add(new StreetMood(this));
+    this.dogs = this.add(new StrayDogs(this));
   }
 
   /** Register a scene (stepped, reset with the rest). */

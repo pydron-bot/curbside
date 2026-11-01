@@ -1195,6 +1195,39 @@ export function ui(v: Voice, kind: UiSound, key: number, major = false): void {
   }
 }
 
+/**
+ * A dog's bark: a gruff saw dropping in pitch through a throaty band, with
+ * a breath of noise on the attack; now and then a second "woof" after it.
+ */
+export function bark(v: Voice): void {
+  const n = Math.random() < 0.35 ? 2 : 1;
+  const p = vary(0.12);
+  for (let i = 0; i < n; i++) {
+    const at = v.t + i * rnd(0.16, 0.22);
+    const o = v.osc('sawtooth', 380 * p, at, at + 0.2);
+    sweep(o.frequency, at, 420 * p, 190 * p, 0.12);
+    const bp = v.filter('bandpass', 760 * p, 1.6);
+    const g = v.gain();
+    v.chain(o, bp, g, v.input);
+    perc(g.gain, at, 0.9, 0.006, 0.045);
+    noiseHit(v, v.bank.white, at, 'bandpass', 1400 * p, 1.2, 0.35, 0.003, 0.025);
+  }
+}
+
+/** A dog's yelp (hit, or bolting from a gunshot): a high whine that rises and falls away. */
+export function yelp(v: Voice): void {
+  const t = v.t;
+  const p = vary(0.1);
+  const o = v.osc('triangle', 900 * p, t, t + 0.4);
+  o.frequency.setValueAtTime(900 * p, t);
+  o.frequency.linearRampToValueAtTime(1350 * p, t + 0.06);
+  o.frequency.exponentialRampToValueAtTime(620 * p, t + 0.3);
+  const bp = v.filter('bandpass', 1300 * p, 1.1);
+  const g = v.gain();
+  v.chain(o, bp, g, v.input);
+  perc(g.gain, t, 0.7, 0.01, 0.07);
+}
+
 /** Far-off city life for the ambient bed: a car swishing past somewhere. */
 export function carPass(v: Voice): void {
   const t = v.t;
