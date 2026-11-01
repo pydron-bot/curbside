@@ -226,6 +226,21 @@ forward). In priority order:
 7. **Ambient life (optional, fun):** `pigeon` (≤ 40 tris, one rigid body,
    plus a `Flap` clip on a 2-bone rig) for flocks that scatter when a car
    comes through.
+8. **Stray dog and umbrella** (`props.glb`, drawn in the props' `things`
+   family; today stand-ins built in code, `src/render/critterModels.ts`,
+   which a root of the same name replaces):
+   - `dog` (standing) and `dog_stride` (mid-trot: diagonal leg pairs swung
+     ~30° apart; the game swaps the two every half stride for the gait):
+     a medium mongrel ~0.65 m long, ~0.75 m to the ear tips, origin on the
+     ground between its feet, game +Z forward (the nose), ≤ 150 tris each,
+     rigid (no rig: the game tilts it to sniff and lays it on its side when
+     it's knocked over). The coat's material is `paint` (the game tints it
+     per dog: tan, dark brown, brown, grey, cream); nose and eyes in a fixed
+     dark colour. A readable silhouette from 20–50 m up: ears and a raised
+     tail. Drawn at 1.3× (the game's DOG_SCALE), so model it life size.
+   - `umbrella`: open, canopy ~1.15 m across (8–10 panels, `paint`, tinted
+     per walker), its rim ~2.0 m up and a short stick down to ~1.15 m (a
+     fixed dark colour), origin on the ground under the stick, ≤ 60 tris.
 
 The code side will wire these in by name when they land, falling back to
 today's stand-ins until then. Badge on the cop: the code side will add a
@@ -253,6 +268,58 @@ now against this contract:
   the deck. Barely moving, a slight sway is enough. The game leans the whole
   bike and rider together by rolling the root, so don't lean in the clip.
 - Optional: `cop_bike` saddlebags in `trim`, and a windscreen in `glass`.
+
+## 10. Street props, round 2 (`props.glb`, requested 2026-11-01)
+
+Road works, food carts, bus shelters and more kerbside furniture are in the
+game (README → *World*), drawn as box stand-ins (`src/render/propStandIns.ts`,
+which is also the best picture of each: sizes, colours, material names)
+until `props.glb` has a root of the same name; the loader swaps them in by
+name with no code change. Same contract as §3: one root per prop, origin on
+the ground at the middle of the footprint, game +Z is the **front** (the
+side named below), Y up, metres, flat colours, no textures.
+
+**Triangle budget matters more here than for §3.** All of these join the
+`street` family (one draw call for every kerbside model), and each instance
+of the family runs every model's vertices through the vertex shader (the
+other models' vertices are dropped early, but they still run). The family
+was ~1,100 tris (3,276 vertices); the stand-ins add 900 tris (2,700 vertices) for the 20 roots. Please keep
+each root to the budget below (≤ 60 for the small, frequent ones) and
+leave out faces nobody sees (undersides, the inside of a skip).
+
+Material names: any name works for a fixed colour; these get special
+shading (`src/render/propModels.ts` `surfaceFor`): `barrier_orange`,
+`cone_orange`, `hazard`, `roadwork_sign` (catch the light at night),
+`blink_amber` (a warning lamp that blinks; the game staggers them along a
+row), `ad_panel`, `screen`, `stripe_*` (always a little self-lit, more at
+night), `lamp` (glows at night), `paint` (takes the instance's colour:
+the game tints vending machines red, blue, green or orange).
+
+| Root | Footprint W × D × H (m) | Front (+Z) | Notes | Tris |
+|---|---|---|---|---|
+| `traffic_barrel` | 0.6 × 0.6 × 1.0 | any | orange drum (`barrier_orange`), two white reflective bands, a `blink_amber` lamp on top (reads from above) | ≤ 60 |
+| `work_barrier` | 1.8 × 0.2 × 0.9 | across its face | plastic panel barrier, long side along X; `barrier_orange` with a white band, two feet, a `blink_amber` lamp at one end | ≤ 60 |
+| `roadwork_sign` | 1.1 × 0.6 × 1.2 | the face | A-frame ROAD WORK sign: front panel `roadwork_sign` (amber, a black figure or band), back panel dark. From above it's two slivers, so make the top edge bold | ≤ 60 |
+| `steel_plate` | 1.6 × 2.4 × 0.04 | along Z | road plate over a trench, lying flat; drawn only (cars drive over it) | ≤ 12 |
+| `work_trench` | 1.6 × 3.6 × 0.35 | along Z | a dark cut in the road (+X side) and a spoil heap (−X side) | ≤ 40 |
+| `skip` | 1.6 × 2.6 × 1.0 | along Z | builder's skip, yellow, rubble showing on top | ≤ 80 |
+| `mini_digger` | 1.5 × 2.8 × 2.1 | the boom | tracks, yellow body and cab roof (`digger_paint`), boom and bucket down in front at −X; reads from above as yellow with an arm | ≤ 150 |
+| `portable_toilet` | 1.1 × 1.1 × 2.3 | the door | blue box, light roof (the roof is what you see) | ≤ 40 |
+| `food_cart_hotdog` | 1.6 × 0.8 cart, 2.0 umbrella | the serving side | steel cart on two wheels; a red-and-yellow quartered umbrella at ~2 m is what reads from above | ≤ 120 |
+| `food_cart_coffee` | 1.5 × 0.8, canopy 1.8 × 1.2 | the serving side | brown cart, a striped green / cream canopy on two posts at the back | ≤ 120 |
+| `fruit_stand` | 2.0 × 1.0, awning 2.2 × 0.75 | the customers' side | table of crates (red, orange, yellow, green) at the front, a green-and-white awning over the back half only, so the fruit shows from above | ≤ 120 |
+| `bus_shelter` | 3.6 × 0.95 × 2.3 | open side, to the road | glass back wall (Z −0.4) and ends, a bench inside, a light roof with a `stripe_bus` front edge, an `ad_panel` at the +X end, a bus-stop flag on a pole at (+1.95, +0.32). The game's walls: back Z −0.45…−0.33, ends at X ±1.6…±1.72 from Z −0.45 to +0.33; keep the solid parts inside those | ≤ 150 |
+| `bike_rack` | 1.8 × 0.25 × 0.8 | either side | rail along X with three hoops (along X), one bike locked to it (any colour) | ≤ 80 |
+| `planter` | 1.2 × 0.7 × 0.9 | to the road | concrete trough, a shrub, a patch of flowers | ≤ 50 |
+| `parking_meter` | 0.25 × 0.2 × 1.4 | the road | pole and head, a coloured cap so it shows from above | ≤ 40 |
+| `recycling_bin` | 0.6 × 0.6 × 1.0 | the pavement | blue bin, lighter lid with a white slot | ≤ 40 |
+| `cafe_table` | 1.6 × 0.8 (chairs), 1.7 umbrella | out from the shop | small table, two chairs either side along X, a quartered umbrella at ~2.1 m: two quarters cream, two `paint` (fixed red for now) | ≤ 80 |
+| `vending_machine` | 1.0 × 0.8 × 1.9 | the front | body in `paint` (tinted per instance), a lit `ad_panel` front, a white stripe on top | ≤ 40 |
+| `atm` | 0.8 × 0.6 × 1.8 | the screen | grey kiosk, `screen`, a lit blue `stripe_atm` band on top | ≤ 40 |
+| `shopping_cart` | 0.55 × 0.9 × 1.0 | the handle at −Z | wire basket (a solid box is fine), red handle | ≤ 40 |
+
+Not yet made, if there's appetite: scaffolding against a façade, a
+`water_barrier` (the white-and-red plastic kind), a work van.
 
 ---
 

@@ -37,6 +37,18 @@ export function rightOf(d: Dir): { x: number; z: number } {
   return { x: -v.z, z: v.x };
 }
 
+/** A number for the lane travelling `d` toward node (ix, iz), for allocation-free lookups. */
+export function laneKey(ix: number, iz: number, d: Dir): number {
+  return ((ix + MAX_NODE) * (2 * MAX_NODE + 1) + iz + MAX_NODE) * 4 + d;
+}
+
+/** A number for the road between two neighbouring nodes, either way round. */
+export function segmentKey(ax: number, az: number, bx: number, bz: number): number {
+  const a = (ax + MAX_NODE) * (2 * MAX_NODE + 1) + az + MAX_NODE;
+  const b = (bx + MAX_NODE) * (2 * MAX_NODE + 1) + bz + MAX_NODE;
+  return Math.min(a, b) * 1024 + Math.max(a, b);
+}
+
 export function nodeValid(ix: number, iz: number): boolean {
   return Math.abs(ix) <= MAX_NODE && Math.abs(iz) <= MAX_NODE;
 }

@@ -51,6 +51,7 @@ import {
 import { NoiseBank, Voice, automateDip, makeImpulse, nodeStats } from './synth';
 import { RateGate, VoiceLimiter } from './voices';
 import { len2 } from '../core/len';
+import { alarmPattern } from '../systems/emergency';
 
 export { createCarSound, describeCar, type CarSound } from './carSound';
 export type { SirenStyle } from './loops';
@@ -688,10 +689,40 @@ export class GameAudio {
         return; // the mission / Chaos Run card plays its own sting
       case 'activityEnd':
         return; // the race banner / results card play their own stings
+      case 'street':
+        return this.onStreet(e);
       default: {
         const unhandled: never = e;
         return unhandled;
       }
+    }
+  }
+
+  /** The city's own happenings: a chime as the ice cream van opens, doors, a bus's brakes, a hose, a winch, a dog. */
+  private onStreet(e: EventOf<'street'>): void {
+    switch (e.what) {
+      case 'iceCream':
+        return this.chime(e.x, e.z);
+      case 'patientLoaded':
+      case 'arrest':
+        return this.oneShot('door', e, FALLOFF.near, 0.6, 0.2, (v) => sfx.door(v, false));
+      case 'busStop':
+      case 'hose':
+        // Air brakes / the pump: a hiss.
+        return this.oneShot('door', e, FALLOFF.near, 0.55, 0.25, sfx.spray);
+      case 'tow':
+        return this.oneShot('crash', e, FALLOFF.crash, 0.45, 0.2, (v) => sfx.crash(v, 4, true));
+      case 'bark':
+        return this.oneShot('ambient', e, FALLOFF.punch, 0.5, 0.25, sfx.bark);
+      case 'yelp':
+        return this.oneShot('ambient', e, FALLOFF.punch, 0.45, 0.2, sfx.yelp);
+      case 'alarm': {
+        const pattern = alarmPattern(e.x, e.z);
+        return this.oneShot('horn', e, FALLOFF.horn, 0.4, 0.2, (v) => sfx.carAlarm(v, pattern));
+      }
+      default:
+        // Sirens are continuous (StreetLife); the rest is heard through what it causes (shots, crashes, horns).
+        return;
     }
   }
 

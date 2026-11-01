@@ -10,7 +10,7 @@
  * each other so the city doesn't change in unison.
  */
 import { BLOCK_SIZE, HALF_EXTENT } from './city';
-import { DIRS, DIR_VEC, MAX_NODE, nodeValid, type Dir } from './roads';
+import { DIRS, DIR_VEC, MAX_NODE, laneKey, nodeValid, type Dir } from './roads';
 
 export type Signal = 'red' | 'amber' | 'green';
 
@@ -94,6 +94,8 @@ export function signalPoles(): SignalPole[] {
 /** What AI drivers ask: the light facing them as they arrive at a junction. */
 export interface SignalView {
   at(ix: number, iz: number, dir: Dir): Signal | null;
+  /** Road works at the kerb of the lane travelling `dir` toward (ix, iz): a driver pulling over for a siren stays in the lane. */
+  kerbWorks?(ix: number, iz: number, dir: Dir): boolean;
 }
 
 /**
@@ -102,6 +104,18 @@ export interface SignalView {
  */
 export class TrafficSignals implements SignalView {
   time = 0;
+  /** Lanes with road works at the kerb (roads.ts laneKey). */
+  private readonly works = new Set<number>();
+
+  /** The road-works sites (world/roadworks.ts), once at boot. */
+  setRoadworks(sites: ReadonlyArray<{ ix: number; iz: number; dir: Dir }>): void {
+    this.works.clear();
+    for (const s of sites) this.works.add(laneKey(s.ix, s.iz, s.dir));
+  }
+
+  kerbWorks(ix: number, iz: number, dir: Dir): boolean {
+    return this.works.has(laneKey(ix, iz, dir));
+  }
 
   step(dt: number): void {
     this.time += dt;

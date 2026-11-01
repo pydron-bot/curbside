@@ -160,6 +160,11 @@ export type GameEvent =
    * gone with the crew.
    */
   | { type: 'boombox'; id: string; x: number; z: number; on: boolean; cut?: boolean }
+  /**
+   * Something happened in the city's own life at (x, z) (game/cityLife.ts):
+   * see StreetWhat. Nothing to do with the player's heat or score.
+   */
+  | { type: 'street'; what: StreetWhat; x: number; z: number }
   /** The game was paused or resumed (menu, app switch, lost graphics context). */
   | { type: 'pause'; paused: boolean }
   /**
@@ -188,6 +193,55 @@ export type GameEvent =
       /** Chaos Run: seconds of bonus time earned. */
       bonusTime?: number;
     };
+
+/**
+ * The city's everyday happenings (`street` events, game/cityLife.ts). The
+ * base emits 'ambulance' (one called), 'patientLoaded' and 'weaponDrop'
+ * (an armed person knocked out let go of their gun). The rest are
+ * reserved for the scenes built on the base, so each can emit its own
+ * without touching this file: fires and fire trucks, police chases, street
+ * races, the ice cream van, buses, tow trucks, scuffles. Add a member here
+ * only for something none of these covers (GameAudio.onStreet's switch
+ * has a default, so it keeps compiling).
+ */
+export type StreetWhat =
+  // The base.
+  | 'ambulance'
+  | 'patientLoaded'
+  | 'weaponDrop'
+  // Reserved: fires and the fire truck (called, hose on, out).
+  | 'fire'
+  | 'fireTruck'
+  | 'hose'
+  | 'fireOut'
+  // A parked car's alarm: one cycle of its siren (repeated while it sounds).
+  | 'alarm'
+  // Reserved: police chases (started, the suspect on foot, cuffed, taken down).
+  | 'chase'
+  | 'suspectRuns'
+  | 'arrest'
+  | 'suspectDown'
+  // Reserved: street races (started, won).
+  | 'race'
+  | 'raceWon'
+  // Reserved: the ice cream van (open, one served), a bus at a stop, a car hooked by a tow truck, a scuffle.
+  | 'iceCream'
+  | 'iceCreamServed'
+  | 'busStop'
+  | 'tow'
+  | 'fight'
+  // Atmosphere: a stray dog barking (chasing a runner) or yelping (hit, scared off), a gang turf flare-up.
+  | 'bark'
+  | 'yelp'
+  | 'turfWar'
+  // People (scenes/buskers.ts, muggings.ts, witnesses.ts): a busker sets up, a bag snatched, handed back, a crime called in.
+  | 'busker'
+  | 'mugging'
+  | 'bagReturned'
+  | 'witnessCall'
+  // Traffic: two cars collided on their own, a truck double-parked in the lane.
+  | 'accident'
+  | 'doublePark';
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;

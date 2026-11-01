@@ -7,6 +7,7 @@ export const RADAR_LEGEND: ReadonlyArray<readonly [icon: string, meaning: string
   ['M', 'Ringing payphone: a job'],
   ['S', "Pay 'n' Spray: lose the heat"],
   ['★', 'Police station'],
+  ['+', 'Hospital: where the ambulances go'],
   ['!', 'Frenzy'],
   ['R', 'Checkpoint race'],
   ['$', 'Docks: car exports'],

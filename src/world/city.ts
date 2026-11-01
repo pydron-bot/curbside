@@ -63,6 +63,20 @@ export interface City {
   obstacles: Rect[];
 }
 
+/**
+ * A random byte per block (in city.blocks order) for the ground's variety
+ * (world/ground.ts); a plaza whose byte is under 128 is drawn as a car park.
+ */
+export function lotBytes(city: City): Uint8Array {
+  const rand = mulberry32(city.seed ^ 0x9e3779b9);
+  return Uint8Array.from(city.blocks, () => Math.floor(rand() * 256));
+}
+
+/** Is the block (index into city.blocks) a car park rather than an open plaza? */
+export function isCarPark(city: City, bytes: Uint8Array, i: number): boolean {
+  return city.blocks[i].kind === 'plaza' && bytes[i] < 128;
+}
+
 /** Interior of block (bx, bz), bx/bz in 0..BLOCKS_PER_SIDE-1. */
 export function blockInterior(bx: number, bz: number): Rect {
   const inset = ROAD_WIDTH / 2 + SIDEWALK;

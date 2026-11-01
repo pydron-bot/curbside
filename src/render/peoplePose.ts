@@ -176,6 +176,8 @@ function poseCrowdPed(c: CrowdPed, dt: number, alpha: number, view: Rect | null)
   // Shooters draw (SWAT an SMG, everyone else a pistol); a hit makes them reel.
   const shooting = a.mode === 'shoot';
   m.hold(shooting ? (c.gun ?? 'pistol') : null, shooting);
+  // A phone held up to call or film: the one-handed aim with nothing in the hand.
+  if (c.phone && !shooting) m.armed = 'one';
   m.cowering = a.cower > 0 && a.mode === 'flee';
   m.followStagger(a.stagger);
   const down = a.mode === 'down';

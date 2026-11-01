@@ -37,6 +37,27 @@ describe('knockable street furniture', () => {
     expect(hit).toBe(1);
   });
 
+  it('a long one is met by its box: a car alongside a barrier passes, one into it knocks it', () => {
+    // A work barrier along the road (long side along z), 1.9 m right of the car's line: inside its radius, clear of its box.
+    const barrier = { id: 4, kind: 'work_barrier', x: 1.9, z: 0, radius: 0.92, hx: 0.12, hz: 0.9 };
+    const k = new Knockables([barrier]);
+    const car = createVehicleState(0, -3, 0);
+    car.vz = 15;
+    let hit = 0;
+    for (let i = 0; i < 40; i++) {
+      car.z += car.vz / 60;
+      k.step([car], 1 / 60, () => hit++);
+    }
+    expect(hit).toBe(0);
+    const closer = createVehicleState(0.95, -3, 0);
+    closer.vz = 15;
+    for (let i = 0; i < 40; i++) {
+      closer.z += closer.vz / 60;
+      k.step([closer], 1 / 60, () => hit++);
+    }
+    expect(hit).toBe(1);
+  });
+
   it('comes back a minute later, but only out of view', () => {
     const k = new Knockables([{ id: 3, kind: 'bench', x: 0, z: 1, radius: 0.9 }]);
     const car = createVehicleState(0, 0, 0);

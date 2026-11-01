@@ -20,6 +20,7 @@ import { createPursuit, drivePursuit, type PursuitTarget } from '../systems/purs
 import { evadeBonus, type Award, type Score } from '../systems/score';
 import { driveAi, reactToHit, rerouteAi, scareDriver, shouldYield, YIELD_RANGE, type Obstacle } from '../systems/traffic';
 import { Wanted, WITNESS_RANGE, type Crime } from '../systems/wanted';
+import { DELAYED_CRIMES } from '../systems/witnesses';
 import type { City, Rect } from '../world/city';
 import type { StaticGrid } from '../world/collision';
 import type { SignalView } from '../world/signals';
@@ -80,6 +81,13 @@ export interface HeatDeps {
   bustFine?(): number;
   /** Traffic lights: ordinary traffic stops on red. */
   signals?: SignalView;
+  /**
+   * A lesser crime (systems/witnesses.ts DELAYED_CRIMES) seen only by
+   * passers-by (on screen, no police near): true if a witness takes it, to
+   * call it in a few seconds later through called() (or never, if the
+   * caller's stopped). False, or no hook: it counts at once, as before.
+   */
+  witnesses?(crime: Crime, x: number, z: number): boolean;
 }
 
 export class Heat {
@@ -304,9 +312,18 @@ export class Heat {
     return this.police.copWithin(x, z, WITNESS_RANGE);
   }
 
+  /** A witness's call about an earlier `crime` got through: it counts now, and the police know where you are. */
+  called(crime: Crime): void {
+    if (!this.live) return;
+    this.wanted.commit(crime, true);
+    this.police.report(this.updateSuspect());
+  }
+
   private crime(crime: Crime, x: number, z: number): void {
     if (!this.live) return;
     const witnessed = this.witnessed(x, z);
+    // Seen only by passers-by: one may call it in later instead (heat lands when the call gets through).
+    if (witnessed && this.deps.witnesses && DELAYED_CRIMES.has(crime) && !this.police.copWithin(x, z, WITNESS_RANGE) && this.deps.witnesses(crime, x, z)) return;
     this.wanted.commit(crime, witnessed);
     // Called in: the police know where you are.
     if (witnessed || crime === 'copCarStolen') this.police.report(this.updateSuspect());

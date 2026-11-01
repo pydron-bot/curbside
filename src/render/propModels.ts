@@ -20,13 +20,13 @@ export const SURF = {
   green: 5,
   /** The police station's blue lamp: glows at night, slow pulse. */
   policeLamp: 6,
-  /** Signage that is always a little self-lit (spray, export, payphone signs, crate stripes). */
+  /** Signage that is always a little self-lit (spray, export, payphone signs, crate stripes, ad panels, screens). */
   sign: 7,
   /** Hazard paint and cones: catch the light at night. */
   hazard: 8,
   /** A stunt ramp's deck: chevrons pointing up the slope. */
   rampDeck: 9,
-  /** An aircraft-warning light: blinks. */
+  /** An aircraft-warning light, a road-works lamp: blinks. */
   blink: 10,
   /** The helicopter's searchlight: bright. */
   searchlight: 11,
@@ -57,7 +57,11 @@ export function surfaceFor(material: string, root: string): number {
     case 'spray_sign':
     case 'export_sign':
     case 'payphone_sign':
+    case 'ad_panel':
+    case 'screen':
       return SURF.sign;
+    case 'blink_amber':
+      return SURF.blink;
     case 'frenzy':
       return SURF.tint;
     case 'booth_roof':
@@ -65,6 +69,7 @@ export function surfaceFor(material: string, root: string): number {
     case 'hazard':
     case 'cone_orange':
     case 'barrier_orange':
+    case 'roadwork_sign':
       return SURF.hazard;
     case 'ramp':
       return SURF.rampDeck;
@@ -130,6 +135,14 @@ export class PropModels {
     this.geometries.set(name, geo);
     this.extents.set(name, { min: b.min.clone(), max: b.max.clone() });
     return geo;
+  }
+
+  /** A ready-made prop geometry (aColor and aSurf set: a box stand-in) under `name`. */
+  addGeometry(name: string, geo: BufferGeometry): void {
+    geo.computeBoundingBox();
+    const b = geo.boundingBox!;
+    this.geometries.set(name, geo);
+    this.extents.set(name, { min: b.min.clone(), max: b.max.clone() });
   }
 
   geometry(name: string): BufferGeometry | undefined {

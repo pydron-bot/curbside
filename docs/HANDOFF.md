@@ -255,6 +255,131 @@ still get the offline shell.
    pass:** tap a pick on the phone, feel the pacing (first level after a
    life or two?), and watch whether stars give too much CRED.
 
+10. **Living city, the shared base: done 2026-11-01** on
+   `claude/living-city` (README *City life*). The knocked out stay down
+   and an ambulance takes them to the hospital (new, `+` on the radar);
+   parked cars at the kerbs and in the car parks' painted bays; anyone
+   armed knocked out drops their gun to pick up (before: nobody dropped
+   anything). Under them: the `CityLife` director with a pure scheduler
+   (cooldowns, caps, range from the player; holds for the title, an
+   activity, wanted stars and the tutorial), a service-vehicle call-out
+   (`scenes/service.ts` ServiceRun) and queues/crowds
+   (`scenes/gathering.ts` Gathering), typed `street` events. iPhone
+   profile ~41 draw calls on average at a fixed seed (40 before), no new
+   mesh or program; smoke OK (61 / 51 iPhone, 70 desktop).
+   **Being built on it in parallel** (one worktree each, branched from
+   this base): fires and fire trucks, police chases, street races, the ice
+   cream van's queue, bus stops, tow trucks, scuffles between people; and
+   the extras (witnesses, traffic accidents, car alarms, muggings,
+   performers and stands, gang flare-ups, double-parked trucks, crowds by
+   time and weather, stray dogs). A first draft of the scenes, written
+   before the work was split, is on the local branch
+   `claude/living-city-scenes-draft` (`4301862`, not pushed): a starting
+   point, not reviewed against this base's APIs.
+   **Atmosphere: done 2026-11-01** on `claude/city-atmosphere` (README
+   *City life*): crowds by the hour and the weather (`game/cityMood.ts`
+   `densityFor`; the Neon Mile and the old town fill at night, the docks
+   and suburbs empty, rain thins every street), umbrellas, sheltering
+   under awnings and hurrying in the rain, groups under the neon at
+   night, a `nightlife` factor for the street races (`life.d.mood`), stray
+   dogs that chase runners and bark, pigeons that land again, and gang
+   turf flare-ups on the VIPERS' borders with colours-only rival crews
+   (step in and the side you didn't hit stands with you). Umbrellas and
+   dogs are code-built stand-ins in the props' `things` family (+2 calls
+   at most; Blender contract in `BLENDER_TODO.md` §8.8). **For the device
+   pass:** do the dogs and umbrellas read from the street camera; is a
+   skirmish (10–20 s) too short; the night crowd in the Neon Mile (up to
+   ~30 people plus the groups) on the phone's CPU.
+   **Hotspots** (keep edits to these small): `core/events.ts` (the
+   `StreetWhat` members for the planned scenes are already there),
+   `game/cityLife.ts` (one `this.add(...)` line per scene), `main.ts` (one
+   `cityLook.add(...)` per scene that draws), `game/population.ts` and
+   `systems/crowd.ts` (the `street` / `scene` / `injured` / `ambient` /
+   `parked` flags), `audio/gameAudio.ts` (`onStreet`). **For the device
+   pass:** does a knocked-out body lying there read on the phone; are the
+   parked cars in the way on foot or in a chase; the drop ring at night.
+   **Emergency services: done 2026-11-01** on `claude/city-emergency`
+   (README *City life*): fires on exploded cars and on walls hit by a
+   grenade or rocket, put out by a fire truck's two firefighters with
+   hoses (or burning out by themselves); tow trucks taking wrecks,
+   abandoned and parked cars away on the hook; car alarms from a bump, a
+   shot or a blast (flashing indicators, a synthesised alarm). Rules pure
+   and tested (`systems/emergency.ts`, `tests/emergency.test.ts`); a new
+   `StreetWhat` member, `alarm`. No new mesh or program; worst case +6
+   draw calls on the iPhone profile (fire truck and tow truck in view,
+   with the firefighters' body). **For the device pass:** the flames and
+   the hose jets in daylight and at night, the alarm's level against the
+   radio, a tow in a tight car park (the car on the hook can clip a
+   neighbour: it's carried, not simulated).
+
+11. **Street props, round 2: done 2026-11-01** on `claude/street-props`
+   (README *World*: *Placement*, *Road works*, *Food carts and bus stops*,
+   *Collision*, *Stand-ins*). Denser, more varied kerbs (parking meters,
+   planters, bike racks, recycling bins, shopping carts; café tables,
+   vending machines and ATMs against shopfronts); 18 road-works sites at
+   the kerb that traffic drives past in its lane (pulling over for a siren
+   too); food carts and fruit stands; 86 bus shelters. All in the `street`
+   family, so no new draw call (iPhone profile, same spots before → after: 49 → 49 at the spawn, 43 → 43 at a works site, 33 → 33 downtown); box stand-ins until props.glb
+   has the models (contracts: `docs/BLENDER_TODO.md` §10). **For the
+   people stream:** `dressing.street.vendors` (serve point, queue
+   direction, vendor spot) and `dressing.street.busStops` (wait spot, where
+   a bus pulls in, its lane) are used by item 12 (the shelters are now
+   the only bus stops; walkers step round a kerb cart's queue). **For the device pass:**
+   whether the stand-ins read from the phone's camera, and the street
+   family's vertex cost (5,976 vertices per instance, was 3,276; every
+   instance runs every model's vertices, dropped early) in a busy downtown
+   view. Not done: scaffolding, a work van, water barriers.
+
+12. **City people: done 2026-11-01** on `claude/city-people` (README *City
+   life*, *People*; built on item 10's base). The bus shelters are the only
+   bus stops (`placeBusStops` is gone; CityLife takes the shelters and the
+   carts through its deps). Buses pull in at shelters where people have
+   gathered, riders board through the front door and a few get off; the
+   ice cream van stops by parks and plazas and serves a queue; food carts
+   get a vendor and a queue, busiest at lunch and in the evening, and
+   walkers step round people standing on the pavement; buskers draw a
+   crowd that tips; scuffles start from a barge (a fleeing ped, the player
+   sprinting), stray fire or a queue-jumper, with a ring of onlookers and
+   now and then a knockout for the ambulance; muggings, with a bag to win
+   back for $50; and witnesses: knocking a civilian down or a carjacking
+   seen only by passers-by is phoned in after 3–5 s, which knocking the
+   caller down or getting 45 m away stops (`HeatDeps.witnesses`,
+   `heat.called`; no witness, the old immediate heat). No new mesh, program
+   or draw call (iPhone profile, fixed seed, seven places: 41.9 → 42.1
+   on average, 57 → 56 at most; README *City life* budget). **Shared-file edits:** `cityLife.ts` (deps
+   `busStops`, `vendors`, `hour?`, `reward?`, `callIn?`; the `witnesses`
+   field; eight `add` lines), `main.ts` (those deps, the heat hook,
+   `cityLook.add(peopleLook(...))`), `heat.ts` (the hook and `called`),
+   `events.ts` (four `StreetWhat` members), `population.ts`
+   (`CrowdPed.phone`), `peoplePose.ts` (one line), `gathering.ts` (`place`,
+   `release`); the scenes' shared bits are `scenes/people.ts`. **For the device pass:** do the phone screens, the mugger's
+   ring and the coins read on the phone; is a bus at a shelter in the way
+   on foot; how the delayed heat feels (tune `CALL_SECONDS`, `SEE_RANGE`,
+   `CALL_RANGE` in `systems/witnesses.ts`). Not done: thrown or knocked
+   objects starting scuffles (no event carries who a knocked prop hit),
+   people carrying a visible bag, a busker's music.
+
+13. **City traffic: done 2026-11-01** on `claude/city-traffic` (README
+   *City life*, *Traffic scenes*). Ambient police chases (car, scooter or
+   on foot; arrested, taken down for the ambulance, or escaped) that never
+   touch the player's heat (attack the officers and the usual crimes
+   apply; any star breaks the chase off and its officers join the police
+   as strays); night-weighted street races with nitro, sometimes chased;
+   rear-end accidents (smoke, hazards, an argument, sometimes a fight, a
+   patrol car breaks it up; the cars stay flagged `Vehicle.towable` for
+   the tow-truck stream); double-parked delivery vans and garbage trucks
+   with a queue that honks and goes round. One incident (chase, race,
+   accident) at a time; a forced scene costs at most +9 draw calls on the
+   iPhone profile; smoke OK (56 / 56 iPhone, 68 desktop). Merged with the
+   others: races read the mood's nightlife where the player is
+   (`nightlife()` in `scenes/streetRaces.ts`), and tows take `towable`
+   crashes first.
+   **For the device pass:** are the sirens of a chase you're not in too
+   much; does a cuffed suspect read at phone scale; are races too fast to
+   follow on foot; how often the queue behind a truck blocks your own run.
+   Not done: a proper motorcycle model (the scooter stands in); ambient
+   police cars aren't on the radar.
+
 Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
 launch ramp landing at a corner checkpoint (is that a feature?).
 

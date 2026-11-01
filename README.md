@@ -221,10 +221,14 @@ bake in as new constants.
   drive-bys; optional character clips; stunt ramps with STUNT awards.
 - **World and vehicle models** (`src/render/propModels.ts`, `propBatch.ts`,
   `worldProps.ts`, `heliModel.ts`; `src/world/streetProps.ts`,
-  `landmarkProps.ts`, `dressing.ts`, `signals.ts`; see *World* below):
+  `landmarkProps.ts`, `dressing.ts`, `signals.ts`, `roadworks.ts`,
+  `streetStops.ts`, `frontages.ts`; see *World* below):
   props.glb, pickups.glb, debris.glb and heli.glb replace the box
   stand-ins — street lamps, traffic lights that traffic obeys, street
-  furniture you can knock flying, rooftop kit, trees by district, booths,
+  furniture you can knock flying (parking meters, planters, bike racks,
+  recycling bins, café tables, vending machines and ATMs too), road-works
+  sites traffic drives past, bus shelters and food carts with spots for
+  queues, rooftop kit, trees by district, booths,
   the station, race gantries, the export bay, the safehouse door, pickups,
   frenzy tokens, ramps and kickers, car-part debris in the car's paint and a
   modelled police helicopter — in seven instanced families. Twelve more
@@ -233,6 +237,11 @@ bake in as new constants.
   bike) with their own handling, health and collision bodies; emergency
   calls with right of way; two-wheelers that lean, carry a rider and
   throw them off in a hard crash.
+- **City life** (`src/game/cityLife.ts`, `src/game/scenes/`; see *City
+  life* below): the knocked out stay down for an ambulance to the
+  hospital, parked cars at the kerbs and in the car parks, guns dropped by
+  the armed; a scheduler and two primitives (service vehicle call-outs,
+  queues and crowds) for the ambient scenes to come.
 - **M8 Ship** — live on GitHub Pages at deeek.org/curbside/ (served from a
   sub-path: `CURBSIDE_BASE`, `publicUrl()`). Next: a real-device
   performance pass and the to-do list in `docs/HANDOFF.md`.
@@ -293,7 +302,9 @@ molotovs 10, rockets 8).
 Everyone, officers included, has 100 HP: pistol 34 (3 hits), SMG 15 (~7),
 shotgun 7 × 16 (one blast up close, thinner at range). A hit staggers for
 0.3 s (no walking, no attacking, the next attack pushed back); 0 HP is a
-knockout: down 8 s, then they run with no grudge. Only a knockout scores
+knockout: down 8 s, then they run with no grudge (a passer-by
+knocked out near you stays down for the ambulance instead: *City life*;
+anyone armed drops their gun). Only a knockout scores
 KNOCKOUT. Punches chain jab (22), jab (22), hook (40, knocks down) within
 0.75 s. Firing locks on: hostiles (fighters, shooters, police while
 wanted) at any angle first, else the best target in a 90° cone; with a
@@ -394,7 +405,9 @@ burning: `explosion.ownCar`), clearly ramming a police car
 +0.6 (bumps in a chase don't count, nor does smashing through a roadblock
 or a chasing cop driving into you), bullets into one +0.15 (capped),
 knocking down an officer +1 (at most +1 per 5 s), wrecking a police car
-+1; stealing one sets at least 1★. Civilian crimes stop at 3★; 4–5★ need
++1; stealing one sets at least 1★. Knocking a civilian down and carjacking
+seen only by passers-by (no police near) wait for one of them to phone it
+in, 3–5 s, and can be stopped (City life, *Witnesses*). Civilian crimes stop at 3★; 4–5★ need
 attacks on the police. Below a star, heat fades after 10 quiet seconds.
 A new star (or a witnessed crime) is called in: for 8 s dispatch tracks
 you while units respond, and the evasion clock waits. **Evasion:** once no
@@ -499,11 +512,428 @@ heat.wanted.level / .heat / .searching    // read the stars
 heat.wanted.commit(crime, witnessed)      // report a crime ('assault', 'carjack', 'gunfire', ...)
 heat.wanted.force(stars)                  // scripted chases, missions
 heat.wanted.clear(reason)                 // e.g. a mission's reward
+heat.called(crime)                        // a witness's call got through (HeatDeps.witnesses held it: City life, Witnesses)
 heat.police.units / .heli / .seen          // read the response
 heat.shops / heat.station                 // landmarks (world/landmarks.ts)
 // Bus: { type: 'wanted', level, prev, reason } · { type: 'busted', fine } · { type: 'horn', x, z, duration }
 //      { type: 'respray', x, z, cleared }; pedDown/explosion/bulletHit/enterVehicle carry `cop` / `police` flags.
 ```
+
+## City life
+
+The city getting on with its day around the player, none of it the
+player's heat or score: the knocked out stay down until an ambulance takes
+them to the hospital, cars stand parked at the kerbs and in the car parks,
+and an armed person knocked out drops their gun for you to pick up. One
+director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
+*scenes* built on it (`src/game/scenes/`); the rules are pure and tested
+(`systems/cityScenes.ts`, `world/streetSpots.ts`, `world/drops.ts`).
+
+- **Knocked out stays down** (`scenes/medics.ts`): a passer-by (crowd
+  upkeep's people and drivers thrown out of their cars: `PedAgent.street`)
+  knocked out cold within 120 m is held down (`injured`: the down timer
+  never runs out, so the get-up clip never starts) instead of getting up
+  after 8 s. 3 s later an ambulance is called: one in traffic within 140 m
+  takes it, else one comes from off-screen with lights and siren (traffic
+  pulls over, StreetLife wails). It pulls up, a paramedic (white shirt)
+  steps out of the door nearest them, kneels 2.2 s, and brings them back
+  on a stretcher (the body slides a pace behind); anyone else lying within
+  35 m goes on the same trip, then it drives off to the **hospital**
+  (`placeHospital`: a built-up block near (10, 7), a red cross on the
+  pavement, `+` on the radar), lights still on. At most 6 held down (more
+  get up as before), 2 ambulances out; nobody comes in 100 s and they come
+  round. Officers, gang members and story characters are other systems'
+  and get up as before.
+- **Parking** (`CityLife.maintain`, `Population.parkCar`): 10 cars
+  (`PARKED_COUNT` × the tier's traffic scale) parked round the player,
+  filled out of view 35–150 m off: at the kerb mid-block (`PARK_OFFSET`
+  6.9 m from the centreline: 1 m clear of the lane, so traffic and
+  pull-overs pass; 14–50 m before a junction, a car length apart), or,
+  45% of picks with a car park in range, nose-in in a car park's painted
+  bays (`carParkBays`: half the plazas, the same blocks and bays
+  `world/ground.ts` paints, via the shared `lotRolls`). Clear of landmarks,
+  spray bays, ramps, the bus shelters' bays, the hospital and the spawn corner. A
+  `parked` car counts apart from abandoned cars and wrecks (its own cap,
+  on top of the idle cap) and is recycled like any other once far off;
+  getting in clears the flag. Common models only (no extra draw calls).
+- **Dropped guns** (`world/drops.ts`, `CityLife.scanDrops`): anyone armed
+  (an armed passer-by, a gang member with a gun, an officer, SWAT) knocked
+  out drops what they carry (`CrowdPed.gun`, else a pistol) a step from
+  where they fell: the pickups.glb crate model, small, in a pulsing amber
+  ring. Walk over it to take it (`combat.collect`, the usual `pickup`
+  event and feed line; left lying if you're full). 8 at most (the oldest
+  goes), 45 s each. A civilian who dropped theirs fights with fists after.
+  *Before this, nobody dropped anything: a knockout only knocked them
+  over (`systems/crowd.ts` hurtPed / `game/combat.ts` resolve), and guns
+  came from the sidewalk crates (`world/pickups.ts`), a frenzy's gift, a
+  mission's hand-out or the Chaos Run's loadout.*
+- **Crowds by the hour and the weather** (`game/cityMood.ts`, pure):
+  `densityFor(district, hour, rain)` multiplies the crowd target: by day
+  downtown and the old town are busiest and the docks quietest; from 18:00
+  the crowd drains out of the docks, the suburbs and downtown into the
+  Neon Mile (×1.3 at night) and the old town's bars, the quiet districts
+  down to ×0.22–0.3; full rain takes 45% off every street. Crowd upkeep
+  takes the density where the player is (`crowdScale`) and keeps spawns in
+  proportion to each district's (`MaintainContext.spawnWeight`), so new
+  people gather where the life is. *Before: the same 22 (× tier) people
+  everywhere, day or night, rain or shine.*
+- **Rain and night on the pavements** (`scenes/streetMood.ts`): in the rain
+  (`render/fxWeather.ts` WeatherCycle: a shower every few minutes) walkers
+  hurry (`rainPace`, up to ×1.5), 40% put up an umbrella (a canopy over
+  their head, six colours), and up to 10 of the rest duck in under an
+  awning on their own pavement (`world/shopSpots.ts`: from the same
+  building plans the awnings are drawn from) and wait there, looking out
+  at the road, until it stops. At night groups of 2–3 hang about under the
+  neon (up to 4 groups at full nightlife, put down out of view 24–70 m
+  off, most in the Neon Mile), and drift off as ordinary passers-by at
+  dawn or after a minute or so.
+- **Stray dogs** (`systems/dogs.ts` pure, `scenes/strayDogs.ts`): up to 4
+  round the player (fewer downtown and in the Neon Mile than in the
+  suburbs and the docks), put down out of view, trotting round the
+  pavements and stopping to sniff. Anyone running past within 8 m (a
+  passer-by or the player) is chased for up to 3.5 s or 22 m, barking
+  (`street` 'bark'); gunfire within 32 m sends them bolting; a car through
+  them, a blast or a punch knocks them over ('yelp') and they get up and
+  run. They keep out of walls.
+- **Pigeons land again** (`systems/pigeons.ts`): most spooked flocks (60%)
+  wheel round and glide down 14–26 m on, away from the scare, and peck
+  about there until spooked again; the rest fly off as before.
+- **Gang turf flare-ups** (`systems/turfWar.ts` pure, `scenes/turfWar.ts`):
+  every 2–4 minutes (`LOUD`), where the VIPERS' turf meets a rival crew's
+  across a road (`RIVALS`, colours only: COBBLE KINGS in the old town,
+  DOCK RATS at the docks, GLASS BOYS downtown), 2–4 of each walk in from
+  either end of the pavement, square up and fight with fists (in 30%, one
+  on each side has a pistol), 35–110 m from the player. The badly hurt may
+  run for it; it's over when one side is all knocked out or gone, and the
+  winners walk off. **Stepping in:** hit someone on one side (a punch, a
+  shot, a knock-down) and that side turns on you while the other stands
+  with you for the rest of the skirmish (they keep fighting the side you
+  hit; hit both and both are on you); knocking a VIPER down costs respect
+  as ever (`gangMode` hears the same `pedDown`). The knocked out are handed
+  to the street (`street`), so the ambulances come for them.
+
+**People** (`scenes/buses.ts`, `iceCream.ts`, `vendors.ts`, `buskers.ts`,
+`fights.ts`, `muggings.ts`, `witnesses.ts`, `pavement.ts`; rules in
+`systems/streetPeople.ts` and `systems/witnesses.ts`, tested). The scenes
+hold at most 24 people between them (`scenes/people.ts` PEOPLE_CAP: on
+top of the crowd's own count, so past it queues and crowds stop drawing
+people in).
+
+- **Bus stops**: the 86 shelters (`dressing.street.busStops`, `life.stops`)
+  are the only stops. The four nearest within 110 m gather riders over
+  time: passers-by drift over and wait in a line along the front facing
+  the road (a Gathering crowd placed by `shelterSpot`, 4–5 each, giving up
+  after 70–150 s), and one coming into range out of view may already have
+  one or two waiting. A bus near the player (in traffic, or brought in
+  every 45–90 s while people wait and none is about) turns at junctions
+  toward the nearest shelter with riders (`routeToward`), pulls in at its
+  bay (`pullIn` to stopX/Z), hisses open (`busStop`): one or two step off
+  the middle door and walk on, the riders walk to the front door and
+  vanish into it, and it pulls out once they're aboard (4–14 s). It stops
+  at an empty shelter 30% of the time.
+- **The ice cream van**: one in traffic within 150 m (or one brought in
+  every 90–180 s) pulls in mid-block at the kerb (`BUS_PULL_IN`), beside a
+  park or open plaza (anywhere else 25% of the time), every 30–60 s;
+  `iceCream` plays the jingle; passers-by queue at the hatch on the
+  pavement side (Gathering queue, 6, one served every 3.2 s: a cheer and
+  `iceCreamServed`); it shuts after 16–40 s and drives on.
+- **Food carts** (`dressing.street.vendors`): the five nearest within 90 m
+  get a vendor at `vendorX/Z` (put there out of view) and a queue at the
+  serving side, served every 4.5 s. How readily people join follows the
+  hour (`cartBusyness`: a lunch peak at 13:00 and an evening one at
+  18:30, near nothing in the small hours); a cart coming into range at a
+  busy hour may already have a customer or two. A kerb cart's first
+  customer stands on the walking line; the rest step off it toward the
+  shopfronts (`cartSpot`), and **walkers step round** anyone a scene holds
+  standing (`Pavement`: eased across their way, `sidestep`, before the
+  static collision), so nobody walks through a queue or jams on it.
+- **Buskers**: every 50–120 s (not while wanted) a busker sets up at the
+  edge of an open plaza or a park 25–90 m off, out of view, facing the
+  pavement, and dances (the Cheer clip, a wave every few beats) for
+  70–110 s; up to 7 passers-by watch in an arc in front (Gathering crowd)
+  for 12–28 s each, and now and then one tips: a coin glints in an arc
+  into the hat (`peopleLook`).
+- **Scuffles** (at most two, LOUD holds): someone running (a ped fleeing,
+  or the player sprinting) barges a walker (`barges`): the player knocks
+  them into whoever's beside them and those two square up; a fleeing ped
+  is gone after by the one they barged (any temper, or a calm one 40% of
+  the time). Also a stray round from someone else's gun (a temper, or one
+  in three, goes for a passer-by who fired it) and someone pushing in at a
+  cart or the ice cream van (`Fights.queueJump`). A shove each way, then
+  the one shoved backs down and walks off (35% if calm, 10% if not), or
+  6–10 s of fists (`setOn` both ways; knocked over, the other stands over
+  them till they're up). 30% end in a knockout (the loser starts low), the
+  ambulance comes for them; otherwise the more hurt walks off and the
+  other raises a fist. Up to 7 watch in a ring (Gathering crowd).
+- **Muggings** (every 90–180 s, LOUD holds): a passer-by on screen 10–40 m
+  off is rushed by someone close by, who snatches their bag (`mugging`)
+  and sprints corner to corner round the blocks, crossing at the corners
+  (`nextCorner`), ringed in red; the victim shouts and points (waving,
+  facing them) for 5 s. Knock the mugger over and the bag drops (a pulsing
+  amber ring, 45 s): walk over it to hand it back (`bagReturned`, the
+  victim cheers, **$50** through `deps.reward` → `progress.pay`; cash, not
+  CRED). Knocking the mugger down isn't called in by passers-by. Ignored,
+  they get away (65 m clear, or 35 s).
+- **Witnesses** (`heat.ts` hook `witnesses`, `scenes/witnesses.ts`): a
+  **lesser crime** (`DELAYED_CRIMES`: knocking a civilian down, a
+  carjacking) that only passers-by saw (on screen, no police within 60 m)
+  goes to whoever saw it: within 26 m and facing within 75° of it (or
+  right beside it), the five nearest. The nearest calls it in on their
+  phone (the one-handed aim pose with nothing in the hand, `CrowdPed.phone`,
+  and a lit screen in the glow batch); one in five of the rest calls too
+  (at most two per crime), half film it, the rest run. The call takes
+  3–5 s; it gets through (`heat.called(crime)`: the heat lands and the
+  police get a fix on you, `witnessCall`) unless every caller is knocked
+  down or scared off, or you get 45 m from them first. A second crime
+  close by while a call is on goes on the same call. With nobody who saw
+  it (or no phone free: 6 at once), heat counts it at once as before.
+  Gunfire, explosions and everything against the police stay immediate.
+- **Fires and fire trucks** (`scenes/fireCrews.ts`; rules in
+  `systems/emergency.ts` FireBoard): a car that blows up leaves its wreck
+  burning (the fire follows it if it's shoved), a grenade or rocket within
+  4.5 m of a building sets the wall alight. A fire flares up over 2.5 s,
+  burns 75 s and dies down over the last 12 (a blast within 5 m feeds it
+  instead); 6 at most (a new one takes the oldest's place). After 4 s a
+  fire within 150 m with 20 s still to burn calls a fire truck
+  (ServiceRun, `#c3191c`, lights and siren). It pulls up, the siren stops
+  (lights on), two firefighters (`ped_stocky`, tan coat, yellow helmet)
+  step down, walk to either side of the fire and hose it: 7 s for a full
+  fire with one hose, half that with two (hosed down, it never flares
+  back); then back in and off as traffic. 2 trucks at most; none behind
+  the title, in an activity or the tutorial (fires there burn out by
+  themselves). The look (`render/emergencyLook.ts` fireLook): bigger
+  flame particles than a burning car's, smoke from 3 m downwind (it's
+  drawn over the flames), embers, a flickering orange pool on the ground
+  (brighter at night); arcing water drops (streaks in the smoke pool,
+  started along their flight so a slow frame still shows a jet) and steam
+  where they land. Nothing hurts anyone (a molotov's fire still does).
+  Street events: `fire`, `fireTruck`, `hose` (the pump's hiss), `fireOut`.
+- **Tow trucks** (`scenes/tows.ts`; `towPose`, `towPriority`, `winch` in
+  `systems/emergency.ts`): every 45–90 s (none in an activity, while
+  wanted, in the tutorial or behind the title) a tow truck (`tow_truck`,
+  `#e8b923`, claimed in traffic within 140 m or brought in) comes for a
+  car within 110 m: a wreck whose fire is out (the player's included)
+  (or a crash or dumped getaway car flagged `towable`) first, then an abandoned car, then, one pick in two, a parked one;
+  never a car still burning, a bike or anything longer than a pickup, an
+  activity's car, or the car the player just left unless it's a wreck. It
+  drives over, then lines up 3 m to the side of the car and just beyond
+  it, tail to it, facing the way it came (`pullIn`), so the car goes on
+  the hook by its nose or its back; winches it up over 2.5 s (`tow`
+  event) and drives off as calm traffic with the car trailing like a
+  trailer (no speed of its own, so no skids). The amber beacon on the cab
+  turns throughout (towLook). Both are retired once far and unseen (or
+  40 s towing unseen). Take the truck, knock its driver out or get into
+  the towed car and the tow's off: the car stays, an ordinary abandoned
+  car. One at a time.
+- **Car alarms** (`scenes/alarms.ts`, `AlarmBoard`): a crash against a
+  parked car (any car's: the contact point on its body, ±0.6 m), a bullet
+  into one, or a blast within 14 m sets its alarm off: the four
+  indicators flash amber at 2 Hz with a wash on the road (alarmLook), and
+  a `street` event `alarm` every 1.6 s plays one cycle of its siren
+  (`sfx.carAlarm`: whoops, a hi-lo two-tone, or chirps and two honks, one
+  per spot, through a little distorted horn speaker). It stops after
+  20 s, or when the car's driven off (getting in clears `parked`), towed,
+  wrecked or recycled; set off again, it starts over. 4 at once; not
+  behind the title.
+
+**Traffic scenes** (`claude/city-traffic`; rules pure and tested in
+`systems/trafficScenes.ts`). Chases, races and accidents are `LOUD` (held
+off by the title, an activity, wanted stars and the tutorial) and only one
+of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
+
+- **Police chases** (`scenes/chases.ts`, every 100–200 s): a getaway car
+  (sports, sedan or compact) or a scooter flat out in a panic through the
+  lights with one or two patrol cars behind it, lights and siren on
+  (traffic pulls over), ramming, PITting and boxing it in with the
+  police's pursuit logic; or someone on foot running down the street
+  (`fleeAxis`) from one or two officers, with a car following 40% of the
+  time. Boxed in, the suspect gives up by the car (55% of the unarmed) or
+  bolts. A runner out of breath (8–14 s) gives up; one caught running is
+  tackled. Then they're cuffed (kneeling, hands on head: the player's
+  `Arrested` clip), walked to a police car's back door (one is called for
+  an arrest on foot) and driven off: **arrested**. A crash that leaves the
+  car under 30% health, or an armed suspect (30%) shooting it out, leaves
+  them knocked out on the street for the ambulance: **taken down**. Lost
+  far off or over 110 s: **escaped**. Then the officers walk back to their
+  cars and drive off.
+  **Not the player's heat:** the chase's officers always have the suspect
+  (or nobody) as their target, are no unit of `PoliceForce` (so they
+  never see, bust or report the player), and are never left in a fighting
+  mode without an opponent (that would turn them on the player). Attack
+  them or ram their cars and the usual crimes apply (they're `cop` peds
+  and police-model cars); with any star the chase breaks off and its
+  officers on foot are handed to the police as strays
+  (`CityLifeDeps.enlist` → `heat.police.strays`), who then act under the
+  normal rules (and bust a player who stands there). No chase starts while
+  the player has stars.
+- **Street races** (`scenes/streetRaces.ts`, every 90–170 s, then
+  `raceOdds(hour)`: all at 22–4 h, 60% in the evening and before dawn, 25%
+  by day, else put off 20–45 s; `CityLifeDeps.hour` is `look.time.hour`,
+  times `nightlife()`: 0.75 + 0.75 × the mood's `nightlifeAt` the player,
+  so 0.75× by day or in a quiet district, 1.5× in the Neon Mile at night): 3–5 sports cars in racing colours line up off-screen and race a
+  4–6 junction route (`raceRoute`, mostly straight) at ~29 m/s as urgent
+  traffic (through the lights, overtaking in the oncoming lane), lighting
+  nitro on straights (a real boost, and exhaust flares in
+  `render/trafficLook.ts`). The first past the last junction wins (a long
+  horn, `raceWon`); they slow into traffic. 30% of races draw the police:
+  the back marker is handed to the chase scene (`chases.pursue(v)`).
+- **Accidents** (`scenes/accidents.ts`, every 80–160 s): a car finds the
+  one 3–30 m ahead in its lane mid-block; that one brakes hard, this one
+  doesn't. Both are left smoking (health 32–52%, below `SMOKE_AT`, above
+  `FIRE_AT`) with hazards blinking; the drivers get out and argue beside
+  the cars (a step in, a step back); 35% come to blows (`setOn`, `fight`
+  event). A patrol car comes (`ServiceRun`, lights on), the officer walks
+  over and breaks it up, has a word, and everyone leaves; a driver knocked
+  out goes to the ambulance. The cars stay in the lane, abandoned and
+  **flagged for a tow**: `Vehicle.towable` (set on crashed cars and dumped
+  getaways, cleared when recycled; `accidents.towables(out)` lists the ones
+  still standing, `ai` null, not the player's).
+- **Double-parked trucks** (`scenes/doubleParking.ts`, every 45–100 s,
+  held by the title and activities): a delivery van (parcel brown or
+  white) or a garbage truck in traffic pulls in 26–44 m before the next
+  junction, a little toward the parked cars, hazards on, for 20–40 s: the
+  courier carries parcels (`package`) from the back doors to the shopfront,
+  the two-man crew (hi-vis) wheel the bins put out at the kerb
+  (`trash_bin`) to the truck and back. Not on a lane with road works
+  (`kerbWorks`), within 18 m of a bus stop, or near a landmark or spray
+  bay (`CityLifeDeps.avoid`). With no truck about one is brought into
+  traffic off-screen and stops once it finds a spot.
+- **The queue behind** (`scenes/laneBlock.ts`, for the trucks and the
+  crashed cars): traffic queues as it does behind anything; anyone stopped
+  2.5 s honks (`horn` events, every 3–7 s); the front of the queue decides
+  once whether to go round (60%) and does when the oncoming lane is empty
+  for 60 m (`canPassAround`), traffic's own overtaking held on until it's
+  3 m past the front (`tests/trafficScenes.test.ts` drives a sedan round a
+  garbage truck: no contact).
+
+```ts
+life.chases.begin(kind?) · .pursue(v) · .chases · .ended   // 'car' | 'bike' | 'foot'; counts by outcome
+life.races.begin() · life.accidents.begin() · .towables(out) · life.doubleParking.begin(force?, job?)
+// Street events: chase, suspectRuns, arrest, suspectDown, race, raceWon, accident, fight, doublePark.
+```
+
+**The director.** `main.ts` creates one and calls `step(dt)` every sim step
+(after combat), `maintain(seed)` with population upkeep, `reset()` with a
+fresh run; a car with a `scene` is driven by `v.scene.drive(v, obstacles,
+dt)` before traffic (null hands it to traffic for that step), and every
+crowd step asks `cityLife.targetFor(c)` for a ped's target (another ped,
+else the player as before), routing their punches and shots through
+`cityLife.punch(c)` / `shoot(c, dx, dz)`. Scenes register with
+`life.add(scene)` (a `Scene`: `step(dt)`, `running`, `reset()`).
+
+```ts
+// Scheduling (systems/cityScenes.ts, pure): each scene defines its kind once
+life.clock.define('ice', { every: [70, 140], cap: 1, first: 30, range: 110, hold: IN_PLAY });
+life.due('ice', running)          // its clock has run down, under its cap, nothing holding it off
+life.near('ice', x, z)            // within its range of the player (default SCENE_START_RANGE 150 m)
+life.clock.start('ice', life.now) // wind the clock (or .defer(kind, now, s): nowhere to put one yet)
+// Holds: 'title' (attract), 'activity' (mission, race, frenzy, fare, Chaos Run), 'wanted', 'tutorial'.
+// LOUD = all four (chases, races, brawls); IN_PLAY = ['title'].
+
+// A service vehicle's call-out (scenes/service.ts): ambulance, fire truck, tow truck, police
+const run = ServiceRun.call(life, { archetype: 'firetruck', paint: '#c3191c', claimRange: 140, emergency: true,
+  cruise: 16, top: 24, arrive: 26, timeout: 80, dwell?: 6, stopAtCar?: false, aheadShare?: 0.5 }, x, z);
+run.goTo(x, z, heading?) · run.redirect(x, z) · run.leave(x?, z?) · run.rush()   // lights on while leaving
+run.step(dt): 'drive' | 'onSite' | 'leave' | 'done' | 'failed'   // run.site: seconds on site; run.v: the vehicle
+run.end()                                                          // stop now (reset)
+// Claims one of that model in traffic within claimRange of the point, else brings one in off-screen
+// (lane 75–140 m from the player, its `paint` livery: any model, tinted). Drives there with the police's
+// pursuit logic (Errand: lanes far off, straight in within 38 m, ~7 m short of a person or at a car's end),
+// holds still on site, drives off lights out (to a point, or as traffic), then hands back to traffic.
+
+// People gathering (scenes/gathering.ts): queues and crowds
+const g = new Gathering(life, { kind: 'queue', capacity: 5, draw: 30, joinChance: 0.6, serveEvery: 3.2, side: 2.2 });
+const c = new Gathering(life, { kind: 'crowd', capacity: 8, draw: 25, joinChance: 0.5, stay: [10, 25], radius: 3, arc?: Math.PI });
+g.at(x, z, heading) · g.recruit() /* ~1×/s */ · g.add(ped) · g.step(dt) /* → the one served / done, handed back */ · g.close()
+g.release(ped)                        // out without handing back (to the bus door, into a scuffle)
+spec.place?(i, out)                   // own places instead of the queue / ring (a shelter's line, a cart's queue)
+
+// People and cars for scenes (cityLife.ts)
+life.addPed(x, z, heading, outfit?, body?) · life.borrow(c) · life.giveBack(c) · life.removePed(c)
+life.walkTo(c, x, z) · life.lookAt(c, x, z) · life.setOn(a, b, gun?, seconds?) · life.unfight(c) · life.opponentOf(c)
+life.spawnCar(archetype, paint, aheadShare?) · life.placeCar(archetype, paint, x, z, heading) · life.release(v) · life.retire(v)
+life.lost(v) · life.present(c) · life.distance(x, z) · life.inView(x, z, margin?) · life.crowded(x, z, gap)
+life.rearOf(sim, out) · life.doorOf(sim) · life.emit(what, x, z) · life.hospital · life.stops · life.bays · life.drops
+holdStill(sim) · stopped(sim) · pullIn(sim, x, z, heading, cruise, obstacles, left)   // scenes/service.ts
+// Places (world/streetSpots.ts): roadPoint, pickParkingSpot, carParkBays, pickBay, queueSpot, crowdSpot, BUS_PULL_IN.
+// Bus stops are the shelters only: life.stops = deps.busStops (dressing.street.busStops, world/streetStops.ts
+// BusStop: wait spot, where a bus pulls in, its lane); deps.vendors the food carts (VendorSpot).
+// Deps for the people: hour?() (the carts' rushes), reward?(cash, label) (a bag handed back), callIn?(crime) (heat.called).
+// Flags: PedAgent.street (borrowable passer-by) / .scene (a scene's: upkeep leaves them) / .injured;
+//        CrowdPed.phone (a witness on the phone: posed holding it up); Vehicle.ambient (brought in: the director
+//        retires it) / .scene (its driver) / .parked.
+// Bus: { type: 'street', what, x, z } (StreetWhat in core/events.ts; members for the planned scenes are reserved;
+//      the atmosphere adds 'bark', 'yelp', 'turfWar'; the people 'busker', 'mugging', 'bagReturned', 'witnessCall').
+// The mood (game/cityMood.ts): life.d.mood?.hour · .rain (0..1) · .raining · .nightlife (0..1: nightlifeFactor(hour),
+//   0 by day, easing in 18:00–22:00, full till 03:00, gone by 06:00: the street races' cue) · .nightlifeAt(x, z)
+//   (× NIGHTLIFE[district]: arts 1, oldtown 0.6, downtown 0.3) · .densityAt(x, z); pure: densityFor, nightlifeAt, rainPace.
+// Atmosphere scenes: life.streetMood (shelterers, groups, umbrellas) · life.dogs.pack (dogs; startle, knock) · life.turfWar
+//   (flare, borders; soon() starts one at the next step, holds permitting).
+// Heat: HeatDeps.witnesses?(crime, x, z) → true to hold a lesser crime for a witness's call; heat.called(crime) lands it.
+// Debug: each people scene has a `kind` and force(): __ub.cityLife.scenes.find((s) => s.kind === 'buses').force().
+// Look (render/cityLifeLook.ts): cityLook.add({ update?(dt, view, fx), draw?(glows, view, props) }); the people's
+//      coins, mugger ring, bag and phone screens are render/peopleLook.ts.
+```
+
+**Adding a scene.** Write `src/game/scenes/<name>.ts` with a class that
+implements `Scene`: in its constructor `life.clock.define(kind, spec)`
+(pick its holds: `LOUD` for anything that could get in the player's way);
+in `step`, when `life.due(kind, running)` and you have a spot
+(`life.near(kind, x, z)`, out of view if things appear there), start one
+and `life.clock.start(kind, life.now)` (or `defer` and try later); drive
+vehicles with `ServiceRun` (or your own `SceneDriver` on `v.scene`), people
+with `Gathering`, `walkTo` / `setOn`; emit `street` events; hand everything
+back in `reset()`. Register it with one line in `CityLife`'s constructor
+(`this.add(new YourScene(this))`) and, if it draws, one `cityLook.add(...)`
+in `main.ts`. Only borrow `street` people, only take vehicles that are
+`ai`-driven, unpinned (`life.d.keep`), not `police`, not the player's. No
+per-step allocation (reuse records; no closures in `drive`).
+
+**Budget.** No new mesh, program or draw call: the vehicles and people are
+the usual batches, the drops go in the props' `things` family, light in
+the shared glow batch. The umbrellas and dogs too go in `things`, as
+stand-in models built in code (`render/critterModels.ts`: `dog`,
+`dog_stride`, `umbrella`, replaced by props.glb roots of those names;
+contract in `docs/BLENDER_TODO.md` §8): that family's call and its shadow
+pass (+2) when nothing else of it is in view, else nothing; the turf crews
+wear the crowd's own bodies. Measured on the iPhone profile, the fixed
+seed's seven places after 20 s each (afternoon / 23:00 / 23:00 in rain),
+two runs each: 41.0–42.4 / 44.0–44.7 / 44.3–45.6 calls on average (53 /
+47–51 / 46–50 at most) before the atmosphere work, 40.3–42.9 / 42.6–44.3
+/ 42.4–45.4 (54–55 / 45–50 / 46–51) with it (rain and the quiet
+districts thin the crowd); taking the umbrellas and dogs out of a frozen
+frame where they were the only `things` in view: −2. Live cars rise by the parked target (10 on
+'high'/'medium', 8 on 'low') plus whatever scenes bring in; people by
+those a scene holds. iPhone profile ('medium'), a fixed seed at seven
+places round the city after 20 s each: 40.3 draw calls on average (54 at
+most) before, 41.3 (50) with the base (a parked model not otherwise in
+view costs its call and shadow pass). Smoke test (random seeds) 56 / 57 →
+61 / 51 on the iPhone sizes, 74 → 70 on desktop: within run-to-run spread. The people (same
+seven places, a run started, tutorial done): 41.9 (57) → 42.1 (56), with
+2–13 people held; every people scene forced at once round one spot 36 →
+43, most of it the bus and ice cream van models in view (forced one at a
+time, each is within the frame-to-frame spread). Scene-made people take
+the body of a passer-by already out (`streetBody`), so no new body batch
+comes in.
+The emergency scenes keep to that: flames, smoke, water and steam in
+Effects' pools, the fire pools, beacon and indicators in the glow batch.
+Same measure (its own seed and places): 40.7 (56) before, 40.1 (54)
+with them. Worst case, a fire with its truck and crew, a tow truck with
+a car on the hook and an alarm all in view: +6 (the fire truck's and tow
+truck's batches, a call and a shadow pass each, and the firefighters'
+`ped_stocky` body when no passer-by of that build is in view). Smoke
+test 53 / 59 on the iPhone sizes, 69 on desktop.
+Traffic scenes: no new mesh or program. A model not otherwise on screen
+costs its call and shadow pass, so they keep to few: patrol cars only
+(`police`, no SUV or police bike), the racers all `sports`, getaways
+common models or the scooter, the bins in the `street` family (always
+drawn); one incident at a time. Measured as the drop when a forced
+scene's cars and people are hidden in the same frame, iPhone profile, at
+the seven places: a bike chase plus a garbage truck at most +7, a race
+chased by the police plus a truck +9, an accident plus a truck +4 (±3
+frame noise). The same places unforced: 39.4–44.9 calls on average before,
+44.3–57.0 after (most of it which traffic models are in view); smoke test
+56 / 56 on the iPhone sizes, 68 on desktop.
 
 ## Progression
 
@@ -1199,7 +1629,8 @@ Everyone in the city is drawn from the Blender bodies in `public/assets/`
 - **Pigeons** (`systems/pigeons.ts` pure, `render/pigeonMesh.ts`): up to
   three flocks settle out of view on plazas, parks and the kerb side of
   pavements and scatter at a passing car, a runner, the player walking up,
-  gunfire, blasts and horns: one instanced draw call with the `Flap` clip
+  gunfire, blasts and horns (most come down again a little way off: *City
+  life*): one instanced draw call with the `Flap` clip
   sampled into the vertex shader, a contact shadow each, none when no bird
   is in view.
 - **Budget** (`?debug`, whole frame): each body on screen costs 2 calls
@@ -1239,7 +1670,7 @@ and every new program is compiled behind the current frame.
   models merged into one geometry; each instance says which model it is
   and the vertex shader drops every other model's vertices, so a family is
   one draw call (and one in the shadow pass): `lamps`, `street` (traffic
-  lights and furniture), `roofs`, `trees`, `landmarks`, `things` (pickups,
+  lights, furniture, road works, carts and shelters), `roofs`, `trees`, `landmarks`, `things` (pickups,
   frenzy tokens, packages, roadblock barriers and cones, knocked-over
   props in flight) and `debris`. Static instances are bucketed in 32 m
   cells and the buffers are refilled only when the view crosses a cell;
@@ -1248,8 +1679,12 @@ and every new program is compiled behind the current frame.
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new
   head); traffic lights on 70% of the inner junctions; furniture per block
-  side by district (hydrants, benches, bins, bollards, newspaper boxes,
-  mailboxes, payphones; busiest downtown), dumpsters at alley mouths,
+  side by district, in ten slots 3 m apart (hydrants, benches, bins,
+  bollards, newspaper boxes, mailboxes, parking meters, planters, bike
+  racks, recycling bins, now and then an abandoned shopping cart or a
+  stray traffic barrel; about 3.8 a side downtown, 3.0 in the arts
+  quarter, 2.7 in the old town, 2.1 in the suburbs, 1.6 in the
+  industrial quarter, up from 2.6–1.1), payphones, dumpsters at alley mouths,
   bollards round plazas, park trees by district (round, tall, palms);
   rooftop kit fitted to the building plans (AC units, vents, water tanks,
   dishes, stair huts, antennas with a blinking tip; the huts' tar-grey and
@@ -1257,15 +1692,78 @@ and every new program is compiled behind the current frame.
   their mouth to the street (the roof opens while you're inside), the
   export bay, the police sign and the safehouse door on their walls (both
   lamps glow at night), race-start gantries with barriers and cones, ramp
-  and kicker models. Nothing lands on a pickup, a payphone, a race start,
-  the station or the safehouse door, or in a bay's mouth.
-- **Collision**: lamp posts, signal poles, bollards, dumpsters, payphones,
-  booth and bay walls, gantry pillars and long barriers go into the
-  `StaticGrid`. Hydrants, bins, newspaper boxes, mailboxes, benches and
-  race cones are *knockables* (`systems/knockables.ts`): a car through
-  one at over 3 m/s sends it flying (`render/knockFx.ts`: a tumbling copy,
-  dust and sparks, a 14 s geyser from a hydrant) and it's back 60 s later
-  once out of sight. Roadblock barriers and cones go flying the same way.
+  and kicker models. Against the shopfronts (`world/frontages.ts`, from
+  the building plans): café tables with umbrellas outside shops with no
+  awning (an awning would hide them; most in the old town and the arts
+  quarter), vending machines (four colours, the instance tint) and ATMs at
+  the ends of shop windows. Nothing lands on a pickup, a payphone, a race
+  start, the station or the safehouse door, in a bay's mouth, or on
+  anything placed before it (a bucketed room check, `world/kerbs.ts`
+  `Placer`); kerb things stay a metre off the line people walk down,
+  wall things a person's width.
+- **Road works** (`world/roadworks.ts`): 18 sites round the city, each
+  closing the strip of road between the kerb and a traffic lane for 20–26
+  m of a block: a ROAD WORK A-frame facing the traffic, a taper of four
+  cones out from the kerb, traffic barrels every 3 m (their lamps blink in
+  a run along the line) with plastic barriers between them, two cones
+  closing the far end, and behind them a mix of a trench and its spoil,
+  steel plates, a skip, a mini digger and a portable toilet. The barrels
+  stand `WORKS_EDGE` (5.95 m) from the centreline and a lane's traffic
+  keeps to 4 ± 1.33 m (a bus), so traffic drives past without changing
+  lanes; a driver pulling over for a siren stays in its lane along a
+  closed kerb (`SignalView.kerbWorks`, set from `TrafficSignals.setRoadworks`
+  in `main.ts`). Sites stay 18–46 m into a block (clear of the junctions
+  and of a right-turning bus's swing), off race legs, the spawn corner, the
+  ramps' run-ups and every car a mission parks at the kerb, and off the
+  outer ring. `tests/roadworks.test.ts` drives a car and a bus past every
+  site, straight on, turning in from either side and pulling over for a
+  siren: nothing knocked, nothing hit. `dressing.street.roadworks`:
+  `{ ix, iz, dir, from, to, area }` (the lane, as `roads.ts` names it, how
+  far along it the site runs, the closed strip as a world rect).
+- **Food carts and bus stops** (`world/streetStops.ts`): hot dog carts,
+  coffee carts and fruit stands on the kerb line serving the pavement
+  (about a third of downtown's block sides; a few in the arts quarter and
+  the old town) and just inside the parks and open plazas (not the car
+  parks); 86 bus shelters on the building side of the pavement, open to
+  the road, beside lanes with no works (most downtown and in the suburbs;
+  one where Deacon Pike waits in Maple Flats). For people code (queues, a
+  bus that stops), pure and the same every game:
+  - `dressing.street.vendors: VendorSpot[]` — `{ kind ('food_cart_hotdog'
+    | 'food_cart_coffee' | 'fruit_stand'), x, z, heading` (the serving
+    side's facing, vehicle convention)`, serveX, serveZ` (where the first
+    customer stands, facing the cart)`, queueX, queueZ` (unit step the
+    queue grows along, down the pavement, away from the vendor)`, vendorX,
+    vendorZ` (the vendor's spot, at the cart's end)`, setting ('kerb' |
+    'park' | 'plaza') }`. The first three queue places are clear of
+    anything solid; a kerb cart's queue stands on the walking line, so
+    walkers will need to step round it.
+  - `dressing.street.busStops: BusStop[]` — `{ x, z, heading` (the shelter,
+    facing the road)`, waitX, waitZ` (in front of it under the roof's edge,
+    clear of the walking line)`, stopX, stopZ, stopHeading` (where a bus
+    pulls in, by the kerb beside it)`, dir, ix, iz }` (its lane, travelling
+    `dir` toward junction (ix, iz)).
+- **Stand-ins** (`render/propStandIns.ts`): props.glb has no models yet for
+  the round-2 kinds, so each is a few boxes (five faces each, no bottom)
+  tagged with the material names the GLB will use, so they light the same
+  (`blink_amber` blinks, `ad_panel` / `screen` / `stripe_*` are self-lit,
+  `roadwork_sign` / `barrier_orange` catch the light, `paint` takes the
+  tint); a GLB root of the same name replaces its stand-in. Contracts in
+  `docs/BLENDER_TODO.md` §10.
+- **Collision**: lamp posts, signal poles, bollards, dumpsters, planters,
+  food carts and fruit stands, vending machines, ATMs, bus shelters (back
+  and ends; open at the front, so people can stand inside), skips, mini
+  diggers, portable toilets, payphones, booth and bay walls, gantry pillars
+  and long barriers go into the `StaticGrid`. Hydrants, bins, newspaper
+  boxes, mailboxes, benches, parking meters, recycling bins, bike racks,
+  café tables, shopping carts and the road works' cones, barrels, barriers
+  and signs, and race cones are *knockables* (`systems/knockables.ts`): a
+  car through one at over 3 m/s sends it flying (`render/knockFx.ts`: a
+  tumbling copy, dust and sparks, a 14 s geyser from a hydrant) and it's
+  back 60 s later once out of sight. Long ones (benches, bike racks, café
+  tables, work barriers, signs) meet people and cars as their box, so a
+  barrier beside a lane is only hit by a car that leaves it. Roadblock
+  barriers and cones go flying the same way. Steel plates and trenches are
+  drawn only.
 - **Traffic lights** (`world/signals.ts`, pure, tested): a 24 s two-phase
   cycle (9 s green, 2 s amber, a beat of all-red), offset per junction,
   stepped with the simulation. The lenses are lit in the shader from one
@@ -1330,6 +1828,15 @@ and every new program is compiled behind the current frame.
   helicopter included: it is drawn speck-small for two frames on load). No
   light is ever added; nothing allocates per frame (knock-overs and debris
   write into preallocated buffers).
+  Street props round 2 (iPhone profile, same spots before → after, on foot,
+  2026-11-01): spawn 49 → 49, a road-works site 43 → 43, a downtown street
+  with carts 33 → 33, a plaza 36 → 36; wider views (camera at 32–45 m)
+  31–51 → 32–52 (a call or three either way with the people in view). No
+  new draw call or program; the cost is vertices: the street family went
+  from 3,276 to 5,976 vertices per instance (every instance runs every
+  model's, the others dropped early), and 17–88 street instances are in
+  view (capacity 1,100), so the scene's submitted triangles rose about 1.6×
+  (e.g. 253k → 438k on the plaza).
 
 `dressCity(city, pickups, ramps)` → `{ street, landmarks, solids,
 knockables }` is the one call `main.ts` makes before building the

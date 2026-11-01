@@ -107,6 +107,14 @@ import { dressCity } from './world/dressing';
 import { TrafficSignals } from './world/signals';
 import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audio/gameAudio';
 import { StreetLife } from './game/streetLife';
+import { CityLife } from './game/cityLife';
+import { TUTORIAL_DONE } from './game/tutorial';
+import { CityLifeLook } from './render/cityLifeLook';
+import { CityMood } from './game/cityMood';
+import { atmosphereLook } from './render/atmosphereLook';
+import { peopleLook } from './render/peopleLook';
+import { alarmLook, fireLook, towLook } from './render/emergencyLook';
+import { RaceLook, RoadsideLook } from './render/trafficLook';
 import { mountRadioToast } from './ui/radioToast';
 import { publicUrl } from './core/paths';
 import { BreachSystem, Breaches, blastKindOf } from './systems/breaches';
@@ -186,6 +194,8 @@ const pigeons = new PigeonLook(scene, look, city, collision, events, mulberry32(
 /** Traffic lights: their clock runs with the sim; traffic stops on red, the lenses show it. */
 const signals = new TrafficSignals();
 look.props.signals = signals;
+// Drivers pulling over for a siren stay in lane past road works at the kerb.
+signals.setRoadworks(dressing.street.roadworks);
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
@@ -296,6 +306,8 @@ attract.start(SPAWN_POINT.x, SPAWN_POINT.z);
 const keepVehicles: Array<Vehicle | null> = [null, null];
 /** Cars an activity needs kept (a mission's target, the Chaos Run car): filled by the progress director. */
 const activityCars: Vehicle[] = [];
+/** The hour and the rain for the crowd (game/cityMood.ts): busier nightlife, thinner rainy streets. */
+const cityMood = new CityMood();
 /**
  * Recycle and top up traffic and crowd; `seed` fills the streets from scratch
  * and puts the spawn point's parked cars back.
@@ -315,14 +327,18 @@ function maintainPopulation(seed = false, parked = seed) {
     view: rig.visibleGround(viewRect),
     keep: keepVehicles,
     trafficScale: getQuality().trafficScale,
-    crowdScale: getQuality().crowdScale,
+    crowdScale: getQuality().crowdScale * cityMood.densityAt(at.x, at.z),
+    spawnWeight: cityMood.weight,
     seed,
     parked: parked ? PARKED : undefined,
   });
+  maintainCity(seed);
   // Knocked-over furniture is back once nobody's looking.
   knockables.restore(viewRect, restoreProp);
 }
 const restoreProp = (k: KnockableItem) => look.props.restore(k.id);
+/** The city's parked cars are topped up with the rest (set once CityLife exists, below). */
+let maintainCity: (seed: boolean) => void = () => {};
 maintainPopulation(true);
 
 // --- Score ---
@@ -358,6 +374,7 @@ const heat = new Heat({
   held: () => progress.holdControls,
   bustFine: () => progress.bustShare(),
   signals,
+  witnesses: (crime, x, z) => cityLife.witnesses.report(crime, x, z),
 });
 addHeatLook(look, heat, {
   scene,
@@ -384,6 +401,56 @@ const combat = new Combat({
   pose: playerModel,
 });
 const combatLook = new CombatLook(scene, look, effects, combat, population.crowd, player);
+
+// --- The city's own life (game/cityLife.ts): ambient scenes, parking, dropped guns ---
+const cityLife = new CityLife({
+  bus: events,
+  vehicles,
+  population,
+  player,
+  city,
+  signals,
+  rand,
+  now: () => simTime,
+  view: (out) => rig.visibleGround(out),
+  playing: () => !attract.active,
+  // Any activity (a mission, a race, a frenzy, a fare) or a Chaos Run holds the loud scenes off.
+  activity: () => progress.busy !== null || progress.chaos.active,
+  stars: () => heat.wanted.level,
+  tutorial: () => progress.progress.data.tutorial < TUTORIAL_DONE,
+  keep: (v) => activityCars.includes(v),
+  avoid: [
+    ...dressing.landmarks.props.map((p) => ({ x: p.x, z: p.z, r: 11 })),
+    ...ramps.map((r) => ({ x: r.x, z: r.z, r: 9 })),
+    ...heat.shops.map((sh) => ({ x: sh.x, z: sh.z, r: 13 })),
+    ...PARKED.map((p) => ({ x: p.x, z: p.z, r: 8 })),
+    // Road works close the kerb strip, and a bus pulls in at a shelter: no parking in either.
+    ...dressing.street.roadworks.map(({ area: a }) => ({ x: (a.minX + a.maxX) / 2, z: (a.minZ + a.maxZ) / 2, r: Math.hypot(a.maxX - a.minX, a.maxZ - a.minZ) / 2 + 4 })),
+    ...dressing.street.busStops.map((b) => ({ x: b.stopX, z: b.stopZ, r: 13 })),
+  ],
+  busStops: dressing.street.busStops,
+  vendors: dressing.street.vendors,
+  trafficScale: () => getQuality().trafficScale,
+  npcShoot: (x, z, dx, dz) => npcShoot(x, z, dx, dz),
+  collect: (kind) => combat.collect(kind),
+  focus: () => (attract.active ? attract : player.position),
+  mood: cityMood,
+  hour: () => look.time.hour,
+  reward: (cash, label) => progress.pay(cash, 'street', label),
+  callIn: (crime) => heat.called(crime),
+  enlist: (officer) => heat.police.strays.push(officer),
+});
+maintainCity = (seed) => cityLife.maintain(seed);
+const cityLook = new CityLifeLook(cityLife, effects, look.props);
+look.addGlowSource((g, view) => cityLook.draw(g, view));
+cityLook.add(atmosphereLook(cityLife));
+cityLook.add(peopleLook(cityLife));
+cityLook.add(fireLook(cityLife));
+cityLook.add(towLook(cityLife));
+cityLook.add(alarmLook(cityLife));
+cityLook.add(new RaceLook(cityLife.races));
+cityLook.add(new RoadsideLook(cityLife.accidents, cityLife.doubleParking));
+const cityView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 // Everyone's place, pose and clip each frame (and the player ducking into cars, cheering wins).
 const people = new PeoplePose({
   bus: events,
@@ -543,6 +610,7 @@ function ejectDriver(v: Vehicle, fromX: number, fromZ: number) {
   const door = driverDoorPosition(v.sim);
   const agent = spawnPed(0, 0, 0, 0, rand);
   Object.assign(agent.s, { x: door.x, z: door.z, vx: 0, vz: 0, heading: v.sim.heading });
+  agent.street = true;
   scare(agent, fromX, fromZ, 5);
   population.addPed(agent);
 }
@@ -557,6 +625,7 @@ function boardVehicle(v: Vehicle) {
   }
   // A bike on its side is stood back up; an ambulance or fire truck taken off its call goes dark.
   v.tipped = false;
+  v.parked = false;
   if (v.emergency) {
     v.emergency = false;
     look.cars.setSiren(v, false);
@@ -588,6 +657,7 @@ function respawnPlayer() {
   knockFx.clear();
   breaches.reset();
   destruction.clear();
+  cityLife.reset();
   maintainPopulation(true);
   // The run is over anyway: a good moment to pick up a waiting app update.
   updates.atSafePoint();
@@ -651,8 +721,8 @@ function simulate(dt: number) {
     if (v.damage.wrecked) controls = NO_CONTROLS;
     else if (v.tipped) slideOnSide(v.sim, dt);
     else if (v === driving) controls = playerControls;
-    // Traffic, police and road ragers. (A car's own entry sits at distance 0, which clearDistance ignores.)
-    else if (v.ai || v.pursuit) controls = heat.drive(v, obstacles, dt);
+    // Traffic, police and road ragers, or a city scene's driver. (A car's own entry sits at distance 0, which clearDistance ignores.)
+    else if (v.ai || v.pursuit) controls = (v.scene ? v.scene.drive(v, obstacles, dt) : null) ?? heat.drive(v, obstacles, dt);
     const landed = stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt);
     if (landed > 0) carLanded(v, landed, v === driving);
     if (rideRamps(v.sim, ramps) === 'launch') carJumped(v, v === driving);
@@ -680,13 +750,19 @@ function simulate(dt: number) {
   for (let i = 0; i < population.crowd.length; i++) {
     const c = population.crowd[i];
     copyPedState(c.prev, c.agent.s);
-    const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, target);
+    // Someone a city scene set on someone else (a scuffle, a suspect and the officers) fights them, not the player.
+    const own = cityLife.targetFor(c);
+    const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, own ?? target);
     if (event?.kind === 'struck') pedHitByCar(c, driving !== null && event.car === driving.sim ? driving : null);
     else if (event?.kind === 'punch') {
-      combat.npcPunch(c);
+      if (own) cityLife.punch(c);
+      else combat.npcPunch(c);
     } else if (event?.kind === 'shoot') {
-      c.model.shoot();
-      npcShoot(c.agent.s.x, c.agent.s.z, event.dirX, event.dirZ);
+      if (own) cityLife.shoot(c, event.dirX, event.dirZ);
+      else {
+        c.model.shoot();
+        npcShoot(c.agent.s.x, c.agent.s.z, event.dirX, event.dirZ);
+      }
     }
   }
 
@@ -794,6 +870,7 @@ function simulate(dt: number) {
   }
   heat.step(dt);
   combat.step(dt);
+  cityLife.step(dt);
   // Cash, the Chaos Run clock and the free-roam activities.
   progress.step(dt);
   // Back on your feet: after dying a fresh run; after a bust, released at the station.
@@ -876,6 +953,7 @@ function throwRider(v: Vehicle, impact: number, byPlayer = false) {
   const door = driverDoorPosition(s);
   const agent = spawnPed(0, 0, 0, 0, rand);
   Object.assign(agent.s, { x: door.x, z: door.z, vx: 0, vz: 0, heading: s.heading });
+  agent.street = true;
   knockDown(agent, fromX, fromZ, push, 2.5);
   population.addPed(agent);
   // Rammed off by the player: a hit-and-run like any other.
@@ -1054,8 +1132,11 @@ function frame(now: number) {
   const focus = attract.active ? attract : player.position;
   pigeons.update(frameSeconds * fx.hitStop.scale, focus.x, focus.z, rig, vehicles, population.crowd, attract.active ? null : player);
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
+  cityMood.set(look.time.hour, fx.weather.rain);
   // Rubble on the sim's clock: frozen by pause, cards and hit-stop like the world.
   destruction.update(simDt);
+  // The city scenes' particles (registered looks), on the sim's clock too.
+  cityLook.update(simDt, rig.visibleGround(cityView));
   // Bikes lean and carry their riders; emergency sirens and the ice cream chime.
   streetLife.update(frameSeconds, focus.x, focus.z, !attract.active);
   combatLook.update(frameSeconds * fx.hitStop.scale);
@@ -1162,6 +1243,8 @@ const hud = new Hud(document.body, score, events, {
 });
 const combatHud = new CombatHud(document.getElementById('hud')!);
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
+// Where the ambulances go.
+radar.setBlip('hospital', { x: cityLife.hospital.x, z: cityLife.hospital.z, kind: 'friend', icon: '+', size: 6 });
 const wantedHud = new WantedHud(document.body, events);
 const heatPresenter = new HeatPresenter(heat, audio, radar, wantedHud, hud.score, events);
 const threats = new ThreatIndicators(document.body);
@@ -1419,6 +1502,8 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   heat,
   progress,
   combat,
+  /** The city's own life (game/cityLife.ts): clock, scenes, medics, drops, people, owned, hospital, bays. */
+  cityLife,
   nitro,
   ramps,
   stunts,

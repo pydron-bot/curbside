@@ -5,6 +5,7 @@ import {
   CROWD_COUNT,
   CROWD_DESPAWN,
   MAX_IDLE_VEHICLES,
+  PARKED_COUNT,
   Population,
   TRAFFIC_COUNT,
   TRAFFIC_DESPAWN,
@@ -309,5 +310,61 @@ describe('population: density and placement', () => {
     expect(TRAFFIC_DESPAWN).toBeGreaterThan(160);
     expect(CROWD_DESPAWN).toBeGreaterThan(60);
     expect(spawnAi(0, 0, 0, 0.5, random(1))).not.toBeNull();
+  });
+});
+
+describe('population: kerbside parking and city scenes', () => {
+  it('parks cars apart from the idle cap, never two on one spot, within the ceiling', () => {
+    const { pop, vehicles } = setup(11);
+    pop.maintain(ctx(0, 0, { seed: true }));
+    const spot = { archetype: 'sedan' as const, paint: '#fff', x: 70, z: 6.9, heading: Math.PI / 2 };
+    const v = pop.parkCar(spot);
+    expect(v?.parked).toBe(true);
+    expect(v?.ai).toBe(null);
+    expect(pop.parkCar(spot)).toBe(null);
+    for (let i = 0; i < PARKED_COUNT + 5; i++) pop.parkCar({ ...spot, x: 100 + i * 7 });
+    expect(pop.parkedCount).toBeLessThanOrEqual(PARKED_COUNT + 1);
+    // Parked cars don't push abandoned cars out under the idle cap, nor traffic out of its budget.
+    pop.maintain(ctx(0, 0));
+    expect(vehicles.filter((o) => o.ai).length).toBeGreaterThan(TRAFFIC_COUNT * 0.8);
+    expect(vehicles.length).toBeLessThanOrEqual(Population.maxVehicles(TRAFFIC_COUNT, PARKED_COUNT));
+  });
+
+  it('far-off parked cars are recycled like any other, and come back unflagged', () => {
+    const { pop, vehicles } = setup(12);
+    const v = pop.parkCar({ archetype: 'van', paint: '#fff', x: 70, z: 6.9, heading: 0 })!;
+    pop.maintain(ctx(-400, -400));
+    // Retired (and perhaps straight back as traffic out there, from the pool).
+    expect(v.parked).toBe(false);
+    if (vehicles.includes(v)) expect(v.ai).not.toBe(null);
+  });
+
+  it('leaves scene cars and scene people to their scene', () => {
+    const { pop, vehicles } = setup(13);
+    pop.maintain(ctx(0, 0, { seed: true }));
+    const v = pop.takeVehicle('ambulance', '#fff');
+    v.police = false;
+    v.ambient = true;
+    v.sim.x = 300;
+    v.sim.z = 300;
+    const agent = spawnPed(0, 0, 0, 0.5, random(1));
+    agent.scene = true;
+    agent.s.x = 300;
+    agent.s.z = 300;
+    const c = pop.addPed(agent);
+    pop.maintain(ctx(0, 0));
+    expect(vehicles.includes(v)).toBe(true);
+    expect(pop.crowd.includes(c)).toBe(true);
+    // Retired, a car forgets its scene.
+    pop.retireVehicle(v);
+    expect(v.ambient).toBe(false);
+    expect(v.scene).toBe(null);
+  });
+
+  it('marks the people it puts on the street as ordinary passers-by', () => {
+    const { pop } = setup(14);
+    pop.maintain(ctx(0, 0, { seed: true }));
+    expect(pop.crowd.length).toBeGreaterThan(0);
+    for (const c of pop.crowd) expect(c.agent.street).toBe(true);
   });
 });

@@ -11,7 +11,7 @@
  */
 import type { ColorRepresentation } from 'three';
 import type { PedState } from '../entities/pedestrian';
-import { createVehicleState, isEmergency, type VehicleArchetype, type VehicleState } from '../entities/vehicle';
+import { createVehicleState, isEmergency, type VehicleArchetype, type VehicleControls, type VehicleState } from '../entities/vehicle';
 import type { CarMesh } from '../render/carMesh';
 import type { CharacterModel, Outfit } from '../render/characterModel';
 import { CAP_COLOURS, STORY_BODIES, pickCrowdBody, type BodyKind } from './bodies';
@@ -19,7 +19,7 @@ import { cornerPoint, spawnPed, type PedAgent } from '../systems/crowd';
 import type { DamageState } from '../systems/damage';
 import type { PursuitDriver } from '../systems/pursuit';
 import type { WeaponKind } from '../systems/weapons';
-import { isHopeless, spawnAi, type AiDriver } from '../systems/traffic';
+import { isHopeless, spawnAi, type AiDriver, type Obstacle } from '../systems/traffic';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type Rect } from '../world/city';
 import { DIRS, MAX_NODE } from '../world/roads';
 import { len2 } from '../core/len';
@@ -50,6 +50,23 @@ export interface Vehicle {
   tipped?: boolean;
   /** An ambulance or fire truck on a call: lights and siren, in a hurry, and traffic gives way. */
   emergency?: boolean;
+  /**
+   * Brought in by a city scene (game/cityLife.ts: an ambulance, a chase, a
+   * race): the scene retires it, and Population neither recycles it nor
+   * counts it as traffic.
+   */
+  ambient?: boolean;
+  /** A city scene steering it this step (instead of traffic's driveAi); null controls hand it back to traffic for the step. */
+  scene?: SceneDriver | null;
+  /** Parked at the kerb by upkeep: counted apart from abandoned cars and wrecks. */
+  parked?: boolean;
+  /** Left in the road by a city scene (a crash, a getaway): a tow truck may take it (scenes/accidents.ts). */
+  towable?: boolean;
+}
+
+/** Something that drives a vehicle for a city scene (allocation-free: returns a reused object). */
+export interface SceneDriver {
+  drive(v: Vehicle, obstacles: Obstacle[], dt: number): VehicleControls | null;
 }
 
 export interface CrowdPed {
@@ -58,6 +75,8 @@ export interface CrowdPed {
   model: CharacterModel;
   /** The gun this person draws when they shoot (a pistol if unset; SWAT carry SMGs). */
   gun?: WeaponKind;
+  /** On their phone (a witness calling or filming, game/scenes/witnesses.ts): held up in the one-handed aim pose. */
+  phone?: boolean;
 }
 
 // --- Tunables -------------------------------------------------------------
@@ -88,6 +107,8 @@ export const CORNER_SHARE = 0.5;
 export const TOWARD_PLAYER_SHARE = 0.75;
 /** Parked, abandoned and wrecked cars kept at most; older ones are recycled off-screen. */
 export const MAX_IDLE_VEHICLES = 8;
+/** Cars parked at the kerbs around the player (scaled by the quality tier), on top of the idle ones. */
+export const PARKED_COUNT = 10;
 /**
  * Spawns stay this far outside the visible ground rectangle, m. The camera
  * moves well under a metre per frame even at top speed, so this is plenty.
@@ -215,6 +236,8 @@ export interface MaintainContext {
   /** Quality-tier multipliers on TRAFFIC_COUNT / CROWD_COUNT. */
   trafficScale?: number;
   crowdScale?: number;
+  /** Share of crowd spawns kept at (x, z), 0..1 (game/cityMood.ts: busier districts get more); unset keeps all. */
+  spawnWeight?: (x: number, z: number) => number;
   /** First fill (game start, respawn): closer rings, no per-call limits. */
   seed?: boolean;
   /**
@@ -256,8 +279,34 @@ export class Population {
   }
 
   /** Hard ceiling on live cars for a given traffic target. */
-  static maxVehicles(trafficTarget = TRAFFIC_COUNT): number {
-    return trafficTarget + MAX_IDLE_VEHICLES + 4;
+  static maxVehicles(trafficTarget = TRAFFIC_COUNT, parked = 0): number {
+    return trafficTarget + MAX_IDLE_VEHICLES + parked + 4;
+  }
+
+  /** Cars parked by upkeep right now. */
+  get parkedCount(): number {
+    let n = 0;
+    for (const v of this.vehicles) if (v.parked) n++;
+    return n;
+  }
+
+  /**
+   * Park a car at the kerb (spot from world/streetSpots.ts), flagged
+   * `parked`: a spare of any model restyled, else a new one. Null when the
+   * spot is taken, PARKED_COUNT (scaled) are parked already, or the
+   * live-car ceiling for `trafficScale` is reached.
+   */
+  parkCar(spot: ParkingSpot, trafficScale = 1): Vehicle | null {
+    const parked = Math.round(PARKED_COUNT * trafficScale);
+    if (this.parkedCount >= parked) return null;
+    let owned = 0;
+    for (const v of this.vehicles) if (v.police || v.ambient) owned++;
+    if (this.vehicles.length >= Population.maxVehicles(Math.round(TRAFFIC_COUNT * trafficScale), parked) + owned) return null;
+    const scratch = this.idle;
+    scratch.length = 0;
+    const v = this.park(spot, scratch);
+    if (v) v.parked = true;
+    return v;
   }
 
   /** Call a few times a second: recycles far cars/peds and tops both back up. */
@@ -334,9 +383,10 @@ export class Population {
     idle.length = 0;
     let aiCount = 0;
     let policeCount = 0;
+    let parkedCount = 0;
     for (let i = vehicles.length - 1; i >= 0; i--) {
       const v = vehicles[i];
-      if (v.police) {
+      if (v.police || v.ambient) {
         policeCount++;
         continue;
       }
@@ -348,6 +398,7 @@ export class Population {
         continue;
       }
       if (v.ai) aiCount++;
+      else if (v.parked) parkedCount++;
       else idle.push(v);
     }
     // After retiring (so far-off cars are free to reuse), before the idle cap.
@@ -366,8 +417,8 @@ export class Population {
     }
 
     // Top up traffic, reusing retired cars before building new ones.
-    // (Police cars come on top of the traffic budget.)
-    const max = Population.maxVehicles(target) + policeCount;
+    // (Police and scene cars come on top of the traffic budget, parked ones beside it.)
+    const max = Population.maxVehicles(target) + policeCount + parkedCount;
     let budget = ctx.seed ? Infinity : TRAFFIC_SPAWNS_PER_CALL;
     let failures = 0;
     while (aiCount < target && vehicles.length < max && budget > 0 && failures < 3) {
@@ -401,9 +452,9 @@ export class Population {
    * of the same model and paint if one is waiting, else any spare restyled,
    * else a new car.
    */
-  private park(spot: ParkingSpot, idle: Vehicle[]): void {
+  private park(spot: ParkingSpot, idle: Vehicle[]): Vehicle | null {
     for (const o of this.vehicles) {
-      if (Math.abs(o.sim.x - spot.x) < PARK_CLEAR && Math.abs(o.sim.z - spot.z) < PARK_CLEAR) return;
+      if (Math.abs(o.sim.x - spot.x) < PARK_CLEAR && Math.abs(o.sim.z - spot.z) < PARK_CLEAR) return null;
     }
     const spares = this.spareVehicles;
     let i = spares.findIndex((v) => v.archetype === spot.archetype && v.paint === spot.paint && !v.charred);
@@ -423,9 +474,11 @@ export class Population {
     v.ai = null;
     v.tipped = false;
     v.emergency = false;
+    v.mesh.siren = false;
     v.mesh.root.visible = true;
     this.vehicles.push(v);
     idle.push(v);
+    return v;
   }
 
   /** Take a car out of play: hidden, driverless, waiting in the spare pool. */
@@ -438,6 +491,10 @@ export class Population {
     v.exported = false;
     v.tipped = false;
     v.emergency = false;
+    v.ambient = false;
+    v.scene = null;
+    v.parked = false;
+    v.towable = false;
     v.mesh.siren = false;
     v.mesh.root.visible = false;
     v.sim.vx = v.sim.vz = v.sim.yawRate = 0;
@@ -504,7 +561,8 @@ export class Population {
     let cops = 0;
     for (let i = this.crowd.length - 1; i >= 0; i--) {
       const a = this.crowd[i].agent;
-      if (a.role === 'cop') {
+      // ...and the city's scenes take the people they borrow off themselves.
+      if (a.role === 'cop' || a.scene) {
         cops++;
         continue;
       }
@@ -560,6 +618,7 @@ export class Population {
     if (d < lo - 2 || d > hi + 4) return;
     // The group spreads up to ~2.5 m either way.
     if (inRect(ax, az, ctx.view, VIEW_MARGIN + 3)) return;
+    if (ctx.spawnWeight && this.rand() > ctx.spawnWeight(ax, az)) return;
 
     const [cmin, cmax] = CROWD_CLUSTER;
     const n = Math.min(target - this.crowd.length, cmin + Math.floor(this.rand() * (cmax - cmin + 1)));
@@ -580,6 +639,7 @@ export class Population {
       const jitter = (this.rand() * 2 - 1) * 0.6;
       if (runsAlongZ) agent.s.x += jitter;
       else agent.s.z += jitter;
+      agent.street = true;
       this.addPed(agent);
     }
   }
