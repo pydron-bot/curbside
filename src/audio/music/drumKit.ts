@@ -7,6 +7,9 @@
  * soft saturation, and three slightly different takes of every hit so a
  * pattern doesn't sound machine-gunned. MusicPlayer plays them back as
  * buffers (round robin), falling back to its live voices until a kit is in.
+ * The chip kit is the 8-bit console's noise channel (a 15-bit LFSR, its
+ * metallic short mode for hats) and a stepped-triangle kick, with 4-bit
+ * volume steps.
  */
 import type { StationSound } from './stations';
 
@@ -35,21 +38,47 @@ export interface KitJob {
 }
 
 /**
- * The kit as small jobs (one take each, a few ms), so a caller can render
- * it between frames instead of in one go. Same output as renderKit.
+ * Everything the kit depends on: sounds with the same key render the same
+ * kit (MusicPlayer caches kits by it), so a field that changes the kit
+ * belongs here.
+ */
+export function kitKey(s: StationSound): string {
+  return `${s.kickTune}|${s.kickDecay}|${s.kick ?? 'round'}|${s.snare}|${s.hat}`;
+}
+
+/**
+ * The kit as small jobs (one take each: up to ~10 ms on a laptop, the
+ * crash's 2.2 s 12-24 ms), so a caller can render it between frames
+ * instead of in one go. Same output as renderKit.
  */
 export function kitJobs(sound: StationSound, rate: number, seed = 1): KitJob[] {
   const r = mulberry32(seed);
   const noise = () => r() * 2 - 1;
   const vary = mulberry32(seed * 7919 + Math.round(sound.kickTune * 13));
+  const chip = sound.snare === 'chip';
+  const rimPerc = sound.snare === 'rim' || sound.snare === 'rimshot';
+  const hat = (open: boolean, v: number) => {
+    if (sound.hat === 'chip') return chipHat(rate, open, 1 + v * 0.04, seed + (open ? 43 : 41));
+    return sound.hat === 'shaker' ? shaker(rate, open, 1 + v * 0.08, noise) : metalHat(rate, open, 1 + v * 0.02, noise);
+  };
   const make: Record<KitPart, (v: number) => Float32Array> = {
-    kick: (v) => kick(rate, sound.kickTune * (1 + v * 0.015), sound.kickDecay * (1 + v * 0.05), noise),
-    snare: (v) => (sound.snare === 'rim' ? rim(rate, 1 + v * 0.02, noise) : snare(rate, sound.snare === 'gated', 1 + v * 0.02, noise)),
-    clap: (v) => clap(rate, 1 + v * 0.15, noise),
-    hat: (v) => (sound.hat === 'shaker' ? shaker(rate, false, 1 + v * 0.08, noise) : metalHat(rate, false, 1 + v * 0.02, noise)),
-    openHat: (v) => (sound.hat === 'shaker' ? shaker(rate, true, 1 + v * 0.08, noise) : metalHat(rate, true, 1 + v * 0.02, noise)),
-    perc: (v) => (sound.snare === 'rim' ? rim(rate, 0.8 + v * 0.03, noise) : bongo(rate, 1 + v * 0.03, noise)),
-    crash: (v) => crash(rate, 1 + v * 0.02, noise),
+    kick: (v) => {
+      const tune = sound.kickTune * (1 + v * 0.015);
+      const decay = sound.kickDecay * (1 + v * 0.05);
+      if (sound.kick === 'chip') return chipKick(rate, tune, decay);
+      return sound.kick === 'hard' ? kick(rate, tune, decay, noise, 3.2, 0.3, 1.5) : kick(rate, tune, decay, noise);
+    },
+    snare: (v) => {
+      if (sound.snare === 'rim') return rim(rate, 1 + v * 0.02, noise);
+      if (sound.snare === 'rimshot') return rimshot(rate, 1 + v * 0.02, noise);
+      if (chip) return chipSnare(rate, 1 + v * 0.03, seed + 11);
+      return snare(rate, sound.snare === 'gated', 1 + v * 0.02, noise);
+    },
+    clap: (v) => (chip ? chipClap(rate, 1 + v * 0.15, seed + 23) : clap(rate, 1 + v * 0.15, noise)),
+    hat: (v) => hat(false, v),
+    openHat: (v) => hat(true, v),
+    perc: (v) => (rimPerc ? rim(rate, 0.8 + v * 0.03, noise) : chip ? chipBlip(rate, 1 + v * 0.03) : bongo(rate, 1 + v * 0.03, noise)),
+    crash: (v) => (chip ? chipCrash(rate, 1 + v * 0.02, seed + 31) : crash(rate, 1 + v * 0.02, noise)),
   };
   const jobs: KitJob[] = [];
   for (const part of Object.keys(make) as KitPart[]) {
@@ -72,8 +101,8 @@ export function renderKit(sound: StationSound, rate: number, seed = 1): DrumKit 
 
 // ---------------------------------------------------------------- the hits
 
-/** A sine body diving from ~3.2× to the tune, a click on top, saturated. */
-function kick(rate: number, tune: number, decay: number, noise: () => number): Float32Array {
+/** A sine body diving from ~3.2× to the tune, a click on top, saturated ('hard': more drive, knock and click). */
+function kick(rate: number, tune: number, decay: number, noise: () => number, drive = 1.8, knockLevel = 0.18, clickLevel = 1): Float32Array {
   const out = new Float32Array(Math.ceil(rate * (decay * 2.2 + 0.08)));
   const hp = new Biquad('highpass', 1800, 0.7, rate);
   let phase = 0;
@@ -83,9 +112,9 @@ function kick(rate: number, tune: number, decay: number, noise: () => number): F
     phase += (2 * Math.PI * f) / rate;
     const body = Math.sin(phase) * attack(t, 0.0015) * Math.exp(-t / decay);
     // Second harmonic for punch on small speakers (phones).
-    const knock = Math.sin(phase * 2) * 0.18 * Math.exp(-t / (decay * 0.35));
-    const click = hp.run(noise()) * 0.35 * Math.exp(-t / 0.0025) + Math.sin(2 * Math.PI * 1500 * t) * 0.15 * Math.exp(-t / 0.004);
-    out[i] = saturate(body + knock + click, 1.8);
+    const knock = Math.sin(phase * 2) * knockLevel * Math.exp(-t / (decay * 0.35));
+    const click = (hp.run(noise()) * 0.35 * Math.exp(-t / 0.0025) + Math.sin(2 * Math.PI * 1500 * t) * 0.15 * Math.exp(-t / 0.004)) * clickLevel;
+    out[i] = saturate(body + knock + click, drive);
   }
   return out;
 }
@@ -126,6 +155,26 @@ function rim(rate: number, tune: number, noise: () => number): Float32Array {
     const tone = (Math.sin(2 * Math.PI * 820 * tune * t) * 0.6 + Math.sin(2 * Math.PI * 1650 * tune * t) * 0.25) * Math.exp(-t / 0.014);
     const click = bp.run(noise()) * Math.exp(-t / 0.008);
     out[i] = saturate((tone + click) * attack(t, 0.0004), 1.3);
+  }
+  return out;
+}
+
+/**
+ * A reggae rimshot: the stick hits rim and head at once, so a hard crack
+ * and a ringing, pitched shell (the one drop's snare, made for echo throws).
+ */
+function rimshot(rate: number, tune: number, noise: () => number): Float32Array {
+  const out = new Float32Array(Math.ceil(rate * 0.28));
+  const crack = new Biquad('bandpass', 3600 * tune, 1, rate);
+  let p = 0;
+  for (let i = 0; i < out.length; i++) {
+    const t = i / rate;
+    const w = 2 * Math.PI * tune * t;
+    const ring = (Math.sin(w * 470) * 0.5 + Math.sin(w * 1130) * 0.3 + Math.sin(w * 1710) * 0.14) * Math.exp(-t / 0.07);
+    p += (2 * Math.PI * (190 * tune + 50 * Math.exp(-t / 0.01))) / rate;
+    const body = Math.sin(p) * 0.45 * Math.exp(-t / 0.03);
+    const snap = crack.run(noise()) * 1.3 * Math.exp(-t / 0.012);
+    out[i] = saturate((ring + body + snap) * attack(t, 0.0005), 1.6);
   }
   return out;
 }
@@ -214,6 +263,130 @@ function crash(rate: number, tune: number, noise: () => number): Float32Array {
     }
     const env = attack(t, 0.002) * (0.75 * Math.exp(-t / 0.5) + 0.25 * Math.exp(-t / 0.06));
     out[i] = (hp2.run(m / 6) * 0.45 + hp.run(noise())) * env;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------- chip
+
+/**
+ * The 8-bit console's noise channel: a 15-bit shift register clocked at
+ * `clock` Hz, one bit out (±1). Long mode is hiss (32767 steps); short mode
+ * repeats every 93 steps, a metallic buzz.
+ */
+export class Lfsr {
+  private reg = 1;
+  private phase = 0;
+  private out = 1;
+
+  constructor(
+    readonly clock: number,
+    readonly short: boolean,
+    readonly rate: number,
+  ) {}
+
+  /** Clock the register once (tests). Returns the new output. */
+  step(): number {
+    const fb = (this.reg & 1) ^ ((this.reg >> (this.short ? 6 : 1)) & 1);
+    this.reg = (this.reg >> 1) | (fb << 14);
+    this.out = this.reg & 1 ? -1 : 1;
+    return this.out;
+  }
+
+  /** The next output sample at `rate`. */
+  next(): number {
+    this.phase += Math.min(this.clock, this.rate) / this.rate;
+    while (this.phase >= 1) {
+      this.phase -= 1;
+      this.step();
+    }
+    return this.out;
+  }
+}
+
+/** 4-bit volume: the console's envelope moves in sixteenths. */
+function steps4(x: number): number {
+  return Math.round(x * 15) / 15;
+}
+
+/** The 16-level triangle at phase `p` (cycles). */
+function tri4(p: number): number {
+  const k = Math.floor((p - Math.floor(p)) * 32);
+  return (k < 16 ? 15 - k : k - 16) / 7.5 - 1;
+}
+
+/** A stepped triangle diving from ~8× to the tune, a noise tick on top. */
+function chipKick(rate: number, tune: number, decay: number): Float32Array {
+  const out = new Float32Array(Math.ceil(rate * (decay * 4 + 0.04)));
+  const tick = new Lfsr(rate, false, rate);
+  let p = 0;
+  for (let i = 0; i < out.length; i++) {
+    const t = i / rate;
+    p += (tune + tune * 7 * Math.exp(-t / 0.018)) / rate;
+    const body = tri4(p) * steps4(Math.exp(-t / (decay * 1.2)));
+    out[i] = body + tick.next() * 0.35 * steps4(Math.exp(-t / 0.006));
+  }
+  return out;
+}
+
+/** Long-mode noise over a falling triangle thump. */
+function chipSnare(rate: number, tune: number, seed: number): Float32Array {
+  const out = new Float32Array(Math.ceil(rate * 0.16));
+  const n = new Lfsr(13000 * tune + seed, false, rate);
+  let p = 0;
+  for (let i = 0; i < out.length; i++) {
+    const t = i / rate;
+    p += (130 * tune + 120 * Math.exp(-t / 0.02)) / rate;
+    const thump = tri4(p) * 0.6 * steps4(Math.exp(-t / 0.03));
+    out[i] = n.next() * steps4(Math.exp(-t / 0.045)) + thump;
+  }
+  return out;
+}
+
+/** Three quick noise bursts. */
+function chipClap(rate: number, spread: number, seed: number): Float32Array {
+  const out = new Float32Array(Math.ceil(rate * 0.18));
+  const n = new Lfsr(9000 + seed, false, rate);
+  for (let i = 0; i < out.length; i++) {
+    const t = i / rate;
+    const burst = t < 0.024 * spread ? Math.exp(-((t % (0.008 * spread)) / 0.003)) : Math.exp(-(t - 0.024 * spread) / 0.04);
+    out[i] = n.next() * steps4(burst);
+  }
+  return out;
+}
+
+/** Short-mode (metallic) noise, clocked high and kept bright. */
+function chipHat(rate: number, open: boolean, tune: number, seed: number): Float32Array {
+  const out = new Float32Array(Math.ceil(rate * (open ? 0.26 : 0.06)));
+  const n = new Lfsr(36000 * tune + seed, true, rate);
+  const hp = new Biquad('highpass', 5000, 0.7, rate);
+  for (let i = 0; i < out.length; i++) {
+    const t = i / rate;
+    out[i] = hp.run(n.next()) * steps4(Math.exp(-t / (open ? 0.08 : 0.012)));
+  }
+  return out;
+}
+
+/** A pulse blip that drops in pitch: the chip tom. */
+function chipBlip(rate: number, tune: number): Float32Array {
+  const out = new Float32Array(Math.ceil(rate * 0.12));
+  let p = 0;
+  for (let i = 0; i < out.length; i++) {
+    const t = i / rate;
+    p += (180 * tune + 260 * Math.exp(-t / 0.025)) / rate;
+    out[i] = (p - Math.floor(p) < 0.25 ? 1 : -0.33) * steps4(Math.exp(-t / 0.035));
+  }
+  return out;
+}
+
+/** Long-mode noise with a long 4-bit fade. */
+function chipCrash(rate: number, tune: number, seed: number): Float32Array {
+  const out = new Float32Array(Math.ceil(rate * 1.4));
+  const n = new Lfsr(30000 * tune + seed, false, rate);
+  const hp = new Biquad('highpass', 2500, 0.7, rate);
+  for (let i = 0; i < out.length; i++) {
+    const t = i / rate;
+    out[i] = hp.run(n.next()) * steps4(Math.exp(-t / 0.35));
   }
   return out;
 }

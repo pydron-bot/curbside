@@ -173,7 +173,7 @@ Full list with context in `docs/HANDOFF.md`. In short:
 
 1. Real-device pass on an iPhone 15 Pro (frame rate, audio/silent switch, haptics, controller, touch feel), with the destruction-test soak and a look at the new art on the phone.
 2. Tune from real play: medals and the 5-star escape (the race bot test and the seeded harnesses are in place).
-3. Music: new stations, a living radio, chase music, themes (ideas in `docs/BACKLOG.md` *Music*).
+3. Music: a living radio (DJ, idents, ads) and recorded tracks (ideas in `docs/BACKLOG.md` *Music*); new stations, chase music, music on foot and the theme and stings are done (2026-11-01).
 4. Ideas: district names first, then police chatter, mission chapter 2, gangs, an online leaderboard.
 
 Done 2026-10-31: the Blender adjustment pass, the deeek.org landing page (`pydron-bot/pydron-bot.github.io`) and the minor known issues.

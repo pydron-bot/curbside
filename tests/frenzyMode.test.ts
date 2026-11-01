@@ -14,7 +14,7 @@ function setup() {
   const player = new Player(bus, 0, 0);
   const banners: [string, string, string | undefined][] = [];
   const ctx = {
-    deps: { bus, player, audio: { ui() {} } },
+    deps: { bus, player, audio: { ui() {}, countIn() {} } },
     progress: new Progress(defaultSave(), null),
     ui: { banner: (text: string, kind: string, sub?: string) => banners.push([text, kind, sub]) },
     freeRoam: true,

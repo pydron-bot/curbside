@@ -7,6 +7,8 @@
 import type { ScoreKind } from '../systems/score';
 import type { WeaponKind } from '../systems/weapons';
 import { clamp01, semis } from './mix';
+import type { KitPart } from './music/drumKit';
+import { bustedSting, wastedSting, type Sting, type StingDrum, type StingNote } from './music/stings';
 import { fold, midiToHz, scaleNote, SCALES } from './music/theory';
 import { perc, sweep, type Voice } from './synth';
 
@@ -705,7 +707,7 @@ export function footstep(v: Voice, sprint: boolean): void {
   noiseHit(v, v.bank.white, t + 0.004, 'highpass', 2500, 0.7, 0.15, 0.004, 0.02);
 }
 
-/** WASTED: a slam, a minor chord sagging down like a dying tape machine, and a bell. */
+/** WASTED: a slam, the theme's hook over a minor chord sagging like a dying tape machine (stings.ts), and a bell. */
 export function wasted(v: Voice, key: number): void {
   const t = v.t;
   thump(v, t, 70, 28, 1, 0.8, 0.35);
@@ -716,28 +718,13 @@ export function wasted(v: Voice, key: number): void {
   v.chain(n, nlp, ng, v.input);
   perc(ng.gain, t, 0.6, 0.004, 0.3);
 
-  const lp = v.filter('lowpass', 2400, 1.5);
-  sweep(lp.frequency, t, 2400, 220, 2.4);
-  const cg = v.gain();
-  v.chain(lp, cg, v.input);
-  const root = fold(key, 57);
-  for (const s of [0, 3, 7]) {
-    for (const d of [-10, 10]) {
-      const hz = midiToHz(root + s);
-      const o = v.osc('sawtooth', hz, t, t + 3.2);
-      o.detune.value = d;
-      sweep(o.frequency, t + 0.05, hz, hz * semis(-7), 2.2);
-      o.connect(lp);
-    }
-  }
-  cg.gain.setValueAtTime(0, t);
-  cg.gain.linearRampToValueAtTime(0.26, t + 0.02);
-  cg.gain.setTargetAtTime(0, t + 1.6, 0.4);
+  // Heavy: as loud as the chord it replaced.
+  playSting(v, wastedSting(key), NO_KIT, 1.6);
 
-  const bell = midiToHz(root + 24);
+  const bell = midiToHz(fold(key, 57) + 24);
   for (const [ratio, peak] of [
-    [1, 0.18],
-    [2.76, 0.07],
+    [1, 0.12],
+    [2.76, 0.05],
   ] as const) {
     const o = v.osc('sine', bell * ratio, t + 0.05, t + 4);
     const g = v.gain();
@@ -747,8 +734,8 @@ export function wasted(v: Voice, key: number): void {
 }
 
 /**
- * BUSTED: handcuffs ratcheting shut and a cell door's clang, under a falling
- * minor stab, like WASTED but colder.
+ * BUSTED: handcuffs ratcheting shut and a cell door's clang, then the hook
+ * on a cold square sinking to the flat fifth (stings.ts), like WASTED but colder.
  */
 export function busted(v: Voice, key: number): void {
   const t = v.t;
@@ -772,20 +759,39 @@ export function busted(v: Voice, key: number): void {
     perc(g.gain, clang, peak, 0.002, tau);
   }
   noiseHit(v, v.bank.white, clang, 'highpass', 3000, 0.8, 0.3, 0.001, 0.08);
-  // A cold minor chord, filtered down.
-  const lp = v.filter('lowpass', 2000, 1.2);
-  sweep(lp.frequency, clang, 2000, 260, 2.2);
-  const cg = v.gain();
-  v.chain(lp, cg, v.input);
-  const root = fold(key, 57);
-  for (const s of [0, 3, 10]) {
-    const o = v.osc('sawtooth', midiToHz(root + s), clang, clang + 3);
-    o.detune.value = rnd(-8, 8);
-    o.connect(lp);
-  }
-  cg.gain.setValueAtTime(0, clang);
-  cg.gain.linearRampToValueAtTime(0.2, clang + 0.03);
-  cg.gain.setTargetAtTime(0, clang + 1.2, 0.4);
+  playSting(v, bustedSting(key));
+}
+
+/**
+ * A record scratch: the boombox's music dragged back and forth under a hand
+ * (a pitched buzz and a band of noise swept down, up, down) and stopped dead.
+ */
+export function recordScratch(v: Voice): void {
+  const t = v.t;
+  const o = v.osc('sawtooth', 300, t, t + 0.4);
+  const f = o.frequency;
+  f.setValueAtTime(320, t);
+  f.exponentialRampToValueAtTime(90, t + 0.09);
+  f.exponentialRampToValueAtTime(420, t + 0.16);
+  f.exponentialRampToValueAtTime(60, t + 0.32);
+  const bp = v.filter('bandpass', 1400, 1.1);
+  const b = bp.frequency;
+  b.setValueAtTime(1600, t);
+  b.exponentialRampToValueAtTime(500, t + 0.09);
+  b.exponentialRampToValueAtTime(2200, t + 0.16);
+  b.exponentialRampToValueAtTime(300, t + 0.32);
+  const n = v.noise(v.bank.white, t, t + 0.4);
+  const ng = v.gain(0.9);
+  v.chain(n, ng, bp);
+  const og = v.gain(0.25);
+  v.chain(o, og, bp);
+  const g = v.gain();
+  v.chain(bp, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.55, t + 0.01);
+  g.gain.setValueAtTime(0.4, t + 0.09);
+  g.gain.linearRampToValueAtTime(0.6, t + 0.13);
+  g.gain.setTargetAtTime(0, t + 0.3, 0.025);
 }
 
 /** A Pay 'n' Spray at work: a long hiss of paint with a rattle-can shake at the start. */
@@ -830,15 +836,17 @@ export function respawn(v: Voice, key: number): void {
 
 /**
  * A score award, tuned to the music's key: a grace note into a pluck that
- * climbs one minor-pentatonic step per combo multiplier, adding a fifth and an
- * octave sparkle as the chain grows. Each kind has a little signature.
+ * climbs one pentatonic step (minor, or major in a major key: the radio plays
+ * on under it) per combo multiplier, adding a fifth and an octave sparkle as
+ * the chain grows. Each kind has a little signature.
  */
-export function award(v: Voice, kind: ScoreKind, multiplier: number, key: number): void {
+export function award(v: Voice, kind: ScoreKind, multiplier: number, key: number, major = false): void {
   const t = v.t;
   const tonic = fold(key, 64);
   const degree = Math.min(9, Math.max(0, multiplier - 1));
-  const note = scaleNote(tonic, SCALES.pentatonicMinor, degree);
-  const grace = scaleNote(tonic, SCALES.pentatonicMinor, degree - 1);
+  const scale = major ? SCALES.pentatonicMajor : SCALES.pentatonicMinor;
+  const note = scaleNote(tonic, scale, degree);
+  const grace = scaleNote(tonic, scale, degree - 1);
   if (kind === 'nearMiss') {
     const n = v.noise(v.bank.white, t, t + 0.2);
     const bp = v.filter('bandpass', 1200, 2);
@@ -857,17 +865,18 @@ export function award(v: Voice, kind: ScoreKind, multiplier: number, key: number
   if (multiplier >= 7) pluck(v, at + 0.12, note + 12, 0.1, 0.16, 7000);
 }
 
-/** KABOOM: a brassy minor stab, a timpani hit and a cymbal. */
-export function bigSting(v: Voice, key: number): void {
+/** KABOOM: a brassy stab (minor, or major in a major key), a timpani hit and a cymbal. */
+export function bigSting(v: Voice, key: number, major = false): void {
   const t = v.t;
   const root = fold(key, 57);
+  const tenth = major ? 16 : 15;
   const lp = v.filter('lowpass', 400, 2);
   lp.frequency.setValueAtTime(400, t);
   lp.frequency.exponentialRampToValueAtTime(5000, t + 0.04);
   lp.frequency.exponentialRampToValueAtTime(800, t + 0.45);
   const g = v.gain();
   v.chain(lp, g, v.input);
-  for (const s of [0, 7, 12, 15]) {
+  for (const s of [0, 7, 12, tenth]) {
     const o = v.osc('sawtooth', midiToHz(root + s), t, t + 1.4);
     o.detune.value = rnd(-8, 8);
     o.connect(lp);
@@ -897,11 +906,191 @@ export function fanfare(v: Voice, key: number): void {
   noiseHit(v, v.bank.white, end, 'highpass', 6500, 0.6, 0.12, 0.004, 0.4);
 }
 
+// --- Theme stings ---
+
+/** Where a sting's drums come from: a take of the radio's kit, or null for the synth stand-ins. */
+export type KitSource = (part: KitPart) => AudioBuffer | null;
+const NO_KIT: KitSource = () => null;
+
+const STING_WAVE = { saw: 'sawtooth', square: 'square', flute: 'triangle' } as const;
+// The hook leads; the kit sits under it as it does on the radio (where it plays at half level).
+const STING_LEAD = 0.17;
+const STING_BASS = 0.15;
+const STING_CHORD = 0.2;
+const STING_DRUM = 0.4;
+const STING_RISER = 0.35;
+
+/**
+ * Play a sting score (music/stings.ts) from v.t. The lead and the bass are
+ * one gliding synth each for all their notes (a few nodes, not a set per
+ * note), chords are saw stacks under a closing filter, drums are takes of
+ * the radio's kit when there is one, plus an optional riser and a
+ * tape-stop sag over everything pitched. `level` scales the lot.
+ */
+export function playSting(v: Voice, s: Sting, kit: KitSource = NO_KIT, level = 1): void {
+  const t0 = v.t;
+  const end = t0 + s.length;
+  const sagged: OscillatorNode[] = [];
+  // The mono synths stop soon after their last note (the echo rings on without them).
+  const until = (notes: readonly { t: number; len: number }[]) => t0 + notes.reduce((e, n) => Math.max(e, n.t + n.len), 0) + 0.4;
+
+  if (s.melody.length > 0) {
+    const first = midiToHz(s.melody[0].note);
+    const stop = until(s.melody);
+    const lp = v.filter('lowpass', s.lead === 'flute' ? 2600 : 4200, 0.8);
+    const g = v.gain();
+    v.chain(lp, g, v.input);
+    const oscs = [v.osc(STING_WAVE[s.lead], first, t0, stop)];
+    // The saw gets a detuned twin: the theme's fat lead.
+    if (s.lead === 'saw') oscs.push(v.osc('sawtooth', first, t0, stop));
+    for (let i = 0; i < oscs.length; i++) {
+      if (oscs.length > 1) oscs[i].detune.value = i === 0 ? -8 : 8;
+      oscs[i].connect(lp);
+      sagged.push(oscs[i]);
+    }
+    const lead = level * STING_LEAD * (s.lead === 'flute' ? 1.6 : s.lead === 'square' ? 0.85 : 1);
+    for (let i = 0; i < s.melody.length; i++) {
+      const n = s.melody[i];
+      const at = t0 + n.t;
+      const hz = midiToHz(n.note);
+      for (const o of oscs) o.frequency.setTargetAtTime(hz, at, n.glide ?? 0.005);
+      g.gain.setTargetAtTime(lead * n.vel, at, s.lead === 'flute' ? 0.02 : 0.005);
+      // A note that runs into the next is slurred into it: its release would cut the next one short.
+      if (releases(s.melody, i, 0.9)) g.gain.setTargetAtTime(0, at + n.len * 0.9, s.lead === 'flute' ? 0.06 : 0.035);
+    }
+    if (s.echo > 0) {
+      const d = v.track(v.ctx.createDelay(1));
+      d.delayTime.value = Math.min(0.95, s.echo);
+      const damp = v.filter('lowpass', 2400, 0.5);
+      const fb = v.gain(0.35);
+      const wet = v.gain(0.45);
+      v.chain(g, d, damp, fb, d);
+      v.chain(damp, wet, v.input);
+    }
+  }
+
+  if (s.bass.length > 0) {
+    const first = midiToHz(s.bass[0].note);
+    const stop = until(s.bass);
+    const a = v.osc('sawtooth', first, t0, stop);
+    const sub = v.osc('sine', first / 2, t0, stop);
+    const lp = v.filter('lowpass', 300, 1.5);
+    const subGain = v.gain(0.7);
+    const g = v.gain();
+    v.chain(a, lp, g, v.input);
+    v.chain(sub, subGain, g);
+    sagged.push(a, sub);
+    for (let i = 0; i < s.bass.length; i++) {
+      const n = s.bass[i];
+      const at = t0 + n.t;
+      const hz = midiToHz(n.note);
+      a.frequency.setTargetAtTime(hz, at, n.glide ?? 0.004);
+      sub.frequency.setTargetAtTime(hz / 2, at, n.glide ?? 0.004);
+      g.gain.setTargetAtTime(level * STING_BASS * n.vel, at, 0.004);
+      if (releases(s.bass, i, 0.88)) g.gain.setTargetAtTime(0, at + n.len * 0.88, 0.04);
+      // Filter pluck: opens on the note and closes over it.
+      lp.frequency.setValueAtTime(300 + 1300 * n.vel, at);
+      lp.frequency.setTargetAtTime(300, at + 0.005, 0.1);
+    }
+  }
+
+  for (const c of s.chords) {
+    const at = t0 + c.t;
+    const stop = at + c.len + 0.9;
+    const lp = v.filter('lowpass', 3200, 1.2);
+    lp.frequency.setValueAtTime(3200, at);
+    lp.frequency.exponentialRampToValueAtTime(700, at + Math.max(0.15, c.len));
+    const g = v.gain();
+    v.chain(lp, g, v.input);
+    c.notes.forEach((note, i) => {
+      const o = v.osc('sawtooth', midiToHz(note), at, stop);
+      o.detune.value = i % 2 === 0 ? -7 : 7;
+      o.connect(lp);
+      sagged.push(o);
+    });
+    const peak = (level * STING_CHORD * c.vel) / Math.sqrt(c.notes.length);
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(peak, at + 0.004);
+    g.gain.setTargetAtTime(peak * 0.55, at + 0.01, 0.15);
+    g.gain.setTargetAtTime(0, at + c.len, 0.12);
+  }
+
+  for (const h of s.drums) {
+    const at = t0 + h.t;
+    const take = kit(h.part);
+    if (take) {
+      const hg = v.gain(level * STING_DRUM * h.vel);
+      v.chain(v.burst(take, at, undefined, 0), hg, v.input);
+    } else {
+      stingDrum(v, h.part, at, level * h.vel);
+    }
+  }
+
+  const r = s.riser;
+  if (r) {
+    const at = t0 + r.t;
+    const stop = at + r.len;
+    const g = v.gain();
+    g.connect(v.input);
+    g.gain.setValueAtTime(level * STING_RISER * r.level[0], at);
+    g.gain.linearRampToValueAtTime(level * STING_RISER * r.level[1], stop - 0.01);
+    g.gain.linearRampToValueAtTime(0, stop + 0.02);
+    const n = v.noise(v.bank.pink, at, stop + 0.03);
+    const bp = v.filter('bandpass', midiToHz(r.from + 24), 2);
+    sweep(bp.frequency, at, midiToHz(r.from + 24), midiToHz(r.to + 24), r.len);
+    v.chain(n, bp, g);
+    const o = v.osc('sawtooth', midiToHz(r.from), at, stop + 0.03);
+    sweep(o.frequency, at, midiToHz(r.from), midiToHz(r.to), r.len);
+    const olp = v.filter('lowpass', 1800, 0.7);
+    const og = v.gain(0.4);
+    v.chain(o, olp, og, g);
+  }
+
+  if (s.sag) {
+    const at = t0 + s.sag.t;
+    for (const o of sagged) {
+      const base = o.detune.value;
+      o.detune.setValueAtTime(base, at);
+      o.detune.linearRampToValueAtTime(base + s.sag.semis * 100, at + s.sag.len);
+    }
+  }
+  v.until(end);
+}
+
+/** A mono part's note `i` gets a release (at `hold` of its length) only when that falls before the next note starts. */
+function releases(notes: readonly StingNote[], i: number, hold: number): boolean {
+  const next = notes[i + 1];
+  return !next || notes[i].t + notes[i].len * hold < next.t;
+}
+
+/** Synth drums for a sting when the radio's kit isn't rendered yet. */
+function stingDrum(v: Voice, part: StingDrum, at: number, vel: number): void {
+  switch (part) {
+    case 'kick':
+      thump(v, at, 150, 48, 0.07, 0.85 * vel, 0.14);
+      return;
+    case 'snare':
+      noiseHit(v, v.bank.white, at, 'bandpass', 1800, 0.7, 0.55 * vel, 0.002, 0.07);
+      thump(v, at, 220, 180, 0.05, 0.3 * vel, 0.04, 'triangle');
+      return;
+    case 'clap':
+      noiseHit(v, v.bank.white, at, 'bandpass', 1150, 1.4, 0.5 * vel, 0.001, 0.05);
+      return;
+    case 'hat':
+      noiseHit(v, v.bank.white, at, 'highpass', 7500, 0.7, 0.18 * vel, 0.0005, 0.02);
+      return;
+    case 'crash':
+      noiseHit(v, v.bank.white, at, 'highpass', 4200, 0.5, 0.22 * vel, 0.002, 0.45);
+      return;
+  }
+}
+
 // --- UI ---
 
 export type UiSound = 'click' | 'confirm' | 'back' | 'countdown' | 'go' | 'success' | 'fail' | 'cash' | 'star' | 'ring';
 
-export function ui(v: Voice, kind: UiSound, key: number): void {
+/** `key` and `major`: the music's, so the pitched ones sit in it. */
+export function ui(v: Voice, kind: UiSound, key: number, major = false): void {
   const t = v.t;
   const root = fold(key, 69);
   switch (kind) {
@@ -941,7 +1130,8 @@ export function ui(v: Voice, kind: UiSound, key: number): void {
       noiseHit(v, v.bank.white, t + 0.24, 'highpass', 7000, 0.6, 0.08, 0.01, 0.3);
       return;
     case 'fail': {
-      [7, 3, 0].forEach((s, i) => pluck(v, t + i * 0.12, root + s - 12, 0.16, i === 2 ? 0.25 : 0.1, 2500));
+      // Down from the fifth through the minor third; in a major key (the radio plays on) through the fourth instead.
+      [7, major ? 5 : 3, 0].forEach((s, i) => pluck(v, t + i * 0.12, root + s - 12, 0.16, i === 2 ? 0.25 : 0.1, 2500));
       const o = v.osc('sawtooth', 110, t + 0.24, t + 1.2);
       const lp = v.filter('lowpass', 600, 0.7);
       const g = v.gain();

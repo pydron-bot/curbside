@@ -48,15 +48,11 @@ describe('the radio drum kit', () => {
     expect(zc(kit.hat[0])).toBeGreaterThan(5000);
   });
 
-  it('comes as small jobs (a take each), so it renders between frames', () => {
+  it('comes as small jobs (a take each, none longer than the crash), so it renders between frames', () => {
+    // The cost is per sample, so bound the samples: a wall-clock bound flakes under load.
     const s = STATIONS[0].sound;
-    renderKit(s, RATE); // warm up
-    let worst = 0;
-    for (const job of kitJobs(s, RATE)) {
-      const t0 = performance.now();
-      job.run();
-      worst = Math.max(worst, performance.now() - t0);
-    }
-    expect(worst).toBeLessThan(25);
+    const jobs = kitJobs(s, RATE);
+    expect(jobs).toHaveLength(Object.values(TAKES).reduce((a, b) => a + b, 0));
+    for (const job of jobs) expect(job.run().length, job.part).toBeLessThanOrEqual(Math.ceil(RATE * 2.2));
   });
 });

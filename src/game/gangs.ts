@@ -109,6 +109,46 @@ export function gangOn(district: District): GangDef | null {
   return GANGS.find((g) => g.turf === district) ?? null;
 }
 
+/** A hangout's boombox comes back on once its crew has been calm this long after trouble, s. */
+export const BOOMBOX_SETTLE = 12;
+
+/** A hangout's boombox: whether it plays, and how long its crew has been calm. */
+export interface Boombox {
+  on: boolean;
+  calm: number;
+}
+
+export function createBoombox(): Boombox {
+  return { on: false, calm: BOOMBOX_SETTLE };
+}
+
+/**
+ * Step a hangout's boombox. `present`: some of the crew is on the street;
+ * `trouble`: one of them is fighting, down or running. It plays while the
+ * crew stands about calm; trouble cuts it ('cut'), and it comes back once
+ * they've settled for BOOMBOX_SETTLE s. A crew gone from the street takes it
+ * with them ('off'); a fresh crew starts it at once. Returns the change, or
+ * null.
+ */
+export function stepBoombox(b: Boombox, present: boolean, trouble: boolean, dt: number): 'on' | 'off' | 'cut' | null {
+  if (!present) {
+    b.calm = BOOMBOX_SETTLE;
+    if (!b.on) return null;
+    b.on = false;
+    return 'off';
+  }
+  if (trouble) {
+    b.calm = 0;
+    if (!b.on) return null;
+    b.on = false;
+    return 'cut';
+  }
+  b.calm += dt;
+  if (b.on || b.calm < BOOMBOX_SETTLE) return null;
+  b.on = true;
+  return 'on';
+}
+
 export interface Hangout {
   id: string;
   gang: GangDef;

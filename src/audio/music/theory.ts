@@ -17,6 +17,7 @@ export const CHORD_SHAPES = {
   dom7: [0, 4, 7, 10],
   min9: [3, 7, 10, 14],
   maj9: [4, 7, 11, 14],
+  dom9: [4, 7, 10, 14],
   sus2: [0, 2, 7],
 } as const satisfies Record<string, readonly number[]>;
 
@@ -29,10 +30,12 @@ export interface Chord {
 }
 
 export const SCALES = {
+  major: [0, 2, 4, 5, 7, 9, 11],
   minor: [0, 2, 3, 5, 7, 8, 10],
   dorian: [0, 2, 3, 5, 7, 9, 10],
   phrygian: [0, 1, 3, 5, 7, 8, 10],
   pentatonicMinor: [0, 3, 5, 7, 10],
+  pentatonicMajor: [0, 2, 4, 7, 9],
 } as const satisfies Record<string, readonly number[]>;
 
 /** Wrap a MIDI note into [lo, lo + 12). */

@@ -92,15 +92,19 @@ describe('look-ahead step clock', () => {
 describe('stations', () => {
   it('are well-formed', () => {
     expect(STATIONS.length).toBeGreaterThanOrEqual(3);
-    const drumChars = /^[xo.]{16}$/;
-    const bassChars = /^[xo537.\-]{16}$/;
+    const drumChars = /^[xort.]{16}$/;
+    const hitChars = /^[xo.]{16}$/;
+    const bassChars = /^[xo5347g.\-~]{16}$/;
     for (const s of STATIONS) {
       expect(s.tiers.length, s.name).toBe(6);
       expect(s.progression.length, s.name).toBe(8);
       expect(s.bpm[0]).toBeLessThan(s.bpm[1]);
       for (const tier of [...s.tiers, s.menu]) {
-        for (const p of [tier.kick, tier.snare, tier.clap, tier.hat, tier.openHat, tier.perc, tier.keys, tier.arp]) {
+        for (const p of [tier.kick, tier.snare, tier.clap, tier.hat, tier.openHat, tier.perc]) {
           if (p !== undefined) expect(p, s.name).toMatch(drumChars);
+        }
+        for (const p of [tier.keys, tier.arp]) {
+          if (p !== undefined) expect(p, s.name).toMatch(hitChars);
         }
         if (tier.bass) expect(tier.bass, s.name).toMatch(bassChars);
         expect(tier.cutoff).toBeGreaterThan(500);

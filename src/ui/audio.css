@@ -51,6 +51,32 @@ body:not([data-scene='play']) #radio {
   --radio-b: #a98bff;
 }
 
+#radio[data-station='sideways'] {
+  --radio-a: #ff3d6e;
+  --radio-b: #b14dff;
+}
+
+#radio[data-station='getaway'] {
+  --radio-a: #ffb13c;
+  --radio-b: #ff5fa2;
+}
+
+#radio[data-station='dubwise'] {
+  --radio-a: #5fe36a;
+  --radio-b: #ffd84f;
+}
+
+#radio[data-station='insertcoin'] {
+  --radio-a: #7dff4f;
+  --radio-b: #4fb8ff;
+}
+
+/* The chase: the lights of the cars behind you. */
+#radio[data-station='chase'] {
+  --radio-a: #ff3b4f;
+  --radio-b: #3b8bff;
+}
+
 .radio-eq {
   display: flex;
   align-items: flex-end;

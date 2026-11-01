@@ -250,6 +250,7 @@ export class MissionMode implements Mode {
       time.set(m.hour);
       time.speed = 0;
     }
+    ctx.deps.audio.missionCue('start', this.missions.indexOf(m));
     this.signal(this.run.begin());
   }
 
@@ -284,7 +285,7 @@ export class MissionMode implements Mode {
         const at = ctx.deps.player.position;
         ctx.deps.bus.emit({ type: 'celebrate', x: at.x, z: at.z });
         // The debrief card says MISSION PASSED and the pay (no banner under it).
-        ctx.deps.audio.ui('success');
+        ctx.deps.audio.missionCue('passed', this.missions.indexOf(m));
         ctx.progress.flush();
         // Just passed the last story job: what rings next is a repeat.
         const last = !replay && this.next !== null && this.nextIsReplay;
@@ -298,7 +299,8 @@ export class MissionMode implements Mode {
         this.finish();
         if (s.reason !== 'QUIT') {
           ctx.ui.banner('MISSION FAILED', 'fail', s.reason, 3);
-          ctx.deps.audio.ui('fail');
+          // Dead or nicked: the WASTED / BUSTED sting already says so (two hooks at once would clash).
+          if (s.reason !== 'WASTED' && s.reason !== 'BUSTED') ctx.deps.audio.missionCue('failed', this.missions.indexOf(run.def));
         }
         return;
     }

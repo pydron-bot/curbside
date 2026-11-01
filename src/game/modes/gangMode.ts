@@ -24,9 +24,12 @@ import {
   KO_COST,
   afterCopHurt,
   afterMemberDown,
+  createBoombox,
   forgive,
   placeHangouts,
+  stepBoombox,
   standing,
+  type Boombox,
   type GangDef,
   type Hangout,
   type Standing,
@@ -45,6 +48,8 @@ const BACKUP = 30;
 
 interface Member {
   hangout: Hangout;
+  /** Index of the hangout. */
+  slot: number;
   /** Where they stand (and walk back to after a fight). */
   homeX: number;
   homeZ: number;
@@ -63,13 +68,21 @@ export class GangMode implements Mode {
   private readonly members: Member[] = [];
   /** Seconds toward the next point of a fading grudge, per gang. */
   private readonly carry = new Map<string, number>();
+  /** Each hangout's boombox, and this step's crew there: on the street, in trouble. */
+  private readonly boomboxes: Boombox[];
+  private readonly present: Uint8Array;
+  private readonly trouble: Uint8Array;
 
   constructor(private readonly ctx: ModeCtx) {
     this.hangouts = placeHangouts();
-    for (const h of this.hangouts) {
+    this.boomboxes = this.hangouts.map(() => createBoombox());
+    this.present = new Uint8Array(this.hangouts.length);
+    this.trouble = new Uint8Array(this.hangouts.length);
+    this.hangouts.forEach((h, slot) => {
       h.members.forEach((m, i) => {
         this.members.push({
           hangout: h,
+          slot,
           homeX: m.x,
           homeZ: m.z,
           // One in each crew carries a gun.
@@ -78,7 +91,7 @@ export class GangMode implements Mode {
           ped: null,
         });
       });
-    }
+    });
     const bus = ctx.deps.bus;
     bus.on('pedDown', (e) => {
       if (!e.byPlayer || e.isPlayer || !this.ctx.freeRoam) return;
@@ -110,6 +123,8 @@ export class GangMode implements Mode {
     for (const g of GANGS) this.fade(g, dt);
     const pop = ctx.deps.population;
     const at = ctx.deps.player.position;
+    this.present.fill(0);
+    this.trouble.fill(0);
     for (const m of this.members) {
       if (m.ped && !pop.crowd.includes(m.ped)) m.ped = null;
       if (!m.ped) {
@@ -117,6 +132,8 @@ export class GangMode implements Mode {
         m.ped = this.materialise(m);
       }
       const a = m.ped.agent;
+      this.present[m.slot] = 1;
+      if (a.mode !== 'arrest' && a.mode !== 'walk') this.trouble[m.slot] = 1;
       if (a.mode === 'down' || a.mode === 'flee') continue;
       // A fight over (or a scare passed): back to the corner.
       if (a.mode === 'walk') {
@@ -128,6 +145,16 @@ export class GangMode implements Mode {
         provoke(a, at.x, at.z);
       }
     }
+    for (let i = 0; i < this.hangouts.length; i++) {
+      const change = stepBoombox(this.boomboxes[i], this.present[i] === 1, this.trouble[i] === 1, dt);
+      if (change) this.boombox(i, change);
+    }
+  }
+
+  /** A hangout's boombox started or stopped: audio plays it (simulation emits, presentation subscribes). */
+  private boombox(i: number, change: 'on' | 'off' | 'cut'): void {
+    const h = this.hangouts[i];
+    this.ctx.deps.bus.emit({ type: 'boombox', id: h.id, x: h.x, z: h.z, on: change === 'on', cut: change === 'cut' });
   }
 
   private materialise(m: Member): CrowdPed {
@@ -202,12 +229,15 @@ export class GangMode implements Mode {
     else if (before === 'hostile') this.ctx.notice(`THE ${g.name} HAVE COOLED OFF`, 'progress');
   }
 
-  /** Crews off the street (a Chaos Run, the title). */
+  /** Crews off the street (a Chaos Run, the title), and their music with them. */
   private clear(): void {
     const pop = this.ctx.deps.population;
     for (const m of this.members) {
       if (m.ped && pop.crowd.includes(m.ped)) pop.removePed(m.ped);
       m.ped = null;
+    }
+    for (let i = 0; i < this.boomboxes.length; i++) {
+      if (stepBoombox(this.boomboxes[i], false, false, 0)) this.boombox(i, 'off');
     }
   }
 

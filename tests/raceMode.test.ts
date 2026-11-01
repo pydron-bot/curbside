@@ -23,7 +23,7 @@ function setup(stars: number) {
       bus,
       player,
       heat: { wanted },
-      audio: { ui() {} },
+      audio: { ui() {}, countIn() {} },
       rig: { snapTo() {} },
       nitro: new Nitro(bus),
       radar: { setWaypoint() {}, clearWaypoint() {} },

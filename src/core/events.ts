@@ -153,6 +153,13 @@ export type GameEvent =
   | { type: 'stunt'; x: number; z: number; airtime: number; distance: number; spin: number; points: number; label: string }
   /** The player's nitro lit (on) or went out (off), at (x, z). */
   | { type: 'boost'; on: boolean; x: number; z: number }
+  /**
+   * A gang hangout's boombox (`id`: the hangout's) at (x, z) started or
+   * stopped: it plays while the crew stands about calm. `cut`: stopped by
+   * trouble (the crew turned on the player or got knocked about), not just
+   * gone with the crew.
+   */
+  | { type: 'boombox'; id: string; x: number; z: number; on: boolean; cut?: boolean }
   /** The game was paused or resumed (menu, app switch, lost graphics context). */
   | { type: 'pause'; paused: boolean }
   /**

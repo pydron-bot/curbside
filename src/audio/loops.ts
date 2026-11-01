@@ -309,6 +309,44 @@ export class AmbientBed {
   }
 }
 
+/**
+ * The music on foot (streetMusic.ts), between the music player and the music
+ * bus: a lowpass (heard through a car body or a shop door), a pan and a
+ * distance gain. Open, centred and at 1 it's the radio in your ears (in the
+ * car, the chase, the title); a few persistent nodes, no sources.
+ */
+export class StreetChain {
+  readonly v: Voice;
+  /** Where the music player connects. */
+  readonly input: AudioNode;
+  private readonly lp: BiquadFilterNode;
+  private readonly pan: StereoPannerNode | null;
+  private readonly level: GainNode;
+
+  constructor(ctx: BaseAudioContext, bank: NoiseBank, dest: AudioNode, now: number) {
+    const v = (this.v = new Voice(ctx, bank, now, 1));
+    this.lp = v.filter('lowpass', 20000, 0.5);
+    this.level = v.gain(1);
+    this.pan = typeof ctx.createStereoPanner === 'function' ? v.track(ctx.createStereoPanner()) : null;
+    if (this.pan) v.chain(this.lp, this.pan, this.level, v.out);
+    else v.chain(this.lp, this.level, v.out);
+    v.out.connect(dest);
+    this.input = this.lp;
+  }
+
+  /** Steer toward a gain, lowpass and pan, smoothed over `tau` s. */
+  apply(gain: number, cutoff: number, pan: number, tau: number, now: number): void {
+    to(this.level.gain, gain, now, tau);
+    to(this.lp.frequency, clamp(cutoff, 200, 20000), now, tau);
+    if (this.pan) to(this.pan.pan, clamp(pan, -1, 1), now, tau);
+  }
+
+  /** Back to the radio in your ears: open, centred, at 1. */
+  open(now: number, tau: number): void {
+    this.apply(1, 20000, 0, tau, now);
+  }
+}
+
 export type SirenStyle = 'twoTone' | 'wail' | 'yelp';
 
 const SIREN_STYLES: Record<SirenStyle, { lfo: OscillatorType; rate: number; base: number; depth: number }> = {

@@ -74,11 +74,11 @@ export class FrenzyMode implements Mode {
         if (n !== this.shownCount && n > 0) {
           this.shownCount = n;
           ctx.ui.banner(String(n), 'count', run.def.title, 0.9);
-          ctx.deps.audio.ui('countdown');
+          ctx.deps.audio.countIn(n);
         }
       } else if (before === 'countdown' && phase === 'live') {
         ctx.ui.banner('GO!', 'go', run.def.title, 0.9);
-        ctx.deps.audio.ui('go');
+        ctx.deps.audio.countIn(0);
         const gift = run.def.gift;
         if (gift) {
           ctx.deps.player.arsenal.pickUp(gift);
