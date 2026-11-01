@@ -774,7 +774,7 @@ Playwright isn't a game dependency: run with
   `MAJOR` (1 the major spelling, 0 minor; unset: minor for `KEY`, and
   `count-in-radio` follows the radio's song, as the game does). The major
   spellings are as loud as the minor (in D, 2026-11-01: count-in −21.7
-  dBFS, mission start −18.8, failed −21.2; RMS within 0.1 dB, peaks within
+  dBFS, mission start −18.8, failed −20.7; RMS within 0.1 dB, peaks within
   0.6); over INSERT COIN `count-in-radio` is −22.2 either way, with no F
   rubbing against its F# any more.
   Baseline 2026-11-01 (raw, key A, seeded): the theme −16.8 dBFS overall
@@ -783,7 +783,8 @@ Playwright isn't a game dependency: run with
   (the old one −13.5), BUSTED −16.6 (old −16.9 to −18.4), peaking at +1.2
   and +1.5 dBFS from their slam and clang layers (the old ones +3.5 to +4.9
   and +1.6 to +2.1; the limiter follows in the game); mission start −18.8,
-  passed −19.4, failed −21.2 (peaks −5.7, −4.7, −7.7); the count's hits
+  passed −19.4, failed −20.7 now its landing tonic holds (peaks −5.7,
+  −4.7, −7.7); the count's hits
   peak at −10, −8 and −5.5 and GO at −4.7.
 
 - **`reactive.mjs <out-dir> [chase|on-foot …]`**: the music that reacts
@@ -982,8 +983,10 @@ only creates it, feeds it one mutable `AudioFrame` per frame and forwards pause.
   drumless menu tier). Drums play
   from a kit rendered per station sound (`drumKit.ts`: layered, saturated
   hits, 808-style metal hats, a four-hand clap, up to three takes each in
-  round robin), rendered a take at a time between frames when a station is
-  first heard; the live drum voices stand in until each part is in. The
+  round robin, one crash take shared by every kit), rendered a take at a
+  time: behind the title in idle time (`MusicPlayer.warmKits`), or between
+  frames when a station is first heard before that; the live drum voices
+  stand in until each part is in. The
   NOW PLAYING card shows the song and artist (`audio.song`,
   `audio.onSongChange`) and drops in for each new song while you drive.
 - **Station instruments.** Each station's `StationSound` picks its

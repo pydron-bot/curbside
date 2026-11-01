@@ -213,13 +213,31 @@ still get the offline shell.
    `beforeinstallprompt`; iOS keeps its Add to Home Screen tip). The
    manifest keeps no explicit `id` (it defaults to the start URL, which is
    what installed copies already have).
-7. **Music, next steps** (2026-10-31: the first one, better sound and song
-   structure, is done: rendered drum kit, four songs per station through a
-   song form, song titles on the card). Ideas Derek has kept for later, in
-   BACKLOG.md *Music*: new stations [`music-stations`], a living radio (DJ,
-   idents, ads) [`music-radio-life`], chase music and music on foot
-   [`music-reactive`], themes for missions and screens [`music-themes`],
-   recorded tracks [`music-recorded`].
+7. **Music: done 2026-11-01** on `claude/music-7` (README *Audio*). Four
+   new stations, each with four songs and their own instruments: SIDEWAYS
+   808 (phonk: cowbell, sliding 808), GETAWAY 104.3 (funk / disco: slap,
+   wah), DUBWISE 88.8 (dub: one drop, skanks, tape echo), INSERT COIN
+   (chiptune; the one major-key station) [`music-stations`]. A title theme
+   with a hand-written hook, and stings built on it: WASTED, BUSTED,
+   mission start / passed / failed, a 3-2-1-GO count-in that drops the
+   radio in on a chorus; stings follow the song's key and mode
+   [`music-themes`]. A chase score from 3 stars that calms down when the
+   cops are lost (R / a tap on its card skips it); on foot the car you left
+   plays on where it stands, and you hear about one parked car in three,
+   shopfronts (stations by district) and the VIPERS' boombox (phonk, cut
+   with a scratch when they turn on you) faintly as you pass
+   [`music-reactive`]. `tools/tune/music.mjs`, `stings.mjs` and
+   `reactive.mjs` render it all offline to MP3 (seeded, repeatable).
+   Reviewed adversarially (36 verified findings, all fixed, each with a
+   test); 955 tests; smoke test passes. **For the device pass:** listen to
+   every station, the theme, the chase and the stings on the phone (nothing
+   has been heard by a person yet); walk NEON MILE past a hangout; check
+   the levels on foot (cars and shops sit ~14 dB under the car radio, the
+   boombox ~4 dB) and that the chase card fits; watch the Perf overlay
+   while walking past shops (kits now warm behind the title; ~7 MB of drum
+   buffers per session). Still kept for later: a living radio (DJ, idents,
+   ads) [`music-radio-life`], recorded tracks [`music-recorded`], a police
+   scanner station (with [`police-chatter`]).
 8. **Ideas:** district names + an area card first [`districts-landmarks`
    phase A], since chatter and gang turf need them; then police radio
    chatter [`police-chatter`]; missions after the eighth [`missions-store`]: driven
