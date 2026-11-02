@@ -131,6 +131,12 @@ export interface CityLifeDeps {
   view(out: Rect): Rect;
   /** In play (false behind the title: the city still lives, nothing waits on the player). */
   playing(): boolean;
+  /**
+   * Observe mode (ui/observeMode.ts): nobody's playing (playing() is false,
+   * nothing waits on the player) but the city lives as in play: no title,
+   * tutorial or activity holds, and people gather (live).
+   */
+  observing?(): boolean;
   /** An activity that holds the busy scenes off is on (cityScenes activityHolds: a timed race, a mission that asks). */
   activity(): boolean;
   /** The player's wanted stars. */
@@ -356,6 +362,11 @@ export class CityLife {
     return this.d.view(this.viewRect);
   }
 
+  /** The city lives as in play: in play, or watched in Observe mode (scenes start and people gather unheld). */
+  get live(): boolean {
+    return this.d.playing() || (this.d.observing?.() ?? false);
+  }
+
   /** One sim step: every scene, armed people's dropped guns, the player picking them up. */
   step(dt: number): void {
     const now = this.now;
@@ -456,8 +467,8 @@ export class CityLife {
     w.activity = this.d.activity();
     w.stars = w.playing ? this.d.stars() : 0;
     w.tutorial = this.d.tutorial();
-    if (kind === this.featured) {
-      // Directed (the title's show, a story job's scene): no holds (a first run's tutorial included), nor stars.
+    if (kind === this.featured || (!w.playing && this.live)) {
+      // Directed (the title's show, a story job's scene), or watched (Observe): no holds (a first run's tutorial included), nor stars.
       w.playing = true;
       w.activity = w.tutorial = false;
       w.stars = 0;
@@ -478,9 +489,9 @@ export class CityLife {
     return n;
   }
 
-  /** Should `kind`'s people come and gather (queues, crowds)? In play, or the title's show is on it. */
+  /** Should `kind`'s people come and gather (queues, crowds)? In play or Observe, or the title's show is on it. */
   lively(kind: string): boolean {
-    return this.d.playing() || kind === this.featured;
+    return this.live || kind === this.featured;
   }
 
   /** Is (x, z) close enough to the player for `kind` to start there? */

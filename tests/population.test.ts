@@ -262,6 +262,23 @@ describe('population: density and placement', () => {
     }
   });
 
+  it("a wide view with a smaller spawn shield (Observe's high camera) still fills the streets, never inside the shield", () => {
+    const { pop, vehicles } = setup(13);
+    // A camera ~110 m up on a phone: nearly all the crowd ring is inside the view.
+    const view = viewAround(9.5, 9.5, 100, 48);
+    pop.maintain(ctx(9.5, 9.5, { view, seed: true }));
+    expect(pop.crowd.length).toBeLessThan(CROWD_COUNT / 3);
+    const shield = viewAround(9.5, 9.5, 58, 28);
+    pop.maintain(ctx(9.5, 9.5, { view, spawnView: shield, seed: true }));
+    expect(pop.crowd.length).toBe(CROWD_COUNT);
+    for (const c of pop.crowd) expect(inRect(c.agent.s.x, c.agent.s.z, shield, VIEW_MARGIN - 1)).toBe(false);
+    for (const v of vehicles) expect(inRect(v.sim.x, v.sim.z, shield, VIEW_MARGIN)).toBe(false);
+    // Nobody inside the real view is taken away for being out of the shield.
+    const inView = pop.crowd.filter((c) => inRect(c.agent.s.x, c.agent.s.z, view, 0)).length;
+    pop.maintain(ctx(9.5, 9.5, { view, spawnView: shield }));
+    expect(pop.crowd.filter((c) => inRect(c.agent.s.x, c.agent.s.z, view, 0)).length).toBeGreaterThanOrEqual(inView);
+  });
+
   it('only despawns peds that are far away and off-screen', () => {
     const { pop } = setup(13);
     pop.maintain(ctx(0, 0, { seed: true }));

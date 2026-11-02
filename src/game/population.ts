@@ -236,6 +236,12 @@ export interface MaintainContext {
   vz: number;
   /** Ground rectangle the camera sees: nothing spawns or vanishes inside it. */
   view: Rect;
+  /**
+   * Where nothing spawns, if not all of `view` (Observe mode's wide zoom,
+   * where the spawn rings lie inside the view: game/observe.ts spawnShield).
+   * Nothing vanishes inside `view` either way.
+   */
+  spawnView?: Rect;
   /** Never recycled: the player's car and the one they just left. */
   keep: ReadonlyArray<Vehicle | null>;
   /** Quality-tier multipliers on TRAFFIC_COUNT / CROWD_COUNT. */
@@ -534,7 +540,7 @@ export class Population {
       if (!spawned) continue;
       const d = len2(spawned.x - ctx.x, spawned.z - ctx.z);
       if (d < lo || d > hi) continue;
-      if (inRect(spawned.x, spawned.z, ctx.view, VIEW_MARGIN)) continue;
+      if (inRect(spawned.x, spawned.z, ctx.spawnView ?? ctx.view, VIEW_MARGIN)) continue;
       if (this.crowded(spawned.x, spawned.z, v)) continue;
       Object.assign(v.sim, createVehicleState(spawned.x, spawned.z, spawned.heading));
       Object.assign(v.prev, v.sim);
@@ -622,7 +628,7 @@ export class Population {
     const d = len2(ax - ctx.x, az - ctx.z);
     if (d < lo - 2 || d > hi + 4) return;
     // The group spreads up to ~2.5 m either way.
-    if (inRect(ax, az, ctx.view, VIEW_MARGIN + 3)) return;
+    if (inRect(ax, az, ctx.spawnView ?? ctx.view, VIEW_MARGIN + 3)) return;
     if (ctx.spawnWeight && this.rand() > ctx.spawnWeight(ax, az)) return;
 
     const [cmin, cmax] = CROWD_CLUSTER;

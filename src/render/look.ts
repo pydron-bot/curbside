@@ -83,6 +83,8 @@ export class Look {
    * this rather than renderer.toneMappingExposure.
    */
   exposureBoost = 1;
+  /** Metres added to the fog's near and far each frame (Observe mode's high camera; 0 in play). */
+  fogPush = 0;
 
   constructor(
     private readonly renderer: WebGLRenderer,
@@ -137,6 +139,10 @@ export class Look {
     worldUniforms.uTime.value += dt;
     const sky = this.lighting.apply(this.time.hour);
     this.renderer.toneMappingExposure *= this.exposureBoost;
+    // Observe mode's wide zoom: the haze starts as far over the street as it does from play height.
+    const fog = this.lighting.fog;
+    fog.near += this.fogPush;
+    fog.far += this.fogPush;
     this.sunShadow.setStrength(sky.shadowStrength);
     this.cars.envIntensity = sky.envIntensity;
     this.post.setNight(sky.night);

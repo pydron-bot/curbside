@@ -69,7 +69,7 @@ export class Fights implements Scene {
     const life = this.life;
     if ((this.scan -= dt) <= 0) {
       this.scan = 0.2;
-      if (life.d.playing() && life.due('fight', this.fights.length)) this.lookForBarges();
+      if (life.live && life.due('fight', this.fights.length)) this.lookForBarges();
     }
     for (let i = this.fights.length - 1; i >= 0; i--) {
       const f = this.fights[i];
@@ -309,7 +309,7 @@ export class Fights implements Scene {
   /** A stray NPC round hit someone at (x, z): if they've a temper (or one in three), they go for whoever fired it, if that's a passer-by. */
   private strayHit(x: number, z: number, fromX: number, fromZ: number): void {
     const life = this.life;
-    if (!life.d.playing() || !life.due('fight', this.fights.length)) return;
+    if (!life.live || !life.due('fight', this.fights.length)) return;
     let victim: CrowdPed | null = null;
     let shooter: CrowdPed | null = null;
     for (const c of life.d.population.crowd) {
