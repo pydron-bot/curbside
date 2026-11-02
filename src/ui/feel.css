@@ -108,6 +108,38 @@ body[data-device='touch'][data-hand='left'][data-mode='car'] .hud-status:not(.in
   height: 34px;
 }
 
+/* A borrowed service vehicle's tool on the same button (V2-09): its icon, a small label under it. */
+.btn-carfire .tool-label {
+  display: none;
+}
+
+.btn-carfire.tool {
+  padding: 8px;
+}
+
+.btn-carfire.tool .fire-icon {
+  width: 28px;
+  height: 28px;
+}
+
+.btn-carfire.tool .tool-label {
+  display: block;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+
+.btn-carfire[data-tool='hose'] {
+  --accent: #4fc3ff;
+}
+
+.btn-carfire[data-tool='chime'] {
+  --accent: #ff9ad5;
+}
+
+.btn-carfire[data-tool='winch'] {
+  --accent: #ffc63a;
+}
+
 .btn-nitro {
   --accent: #2ee6ff;
   right: calc(var(--edge-r) + var(--pad-w) + 20px);

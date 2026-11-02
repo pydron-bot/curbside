@@ -161,7 +161,7 @@ export class DoubleParking implements Scene {
     if (!ai || ai.mood !== 'calm' || ai.phase !== 'approach' || ai.overtaking > 0 || ai.yielding > 0) return false;
     if (v.scene || v.police || v.pursuit || v.emergency || v.parked || v.damage.burning) return false;
     if (v.ambient && v !== this.pending) return false;
-    if (v === life.d.player.driving || life.d.keep(v)) return false;
+    if (v === life.d.player.driving || life.keeps(v)) return false;
     const d = life.distance(v.sim.x, v.sim.z);
     return d >= RANGE[0] && d <= RANGE[1];
   }

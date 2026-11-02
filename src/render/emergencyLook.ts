@@ -13,8 +13,10 @@
 import type { CityLife } from '../game/cityLife';
 import { FireCrews } from '../game/scenes/fireCrews';
 import { CarAlarms } from '../game/scenes/alarms';
+import { ServiceTools } from '../game/scenes/serviceTools';
 import { Tows } from '../game/scenes/tows';
 import { alarmLit } from '../systems/emergency';
+import { HOSE_NOZZLE_Y } from '../systems/serviceTools';
 import type { Rect } from '../world/city';
 import { near, type CityLookPart } from './cityLifeLook';
 import type { Effects } from './effects';
@@ -120,12 +122,13 @@ function flame(fx: Effects, x: number, z: number, y: number, size: number): void
 }
 
 /**
- * `debt` water drops' worth from a firefighter at (x, z) in a lob onto
- * (tx, ty, tz), with steam where it lands; returns the debt left over.
+ * `debt` water drops' worth from a firefighter at (x, z) (a nozzle `y0`
+ * up) in a lob onto (tx, ty, tz), with steam where it lands; returns the
+ * debt left over.
  * Each drop starts somewhere in the last `dt` of its flight, so a slow
  * frame still draws a stream, not a clump at the nozzle.
  */
-function jet(fx: Effects, x: number, z: number, tx: number, tz: number, ty: number, debt: number, dt: number, scale: number): number {
+function jet(fx: Effects, x: number, z: number, tx: number, tz: number, ty: number, debt: number, dt: number, scale: number, y0 = NOZZLE_Y, speed = JET_SPEED, steam = true): number {
   const pool = fx.soft;
   const dx = tx - x;
   const dz = tz - z;
@@ -133,8 +136,8 @@ function jet(fx: Effects, x: number, z: number, tx: number, tz: number, ty: numb
   // From the nozzle half a step ahead of them; flight time from the distance, lift to land at ty.
   const ox = x + (dx / d) * 0.5;
   const oz = z + (dz / d) * 0.5;
-  const t = Math.max(0.15, (d - 0.5) / JET_SPEED);
-  const vy = (ty - NOZZLE_Y) / t + (GRAVITY * t) / 2;
+  const t = Math.max(0.15, (d - 0.5) / speed);
+  const vy = (ty - y0) / t + (GRAVITY * t) / 2;
   const vx = ((dx / d) * (d - 0.5)) / t;
   const vz = ((dz / d) * (d - 0.5)) / t;
   while (debt >= 1) {
@@ -142,7 +145,7 @@ function jet(fx: Effects, x: number, z: number, tx: number, tz: number, ty: numb
     const j = (Math.random() - 0.5) * 0.08;
     const a = Math.random() * Math.min(dt, t * 0.8);
     const dvy = vy + (Math.random() - 0.5) * 0.6;
-    const i = pool.spawn(ox + vx * a, NOZZLE_Y + (dvy - (GRAVITY * a) / 2) * a, oz + vz * a, vx - vz * j, dvy - GRAVITY * a, vz + vx * j, t * (0.92 + Math.random() * 0.16) - a, 0.45, 0.9, RAMP.flat, FRAME.dot);
+    const i = pool.spawn(ox + vx * a, y0 + (dvy - (GRAVITY * a) / 2) * a, oz + vz * a, vx - vz * j, dvy - GRAVITY * a, vz + vx * j, t * (0.92 + Math.random() * 0.16) - a, 0.45, 0.9, RAMP.flat, FRAME.dot);
     if (i < 0) return 0;
     pool.r[i] = 0.86;
     pool.g[i] = 0.94;
@@ -154,8 +157,57 @@ function jet(fx: Effects, x: number, z: number, tx: number, tz: number, ty: numb
     pool.flags[i] = FLAG.stretch;
     pool.stretch[i] = 0.07;
   }
-  if (Math.random() < dt * STEAM * scale) fx.puff(tx + (Math.random() - 0.5) * 1.6, ty, tz + (Math.random() - 0.5) * 1.6, 0.92, 0.8, 3, 0.4, 0, 1.4, 0, 1.6);
+  // Steam off a fire; off the road, a lower, quicker splash.
+  if (Math.random() < dt * STEAM * scale) {
+    if (steam) fx.puff(tx + (Math.random() - 0.5) * 1.6, ty, tz + (Math.random() - 0.5) * 1.6, 0.92, 0.8, 3, 0.4, 0, 1.4, 0, 1.6);
+    else fx.puff(tx + (Math.random() - 0.5) * 1.2, 0.2, tz + (Math.random() - 0.5) * 1.2, 0.95, 0.5, 1.6, 0.3, 0, 0.8, 0, 0.6);
+  }
   return debt;
+}
+
+/** The borrowed fire truck's monitor: water drops a second, and how fast they leave it, m/s. */
+const MONITOR_WATER = 64;
+const MONITOR_SPEED = 17;
+
+/**
+ * The player's borrowed service vehicles (game/scenes/serviceTools.ts): the
+ * fire truck's monitor jet (water drops in the soft pool, steam on a fire,
+ * a splash on the road) and the tow truck's amber beacon while a car's on
+ * its hook. Pools and the glow batch only.
+ */
+export function toolsLook(life: CityLife): CityLookPart {
+  const tools = ServiceTools.of(life);
+  if (!tools) return {};
+  let debt = 0;
+  let time = 0;
+  return {
+    update(dt: number, view: Rect, fx: Effects): void {
+      time += dt;
+      const n = tools.nozzle;
+      if (!tools.hosing || !near(view, n.x, n.z, MARGIN)) {
+        debt = 0;
+        return;
+      }
+      const len = tools.jetLength;
+      const tx = n.x + tools.jetX * len;
+      const tz = n.z + tools.jetZ * len;
+      debt = jet(fx, n.x, n.z, tx, tz, tools.jetOnFire ? 0.9 : 0.15, debt + dt * MONITOR_WATER * fx.scale, dt, fx.scale, HOSE_NOZZLE_Y, MONITOR_SPEED, tools.jetOnFire);
+    },
+    draw(glows: GlowSprites, view: Rect): void {
+      const t = tools.truck;
+      if (!t || !tools.hooked) return;
+      const p = t.mesh.root.position;
+      if (!near(view, p.x, p.z, 4)) return;
+      const h = t.sim.heading;
+      const fx = Math.sin(h);
+      const fz = Math.cos(h);
+      const turn = (time * 3) % 1;
+      for (let side = -1; side <= 1; side += 2) {
+        const k = (side < 0) === turn < 0.5 ? 1.8 : 0.25;
+        glows.addFlat(p.x + fx * 1.6 + fz * side * 0.45, 2.75, p.z + fz * 1.6 - fx * side * 0.45, h, 1.5, 1.5, 1.6 * k, 0.75 * k, 0.05 * k, GLOW.disc);
+      }
+    },
+  };
 }
 
 /** A tow truck's amber beacon, turning while it's on a job (on its way, hooking, towing). */

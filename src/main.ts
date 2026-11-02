@@ -55,6 +55,7 @@ import { fullRatePed, knockDown, provoke, resumeWalking, scare, spawnPed, stepCr
 import { LOD_FAR, LOD_NEAR, SimLod, newSimClock } from './systems/simLod';
 import { holdsFire } from './systems/police';
 import { WEAPONS, WEAPON_ORDER, type WeaponKind } from './systems/weapons';
+import { toolFor } from './systems/serviceTools';
 import { PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
   PLAYER_CRASH_SHARE,
@@ -124,7 +125,7 @@ import { incidentsLook } from './render/incidentsLook';
 import { CityMood } from './game/cityMood';
 import { atmosphereLook } from './render/atmosphereLook';
 import { peopleLook } from './render/peopleLook';
-import { alarmLook, fireLook, towLook } from './render/emergencyLook';
+import { alarmLook, fireLook, toolsLook, towLook } from './render/emergencyLook';
 import { RaceLook, RoadsideLook } from './render/trafficLook';
 import { mountRadioToast } from './ui/radioToast';
 import { publicUrl } from './core/paths';
@@ -351,6 +352,9 @@ function maintainPopulation(seed = false, parked = seed) {
   keepVehicles[0] = player.driving;
   keepVehicles[1] = player.lastDriven;
   keepVehicles.length = 2;
+  // The car on a borrowed tow truck's hook isn't upkeep's to recycle.
+  const hooked = towHooked();
+  if (hooked) keepVehicles.push(hooked);
   for (const v of activityCars) keepVehicles.push(v);
   population.maintain({
     x: at.x,
@@ -372,6 +376,8 @@ function maintainPopulation(seed = false, parked = seed) {
 const restoreProp = (k: KnockableItem) => look.props.restore(k.id);
 /** The city's parked cars are topped up with the rest (set once CityLife exists, below). */
 let maintainCity: (seed: boolean) => void = () => {};
+/** The car on a borrowed tow truck's hook (set once CityLife exists, below). */
+let towHooked: () => Vehicle | null = () => null;
 maintainPopulation(true);
 
 // --- Score ---
@@ -487,6 +493,7 @@ const cityLife = new CityLife({
   },
 });
 maintainCity = (seed) => cityLife.maintain(seed);
+towHooked = () => cityLife.tools.hooked;
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
 look.addGlowSource((g, view) => cityLook.draw(g, view));
 cityLook.add(atmosphereLook(cityLife));
@@ -494,6 +501,7 @@ cityLook.add(peopleLook(cityLife));
 cityLook.add(fireLook(cityLife));
 cityLook.add(towLook(cityLife));
 cityLook.add(alarmLook(cityLife));
+cityLook.add(toolsLook(cityLife));
 cityLook.add(new RaceLook(cityLife.races));
 cityLook.add(new RoadsideLook(cityLife.accidents, cityLife.doubleParking));
 cityLook.add(incidentsLook(cityLife));
@@ -766,6 +774,8 @@ function simulate(dt: number) {
   const driving = player.driving;
   // A race or Chaos Run 3-2-1 holds the car on the line.
   const playerControls = driving && !progress.holdControls ? input.readVehicle(driving.sim, dt) : NO_CONTROLS;
+  // Towing on a borrowed tow truck: held to the tow speed, no nitro.
+  if (playerControls !== NO_CONTROLS) cityLife.tools.limit(playerControls);
   // Nitro burns only while held, lit and in the tank.
   const boosting = nitro.step(dt, driving !== null && playerControls.boost === true && !attract.active, driving ? driving.sim : null);
   // NO_CONTROLS is shared: only the frame's own read gets the boost flag.
@@ -1200,13 +1210,16 @@ function frame(now: number) {
   const pressed = input.consumePunch();
   const cycle = input.consumeCycle();
   const acted = input.consumeAction();
+  // A borrowed service vehicle's tool takes the fire slot (hose, chime, winch).
+  const tool = control && player.driving ? toolFor(player.driving.archetype) : null;
+  cityLife.tools.control(tool !== null && pressed, tool !== null && input.fireHeld, tool !== null ? aiming : null);
   if (control) {
     // In a car, only what fires out of a window is on offer.
     if (cycle !== 0) player.arsenal.cycle(cycle, player.driving ? driveByOnly : undefined);
     const gun = player.arsenal.current;
     if (player.driving) {
       const auto = gun !== null && WEAPONS[gun].driveBy && WEAPONS[gun].automatic;
-      if (pressed || (auto && input.fireHeld)) combat.driveBy(aiming);
+      if (!tool && (pressed || (auto && input.fireHeld))) combat.driveBy(aiming);
       combat.updateAim(false, aimInput);
     } else if (player.ready) {
       aimInput.heading = aimHeadingNow;
@@ -1358,11 +1371,12 @@ function updateHud(frameSeconds: number) {
   hudFrame.nearCar = nearCar ? (nearCar.ai ? 'jack' : 'enter') : null;
   hudFrame.nearBike = nearCar !== null && isBike(nearCar.archetype);
   hudFrame.mouseAim = !v && !attract.active && input.mouseAimLive();
-  hudFrame.driveBy = v !== null && gun !== null && WEAPONS[gun].driveBy;
+  const tool = v ? toolFor(v.archetype) : null;
+  hudFrame.driveBy = v !== null && tool === null && gun !== null && WEAPONS[gun].driveBy;
   hudFrame.cheated = player.tainted;
   hud.update(frameSeconds, hudFrame);
   combatHud.update(player.armour, nitro.charge, nitro.boosting, nitro.charge >= NITRO_MIN);
-  carButtons.update(v ? (gun && WEAPONS[gun].driveBy ? gun : player.arsenal.driveByGun()) : null, nitro.charge, nitro.charge >= NITRO_MIN || nitro.boosting);
+  carButtons.update(v ? (gun && WEAPONS[gun].driveBy ? gun : player.arsenal.driveByGun()) : null, nitro.charge, nitro.charge >= NITRO_MIN || nitro.boosting, tool);
   touch.setWeapon(gun, gun !== null || ownsGun());
   touch.setMode(v ? 'car' : 'foot', nearCar !== null);
 }
@@ -1405,6 +1419,7 @@ const labels = new LabelsOverlay(app, {
   collect: (board) => {
     progress.missions.describe(board);
     progress.taxi.describe(board);
+    progress.service.describe(board);
     cityLife.describe(board);
     labelWorld.now = simTime;
     labelWorld.driving = player.driving;
@@ -1446,6 +1461,7 @@ const progress = new ProgressDirector({
   haptics,
   scene,
   pinned: activityCars,
+  tools: cityLife.tools,
   playing: () => !attract.active,
   enterTitle: () => enterTitle(),
 });

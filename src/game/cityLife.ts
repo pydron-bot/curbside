@@ -77,6 +77,7 @@ import { Pavement } from './scenes/pavement';
 import { Vendors } from './scenes/vendors';
 import { Witnesses } from './scenes/witnesses';
 import { FireCrews } from './scenes/fireCrews';
+import { ServiceTools } from './scenes/serviceTools';
 import { Tows } from './scenes/tows';
 import { CarAlarms } from './scenes/alarms';
 import { Chases } from './scenes/chases';
@@ -239,6 +240,8 @@ export class CityLife {
   readonly races: StreetRaces;
   readonly accidents: Accidents;
   readonly doubleParking: DoubleParking;
+  /** The player's borrowed service vehicle's tool: hose, chime, winch (V2-09). */
+  readonly tools: ServiceTools;
   readonly scenes: Scene[] = [];
   /** Each scene's name for diagnostics (scenes order). */
   readonly sceneLabels: string[] = [];
@@ -312,6 +315,7 @@ export class CityLife {
     this.add(new Congas(this, fights));
     this.add(new FilmShoots(this));
     this.add(new Pavement(this), 'pavement');
+    this.tools = this.add(new ServiceTools(this), 'tools');
     const kinds: string[] = [];
     for (let i = 0; i < this.scenes.length; i++) {
       if (!this.scenes[i].subject) continue;
@@ -574,6 +578,14 @@ export class CityLife {
     if (!v.damage.wrecked && v !== this.d.player.driving && v.ai) {
       v.ai = driverFor(v.sim, this.d.rand);
     }
+  }
+
+  /**
+   * Cars no scene may take: an activity's (d.keep), and the guard's: the
+   * player's borrowed service vehicle and the car on its hook.
+   */
+  keeps(v: Vehicle): boolean {
+    return this.d.keep(v) || this.tools.guards(v);
   }
 
   /** Has a scene lost `v` (taken by the player, its driver out, wrecked, burning, recycled)? */

@@ -88,7 +88,7 @@ export class ServiceRun implements SceneDriver {
       const p = life.d.player;
       for (const o of life.d.vehicles) {
         if (o.archetype !== spec.archetype || !o.ai || o.scene || o.police || o.pursuit || o === p.driving || o.damage.burning) continue;
-        if (life.d.keep(o) || len2(o.sim.x - x, o.sim.z - z) > range) continue;
+        if (life.keeps(o) || len2(o.sim.x - x, o.sim.z - z) > range) continue;
         v = o;
         break;
       }
