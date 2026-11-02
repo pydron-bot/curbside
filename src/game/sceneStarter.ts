@@ -272,11 +272,11 @@ export function storyScenes(life: CityLife, starter: SceneStarter): SceneHost {
     start(id, x, z) {
       const at = life.d.focus();
       const was = life.featured;
-      kind = SCENE_KINDS[id];
-      life.featured = kind;
+      life.featured = SCENE_KINDS[id];
       starter.start(id, x, z, Math.atan2(at.vx, at.vz), life.d.player.driving);
-      // Didn't start: whatever was featured (an earlier scene of the job's) stays so.
-      if (!starter.ok) life.featured = kind = was;
+      // Didn't start: whatever was featured stays so, and stays whoever's it was (not ours to unfeature unless it was already).
+      if (!starter.ok) life.featured = was;
+      else kind = life.featured;
       return starter.ok;
     },
     unfeature() {

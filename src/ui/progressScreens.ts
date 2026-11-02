@@ -145,10 +145,6 @@ export class ResultsCard implements Panel {
   }
 }
 
-/**
- * A phone call or a mission debrief: who's talking, a few lines, the
- * payout, and a button to carry on. Shown over the frozen game.
- */
 /** Speakers with a badge colour of their own (progress.css .dlg-line[data-who]); anyone else gets Vex's pink. */
 export const BADGES: ReadonlyArray<readonly [RegExp, string]> = [
   [/TUNA/, 'tuna'],
@@ -165,6 +161,10 @@ export function badgeFor(name: string): string {
   return 'vex';
 }
 
+/**
+ * A phone call or a mission debrief: who's talking, a few lines, the
+ * payout, and a button to carry on. Shown over the frozen game.
+ */
 export class DialogueCard implements Panel {
   readonly root: HTMLElement;
   readonly nav: MenuNav;

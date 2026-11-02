@@ -6,7 +6,7 @@ import { MissionMode } from '../src/game/modes/missionMode';
 import { Player } from '../src/game/player';
 import { Progress } from '../src/game/progress';
 import { defaultSave } from '../src/game/progressSave';
-import { storyScenes, type SceneStarter } from '../src/game/sceneStarter';
+import { SCENE_KINDS, storyScenes, type SceneStarter } from '../src/game/sceneStarter';
 import type { DialogueCard } from '../src/ui/progressScreens';
 import { generateCity } from '../src/world/city';
 import { random } from './helpers';
@@ -43,6 +43,11 @@ describe('a featured scene', () => {
   // A kind held by everything (as the loud scenes were).
   life.clock.define('loud', { every: [1, 1], cap: 1, first: 0, hold: ['title', 'activity', 'wanted', 'tutorial'] });
 
+  it("each scene a job can start features a kind the city's clock has (else nothing would be lifted)", () => {
+    const kinds = life.clock.kinds;
+    for (const [id, kind] of Object.entries(SCENE_KINDS)) expect(kinds, id).toContain(kind);
+  });
+
   it('survives the activity hold at 3 stars (a story job featuring it), and only it does', () => {
     life.featured = null;
     expect(life.due('loud', 0)).toBe(false);
@@ -75,6 +80,12 @@ describe('a featured scene', () => {
     // The title's show featuring something else is left alone.
     life.featured = 'bus';
     host.unfeature();
+    expect(life.featured).toBe('bus');
+    // Nor is it taken over when a scene of the job's fails to start while it's featured.
+    const fresh = storyScenes(life, starter);
+    expect(fresh.start('fight', 0, 0)).toBe(false);
+    expect(life.featured).toBe('bus');
+    fresh.unfeature();
     expect(life.featured).toBe('bus');
   });
 });
