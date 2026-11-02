@@ -252,8 +252,8 @@ items wait for everything else to be green.
   pursuit, a bus through a queue, a rocket into a fire truck mid-hose. The
   have-a-go moments from V2-03 use the same stamp. About 12 original names.
   Bystanders in view switch to the witnesses' film pose, so the street
-  visibly reacts (reusing people already on the street, not adding any). Off
-  in Chaos Run.
+  visibly reacts (reusing people already on the street, not adding any). On in Chaos Run
+  too (the owner gave it the living city).
 - **Done when:** detector tests (windows, cooldown, priority); smoke
   screenshots at 852×340 show no overlap with stars, radar or activity card.
 

@@ -85,8 +85,8 @@ async function play(page, label) {
   return r;
 }
 
-/** HUD pieces a stamp must never cover. */
-const STAMP_CLEAR_OF = ['#wanted', '#radar', '#activity', '#score', '.hud-status', '#act-banner'];
+/** HUD pieces a stamp must never cover (the touch buttons too: it once sat on NOS under two cards). */
+const STAMP_CLEAR_OF = ['#wanted', '#radar', '#activity', '#score', '.hud-status', '#act-banner', '.tbtn'];
 
 /**
  * A named-mayhem stamp (the longest label, with stars up) held mid-show:

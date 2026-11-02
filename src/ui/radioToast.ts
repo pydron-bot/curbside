@@ -13,6 +13,8 @@ import type { Station } from '../audio/music/stations';
 import { events } from '../core/events';
 
 const SHOW_MS = 2600;
+/** A stamp's whole show, ms (ui/stamp.css's 1.9 s animation). */
+const STAMP_MS = 1900;
 
 export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(station?: Station): void } {
   const el = document.createElement('div');
@@ -37,8 +39,14 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
   const chaseShown = () => el.dataset.station === CHASE_STATION.id;
   let hideTimer = 0;
   let goneTimer = 0;
+  // A mayhem stamp needs the space under the stars more than the station name
+  // does (on a phone under an activity card, the card pushed it onto NOS):
+  // the card leaves as a stamp lands and waits for its show to end.
+  let stampEnds = 0;
+  let waitTimer = 0;
 
   const hide = () => {
+    window.clearTimeout(waitTimer);
     window.clearTimeout(hideTimer);
     el.classList.remove('in');
     goneTimer = window.setTimeout(() => (el.hidden = true), 400);
@@ -46,6 +54,12 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
 
   /** The radio's card (`station`, or the car radio's), or the chase's while it plays and no station is asked for. */
   const show = (station?: Station) => {
+    const wait = stampEnds - performance.now();
+    if (wait > 0) {
+      window.clearTimeout(waitTimer);
+      waitTimer = window.setTimeout(() => show(station), wait);
+      return;
+    }
     const chase = !station && audio.playingScore;
     const s = chase ? CHASE_STATION : (station ?? audio.station);
     hint.textContent = `NOW PLAYING · ${chase ? back : tune}`;
@@ -81,6 +95,10 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
     show();
   });
   events.on('exitVehicle', () => (inCar = false));
+  events.on('stamp', () => {
+    stampEnds = performance.now() + STAMP_MS;
+    hide();
+  });
   el.addEventListener('pointerdown', (e) => {
     e.stopPropagation();
     audio.nextStation();
