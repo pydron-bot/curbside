@@ -1,7 +1,7 @@
 import './moment.css';
 import type { EventBus } from '../core/events';
-import { BestMoment, momentCaption, momentFileName, type MomentCaption } from '../systems/bestMoment';
-import type { StampTone } from '../systems/stamps';
+import { BestMoment, beats, momentCaption, momentFileName, type MomentCaption } from '../systems/bestMoment';
+import type { StampId, StampTone } from '../systems/stamps';
 import { saveFiles, shareFiles } from './bugReport';
 import { ICONS } from './icons';
 import { onTap } from './tap';
@@ -53,8 +53,12 @@ export class MomentCard {
   private readonly where: HTMLElement;
   private readonly shareBtn: HTMLButtonElement;
   private readonly shareText: HTMLElement;
-  /** A photo is due on the frame being drawn. */
+  /** A photo is due on the frame being drawn, of this stamp (the best only once it's taken). */
   private due = false;
+  private dueId: StampId = 'lastOrders';
+  private dueX = 0;
+  private dueZ = 0;
+  private dueHour = 0;
   /** The canvas holds this life's best. */
   private shot = false;
   private blob: Blob | null = null;
@@ -86,7 +90,12 @@ export class MomentCard {
     this.shareText = this.shareBtn.querySelector('span')!;
     onTap(this.shareBtn, () => this.share());
     d.bus.on('stamp', (e) => {
-      if (this.best.offer(e.id, e.x, e.z, d.hour())) this.due = true;
+      if (!beats(e.id, this.due ? this.dueId : this.best.has ? this.best.moment.id : null)) return;
+      this.due = true;
+      this.dueId = e.id;
+      this.dueX = e.x;
+      this.dueZ = e.z;
+      this.dueHour = d.hour();
     });
     d.bus.on('playerDied', () => this.show());
     d.bus.on('busted', () => this.show());
@@ -108,11 +117,9 @@ export class MomentCard {
     if (!this.due) return;
     this.due = false;
     const src = this.d.source;
-    if (this.d.lost() || src.width === 0 || src.height === 0) {
-      // No picture of it: the next stamp, any weight, gets the chance.
-      this.best.reset();
-      return;
-    }
+    const ctx = this.ctx;
+    // No picture of it: the one before (if any) stays the life's best.
+    if (!ctx || this.d.lost() || src.width === 0 || src.height === 0) return;
     const t0 = performance.now();
     const k = Math.min(1, MOMENT_WIDTH / src.width);
     const w = Math.max(1, Math.round(src.width * k));
@@ -122,14 +129,10 @@ export class MomentCard {
       pic.width = w;
       pic.height = h;
     }
-    const ctx = this.ctx;
-    if (!ctx) {
-      this.best.reset();
-      return;
-    }
     // (A resize resets the context's state.)
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(src, 0, 0, w, h);
+    this.best.offer(this.dueId, this.dueX, this.dueZ, this.dueHour);
     this.shot = true;
     this.copyMs = performance.now() - t0;
     this.d.log('moment', `${this.best.moment.id} ${w}×${h} copy ${this.copyMs.toFixed(1)} ms`);
