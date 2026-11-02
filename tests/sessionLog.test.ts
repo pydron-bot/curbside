@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { emptyCounts } from '../src/core/sceneCounts';
 import {
+  BOOT_MS,
+  BOOT_SAMPLE_EVERY_MS,
   DIAG_KEY,
   DIP_CAPACITY,
   EVENT_CAPACITY,
@@ -28,10 +30,17 @@ function fakeStore(): KeyValueStore & { map: Map<string, string>; writes: number
 }
 
 describe('SessionLog', () => {
-  it('samples every 10 s, rounded, oldest first after the ring wraps', () => {
+  it('samples every 2 s for the first 30 s, then every 10 s', () => {
     const log = new SessionLog(1000, 'x');
-    expect(log.due(1000 + SAMPLE_EVERY_MS - 1)).toBe(false);
-    expect(log.due(1000 + SAMPLE_EVERY_MS)).toBe(true);
+    expect(log.due(1000 + BOOT_SAMPLE_EVERY_MS - 1)).toBe(false);
+    expect(log.due(1000 + BOOT_SAMPLE_EVERY_MS)).toBe(true);
+    log.addSample(1000 + BOOT_MS, base);
+    expect(log.due(1000 + BOOT_MS + SAMPLE_EVERY_MS - 1)).toBe(false);
+    expect(log.due(1000 + BOOT_MS + SAMPLE_EVERY_MS)).toBe(true);
+  });
+
+  it('samples rounded, oldest first after the ring wraps', () => {
+    const log = new SessionLog(1000, 'x');
     for (let i = 1; i <= SAMPLE_CAPACITY + 5; i++) log.addSample(1000 + i * SAMPLE_EVERY_MS, { ...base, dc: i });
     const d = log.data();
     expect(d.samples).toHaveLength(SAMPLE_CAPACITY);
@@ -102,6 +111,9 @@ describe('SessionLog: what was on screen', () => {
     expect(d.dips![0].dc).toBe(46);
     expect(d.dips![0].fps).toBe(39.8);
     expect(d.dips![0].ratio).toBe(1.25);
+    expect(d.dips![0].js).toBeUndefined();
+    log.addDip(1e6, { fps: 30, p95: 34, max: 50, tier: 'low', ratio: 1, dc: 40, js: 12.34, n: emptyCounts() });
+    expect(log.data().dips!.at(-1)!.js).toBe(12.3);
     expect(log.dipCount).toBe(DIP_CAPACITY);
     log.persist(1e9, store, true);
     expect(loadPreviousLog(store)!.dips).toHaveLength(DIP_CAPACITY);

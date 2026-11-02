@@ -1,4 +1,4 @@
-import { Scene, type ColorRepresentation } from 'three';
+import { DefaultLoadingManager, Scene, type ColorRepresentation } from 'three';
 import { onSettingsChange, settings } from './core/settings';
 import { playerBody } from './game/bodies';
 import { registerSW } from 'virtual:pwa-register';
@@ -1121,6 +1121,8 @@ const loop = new FixedStep(1 / 60);
 let last = performance.now();
 let paused = false;
 let maintainTimer = 0;
+/** The page was hidden since the last frame: the next interval spans the absence, not a frame (kept out of the stats and dips). */
+let spannedHidden = false;
 
 function frame(now: number) {
   const t0 = performance.now();
@@ -1275,10 +1277,14 @@ function frame(now: number) {
   look.render(rig.camera);
   labels.update(frameSeconds, viewW, viewH, playing);
   resolution.sample(elapsed);
-  frameStats.sample(elapsed * 1000, performance.now() - t0);
+  const jsMs = performance.now() - t0;
+  if (!spannedHidden) {
+    frameStats.sample(elapsed * 1000, jsMs);
+    diagnostics.frame(elapsed * 1000, jsMs);
+  }
+  spannedHidden = false;
   prof.add(P_FRAME, performance.now() - t0);
   prof.endFrame();
-  diagnostics.frame(elapsed * 1000);
 }
 
 /** This frame's aim, for Combat (reused). */
@@ -1534,6 +1540,8 @@ function setPaused(p: boolean, reason: PauseReason = 'paused') {
   events.emit({ type: 'pause', paused: p });
 }
 document.addEventListener('visibilitychange', () => {
+  // Both ways: a frame may still run between 'hidden' and the page stopping.
+  spannedHidden = true;
   // A waiting update goes in behind the title, or on return after a long absence; never on a plain app switch mid-run.
   if (!document.hidden) {
     updates.pageShown(Date.now());
@@ -1570,6 +1578,15 @@ const diagnostics = new Diagnostics(document.body, {
   counts: (out) => census.fill(out),
   reportBug: () => openBugReport(),
 });
+// Each model file as it arrives (start-up dips in the log line up with these), and
+// its geometry uploads and first draws aren't slow frames to dynamic resolution.
+const assetsSeen = new Set<string>();
+DefaultLoadingManager.onProgress = (url) => {
+  // Twice a file: fetched (FileLoader), then parsed (GLTFLoader).
+  if (!assetsSeen.has(url)) logEvent('asset', url.slice(url.lastIndexOf('/') + 1));
+  assetsSeen.add(url);
+  resolution.holdOff(2);
+};
 addDiagnosticsButton(diagnostics, frontDoor, () => input.lastDevice !== 'touch');
 
 // TEST in the pause menu (Settings → Test tools): cheats, spawns, teleports, scenes and save tools for playtesting.

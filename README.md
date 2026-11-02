@@ -116,8 +116,8 @@ on: turn it off and the shipped feel is back. The report's `TUNE` line and
 `tune` JSON list the values that differ from the defaults, the numbers to
 bake in as new constants.
 
-**Perf log** (`ui/diagnostics.ts`, `core/sessionLog.ts`): every 10 s the
-session log samples frame times, tier, ratio and draw calls, and `n`: what
+**Perf log** (`ui/diagnostics.ts`, `core/sessionLog.ts`): every 10 s
+(every 2 s for the first 30 s, the start-up) the session log samples frame times, tier, ratio and draw calls, and `n`: what
 was on screen (`core/sceneCounts.ts`, filled by `render/sceneCensus.ts`
 from counters the pools and batches already keep): live fire / smoke
 particles, big ones (over 2.5 m) and their **fill** (quad area over the
@@ -126,8 +126,12 @@ glows drawn and their fill, fires (in view / burning), burning cars,
 explosions in the last 10 s, rubble drawn / live, people and cars drawn /
 shown, and the city scenes running by kind. Frames are also judged in 1 s
 windows: one whose p95 is over 25 ms logs a **dip** with the same counts
-(at most one per 5 s; the newest 60 kept in `dips`), so a drop names what
-was on screen. The Full overlay shows the counts on two more lines
+and the window's JS p95 (`js`: high means the main thread was the
+bottleneck, low the GPU or the browser; at most one per 5 s; the newest 60
+kept in `dips`), so a drop names what was on screen. The frame that spans
+an app switch (any `visibilitychange`) is kept out of the dips and the
+frame stats. Each model file logs an `asset` event as it arrives, and
+holds dynamic resolution off for 2 s (its uploads and first draws). The Full overlay shows the counts on two more lines
 (`fx hot/soft big fill · glow n (fill) · fire seen/all burn boom`,
 `ppl · cars · scenes`), the Diagnostics summary an `ON SCREEN` line and the
 recent dips. Nothing is allocated per frame.

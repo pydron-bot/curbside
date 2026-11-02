@@ -196,11 +196,12 @@ export class Diagnostics implements Panel {
   }
 
   /**
-   * Every frame (not paused): its interval, ms. A slow stretch (DipDetector)
-   * logs a dip with what was on screen, at most once per DIP_COOLDOWN_MS.
+   * Every frame (not paused): its interval and JS time, ms. A slow stretch
+   * (DipDetector) logs a dip with what was on screen, at most once per
+   * DIP_COOLDOWN_MS.
    */
-  frame(intervalMs: number): void {
-    if (!this.dips.sample(intervalMs)) return;
+  frame(intervalMs: number, jsMs: number): void {
+    if (!this.dips.sample(intervalMs, jsMs)) return;
     const w = this.dips.last;
     this.log.addDip(performance.now(), {
       fps: w.fps,
@@ -209,6 +210,7 @@ export class Diagnostics implements Panel {
       tier: getQuality().name,
       ratio: this.deps.ratio(),
       dc: this.deps.drawCalls(),
+      js: w.js,
       n: this.counts() ?? emptyCounts(),
     });
   }
@@ -295,7 +297,7 @@ export class Diagnostics implements Panel {
     const tail = data.events.slice(-8).map((e) => `${e.t.toFixed(0).padStart(5)} s  ${e.kind}${e.detail ? ` ${e.detail}` : ''}`);
     const dips = (data.dips ?? []).slice(-4).map(
       (d) =>
-        `${d.t.toFixed(0).padStart(5)} s  ${d.fps.toFixed(0)} fps p95 ${d.p95.toFixed(0)} ms · ${d.tier} @${d.ratio}x · fx ${d.n.hot}/${d.n.soft} fill ${d.n.fill} · glow ${d.n.glows} · fire ${d.n.firesSeen}/${d.n.fires} boom ${d.n.booms} · ppl ${d.n.peopleSeen} cars ${d.n.carsSeen}`,
+        `${d.t.toFixed(0).padStart(5)} s  ${d.fps.toFixed(0)} fps p95 ${d.p95.toFixed(0)} ms${d.js !== undefined ? ` js ${d.js.toFixed(0)}` : ''} · ${d.tier} @${d.ratio}x · fx ${d.n.hot}/${d.n.soft} fill ${d.n.fill} · glow ${d.n.glows} · fire ${d.n.firesSeen}/${d.n.fires} boom ${d.n.booms} · ppl ${d.n.peopleSeen} cars ${d.n.carsSeen}`,
     );
     this.summaryEl.textContent =
       `${this.summaryText(f)}\n\nRECENT EVENTS\n${tail.join('\n')}` + (dips.length ? `\n\nRECENT DIPS (slow frames: what was on screen)\n${dips.join('\n')}` : '');
