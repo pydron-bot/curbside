@@ -98,6 +98,7 @@ const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
   molotov: { r: 1, g: 0.5, b: 0.15 },
   rocket: { r: 0.9, g: 0.35, b: 1 },
   horn: { r: 1, g: 0.4, b: 0.75 },
+  smoke: { r: 0.75, g: 0.82, b: 0.88 },
 };
 
 export class FxDirector {

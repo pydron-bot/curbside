@@ -18,6 +18,7 @@ import { createDamage } from '../systems/damage';
 import { PoliceForce, type PoliceContext, type Suspect } from '../systems/police';
 import { createPursuit, drivePursuit, type PursuitTarget } from '../systems/pursuit';
 import { evadeBonus, type Award, type Score } from '../systems/score';
+import type { SmokeView } from '../systems/smoke';
 import { driveAi, reactToHit, rerouteAi, scareDriver, shouldYield, YIELD_RANGE, type Obstacle } from '../systems/traffic';
 import { CRIME_FLOOR, Wanted, WITNESS_RANGE, type Crime } from '../systems/wanted';
 import { DELAYED_CRIMES } from '../systems/witnesses';
@@ -101,6 +102,8 @@ export interface HeatDeps {
    * stops and gets out), and that driver doesn't panic, rage or bail.
    */
   adoptCrash?(v: Vehicle, impact: number): boolean;
+  /** Smoke grenades' clouds (game/combat.ts): the police can't see through them. */
+  smoke?: SmokeView;
 }
 
 export class Heat {
@@ -146,7 +149,7 @@ export class Heat {
     );
     this.shops = placeSprayShops(deps.city);
     this.station = placeStation(deps.city);
-    this.ctx = { stars: 0, tracked: false, suspect: this.suspect, view: deps.view(), grid: deps.grid, rand: deps.rand };
+    this.ctx = { stars: 0, tracked: false, suspect: this.suspect, view: deps.view(), grid: deps.grid, rand: deps.rand, smoke: deps.smoke };
 
     // --- Crimes, as the simulation reports them ---
     bus.on('pedDown', (e) => {

@@ -2,16 +2,18 @@
  * Things that fly: grenades (thrown in an arc, bounce, go off after a fuse),
  * molotovs (thrown, shatter on whatever they hit first into a patch of
  * burning fuel) and rockets (a slow, visible flight in a straight line that
- * blows up on the first thing it touches). Plus the fire patches molotovs
- * leave. Pure simulation in fixed pools (nothing allocated while playing);
+ * blows up on the first thing it touches), and smoke grenades (thrown and
+ * bounced like a grenade; at the end of their fuse they pour a cloud,
+ * systems/smoke.ts). Plus the fire patches molotovs leave. Pure simulation in fixed pools (nothing allocated while playing);
  * the game resolves what explosions and fires do through ProjectileWorld,
  * the renderer reads the pools.
  */
 import type { StaticGrid } from '../world/collision';
+import { SMOKE_FUSE } from './smoke';
 import { rayRect } from './weapons';
 import { len2 } from '../core/len';
 
-export type ProjectileKind = 'grenade' | 'molotov' | 'rocket';
+export type ProjectileKind = 'grenade' | 'molotov' | 'rocket' | 'smoke';
 
 export interface Projectile {
   kind: ProjectileKind;
@@ -24,7 +26,7 @@ export interface Projectile {
   vz: number;
   /** Seconds since it was thrown or fired. */
   age: number;
-  /** Grenades: seconds until it goes off. */
+  /** Grenades: seconds until it goes off (smoke: until it starts pouring). */
   fuse: number;
   /** Where a thrown one comes down first (for the landing marker), and its flight time. */
   landX: number;
@@ -60,6 +62,8 @@ export interface ProjectileWorld {
   explode(kind: 'grenade' | 'rocket', x: number, z: number, byPlayer: boolean): void;
   /** A molotov burst into a fire patch. */
   ignite(x: number, z: number, byPlayer: boolean): void;
+  /** A smoke grenade's fuse ran down at (x, z): the cloud pours (optional: no smoke, no cloud). */
+  smoke?(x: number, z: number, byPlayer: boolean): void;
 }
 
 /** Gravity on thrown things, m/s² (a little heavy, so arcs read from above). */
@@ -167,8 +171,8 @@ export class Projectiles {
     for (let i = 0; i < MAX_FIRES; i++) this.fires.push({ alive: false, x: 0, z: 0, radius: 0, age: 0, life: 0, byPlayer: false });
   }
 
-  /** Throw a grenade or molotov from (x, z) to land on (tx, tz). */
-  throw(kind: 'grenade' | 'molotov', x: number, z: number, tx: number, tz: number, byPlayer: boolean): Projectile | null {
+  /** Throw a grenade, molotov or smoke grenade from (x, z) to land on (tx, tz). */
+  throw(kind: 'grenade' | 'molotov' | 'smoke', x: number, z: number, tx: number, tz: number, byPlayer: boolean): Projectile | null {
     const p = this.take();
     if (!p) return null;
     throwVelocity(x, z, tx, tz, scratchThrow);
@@ -176,7 +180,7 @@ export class Projectiles {
     p.vx = scratchThrow.vx;
     p.vy = scratchThrow.vy;
     p.vz = scratchThrow.vz;
-    p.fuse = GRENADE_FUSE;
+    p.fuse = kind === 'smoke' ? SMOKE_FUSE : GRENADE_FUSE;
     p.landX = tx;
     p.landZ = tz;
     return p;
@@ -294,7 +298,8 @@ export class Projectiles {
     }
     if (!molotov && (p.fuse -= dt) <= 0) {
       p.alive = false;
-      world.explode('grenade', p.x, p.z, p.byPlayer);
+      if (p.kind === 'smoke') world.smoke?.(p.x, p.z, p.byPlayer);
+      else world.explode('grenade', p.x, p.z, p.byPlayer);
     }
   }
 

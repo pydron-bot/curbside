@@ -522,6 +522,18 @@ export class Effects {
     return i;
   }
 
+  /**
+   * One billow of a smoke grenade's cloud at (x, y, z): pale, slow and
+   * heavy (it hangs rather than rises), `size0`→`size1` m over `life` s,
+   * drifting (vx, vz) and a little with the breeze.
+   */
+  smokeCloud(x: number, y: number, z: number, size0: number, size1: number, life: number, vx: number, vz: number, shade: number, alpha: number): void {
+    const i = this.soft.spawn(x, y, z, vx + this.windX * 0.25, 0.12 + Math.random() * 0.15, vz + this.windZ * 0.25, life, size0, size1, RAMP.smoke, puffFrame());
+    if (i < 0) return;
+    this.smokeLook(i, shade, alpha);
+    this.soft.drag[i] = 0.7;
+  }
+
   /** A ring of low dust spreading from (x, z) (someone hitting the ground, a landing). */
   dustRing(x: number, z: number, count: number, radius: number, speed: number): void {
     for (let k = 0; k < count; k++) {

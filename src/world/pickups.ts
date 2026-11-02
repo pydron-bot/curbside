@@ -25,8 +25,8 @@ export const HEALTH_PICKUP = 50;
 export const ARMOUR_PICKUP = 50;
 
 const KINDS: Array<[PickupKind, number]> = [
-  ['pistol', 0.18],
-  ['smg', 0.14],
+  ['pistol', 0.16],
+  ['smg', 0.12],
   ['shotgun', 0.12],
   ['health', 0.15],
   ['armour', 0.1],
@@ -35,6 +35,7 @@ const KINDS: Array<[PickupKind, number]> = [
   ['molotov', 0.05],
   ['rocket', 0.04],
   ['horn', 0.05],
+  ['smoke', 0.04],
 ];
 
 /** The feed line for picking one up. */

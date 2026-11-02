@@ -10,11 +10,13 @@
  *
  * The air horn is held and aimed like a gun but fires no bullets: each use
  * is one blast of systems/airHorn.ts's cone (game/combat.ts blowHorn).
+ * The smoke grenade is thrown like a grenade and pours a cloud
+ * (systems/smoke.ts) instead of going off.
  */
 import type { Rect } from '../world/city';
 import { len2 } from '../core/len';
 
-export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'grenade' | 'molotov' | 'rocket' | 'horn';
+export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'grenade' | 'molotov' | 'rocket' | 'horn' | 'smoke';
 
 /** How a weapon fires: hitscan bullets, a thrown arc, a flying rocket, or the air horn's blast. */
 export type FireMode = 'gun' | 'throw' | 'launcher' | 'horn';
@@ -160,9 +162,26 @@ export const WEAPONS: Record<WeaponKind, WeaponSpec> = {
     automatic: false,
     driveBy: false,
   },
+  // Thrown like a grenade; the cloud is systems/smoke.ts's.
+  smoke: {
+    label: 'SMOKE GRENADE',
+    mode: 'throw',
+    damage: 0,
+    pellets: 1,
+    interval: 0.8,
+    spread: 0,
+    bloom: 0,
+    bloomMax: 0,
+    recover: 1,
+    range: 20,
+    pickupAmmo: 2,
+    maxAmmo: 6,
+    automatic: false,
+    driveBy: false,
+  },
 };
 
-export const WEAPON_ORDER: WeaponKind[] = ['pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket', 'horn'];
+export const WEAPON_ORDER: WeaponKind[] = ['pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket', 'horn', 'smoke'];
 /** What an ammo crate tops up: the guns, and the air horn's canister. */
 export const GUNS: readonly WeaponKind[] = ['pistol', 'smg', 'shotgun', 'horn'];
 /** Fraction of a bullet's damage that applies to vehicles. */

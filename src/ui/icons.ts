@@ -71,6 +71,13 @@ export const ICONS = {
       '<path d="M4.5 8V5.8h3V8" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
       '<path d="M2.5 13h7M17 9v6" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
   ),
+  /** A smoke grenade: the canister, its lever and a cloud billowing out of the top. */
+  smoke: svg(
+    '<rect x="5" y="11" width="8" height="11" rx="1.6" fill="currentColor"/>' +
+      '<path d="M7 11V9.2h4V11M11 9.8l3.2 2.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>' +
+      '<path d="M12.5 8.6a3 3 0 0 1 1.6-5.4 3.4 3.4 0 0 1 6 1.1 2.7 2.7 0 0 1 .3 5.4h-6.4a2.4 2.4 0 0 1-1.5-1.1z" fill="currentColor" opacity=".75"/>' +
+      '<path d="M5 14.5h8M5 18.5h8" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
+  ),
   /** Body armour: a vest. */
   armour: svg(
     '<path d="M8 3h2.2c.4 1.4 1 2 1.8 2s1.4-.6 1.8-2H16l3.5 2.4-1.6 4.4V20a1 1 0 0 1-1 1H7.1a1 1 0 0 1-1-1V9.8L4.5 5.4z" fill="currentColor"/>' +

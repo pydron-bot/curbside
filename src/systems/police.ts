@@ -3,7 +3,9 @@
  * view as the wanted level rises, chase with the pursuit controller, box the
  * player in, get out and run them down on foot, set up roadblocks, and a
  * helicopter at 5 stars. Also what the police can see: line of sight from
- * every car, officer and the helicopter, shared over the radio.
+ * every car, officer and the helicopter, shared over the radio. A smoke
+ * grenade's cloud (systems/smoke.ts) blinds them and confuses the cars that
+ * drive into it.
  *
  * Cars and officers are ordinary vehicles and crowd peds lent by Population
  * (flagged so its upkeep leaves them alone), so they collide, get shot, run
@@ -24,6 +26,7 @@ import { DIR_VEC, MAX_NODE, type Dir } from '../world/roads';
 import { carsTouching } from './arrest';
 import { HELI_FROM, HELI_GONE, HELI_REFUEL, HELI_SHIFT, HELI_SPAWN, stepHelicopter, type Helicopter } from './helicopter';
 import { lineOfSight, sees } from './sight';
+import { createDaze, driveDazed, stepDaze, type Daze, type SmokeView } from './smoke';
 import { knockDown, resumeWalking, spawnPed, type PedRole } from './crowd';
 import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from './pursuit';
 import { CRUISE_SPEED, TURN_SPEED, createDriver, rerouteAi, spawnAi, type AiDriver, type Obstacle } from './traffic';
@@ -129,6 +132,8 @@ export interface PoliceUnit {
   dismissed: boolean;
   /** Seconds this roadblock has stood (or, dismissed, waited for its crew). */
   age: number;
+  /** Lost in a smoke cloud (systems/smoke.ts): crawling, stopped with hazards on, or off on a wrong turn. */
+  daze: Daze;
 }
 
 /** Population's lending desk, as the police use it. */
@@ -166,6 +171,8 @@ export interface PoliceContext {
   view: Rect;
   grid: StaticGrid;
   rand: () => number;
+  /** Smoke grenades' clouds: nobody sees through them, and cars in them get lost. */
+  smoke?: SmokeView;
 }
 
 /** Fire a shot from (x, z) along unit (dx, dz) (the game traces and resolves it). */
@@ -242,6 +249,7 @@ export class PoliceForce {
     if (!u) return null;
     // Parked: a roadblock, or officers out on foot (nobody at the wheel).
     if (u.role === 'roadblock' || u.officers.length > 0 || u.aboard === 0) return PARKED;
+    if (u.daze.confused !== 'none') return driveDazed(u.daze, u.driver, v.sim, this.target, obstacles, rand, dt);
     // The shared picture comes over the radio, but only a clear view lets a car
     // drive straight at them: otherwise it follows the roads there.
     const t = this.target;
@@ -480,6 +488,7 @@ export class PoliceForce {
       shootIn: CAR_SHOT_EVERY,
       dismissed: false,
       age: 0,
+      daze: createDaze(),
     };
     v.pursuit = driver;
     v.ai = null;
@@ -559,6 +568,8 @@ export class PoliceForce {
       }
       return;
     }
+    // Driving into smoke: lost (a crawl, a stop, a wrong turn) until out of it.
+    if (u.aboard > 0) stepDaze(u.daze, ctx.smoke?.hides(v.sim.x, v.sim.z) ?? false, u.driver, v.sim, ctx.rand, dt);
     // Fell far behind out of sight, or wedged for good: recycle it (a fresh one
     // spawns closer). Behind whom: where the police think the player is, so
     // units searching the last sighting aren't swapped out while they look.
@@ -730,7 +741,11 @@ export class PoliceForce {
 
   // --- Sight ----------------------------------------------------------------
 
-  /** Who can see the player: each unit checks SIGHT_HZ times a second, staggered. */
+  /**
+   * Who can see the player: each unit checks SIGHT_HZ times a second,
+   * staggered. Smoke hides them from cars and officers inside it or
+   * looking through it, however close (bar arm's length).
+   */
   private updateSight(dt: number, ctx: PoliceContext): void {
     const s = ctx.suspect;
     let seen = false;
@@ -745,17 +760,19 @@ export class PoliceForce {
             // One ray per car: a clear line within CAR_SIGHT both sees and
             // lets it drive straight there; up close it sees regardless.
             const d = len2(v.sim.x - s.x, v.sim.z - s.z);
-            direct = d < 6 || (d <= CAR_SIGHT && lineOfSight(ctx.grid, v.sim.x, v.sim.z, s.x, s.z));
-            carSees = direct || d < CAR_PROXIMITY;
+            if (!ctx.smoke?.blocks(v.sim.x, v.sim.z, s.x, s.z)) {
+              direct = d < 6 || (d <= CAR_SIGHT && lineOfSight(ctx.grid, v.sim.x, v.sim.z, s.x, s.z));
+              carSees = direct || d < CAR_PROXIMITY;
+            }
           }
-          u.seesPlayer = !u.dismissed && (carSees || this.officersSee(u, s, ctx.grid));
+          u.seesPlayer = !u.dismissed && (carSees || this.officersSee(u, s, ctx.grid, ctx.smoke));
           u.direct = direct;
         }
         if (u.seesPlayer) seen = true;
       }
       for (const p of this.strays) {
         const d = len2(p.agent.s.x - s.x, p.agent.s.z - s.z);
-        if (p.agent.mode !== 'down' && d < OFFICER_PROXIMITY) seen = true;
+        if (p.agent.mode !== 'down' && d < OFFICER_PROXIMITY && !ctx.smoke?.blocks(p.agent.s.x, p.agent.s.z, s.x, s.z)) seen = true;
       }
       if (this.heli.active && !this.heli.leaving && this.heli.sees) seen = true;
     } else {
@@ -765,10 +782,10 @@ export class PoliceForce {
   }
 
   /** Can any of the unit's officers on their feet see the player? */
-  private officersSee(u: PoliceUnit, s: Suspect, grid: StaticGrid): boolean {
+  private officersSee(u: PoliceUnit, s: Suspect, grid: StaticGrid, smoke?: SmokeView): boolean {
     for (const p of u.officers) {
       if (p.agent.mode === 'down') continue;
-      if (sees(grid, p.agent.s.x, p.agent.s.z, s.x, s.z, OFFICER_PROXIMITY, OFFICER_SIGHT)) return true;
+      if (sees(grid, p.agent.s.x, p.agent.s.z, s.x, s.z, OFFICER_PROXIMITY, OFFICER_SIGHT, smoke)) return true;
     }
     return false;
   }
@@ -850,6 +867,8 @@ export class PoliceForce {
       return;
     }
     stepHelicopter(h, this.target.x, this.target.z, this.target.vx, this.target.vz, s.x, s.z, dt);
+    // The spotlight finds nothing but smoke.
+    if (h.sees && ctx.smoke?.hides(s.x, s.z)) h.sees = false;
     if (h.leaving) {
       h.sees = false;
       if (len2(h.x - s.x, h.z - s.z) > HELI_GONE) h.active = h.leaving = false;

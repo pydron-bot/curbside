@@ -272,6 +272,58 @@ export function ignite(v: Voice): void {
   thump(v, t + 0.04, 90, 40, 0.2, 0.6, 0.08);
 }
 
+/**
+ * A smoke grenade starting to pour (W3-B): the pop of the cap, then a long
+ * hiss of gas through the nozzle that settles into a steady rush and tails
+ * off. ~3 s (the cloud itself is silent after that).
+ */
+export function smokePop(v: Voice): void {
+  const t = v.t;
+  const b = v.bank;
+  noiseHit(v, b.white, t, 'bandpass', 1800, 1.2, 0.6, 0.001, 0.02);
+  thump(v, t, 260, 120, 0.05, 0.35, 0.04);
+  const len = 3;
+  const n = v.noise(b.white, t + 0.02, t + len);
+  const hp = v.filter('highpass', 2400 * vary(0.08), 0.5);
+  sweep(hp.frequency, t + 0.02, 4200, 2400, 0.4);
+  const lp = v.filter('lowpass', 9000, 0.5);
+  const g = v.gain();
+  v.chain(n, hp, lp, g, v.input);
+  g.gain.setValueAtTime(0, t + 0.02);
+  g.gain.linearRampToValueAtTime(0.55, t + 0.08);
+  g.gain.setTargetAtTime(0.3, t + 0.3, 0.4);
+  g.gain.setTargetAtTime(0, t + len - 0.9, 0.3);
+  // The rush of the cloud billowing out, low under the hiss.
+  const r = v.noise(b.pink, t + 0.05, t + len);
+  const bp = v.filter('bandpass', 500, 0.8);
+  const rg = v.gain();
+  v.chain(r, bp, rg, v.input);
+  rg.gain.setValueAtTime(0, t + 0.05);
+  rg.gain.linearRampToValueAtTime(0.35, t + 0.5);
+  rg.gain.setTargetAtTime(0, t + 1.4, 0.5);
+}
+
+/**
+ * Someone coughing in the smoke: two or three dry barks of breathy noise
+ * through a throaty band, pitched lower for an officer (`deep`).
+ */
+export function cough(v: Voice, deep: boolean): void {
+  const t = v.t;
+  const hacks = Math.random() < 0.5 ? 2 : 3;
+  const centre = (deep ? 700 : 1000) * vary(0.15);
+  for (let i = 0; i < hacks; i++) {
+    const at = t + i * rnd(0.16, 0.24);
+    const n = v.noise(v.bank.pink, at, at + 0.22);
+    const bp = v.filter('bandpass', centre * vary(0.08), 1.6);
+    sweep(bp.frequency, at, centre * 1.3, centre * 0.8, 0.1);
+    const g = v.gain();
+    v.chain(n, bp, g, v.input);
+    perc(g.gain, at, i === 0 ? 0.9 : 0.6, 0.008, 0.045);
+    // The voiced edge of the bark.
+    thump(v, at, deep ? 150 : 210, deep ? 110 : 160, 0.06, 0.12, 0.04, 'triangle');
+  }
+}
+
 /** A bullet passing close by: a short tearing hiss. */
 export function whiz(v: Voice): void {
   const t = v.t;
