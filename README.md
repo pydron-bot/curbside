@@ -66,7 +66,9 @@ perf overlay (Off / FPS / Full); under TESTING, Test tools (TEST in the
 pause menu, below). In the
 header, VERSION HISTORY: every release from `core/changelog.ts`, newest
 first (the version also shows top right on the title screen and on the
-pause card). Playtest labels over what the city's people and cars are
+pause card), and STORY · REPLAY OPENING: a fresh run straight into the
+cold open (`SettingsPanel.addLink`; in a run it asks TAP AGAIN first,
+since it throws the run away). Playtest labels over what the city's people and cars are
 doing: `settings.debugLabels`, Shift+L (see *City life*).
 
 **TEST menu** (Settings → Test tools; `game/testTools.ts` the actions,
@@ -95,8 +97,8 @@ rain on; TURF WAR still waits for its holds). The starting is
 with the title's highlights. SAVE: +1 CRED
 level, max perks, reset CRED, +$10,000, unlock all jobs, jump to any story
 job, grouped by arc and chapter (it becomes its arc's next job; you land
-by its payphone, and the clock jumps to 21:00 for a Night Shift job by day), tutorial done /
-reset, reset the save, export (share sheet, else clipboard) and import (a
+by its payphone, and the clock jumps to 21:00 for a Night Shift job by day), opening done /
+reset (the next PLAY has the cold open), reset the save, export (share sheet, else clipboard) and import (a
 pasted save, sanitised like a loaded one: `migrateSave`, `pruneSave`);
 reset and import write the save and reload. Destructive ones take a second
 press. Anything but LABELS and EXPORT is a cheat: `player.markCheated()`
@@ -688,7 +690,7 @@ director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
 **The city doesn't stop for you** (V2-02; `systems/cityScenes.ts`,
 `systems/routeAhead.ts`, tested). The busy scenes (chases, races,
 accidents, scuffles, muggings, turf wars, tows; `BUSY`) are held off only
-behind the title, in the first run's tutorial, and in an activity that
+behind the title, during the cold open, and in an activity that
 asks for a quiet city: a timed race, or a mission flagged `quiet` (or on a
 checkpoint `race` step; `activityHolds`, `MissionMode.quiet`). Free roam,
 Chaos Run, taxi fares and frenzies all get the living city. Wanted stars
@@ -886,7 +888,7 @@ people in).
   step down, walk to either side of the fire and hose it: 7 s for a full
   fire with one hose, half that with two (hosed down, it never flares
   back); then back in and off as traffic. 2 trucks at most; none behind
-  the title, in a timed race or quiet mission, or the tutorial (fires there burn out by
+  the title, in a timed race or quiet mission, or the cold open (fires there burn out by
   themselves). The look (`render/emergencyLook.ts` fireLook): bigger
   flame particles than a burning car's, smoke from 3 m downwind (it's
   drawn over the flames), embers, a flickering orange pool on the ground
@@ -896,7 +898,7 @@ people in).
   Street events: `fire`, `fireTruck`, `hose` (the pump's hiss), `fireOut`.
 - **Tow trucks** (`scenes/tows.ts`; `towPose`, `towPriority`, `winch` in
   `systems/emergency.ts`): every 45–90 s (`BUSY`: none in a timed race,
-  the tutorial or behind the title; less often while wanted) a tow truck (`tow_truck`,
+  the cold open or behind the title; less often while wanted) a tow truck (`tow_truck`,
   `#e8b923`, claimed in traffic within 140 m or brought in) comes for a
   car within 110 m: a wreck whose fire is out (the player's included)
   (or a crash or dumped getaway car flagged `towable`) first, then an abandoned car, then, one pick in two, a parked one;
@@ -924,7 +926,7 @@ people in).
 
 **Traffic scenes** (`claude/city-traffic`; rules pure and tested in
 `systems/trafficScenes.ts`). Chases, races and accidents are `BUSY` (held
-off by the title, a timed race or quiet mission and the tutorial; races
+off by the title, a timed race or quiet mission and the cold open; races
 and accidents fewer while you're wanted, and then on your way; chases
 too, run past you by the handoff) and only one
 of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
@@ -1141,8 +1143,8 @@ life.clock.define('ice', { every: [70, 140], cap: 1, first: 30, range: 110, hold
 life.due('ice', running)          // its clock has run down, under its cap, nothing holding it off
 life.near('ice', x, z)            // within its range of the player (default SCENE_START_RANGE 150 m)
 life.clock.start('ice', life.now) // wind the clock (or .defer(kind, now, s): nowhere to put one yet)
-// Holds: 'title' (attract), 'activity' (a timed race, a `quiet` mission: activityHolds), 'wanted', 'tutorial'.
-// BUSY = title, activity, tutorial (+ pace: WANTED_PACE: slower while wanted, never held); LOUD = all four
+// Holds: 'title' (attract), 'activity' (a timed race, a `quiet` mission: activityHolds), 'wanted', 'opening' (the cold open).
+// BUSY = title, activity, opening (+ pace: WANTED_PACE: slower while wanted, never held); LOUD = all four
 // (no city scene now); IN_PLAY = ['title']. spec.ahead: arrives by car, may go on the road ahead while wanted.
 // life.onRoute(x, z): for scenes picking among existing spots: only on a wanted player's way. life.busyRunning().
 // life.featured = kind: the title's highlight (game/attractHighlights.ts) or a story job's scene (sceneStarter.ts
@@ -1341,7 +1343,8 @@ are `src/game/modes/*Mode.ts`.
 - **Save** (`game/progressSave.ts`): one versioned JSON record,
   `curbside.save`: cash, lifetime stats, best score per mode, medals, race
   times, packages found, frenzies beaten, export orders, taxi streak,
-  missions passed, unlocks, the first-run pointer reached. Every field is sanitised on load (a bad value
+  missions passed, unlocks, whether the cold open has run (`opening`; the
+  old first-run pointers' `tutorial` step is kept for older builds). Every field is sanitised on load (a bad value
   falls back alone, NaN or negative cash can't get in, a newer save keeps
   what this build understands and carries the rest through untouched,
   never lowering `v`, so an older tab or a stale PWA can't wipe it; ids
@@ -1356,19 +1359,49 @@ are `src/game/modes/*Mode.ts`.
   and flushed on pause, app switch, page hide and the end of anything that
   pays. `Progress` (`game/progress.ts`) owns it: `earn`, `spend`, `charge`,
   bests, medals, unlocks, and lifetime stats counted off the bus.
-- **First run** (`game/tutorial.ts`): three pointers on the marker
-  prompt, one at a time, whenever nothing nearer to hand has a prompt
-  (on a phone, in a car only while it's stopped: the look-ahead puts a car
-  driving up the screen right under the pill, from 5 m/s on, `pointerWaits`):
-  STEAL A CAR (in the device's words: E, Y, the door button) until you
-  drive one; DRIFT · NEAR MISS · SMASH · JUMP — CHAINS BANK AS CASH until
-  the first chain banks; ANSWER THE RINGING PAYPHONE with the radar routed
-  to it until a call is answered (which ends them all). Saved
-  (`save.tutorial`); a save from before them with 2+ minutes of play skips
-  them. The yellow sports car at the spawn waits on the centreline lined
-  up on the ramp a block east. How to Play adds banking, heat, BUSTED,
-  cash and the shop, where the activities are, and a radar
-  legend (`ui/radarLegend.ts`, also at the foot of PROGRESS).
+- **The cold open** (V2-07; rules and geometry in `game/opening.ts`, pure
+  and tested; the runtime `game/modes/openingMode.ts`, `OpeningMode` in the
+  director's modes, its city side `openingStage` wired in main.ts). PLAY
+  on a save that hasn't had it (`openingDue`: `save.opening` false) drops
+  the player at the bus shelter nearest the safehouse with room ahead of it
+  (`pickOpeningStop`), standing just past the shelter, as a bus pulls in
+  22 m back (`Buses.force(stop, back)`). The getaway's road is cleared of
+  traffic and parked cars (`onOpeningRoad`; the screen has only just cut
+  there). A staged chase (`Chases.stage`, a sedan and two units 30 and 44 m
+  behind it) waits 62 m up the far lane for 2 s with its sirens going, then
+  comes flat out, swerves across and piles into the kerb 12 m ahead of the
+  stop (on reaching it, on hitting anything on the way, or 6 s after setting
+  off: about 5.4 s after PLAY): a crash, half its health gone (smoking),
+  stopped dead; its driver runs, and it's an abandoned car (off the
+  director's list). The units pull up 22 m short of it; nobody comes in
+  45 s and they leave it. The crash starts story job **s1, WRONG STOP**
+  (`direct`, `MissionMode.beginNow(job, lend)`: the getaway lent as its
+  `getaway` car): GET IN · LOSE THE HEAT. Getting in is TAKE THE HEAT
+  through the chase handoff (2 stars, its cops yours, the stamp); with no
+  chase to hand over (chases off, `Chases.enabled = false`, or no room for a
+  unit: the **fallback**, a crashed sedan already at the kerb; or a chase
+  that gave up on the car) the opening calls it in itself (`tookGetaway`,
+  the `takeTheHeat` award and street event). It has run once the player is
+  in the car (`save.opening`, flushed); a respawn before that (WASTED on the
+  pavement) starts it over, and a quit leaves it due. It's armed by any
+  respawn (PLAY, RESTART, after WASTED) and starts on the next sim step,
+  unless a Chaos Run took the run. While it's on (`OpeningMode.holding`)
+  the busy scenes hold off (`CityLifeDeps.opening`). Settings → REPLAY
+  OPENING forgets it and starts a run; a passed s1 replays as a repeat job.
+  A save from before the cold open with 2+ minutes of play is a veteran's
+  (`migrateSave`): `opening` true, PLAY as before. Once the opening has
+  run, an s1 not passed no longer holds the main story's phones
+  (`nextInArc(…, skipDirect)`). The three first-run pointers it replaced
+  are gone. The yellow sports car at the spawn waits on the centreline
+  lined up on the ramp a block east. How to Play adds banking, heat,
+  BUSTED, cash and the shop, where the activities are, and a radar legend
+  (`ui/radarLegend.ts`, also at the foot of PROGRESS).
+- **Side modes wait for story job 2** (`sideModesOpen`): Chaos Run (on
+  the title), frenzies, races, exports and taxi fares are hidden, and not
+  offered in the street (`ModeCtx.sideModes`), until `s2-noise` is passed
+  ("SIDE JOBS OPEN · CHAOS RUN ON THE TITLE" when it happens) or the save
+  has the `sideModes` unlock (a veteran's save, at migration). Hidden
+  packages, the shop and the payphones are there from the start.
 - **Bank your chaos** (`game/progressBank.ts`): when a combo chain ends (the
   combo window has run out and no drift is sliding), its points become cash:
   points / 10 × (1 + 0.5 × the highest wanted level during the chain), with
@@ -1408,7 +1441,7 @@ are `src/game/modes/*Mode.ts`.
   PAY 'N' SPRAY CARD $1,500; PACKAGE SCANNER $2,000; pistol / SMG / shotgun
   ammo $150 / $400 / $300 (`arsenal.pickUp`). Something you can't afford
   shakes and flashes the cash red (and a haptic tick).
-- **CHAOS RUN** (title, `modes/chaosRun.ts`, `chaosRunMode.ts`): a sports
+- **CHAOS RUN** (title, once the side modes are open; `modes/chaosRun.ts`, `chaosRunMode.ts`): a sports
   car at a random crossing and the same loadout every run (`CHAOS_LOADOUT`:
   a pistol, whatever free roam or the shop left in your pockets; RETRY too),
   3-2-1 with the car held, then 2:00 on the clock
@@ -1519,18 +1552,21 @@ are `src/game/modes/*Mode.ts`.
     moon (☾) on the radar and *☾ NIGHT SHIFT* on the call card. So in the
     evening both can ring at once, never at the same phone. Each arc rings
     for its own first job not passed, in data order (an id this build
-    hasn't got, like `s1` until the cold open lands, is skipped); a
-    `direct` job never rings (the glue starts it with
-    `missions.beginNow(def)`) and nothing else in its arc rings until it's
-    passed. Script and cast in `docs/STORY.md`.
+    hasn't got is skipped); a `direct` job (s1, the cold open's: no phone,
+    no call) never rings (the glue starts it with
+    `missions.beginNow(def, lend?)`, a car already on the street lent as one
+    of its tagged cars) and nothing else in its arc rings until it's
+    passed, or until the glue has had its go (`skipDirect`: the cold open
+    has run). Script and cast in `docs/STORY.md`.
   Answer on foot or by stopping beside a ringing phone (the nearest, if
   two are; a ripple of light, the bell within 55 m, 'M' or '☾' on the radar
   with an arrow): the call is a card, the job runs with its objective
   on the activity card and its targets marked (a step any sedan will do
   for rings and blips the three nearest, and the wrong car says NOT A
   SEDAN); MIDNIGHT EXPRESS, PAPER TRAIL and NO PARKING pin the clock at night (a fail or quit puts the
-  hour back). Pay $500–$5,000; fail and the phone rings again. No main
-  story job sets stars or asks you to lose them. The last job of a chapter
+  hour back). Pay $300–$5,000; fail and the phone rings again. No main
+  story job sets stars, and only s1 asks you to lose the ones its getaway
+  brought. The last job of a chapter
   debriefs CHAPTER n COMPLETE (`chapter`, `endsChapter` over its arc), an
   arc's very last STORY COMPLETE or NIGHT SHIFT COMPLETE. Once an arc's
   jobs are all passed its phone rings with them again in order as REPEAT
@@ -2871,8 +2907,8 @@ truck comes in), a turf war, an accident and the argument, the ice cream
 van and its queue, a bus pulling in at a stop, a busker and the crowd, a
 mugging (the mugger), stray dogs after a runner. A shuffled round, never the
 same twice running. The scene is started round the camera with the TEST
-menu's `SceneStarter`; `CityLife.featured` lifts its holds (the title, a
-first run's tutorial) and its people gather (`lively`), every other scene
+menu's `SceneStarter`; `CityLife.featured` lifts its holds (the title, the
+cold open) and its people gather (`lively`), every other scene
 stays held, so there's one at a time. It's followed through its
 `subject()` until that says it's over (then 3 s more) or for 25–40 s; one
 with nothing to show 8 s after starting, or that won't start, is skipped

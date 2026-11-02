@@ -253,11 +253,6 @@ export class MissionMode implements Mode {
     this.sceneHost = host;
   }
 
-  /** A payphone ringing with a job, the main story's first (for the first-run pointer). */
-  get ringing(): Spot | null {
-    return this.ringingPhone(this.arcs[0]) ?? this.ringingPhone(this.arcs[1]);
-  }
-
   /** The phone `a` rings, if it's ringing now (free roam, nothing on, its hours). */
   private ringingPhone(a: ArcPhone): Spot | null {
     const ctx = this.ctx;

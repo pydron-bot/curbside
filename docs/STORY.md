@@ -6,9 +6,10 @@ line there, update it here too (and the other way round).
 
 There are two arcs on the payphones:
 
-- **KEEP IT LOUD**, the main story (`arc: 'main'`, ids `s1`–`s6`). It
-  rings by day and in the evening (sunrise to midnight) from the city's
-  three phones, and it carries the story's 30% of completion.
+- **KEEP IT LOUD**, the main story (`arc: 'main'`, ids `s1`–`s6`). Job 1
+  is the live cold open (no phone); the rest ring by day and in the evening
+  (sunrise to midnight) from the city's three phones. It carries the
+  story's 30% of completion.
 - **The Night Shift**, the side story (`arc: 'night'`, ids `m1`–`m13`):
   the Graveyard Shift jobs from before V2, with the same ids, so a save
   keeps its progress. It rings only after dark (sunset to sunrise), and
@@ -95,7 +96,7 @@ speaker in the story has one.
 | industrial | RUSTWATER DOCKS | the docks yard and its phone: the Night Shift's |
 | residential | MAPLE FLATS | the Collector, Pike's bus shelter (Night Shift) |
 
-There are four payphones. The main story rings from three
+There are four payphones. The main story (after the cold open) rings from three
 (`phone-oldtown`, which stands just inside Glass Heights by Cobble Row,
 `phone-arts`, `phone-suburbs`) and two main jobs in a row never ring the
 same one; the Night Shift rings only from `phone-docks`. Tests check that
@@ -105,41 +106,53 @@ the people, cars and areas are in the districts the dialogue names.
 
 | # | Id | Job | Phone | Pay | What happens |
 | --- | --- | --- | --- | --- | --- |
-| 1 | `s1` | WRONG STOP | none (the cold open) | — | A getaway crashes at your bus shelter: GET IN · LOSE THE HEAT. *Not written yet: it comes with the live cold open (V2-07).* |
+| 1 | `s1-wrongstop` | WRONG STOP | none (the cold open) | $300 | A getaway crashes at your bus shelter: GET IN · LOSE THE HEAT. |
 | 2 | `s2-noise` | MAKE SOME NOISE | oldtown | $1,000 | 2,500 points of mayhem in Cobble Row, with a street race started there to crash into. |
 | 3 | `s3-quiet` | QUIET PLEASE | suburbs | $1,500 | Flatten Lull's two wardens in Glass Heights, pick up Lionel, get him to Neon Mile. |
 | 4 | `s4` | NINETY-NINE PROBLEMS | — | — | Take Doreen's van back off a Graveyard Shift tow truck, unscratched. The Night Shift's one cameo. *Outline.* |
 | 5 | `s5` | RIBBON CUTTING | — | — | Wreck the Mayor's limo. *Outline.* |
 | 6 | `s6` | QUIETEST CITY | — | — | 5,000 points of mayhem near the award judges' coach, with a race, a fire and a turf flare-up started along its route. *Outline.* |
 
-Until `s1` is in the game the main story starts at `s2` from a payphone
-(the next job is the first one not passed, and an id the build hasn't got
-is simply skipped), so `s2`'s call has Doreen introduce herself; once the
-cold open's outro does that, her first line can go.
+The cold open runs once (a fresh save's first PLAY; Settings → REPLAY
+OPENING for another go). Once it has run, `s2` rings whether or not `s1`
+was passed (died on the way, say), and a save from before the cold open
+with real play skips it altogether and starts at `s2`. Doreen introduces
+herself in `s1`'s outro, so `s2`'s call opens with Lull's notice instead
+(the backstory beat, which the outline had on a radio card).
 
-### 1. WRONG STOP (outline)
+### 1. WRONG STOP
 
-The cold open: no card, the only prompt over the live crash.
+`s1-wrongstop` · no phone (`direct`: the cold open starts it) · $300
 
-```
-GET IN · LOSE THE HEAT
-[TAKE THE HEAT stamps; two patrol cars swing in behind you]
+PLAY drops the camera on a bus pulling in at the shelter nearest the
+safehouse, with you standing at it. Sirens off screen; then a getaway
+comes down the far lane flat out, swerves across and piles into the kerb
+a few steps away, and its driver legs it. No card, no call: the only
+prompt over the live crash.
 
-JOB 1 OUTRO, the nearest payphone
-DOREEN: You're the alarm fitter. Lost your job tonight, I heard. I lost my chimes.
-DOREEN: Lull's banned anything louder than a sigh. Fancy keeping this city loud? It pays.
-DOREEN: Badly. But in ice cream.
+1. **GET IN · LOSE THE HEAT.** The crashed getaway (it's the job's car;
+   wrecked, the job fails: THE GETAWAY IS WRECKED). Getting in is TAKE
+   THE HEAT: the chase's cops are yours, at 2 stars, and the stamp lands.
+   If the chase couldn't start, the getaway is already there, crashed,
+   and getting in brings the same.
+2. **LOSE THE HEAT.** The one main job that asks it: the stars came with
+   the car.
 
-BACKSTORY BEAT (radio card, first drive after job 1)
-MAYOR LULL: Mayor Lull. From midnight, car alarms are illegal. So are chimes. And buskers. And joy.
-MAYOR LULL: Alarm fitters, please hand in your alarms. Quietly.
-```
+> **DOREEN:** You're the alarm fitter. Lost your job tonight, I heard. I lost my chimes.
+> **DOREEN:** Lull's banned anything louder than a sigh. Fancy keeping this city loud? It pays.
+> **DOREEN:** Badly. But in ice cream.
+
+The outro plays on the debrief card (Doreen on the nearest payphone).
+Story job 2 also opens the side modes: Chaos Run, frenzies, races,
+exports and taxi fares stay hidden from a brand-new player until it's
+passed.
 
 ### 2. MAKE SOME NOISE
 
 `s2-noise` · phone-oldtown · $1,000
 
-> **DOREEN:** Doreen, from the ice cream van. You're the alarm fitter Lull sacked. I lost my chimes the same night.
+> **MAYOR LULL:** Mayor Lull. From midnight, car alarms are illegal. So are chimes. And buskers. And joy.
+> **MAYOR LULL:** Alarm fitters, please hand in your alarms. Quietly.
 > **DOREEN:** Twenty years you wired Cobble Row. Every alarm on that street is yours. Remind them.
 
 1. **MAKE COBBLE ROW LOUD · 0 / 2,500.** A `mayhem` step: score awards
