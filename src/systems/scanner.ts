@@ -50,7 +50,10 @@ export type StreetTopic =
   | 'arrest'
   | 'suspectDown'
   | 'citizensArrest'
-  | 'bagReturned';
+  | 'bagReturned'
+  | 'raceJoin'
+  | 'raceCrasher'
+  | 'vanNicked';
 
 /** The player's own: a star up, a district crossed or a car switched while wanted, and how it ended. */
 export type YouTopic = 'wanted' | 'heading' | 'switched' | 'evaded' | 'respray' | 'busted';
@@ -199,6 +202,10 @@ export const TOPICS: Readonly<Record<ScannerTopic, TopicSpec>> = {
   suspectDown: { priority: 1, cooldown: 60, lines: ['SUSPECT DOWN IN {place}. AMBULANCE REQUESTED.'] },
   citizensArrest: { priority: 1, cooldown: 60, lines: ['GETAWAY STOPPED BY THE PUBLIC, {place}. CHEEKY.'] },
   bagReturned: { priority: 1, cooldown: 60, lines: ['BAG HANDED BACK IN {place}. FAIR PLAY.'] },
+  // Gatecrashing (V2-12): an opportunity taken, so it's said over the race's own ping.
+  raceJoin: { priority: 3, cooldown: 60, lines: ['GATECRASHER IN THE {place} RACE. NOBODY INVITED THEM.'] },
+  raceCrasher: { priority: 3, cooldown: 60, lines: ['RACE IN {place} WON BY A GATECRASHER. RACERS FUMING.'] },
+  vanNicked: { priority: 2, cooldown: 90, lines: ["ICE CREAM VAN NICKED IN {place}. QUEUE IN PURSUIT."] },
   // The player's own (wanted lines: WANTED_LINES by stars).
   wanted: { priority: 4, cooldown: 0, lines: [] },
   heading: { priority: 4, cooldown: 30, lines: ['{suspect} HEADING INTO {place}.', '{suspect} NOW IN {place}. STAY ON IT.'] },
@@ -243,12 +250,16 @@ export const STREET_TOPICS: Readonly<Partial<Record<StreetWhat, StreetTopic>>> =
   suspectDown: 'suspectDown',
   citizensArrest: 'citizensArrest',
   bagReturned: 'bagReturned',
+  raceJoin: 'raceJoin',
+  raceCrasher: 'raceCrasher',
+  vanNicked: 'vanNicked',
 };
 
 /** Street events that end an incident: its scene's pings close by go. */
 export const CLOSES: Readonly<Partial<Record<StreetWhat, string>>> = {
   fireOut: 'fire',
   raceWon: 'race',
+  raceCrasher: 'race',
   arrest: 'chase',
   suspectDown: 'chase',
   citizensArrest: 'chase',

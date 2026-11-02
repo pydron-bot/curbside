@@ -759,6 +759,11 @@ export class GameAudio {
         return this.oneShot('door', e, FALLOFF.near, 0.6, 0.2, (v) => sfx.door(v, true));
       case 'haveAGo':
         return; // heard through the knock-down and the award's sting
+      // Gatecrashing (V2-12): a racer leans on the horn as you pull in; the van's music dragged to a stop.
+      case 'raceJoin':
+        return this.horn(e.x, e.z, 0.6);
+      case 'vanNicked':
+        return this.oneShot('ambient', e, FALLOFF.punch, 0.55, 0.15, sfx.recordScratch);
       // The incidents (V2).
       case 'cashRun':
         // The armoured van's back doors.

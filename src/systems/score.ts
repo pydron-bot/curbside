@@ -24,7 +24,10 @@ export type ScoreKind =
   | 'wrapped'
   | 'noRespect'
   // A chain the player set off in the city (systems/mess.ts): DOMINO ×N, all bonus.
-  | 'domino';
+  | 'domino'
+  // Gatecrashing the city (V2-12): a street race won from the outside, the ice cream van driven off from its queue.
+  | 'raceCrasher'
+  | 'vanNicked';
 
 export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   nearMiss: 100,
@@ -47,6 +50,8 @@ export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   noRespect: 250,
   // All bonus: see systems/mess.ts dominoBonus().
   domino: 0,
+  raceCrasher: 750,
+  vanNicked: 300,
 };
 
 export const LABELS: Record<ScoreKind, string> = {
@@ -68,6 +73,8 @@ export const LABELS: Record<ScoreKind, string> = {
   wrapped: "THAT'S A WRAP",
   noRespect: 'NO RESPECT',
   domino: 'DOMINO',
+  raceCrasher: 'RACE CRASHER',
+  vanNicked: 'VAN NICKED',
 };
 
 /** Shaking off a chase of this many stars or more earns the EVADED bonus. */

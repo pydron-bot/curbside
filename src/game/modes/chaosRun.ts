@@ -87,6 +87,11 @@ export function categoryOf(kind: ScoreKind): ChaosCategory {
     // A chain set off (systems/mess.ts): the smash that started it.
     case 'domino':
       return 'smash';
+    // Gatecrashing (V2-12): a race won is driving, a van driven off a theft.
+    case 'raceCrasher':
+      return 'stunt';
+    case 'vanNicked':
+      return 'carjack';
     default:
       return kind;
   }

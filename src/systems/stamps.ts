@@ -29,7 +29,10 @@ export type StampId =
   // Shown by the chase handoff (V2-03) through Stamps.show(); not detected here.
   | 'takeTheHeat'
   | 'citizensArrest'
-  | 'haveAGo';
+  | 'haveAGo'
+  // Gatecrashing (V2-12), read off their awards.
+  | 'raceCrasher'
+  | 'vanNicked';
 
 /** Ink: mayhem (hot red), the have-a-go moments (blue), the police (white on blue). */
 export type StampTone = 'mayhem' | 'hero' | 'law';
@@ -60,6 +63,8 @@ export const STAMPS: Readonly<Record<StampId, StampDef>> = {
   takeTheHeat: { label: 'TAKE THE HEAT', sub: 'THEIR COPS ARE YOURS NOW', weight: 8, tone: 'hero' },
   citizensArrest: { label: "CITIZEN'S ARREST", sub: 'THE COPS WAVE YOU THROUGH', weight: 8, tone: 'hero' },
   haveAGo: { label: 'HAVE-A-GO HERO', sub: 'BAG HANDED BACK', weight: 5, tone: 'hero' },
+  raceCrasher: { label: 'RACE CRASHER', sub: "THEIR CAR'S YOURS", weight: 6, tone: 'mayhem' },
+  vanNicked: { label: 'VAN NICKED', sub: 'THE QUEUE WANTS A WORD', weight: 4, tone: 'mayhem' },
 };
 
 export const STAMP_IDS = Object.keys(STAMPS) as StampId[];
@@ -195,6 +200,8 @@ export class StampDetector {
         if (a.kind === 'evaded' && a.points > 0) found = heavier(found, 'nothingToSeeHere');
         // The chase handoff's moments (scenes/chases.ts) share their score kinds' names.
         if (a.kind === 'takeTheHeat' || a.kind === 'citizensArrest' || a.kind === 'haveAGo') found = heavier(found, a.kind);
+        // Gatecrashing (V2-12): the race won, the van driven off.
+        if (a.kind === 'raceCrasher' || a.kind === 'vanNicked') found = heavier(found, a.kind);
         // The award that takes the combo to the top (the fx director's ×10 flash).
         if (a.multiplier === MAX_COMBO - 1) found = heavier(found, 'absoluteScenes');
         break;
