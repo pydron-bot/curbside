@@ -3,8 +3,9 @@
  * and play it headless (Chromium + SwiftShader) on desktop 1280×720 and the
  * iPhone 15 Pro landscape profile at 852×393 and 852×340 (Safari's toolbar
  * showing): it must boot, start a run and simulate 30 s with no page or
- * console errors, and draw under the 150-call budget. A fresh save has no
- * side modes on the title and PLAY is the cold open: the player must be in
+ * console errors, and draw under the 150-call budget. A fresh save's title
+ * is PLAY and SETTINGS (OBSERVE too with Test tools on) and has OBSERVE,
+ * CHARACTER and HOW TO PLAY once the cold open has run; PLAY is the cold open: the player must be in
  * the getaway within 20 s, then again with chases forced off (the fallback),
  * and a second PLAY must not replay it. Then the PWA: the
  * manifest is installable, and once the service worker has the game cached,
@@ -132,8 +133,17 @@ async function coldOpen(page, label, fallback) {
   );
 }
 
+/** The title's buttons on screen, by label (INSTALL comes and goes with the browser's offer: left out). */
+const titleButtons = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll('#title .mbtn')]
+      .filter((el) => el.getClientRects().length > 0)
+      .map((el) => el.querySelector('b').textContent)
+      .filter((t) => t !== 'INSTALL'),
+  );
+
 /** Boot, start a run (the cold open on a fresh save), simulate, draw: the checks every profile gets. `full`: the fallback and a second PLAY too. */
-async function play(page, label, full = true) {
+async function play(page, label, full = true, testTools = false) {
   await page.goto(URL);
   await page.waitForFunction(() => window.__ub, null, { timeout: 90000 });
   await page.waitForTimeout(2000);
@@ -142,6 +152,10 @@ async function play(page, label, full = true) {
     due: !window.__ub.progress.progress.data.opening,
   }));
   check(fresh.titleModes.length === 0 && fresh.due, `${label}: a fresh save: no side modes on the title (${fresh.titleModes.join(', ') || 'none'}), the cold open due`);
+  // PLAY and SETTINGS only (OBSERVE too with Test tools on, as a testing mode).
+  const freshButtons = (await titleButtons(page)).join(', ');
+  const want = testTools ? 'PLAY, OBSERVE, SETTINGS' : 'PLAY, SETTINGS';
+  check(freshButtons === want, `${label}: a fresh save's title: ${freshButtons}${freshButtons === want ? '' : ` (want ${want})`}`);
   await coldOpen(page, label, false);
   const r = await page.evaluate(async () => {
     const u = window.__ub;
@@ -158,10 +172,14 @@ async function play(page, label, full = true) {
   // A 1280×720 'high' frame on SwiftShader takes ~20 s to capture on a busy runner (main and branches
   // alike), so the default 30 s ran out now and then; a hung renderer still fails here.
   await page.screenshot({ path: path.join(opt.out, `${label}.png`), timeout: 120000 });
+  // In the getaway, the cold open has run: OBSERVE (and CHARACTER, HOW TO PLAY) on the title from now on.
+  await page.evaluate(() => window.__ub.enterTitle());
+  const after = (await titleButtons(page)).join(', ');
+  const wantAfter = 'PLAY, OBSERVE, CHARACTER, SETTINGS, HOW TO PLAY';
+  check(after === wantAfter, `${label}: after the cold open, the title: ${after}${after === wantAfter ? '' : ` (want ${wantAfter})`}`);
   if (!full) return r;
   const again = await page.evaluate(() => {
     const u = window.__ub;
-    u.enterTitle();
     u.startGame();
     u.fastForward(1);
     return { phase: u.progress.opening.phase, d: Math.hypot(u.player.ped.x - 9.5, u.player.ped.z - 9.5) };
@@ -444,7 +462,7 @@ try {
     const errors = watch(page, label);
     if (saved) await page.addInitScript((s) => localStorage.setItem('curbside.settings', JSON.stringify(s)), saved);
     try {
-      await play(page, label);
+      await play(page, label, true, !!saved?.testTools);
       if (saved?.testTools) await bugReport(page, label);
       await stampCheck(page, label, false);
       await scannerCheck(page, label);
