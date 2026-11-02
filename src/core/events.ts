@@ -17,7 +17,16 @@ export type GameEvent =
    * A car hit a wall/obstacle or another car (closing speed above a small
    * threshold). impact = closing speed, m/s; (x, z) is the point of contact.
    */
-  | { type: 'crash'; x: number; z: number; impact: number; against: 'static' | 'vehicle'; involvesPlayer: boolean }
+  | {
+      type: 'crash';
+      x: number;
+      z: number;
+      impact: number;
+      against: 'static' | 'vehicle';
+      involvesPlayer: boolean;
+      /** Street furniture knocked flying (its kind: 'hydrant', 'bench'...), if that's what was hit. */
+      prop?: string;
+    }
   /**
    * A vehicle blew up. byPlayer: the player was driving it or hurt it in the
    * last few seconds (directly or with another blast). ownCar: it was the car
@@ -254,7 +263,17 @@ export type StreetWhat =
   // The player in a police chase (scenes/chases.ts): took the getaway and its cops, stopped it by a patrol, floored a suspect.
   | 'takeTheHeat'
   | 'citizensArrest'
-  | 'haveAGo';
+  | 'haveAGo'
+  // Incidents (V2): the cash van's guard out, its cash spilled; chucking-out time at the kebab shop; a funeral's
+  // bell; a hydrant gushing (repeated while it goes); a conga's chant (repeated); a film's ACTION and its staged blast.
+  | 'cashRun'
+  | 'cashSpill'
+  | 'kebab'
+  | 'funeral'
+  | 'hydrant'
+  | 'conga'
+  | 'action'
+  | 'pyro';
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;

@@ -22,13 +22,18 @@ export function roomFor(life: SceneCtx, n = 1): boolean {
  * already drawing comes in (each body is its own batch: a draw call and a
  * shadow pass). Undefined (any crowd body) if nobody's about.
  */
-export function streetBody(life: SceneCtx): BodyKind | undefined {
+export function streetBody(life: SceneCtx, onScreen = false): BodyKind | undefined {
   const crowd = life.d.population.crowd;
   // From a random place in the list, so the bodies stay as mixed as the street's.
   const from = Math.floor(life.d.rand() * crowd.length);
-  for (let k = 0; k < crowd.length; k++) {
-    const c = crowd[(from + k) % crowd.length];
-    if (c.agent.street && c.agent.role === 'civilian') return c.model.bodyKind;
+  // `onScreen`: one already drawn in view, so a group put down where it's seen costs no batch that wasn't drawn.
+  for (let pass = onScreen ? 0 : 1; pass < 2; pass++) {
+    for (let k = 0; k < crowd.length; k++) {
+      const c = crowd[(from + k) % crowd.length];
+      if (!c.agent.street || c.agent.role !== 'civilian') continue;
+      if (pass === 0 && !life.inView(c.agent.s.x, c.agent.s.z, 2)) continue;
+      return c.model.bodyKind;
+    }
   }
   return undefined;
 }
@@ -46,6 +51,25 @@ export function handBack(life: SceneCtx, c: CrowdPed): void {
     return;
   }
   life.unfight(c);
+  c.agent.scene = false;
+  const i = life.people.indexOf(c);
+  if (i >= 0) life.people.splice(i, 1);
+}
+
+/**
+ * Let go of someone as they are: walking, they walk on (handBack); down,
+ * they lie there; swinging at the player (a drunk or a dancer provoked),
+ * they keep swinging. Only for those no scene set on anyone (a
+ * scene's fighter would turn on the player).
+ */
+export function letGo(life: SceneCtx, c: CrowdPed): void {
+  const m = c.agent.mode;
+  if (m !== 'fight' && m !== 'shoot') {
+    handBack(life, c);
+    return;
+  }
+  c.phone = false;
+  if (!life.present(c) || !c.agent.scene) return;
   c.agent.scene = false;
   const i = life.people.indexOf(c);
   if (i >= 0) life.people.splice(i, 1);

@@ -730,6 +730,25 @@ export class GameAudio {
         return this.oneShot('door', e, FALLOFF.near, 0.6, 0.2, (v) => sfx.door(v, true));
       case 'haveAGo':
         return; // heard through the knock-down and the award's sting
+      // The incidents (V2).
+      case 'cashRun':
+        // The armoured van's back doors.
+        return this.oneShot('door', e, FALLOFF.near, 0.6, 0.2, (v) => sfx.door(v, true));
+      case 'cashSpill':
+        return this.oneShot('pickup', e, FALLOFF.punch, 0.7, 0.2, sfx.cashSpill);
+      case 'kebab':
+        return this.oneShot('ambient', e, FALLOFF.punch, 0.45, 0.3, sfx.lastOrders);
+      case 'funeral':
+        return this.oneShot('ambient', e, FALLOFF.horn, 0.35, 0.45, sfx.toll);
+      case 'hydrant':
+        return this.oneShot('ambient', e, FALLOFF.fire, 0.5, 0.2, sfx.gush);
+      case 'conga':
+        return this.oneShot('ambient', e, FALLOFF.punch, 0.45, 0.25, sfx.conga);
+      case 'action':
+        return this.oneShot('ambient', e, FALLOFF.punch, 0.55, 0.25, sfx.clapper);
+      case 'pyro':
+        // The staged blast: the real thing's sound, a little held back.
+        return this.oneShot('explosion', e, FALLOFF.explosion, 0.5, 0.35, (v) => sfx.explosion(v, 0.3));
       default:
         // Sirens are continuous (StreetLife); the rest is heard through what it causes (shots, crashes, horns).
         return;

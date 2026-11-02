@@ -80,6 +80,11 @@ export function categoryOf(kind: ScoreKind): ChaosCategory {
     case 'citizensArrest':
     case 'haveAGo':
       return 'cops';
+    // The incidents' awards count as smashing things up.
+    case 'cashGrab':
+    case 'wrapped':
+    case 'noRespect':
+      return 'smash';
     default:
       return kind;
   }

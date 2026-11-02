@@ -127,4 +127,24 @@ describe('knockable street furniture', () => {
     expect(q.x).toBeCloseTo(0.9 + PED_RADIUS);
     expect(k.isKnocked(3)).toBe(false);
   });
+
+  it('a scene finds the nearest standing hydrant and knocks it over itself (it comes back as usual)', () => {
+    const k = new Knockables([
+      { id: 1, kind: 'hydrant', x: 10, z: 0, radius: 0.25 },
+      { id: 2, kind: 'hydrant', x: 4, z: 0, radius: 0.25 },
+      { id: 3, kind: 'bench', x: 1, z: 0, radius: 0.5 },
+    ]);
+    expect(k.nearest('hydrant', 0, 0, 3)).toBeNull();
+    const h = k.nearest('hydrant', 0, 0, 20)!;
+    expect(h.id).toBe(2);
+    expect(k.knock(h)).toBe(true);
+    expect(k.isKnocked(2)).toBe(true);
+    expect(k.knock(h)).toBe(false);
+    // The next nearest now.
+    expect(k.nearest('hydrant', 0, 0, 20)!.id).toBe(1);
+    const back: number[] = [];
+    k.step([], KNOCK_RESPAWN + 1, () => {});
+    k.restore(far, (item) => back.push(item.id));
+    expect(back).toEqual([2]);
+  });
 });

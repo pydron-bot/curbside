@@ -3,7 +3,9 @@
  * traffic it cruises with for something happening in the city (a police
  * chase, a street race, a fire and its truck, a turf war, an accident, the
  * ice cream van, a bus stop, a busker, a mugging, stray dogs after a
- * runner), follows it while it plays out and goes back to cruising. When
+ * runner, and the V2 incidents: the cash van, chucking-out time, a funeral,
+ * a burst hydrant, a conga, a film shoot; the night's only at night),
+ * follows it while it plays out and goes back to cruising. When
  * and which is ui/attractShow.ts (pure); this starts the scenes round the
  * camera (game/sceneStarter.ts, shared with the TEST menu), asks each for
  * its subject (Scene.subject) and fades a long cut.
@@ -19,8 +21,25 @@ import type { CityLife, Scene, Subject } from './cityLife';
 import { FireCrews } from './scenes/fireCrews';
 import type { SceneId, SceneStarter } from './sceneStarter';
 import { len2 } from '../core/len';
+import { CASH_HOURS, FILM_HOURS, FUNERAL_HOURS, inHours } from '../systems/incidents';
 
-export type HighlightId = 'chase' | 'race' | 'fire' | 'turf' | 'accident' | 'iceCream' | 'bus' | 'busker' | 'mugging' | 'dogs';
+export type HighlightId =
+  | 'chase'
+  | 'race'
+  | 'fire'
+  | 'turf'
+  | 'accident'
+  | 'iceCream'
+  | 'bus'
+  | 'busker'
+  | 'mugging'
+  | 'dogs'
+  | 'cashRun'
+  | 'kebab'
+  | 'funeral'
+  | 'hydrant'
+  | 'conga'
+  | 'filmShoot';
 
 interface Highlight {
   /** The caption's first half ("POLICE CHASE · NEON MILE"). */
@@ -31,6 +50,8 @@ interface Highlight {
   start: SceneId;
   /** Reset it once out of view if the show moves on before it's over (false: it winds down by itself). */
   clear: boolean;
+  /** Only shown at these hours (the title's clock), wrapping past midnight: the night's incidents at night. */
+  hours?: readonly [number, number];
 }
 
 export const HIGHLIGHTS: Readonly<Record<HighlightId, Highlight>> = {
@@ -44,6 +65,12 @@ export const HIGHLIGHTS: Readonly<Record<HighlightId, Highlight>> = {
   busker: { caption: 'STREET SHOW', kind: 'busker', start: 'busker', clear: true },
   mugging: { caption: 'MUGGING', kind: 'mugging', start: 'mugging', clear: true },
   dogs: { caption: 'STRAY DOGS', kind: 'dog', start: 'dogChase', clear: false },
+  cashRun: { caption: 'CASH RUN', kind: 'cashRun', start: 'cashRun', clear: true, hours: CASH_HOURS },
+  kebab: { caption: 'CHUCKING-OUT TIME', kind: 'kebab', start: 'kebab', clear: true, hours: [22, 5] },
+  funeral: { caption: 'FUNERAL', kind: 'funeral', start: 'funeral', clear: true, hours: FUNERAL_HOURS },
+  hydrant: { caption: 'BURST MAIN', kind: 'hydrant', start: 'hydrant', clear: true },
+  conga: { caption: 'CONGA', kind: 'conga', start: 'conga', clear: true, hours: [19, 4] },
+  filmShoot: { caption: 'ON SET', kind: 'filmShoot', start: 'filmShoot', clear: true, hours: FILM_HOURS },
 };
 const IDS = Object.keys(HIGHLIGHTS) as HighlightId[];
 /** A chase is the scooter this share of the time. */
@@ -57,6 +84,8 @@ export interface AttractHighlightsDeps {
   rand: () => number;
   /** May one start now (the title is up)? */
   ready(): boolean;
+  /** The title's hour, 0..24 (a night's incident only shows at night). */
+  hour?(): number;
 }
 
 /** What the title camera should do this frame (step's answer). */
@@ -143,6 +172,7 @@ export class AttractHighlights implements ShowStage<HighlightId> {
   start(id: HighlightId): boolean {
     const { life, starter } = this.d;
     const h = HIGHLIGHTS[id];
+    if (h.hours && !inHours(this.d.hour?.() ?? 13, h.hours)) return false;
     // One at a time: whatever the last left running goes now.
     if (this.leftover) {
       this.leftover.reset();
