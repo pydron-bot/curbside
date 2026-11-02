@@ -42,7 +42,8 @@ independently reviewed and fixed, then merged and play-tested:
 3. **Look:** batched rendering (all people/cars/glows in a few draw calls), sun
    shadows, ACES + grade, shader-drawn roads/buildings, districts, 12-minute
    day/night, street light pools, desktop bloom (`src/render/look.ts`).
-4. **UI:** title over a live attract mode, pause/settings/how-to, rotate card,
+4. **UI:** title over a live attract mode (framed right of the menu, cutting to
+   city-scene highlights: README *Title highlights*), pause/settings/how-to, rotate card,
    touch overhaul (point-to-steer, pedal pad, twin-stick aim), mouse and
    gamepad aim, new HUD, radar with blips/waypoints, haptics (`src/ui/`).
 5. **FX:** particle pools, skid marks, sparks, tracers, muzzle flashes,

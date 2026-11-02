@@ -74,6 +74,8 @@ export class Buses implements Scene {
   private readonly byLane = new Map<number, BusStop>();
   private readonly looked = new Set<BusStop>();
   private scan = 0;
+  /** The run force() started (the title's highlight watches it, not a bus adopted from traffic). */
+  private forced: Run | null = null;
   private readonly left = { m: 0 };
   private readonly door = { x: 0, z: 0 };
   private readonly spot: Stand = { x: 0, z: 0, heading: 0 };
@@ -119,6 +121,7 @@ export class Buses implements Scene {
   reset(): void {
     for (const r of this.runs) this.endRun(r);
     this.runs.length = 0;
+    this.forced = null;
     for (const w of this.waiting) w.crowd.close();
     this.waiting.length = 0;
     this.looked.clear();
@@ -132,15 +135,13 @@ export class Buses implements Scene {
     for (const w of this.waiting) labelMembers(out, w.crowd.members, 'BUS STOP', true);
   }
 
-  /** A bus pulling in (framed with its stop) or at the stop; nothing once it's away. */
+  /** The bus force() sent pulling in (framed with its stop) or at the stop; nothing once it's away. */
   subject(out: Subject): boolean {
-    for (const r of this.runs) {
-      if (r.phase === 'drive' || !r.stop) continue;
-      const s = r.v.sim;
-      const st = r.stop;
-      return watch(out, (s.x + st.waitX) / 2, (s.z + st.waitZ) / 2, s.vx / 2, s.vz / 2);
-    }
-    return false;
+    const r = this.forced;
+    if (!r || !this.runs.includes(r) || r.phase === 'drive' || !r.stop) return false;
+    const s = r.v.sim;
+    const st = r.stop;
+    return watch(out, (s.x + st.waitX) / 2, (s.z + st.waitZ) / 2, s.vx / 2, s.vz / 2);
   }
 
   /**
@@ -160,6 +161,7 @@ export class Buses implements Scene {
     const r = this.track(v);
     r.phase = 'pull';
     r.stop = best;
+    this.forced = r;
     return true;
   }
 

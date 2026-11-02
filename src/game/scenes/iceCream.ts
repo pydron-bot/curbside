@@ -64,6 +64,8 @@ export class IceCream implements Scene {
   readonly kind = 'iceCream';
   readonly vans: Van[] = [];
   private scan = 0;
+  /** The van force() put down (the title's highlight watches it, not one adopted from traffic). */
+  private forced: Van | null = null;
   private readonly left = { m: 0 };
   private readonly p = { x: 0, z: 0 };
   private readonly driver: SceneDriver;
@@ -116,6 +118,7 @@ export class IceCream implements Scene {
   reset(): void {
     for (const van of this.vans) this.untrack(van);
     this.vans.length = 0;
+    this.forced = null;
   }
 
   describe(out: LabelSink): void {
@@ -126,14 +129,12 @@ export class IceCream implements Scene {
     }
   }
 
-  /** A van pulling in or open; nothing once it drives on. */
+  /** The van force() put down, while it's open; nothing once it drives on. */
   subject(out: Subject): boolean {
-    for (const van of this.vans) {
-      if (van.phase === 'drive') continue;
-      const s = van.v.sim;
-      return watch(out, s.x, s.z, s.vx, s.vz);
-    }
-    return false;
+    const van = this.forced;
+    if (!van || !this.vans.includes(van) || van.phase === 'drive') return false;
+    const s = van.v.sim;
+    return watch(out, s.x, s.z, s.vx, s.vz);
   }
 
   /** Debug (__ub) and the title's highlights: a van put down at the kerb near the player, open, with a few already queueing. */
@@ -163,6 +164,7 @@ export class IceCream implements Scene {
     van.z = bz;
     van.heading = bh;
     this.open(van);
+    this.forced = van;
     for (let i = 0; i < 3; i++) {
       const c = life.addPed(bx - Math.cos(bh) * 4 + (life.d.rand() - 0.5) * 4, bz + Math.sin(bh) * 4 + (life.d.rand() - 0.5) * 4, 0, undefined, streetBody(life));
       c.agent.street = true;
