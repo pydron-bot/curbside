@@ -92,6 +92,7 @@ import { getDevice } from './render/quality';
 import { AttractCamera, LEAD_ATTRACT } from './ui/attract';
 import { TitleCamera } from './ui/titleCamera';
 import { AttractHighlights } from './game/attractHighlights';
+import { storyScenes } from './game/sceneStarter';
 import { FrontDoor } from './ui/frontDoor';
 import { addDiagnosticsButton, Diagnostics } from './ui/diagnostics';
 import { blockBrowserGestures } from './ui/gestures';
@@ -1621,6 +1622,8 @@ const testTools = new TestTools({
 });
 // The title's highlights: now and then the camera leaves traffic for a scene (started like the TEST menu's).
 const highlights = new AttractHighlights({ life: cityLife, starter: testTools.starter, rand, ready: () => frontDoor.inTitle });
+// A story job's scenes (its 'scene' action) start the same way, featured while it runs.
+progress.missions.useScenes(storyScenes(cityLife, testTools.starter));
 const titleCam = new TitleCamera({
   attract,
   highlights,

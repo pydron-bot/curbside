@@ -9,10 +9,17 @@
  * MissionRun only keeps the rules: each step it reads the world through a
  * MissionView (positions and states by tag, provided by the glue) and says
  * when a step is done, the mission passed or failed. Pure logic, unit-tested.
+ *
+ * Two arcs share the phones: the main story (KEEP IT LOUD) rings from sunrise
+ * to midnight from the city's phones, the Night Shift side story only after
+ * dark from the docks-yard phone (arcRings, nextInArc).
  */
 import type { BodyKind } from '../game/bodies';
+import type { SceneId } from '../game/sceneStarter';
 import type { VehicleArchetype } from '../entities/vehicle';
 import type { WeaponKind } from './weapons';
+import { SUNRISE, SUNSET } from '../render/timeOfDay';
+import { districtAt, type District } from '../world/districts';
 import { len2 } from '../core/len';
 
 export interface DialogueLine {
@@ -35,11 +42,43 @@ export type MissionAction =
   /** The tagged person gets into the player's car (off the street). */
   | { do: 'board'; tag: string }
   /** The passenger gets out beside the player's car and walks off. */
-  | { do: 'alight'; tag: string };
+  | { do: 'alight'; tag: string }
+  /**
+   * One of the city's scenes started round (x, z) once the player is within
+   * `r` m of it, and featured (nothing holds it off): a street race, a fight,
+   * a fire. It may not start (no room, no people near); no step depends on it.
+   */
+  | SceneAction;
 
-/** A fail condition on a step: a tagged car wrecked, or left behind / gone. */
+/** The scenes a job can start (SceneStarter's, less the TEST menu's rain). */
+export type MissionSceneId = Exclude<SceneId, 'rain'>;
+
+export interface SceneAction {
+  do: 'scene';
+  scene: MissionSceneId;
+  x: number;
+  z: number;
+  r?: number;
+}
+
+/**
+ * Where a mayhem step's points count: anywhere in `district`, or else within
+ * `r` m of the tagged car or person (of (x, z) without a tag, or once it's
+ * gone). (x, z) is also where the radar points from outside.
+ */
+export interface MayhemArea {
+  x: number;
+  z: number;
+  r?: number;
+  district?: District;
+  tag?: string;
+}
+
+/** A fail condition on a step: a tagged car wrecked, or left behind / gone, or a tagged person knocked down. */
 export interface MissionFail {
   wrecked?: string;
+  /** Fails when the tagged person is down (someone you're there to pick up). */
+  down?: string;
   /** Fails when the tagged car is gone or further than LOST_RANGE from the player. */
   lost?: string;
   reason: string;
@@ -66,13 +105,20 @@ export type MissionStep = StepBase &
     | { kind: 'pickup'; tag: string }
     | { kind: 'destroy'; tags: string[] }
     | { kind: 'knockOut'; tag: string }
+    /** Knock down every one of the tagged people (in any order). */
+    | { kind: 'knockOutAll'; tags: string[] }
     /** Stay alive and free this long (the wanted level is the start actions' job). */
     | { kind: 'survive'; seconds: number }
     | { kind: 'loseHeat' }
     | { kind: 'collect'; points: ReadonlyArray<readonly [number, number]>; r?: number }
     /** Checkpoints at intersections (ix, iz), in order. */
     | { kind: 'race'; nodes: ReadonlyArray<readonly [number, number]> }
+    /** Score this many chaos points (score awards, fed by the glue) in the area, or anywhere without one. */
+    | { kind: 'mayhem'; points: number; near?: MayhemArea }
   );
+
+/** Which story a job belongs to: the main story, or the Night Shift side story. */
+export type MissionArc = 'main' | 'night';
 
 export interface MissionDef {
   id: string;
@@ -88,6 +134,10 @@ export interface MissionDef {
   chapter?: number;
   /** Hold the city's busy scenes off for the whole job (a timed run); left out, the city carries on round it. */
   quiet?: boolean;
+  /** The main story if left out. */
+  arc?: MissionArc;
+  /** Starts without a payphone (the glue begins it itself, as the cold open does): never rings. */
+  direct?: boolean;
   steps: MissionStep[];
 }
 
@@ -144,8 +194,10 @@ export class MissionRun {
   /** Race steps: the next checkpoint index; pick-ups: time held beside them. */
   next = 0;
   held = 0;
-  /** destroy steps: how many of the tags are wrecks. */
+  /** destroy and knockOutAll steps: how many of the tags are wrecks / down. */
   destroyed = 0;
+  /** mayhem steps: points scored in the area so far. */
+  mayhem = 0;
   state: 'running' | 'passed' | 'failed' = 'running';
   failReason = '';
 
@@ -174,12 +226,24 @@ export class MissionRun {
         const car = v.vehicle(f.wrecked);
         if (!car || car.wrecked) return this.fail(f.reason);
       }
+      if (f.down && v.ped(f.down)?.down) return this.fail(f.reason);
       if (f.lost) {
         const car = v.vehicle(f.lost);
         if (!car || len2(car.x - v.x, car.z - v.z) > LOST_RANGE) return this.fail(f.reason);
       }
     }
     return this.check(s, dt, v);
+  }
+
+  /**
+   * Points scored (a score award), with the player at (x, z): a mayhem step
+   * counts them if they're in its area. The step passes on the next update
+   * (an award comes mid-step, while other systems are halfway through theirs).
+   */
+  award(points: number, v: MissionView): void {
+    const s = this.step;
+    if (this.state !== 'running' || !s || s.kind !== 'mayhem' || points <= 0) return;
+    if (!s.near || inArea(s.near, v.x, v.z, v)) this.mayhem += points;
   }
 
   /** The mission is off (WASTED, BUSTED, quit). */
@@ -220,6 +284,18 @@ export class MissionRun {
       }
       case 'knockOut':
         return v.ped(s.tag)?.down ? this.advance(s) : null;
+      case 'knockOutAll': {
+        let n = 0;
+        for (const tag of s.tags) if (v.ped(tag)?.down) n++;
+        if (n === s.tags.length) return this.advance(s);
+        if (n !== this.destroyed) {
+          this.destroyed = n;
+          return { kind: 'progress' };
+        }
+        return null;
+      }
+      case 'mayhem':
+        return this.mayhem >= s.points ? this.advance(s) : null;
       case 'survive':
         return this.stepTime >= s.seconds ? this.advance(s) : null;
       case 'loseHeat':
@@ -267,10 +343,29 @@ export class MissionRun {
     this.next = 0;
     this.held = 0;
     this.destroyed = 0;
+    this.mayhem = 0;
     this.collected = s.kind === 'collect' ? s.points.map(() => false) : [];
     return { kind: 'step', index: this.index, step: s, prev };
   }
 }
+
+/** Is (x, z) in a mayhem step's area? */
+export function inArea(a: MayhemArea, x: number, z: number, v: MissionView): boolean {
+  if (a.district) return districtAt(x, z) === a.district;
+  let cx = a.x;
+  let cz = a.z;
+  if (a.tag) {
+    const t = v.vehicle(a.tag) ?? v.ped(a.tag);
+    if (t) {
+      cx = t.x;
+      cz = t.z;
+    }
+  }
+  return len2(x - cx, z - cz) <= (a.r ?? MAYHEM_RADIUS);
+}
+
+/** A mayhem area without a radius reaches this far, m. */
+export const MAYHEM_RADIUS = 120;
 
 /** A repeat job pays this share of the story reward (rounded to $50). */
 export const REPLAY_PAY = 0.5;
@@ -306,4 +401,103 @@ export function missionTags(def: MissionDef): { cars: string[]; peds: string[] }
     }
   }
   return { cars: [...cars], peds: [...peds] };
+}
+
+// --- The two arcs ---------------------------------------------------------------
+
+/** The Night Shift's phone (the docks yard's); the main story never rings it. */
+export const NIGHT_PHONE = 'phone-docks';
+
+export function arcOf(def: MissionDef): MissionArc {
+  return def.arc ?? 'main';
+}
+
+/**
+ * Does `arc`'s phone ring at `hour`? The Night Shift only after dark; the
+ * main story by day and in the evening (sunrise to midnight).
+ */
+export function arcRings(arc: MissionArc, hour: number): boolean {
+  return arc === 'night' ? hour >= SUNSET || hour < SUNRISE : hour >= SUNRISE;
+}
+
+/**
+ * What `arc` has next: its first job not passed (in data order, so a job
+ * this build hasn't got is simply skipped), or once all are passed a REPEAT
+ * JOB (replayJob over the jobs that ring). Null when there's nothing to ring
+ * for: a `direct` job is next (the glue starts that), or the arc has none.
+ */
+export function nextInArc(missions: readonly MissionDef[], arc: MissionArc, passed: readonly string[], replays: number): { job: MissionDef; replay: boolean } | null {
+  const jobs = missions.filter((m) => arcOf(m) === arc);
+  const story = jobs.find((m) => !passed.includes(m.id));
+  if (story) return story.direct ? null : { job: story, replay: false };
+  const job = replayJob(
+    jobs.filter((m) => !m.direct),
+    passed,
+    replays,
+  );
+  return job ? { job, replay: true } : null;
+}
+
+// --- Scenes a job starts ---------------------------------------------------------
+
+/** What the 'scene' action needs from the city (game/sceneStarter.ts storyScenes). */
+export interface SceneHost {
+  /** Start `id` round (x, z) and feature it (nothing holds it off); false if it couldn't start. */
+  start(id: MissionSceneId, x: number, z: number): boolean;
+  /** Stop featuring what start() featured (the job is over). */
+  unfeature(): void;
+}
+
+/** A 'scene' action starts within this of the player, m (unless it says). */
+export const SCENE_REACH = 110;
+/** A scene that couldn't start is tried once more this long after, s. */
+export const SCENE_REROLL = 4;
+
+/**
+ * A job's scenes: each waits for the player to come within reach of its
+ * point, then is tried, and re-rolled once if it couldn't start; after
+ * that it's dropped quietly. One at a time, in order. end() (a pass, a
+ * fail, WASTED, BUSTED, quit) drops the rest and stops featuring.
+ */
+export class MissionScenes {
+  readonly pending: SceneAction[] = [];
+  /** Tries at the first pending one. */
+  private tries = 0;
+  private wait = 0;
+  /** One started, so something is featured. */
+  private featuring = false;
+
+  request(a: SceneAction): void {
+    this.pending.push(a);
+  }
+
+  /** One sim step, the player at (x, z). Returns the scene that started, if one did. */
+  step(dt: number, x: number, z: number, host: SceneHost | null): SceneAction | null {
+    const a = this.pending[0];
+    if (!a || !host) return null;
+    if ((this.wait -= dt) > 0 || len2(x - a.x, z - a.z) > (a.r ?? SCENE_REACH)) return null;
+    this.tries++;
+    if (host.start(a.scene, a.x, a.z)) {
+      this.featuring = true;
+      this.next();
+      return a;
+    }
+    if (this.tries >= 2) this.next();
+    else this.wait = SCENE_REROLL;
+    return null;
+  }
+
+  end(host: SceneHost | null): void {
+    this.pending.length = 0;
+    this.tries = 0;
+    this.wait = 0;
+    if (this.featuring) host?.unfeature();
+    this.featuring = false;
+  }
+
+  private next(): void {
+    this.pending.shift();
+    this.tries = 0;
+    this.wait = 0;
+  }
 }

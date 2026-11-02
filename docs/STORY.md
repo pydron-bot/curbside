@@ -4,13 +4,40 @@ The story jobs, their cast and the script. The data lives in
 `src/systems/missionsData.ts` and is the source of truth: if you edit a
 line there, update it here too (and the other way round).
 
-## Premise
+There are two arcs on the payphones:
 
-The **Graveyard Shift** is a night-time tow crew that tows rather more than
-it should. The player answers a payphone, passes Vex's audition and ends up
-on the crew. Chapter 1 is the war with Deacon Pike's Chrome Saints. In
-chapter 2, *The Ledger*, Pike's money leads to the man who was running him
-all along: the city's Parking Commissioner.
+- **KEEP IT LOUD**, the main story (`arc: 'main'`, ids `s1`–`s6`). It
+  rings by day and in the evening (sunrise to midnight) from the city's
+  three phones, and it carries the story's 30% of completion.
+- **The Night Shift**, the side story (`arc: 'night'`, ids `m1`–`m13`):
+  the Graveyard Shift jobs from before V2, with the same ids, so a save
+  keeps its progress. It rings only after dark (sunset to sunrise), and
+  only from the docks-yard phone, with a moon (☾) on the radar and on the
+  call card. PROGRESS shows it on its own row; it isn't weighted.
+
+In the evening both can ring at once, never at the same phone.
+
+## Premise: KEEP IT LOUD
+
+You fitted car alarms for twenty years; half the alarms in Cobble Row are
+yours. Mayor Prudence Lull, chasing the national *Quietest City* award,
+passes the **Quiet Streets Act**: from midnight, car alarms, chimes,
+buskers and kebab vans are banned after ten. Her American consultant wrote
+"curbside nuisances" into the Act, nobody fixed the spelling, and the kerb
+traders wear it as a badge: "We're the Curbside." (One joke, not a running
+gag.)
+
+You're sacked the same night. You're waiting for the night bus with your
+toolbox when a getaway crashes at your shelter with the door open. You get
+in. Lose the heat and a payphone rings: Doreen from the ice cream van needs
+someone with nothing to lose. The kerbside traders (Doreen, Lionel the
+busker, the kebab shop) hire you to keep the city loud, and every job asks
+for mayhem, not stealth. No main job fails you for getting stars: the
+villain wants the city quiet.
+
+**The player** is an alarm fitter, never named or gendered. The traders
+call you **"Alarms"**. Your trade is the joke that runs under the mayhem:
+every crash, bullet and blast sets off "your" alarms.
 
 ## Tone
 
@@ -19,65 +46,189 @@ all along: the city's Parking Commissioner.
 - **British English:** pavement, nan, lolly, lollipop man, kerb.
 - **Short.** At most three lines per call (the card staggers three; a test
   enforces it). Keep a line under about 100 characters so the card fits
-  the iPhone's 852×340 layout. One or two sentences each.
+  the iPhone's 852×340 layout (a test allows 105). One or two sentences
+  each.
 - **Voices:**
+  - **Doreen** runs the ice cream van and the traders. Brisk, warm, a bit
+    menacing; she gives the instruction and pays in ice cream. Ends on a
+    dry one-word kicker ("Lovely.").
+  - **Lionel** is a busker and a performer at all times: grand,
+    self-pitying, devoted to his hat.
+  - **Mayor Lull** speaks in council notices on the radio: soft, prim,
+    everything "quietly". She never shouts. She's never seen.
   - **Vex** is dry and in charge, and ends calls with the instruction.
   - **Tuna** panics, overshares and gets the last word.
   - **Pike** was pompous in chapter 1 and is pompous and broke in chapter 2.
   - **Clamp** speaks like a council letter: formal, no contractions,
     "Good evening."
-- **Objective lines** are capitals, under about 38 characters, and say what
-  to do: `STEAL …`, `BRING IT TO …`, `LOSE THE HEAT`.
+- **Objective lines** are capitals, under about 38 characters (a test
+  allows 40), and say what to do: `STEAL …`, `BRING IT TO …`,
+  `MAKE COBBLE ROW LOUD`.
 
 ## Cast
 
 | Speaker label | Who | Drawn as | Card badge |
 | --- | --- | --- | --- |
+| `DOREEN` | Runs the ice cream van, and the kerb traders. Lost her chimes to the Act. | (not seen yet) | mint |
+| `LIONEL` | Busker. Red waistcoat, a hat that is his livelihood. | `ped_slim`, red shirt | violet |
+| `MAYOR LULL` | Mayor Prudence Lull. Wants the *Quietest City* award. Heard on the radio, never seen. | — | pearl |
 | `VEX` | Runs the Graveyard Shift. Orange hair, blue overalls, toolbelt. | `vex` GLB | pink |
 | `LIL' TUNA` | Vex's mechanic. Short, pink hoodie, big headphones. | `tuna` GLB | yellow |
 | `DEACON PIKE` | Leader of the Chrome Saints in chapter 1. Ruined and broke in chapter 2, and a reluctant informant. | `pike` GLB | steel blue |
 | `COMMISSIONER CLAMP` | Parking Commissioner, runs the city impound. Grey suit, clipboard. | `ped_coat`, grey shirt | traffic-cone orange |
-| — | The Collector, Pike's money man (chapter 1, job 7). | `pike` GLB | — |
-| — | Clamp's traffic wardens (chapter 2, job 5). Hi-vis yellow. | `ped_stocky` | — |
-| — | The Mayor. Mentioned, never seen. | — | — |
+| — | Lull's wardens (main story, job 3) and Clamp's (Night Shift job 13). Hi-vis yellow. | `ped_stocky` | — |
+| — | The Collector, Pike's money man (Night Shift job 7). | `pike` GLB | — |
 
-The card picks a badge colour from the speaker label: TUNA, PIKE and CLAMP
-have their own, and anyone else gets Vex's pink
-(`DialogueCard.show` in `src/ui/progressScreens.ts`, colours in
-`src/ui/progress.css`). A new speaker needs a line in both.
+The card picks a badge colour from the speaker label (`badgeFor` and
+`BADGES` in `src/ui/progressScreens.ts`, colours in `src/ui/progress.css`):
+TUNA, PIKE, CLAMP, DOREEN, LIONEL and LULL have their own, and anyone else
+gets Vex's pink. A new speaker needs a line in both; a test checks every
+speaker in the story has one.
 
 ## Places
 
-The district names are still placeholders (`DISTRICT_NAMES` in
-`src/world/districts.ts`). Chapter 2 uses them, and a test checks that its
-spawns really are in the districts the dialogue names. Chapter 1's text
-still says "arts quarter", "suburbs" and "old town".
-
 | District | Name | In the story |
 | --- | --- | --- |
-| downtown | GLASS HEIGHTS | the safehouse, the city impound, Clamp's office |
-| oldtown | COBBLE ROW | the Saints' vans (ch. 1) |
-| arts | NEON MILE | Tuna's hide-outs (ch. 1), Clamp's tow-away zone (ch. 2) |
-| industrial | RUSTWATER DOCKS | the docks yard, where Vex takes deliveries |
-| residential | MAPLE FLATS | the Collector (ch. 1), Pike's bus shelter (ch. 2) |
+| downtown | GLASS HEIGHTS | Lull's wardens and Lionel (job 3); the safehouse, the city impound, Clamp's office |
+| oldtown | COBBLE ROW | the street you wired (job 2); the Saints' vans (Night Shift) |
+| arts | NEON MILE | where Lionel plays (job 3); Tuna's hide-outs, Clamp's tow-away zone (Night Shift) |
+| industrial | RUSTWATER DOCKS | the docks yard and its phone: the Night Shift's |
+| residential | MAPLE FLATS | the Collector, Pike's bus shelter (Night Shift) |
 
-There are four payphones, and two jobs in a row never ring the same one.
-`phone-oldtown` actually stands just inside Glass Heights.
+There are four payphones. The main story rings from three
+(`phone-oldtown`, which stands just inside Glass Heights by Cobble Row,
+`phone-arts`, `phone-suburbs`) and two main jobs in a row never ring the
+same one; the Night Shift rings only from `phone-docks`. Tests check that
+the people, cars and areas are in the districts the dialogue names.
 
-## Chapter 1 (8 jobs, $13,800)
+## KEEP IT LOUD, chapter 1 (6 jobs)
 
-| # | Job | Phone | Pay | What happens |
-| --- | --- | --- | --- | --- |
-| 1 | WRONG NUMBER | oldtown | $500 | Vex's audition: steal a sedan and deliver it to the docks yard without a scratch. |
-| 2 | TUNA RUN | arts | $700 | Pick up Lil' Tuna, stranded in the arts quarter, and take him to the safehouse against the clock. |
-| 3 | SAINTS' PAINT | suburbs | $1,200 | Steal the Saints' purple sports car, lose the 2 stars they call down and deliver it. |
-| 4 | SPECIAL DELIVERY | docks | $900 | Find three parcels Tuna dropped out of a moving van. ("Why are my parcels warm.") |
-| 5 | SPARE PARTS | oldtown | $1,500 | Wreck the Saints' three parts vans with a shotgun. Pike's first threat. |
-| 6 | MIDNIGHT EXPRESS | arts | $2,000 | Night. Pike has put a price on Tuna's head: get him to the docks through checkpoints at 3 stars. |
-| 7 | COLLECTION DAY | suburbs | $2,000 | Take down Pike's armed money man, the Collector. His ledger says Pike owes everyone, *including us*. |
-| 8 | LAST CALL | docks | $5,000 | Steal Pike's black sports car, survive his 4-star tip-off and bring it home. The Saints scatter. **CHAPTER 1 COMPLETE.** |
+| # | Id | Job | Phone | Pay | What happens |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `s1` | WRONG STOP | none (the cold open) | — | A getaway crashes at your bus shelter: GET IN · LOSE THE HEAT. *Not written yet: it comes with the live cold open (V2-07).* |
+| 2 | `s2-noise` | MAKE SOME NOISE | oldtown | $1,000 | 2,500 points of mayhem in Cobble Row, with a street race started there to crash into. |
+| 3 | `s3-quiet` | QUIET PLEASE | suburbs | $1,500 | Flatten Lull's two wardens in Glass Heights, pick up Lionel, get him to Neon Mile. |
+| 4 | `s4` | NINETY-NINE PROBLEMS | — | — | Take Doreen's van back off a Graveyard Shift tow truck, unscratched. The Night Shift's one cameo. *Outline.* |
+| 5 | `s5` | RIBBON CUTTING | — | — | Wreck the Mayor's limo. *Outline.* |
+| 6 | `s6` | QUIETEST CITY | — | — | 5,000 points of mayhem near the award judges' coach, with a race, a fire and a turf flare-up started along its route. *Outline.* |
 
-## Chapter 2: The Ledger (5 jobs, $12,500)
+Until `s1` is in the game the main story starts at `s2` from a payphone
+(the next job is the first one not passed, and an id the build hasn't got
+is simply skipped), so `s2`'s call has Doreen introduce herself; once the
+cold open's outro does that, her first line can go.
+
+### 1. WRONG STOP (outline)
+
+The cold open: no card, the only prompt over the live crash.
+
+```
+GET IN · LOSE THE HEAT
+[TAKE THE HEAT stamps; two patrol cars swing in behind you]
+
+JOB 1 OUTRO, the nearest payphone
+DOREEN: You're the alarm fitter. Lost your job tonight, I heard. I lost my chimes.
+DOREEN: Lull's banned anything louder than a sigh. Fancy keeping this city loud? It pays.
+DOREEN: Badly. But in ice cream.
+
+BACKSTORY BEAT (radio card, first drive after job 1)
+MAYOR LULL: Mayor Lull. From midnight, car alarms are illegal. So are chimes. And buskers. And joy.
+MAYOR LULL: Alarm fitters, please hand in your alarms. Quietly.
+```
+
+### 2. MAKE SOME NOISE
+
+`s2-noise` · phone-oldtown · $1,000
+
+> **DOREEN:** Doreen, from the ice cream van. You're the alarm fitter Lull sacked. I lost my chimes the same night.
+> **DOREEN:** Twenty years you wired Cobble Row. Every alarm on that street is yours. Remind them.
+
+1. **MAKE COBBLE ROW LOUD · 0 / 2,500.** A `mayhem` step: score awards
+   count while you're anywhere in Cobble Row (outside it, the radar points
+   there). A street race is started once you're within 160 m of the middle
+   of it (a `scene` action, featured so it runs even with you wanted; if it
+   can't start, nothing depends on it).
+
+> **DOREEN:** Heard that from the docks. The council's lodged a complaint. Lovely.
+> **MAYOR LULL:** Mayor Lull. Noise in Cobble Row has been noted. Wardens are on their way. Quietly.
+
+### 3. QUIET PLEASE
+
+`s3-quiet` · phone-suburbs · $1,500
+
+> **LIONEL:** Two wardens have nicked my hat. My hat is my livelihood. And my hat.
+> **LIONEL:** They're in Glass Heights, writing me up for unlicensed joy. I'm hiding behind a bin.
+> **DOREEN:** Flatten the wardens, pick Lionel up and get him to Neon Mile. The Mile likes a song.
+
+1. **FLATTEN THE WARDENS · 0/2.** Two of Lull's wardens on a Glass Heights
+   pavement, hi-vis, unarmed but they fight (as Clamp's do in NO PARKING).
+   Lionel waits round the corner of the block.
+2. **GET A CAR.**
+3. **PICK UP LIONEL.**
+4. **GET LIONEL TO NEON MILE.** He gets out at a kerb on the Mile.
+
+Until he's in the car the job fails if Lionel is knocked down: NOT LIONEL!
+HE WAS ON YOUR SIDE.
+
+> **LIONEL:** I'd pay you, but it's in the hat, and the hat's evidence.
+> **LIONEL:** Neon Mile! An audience! Several of them are even awake!
+> **DOREEN:** Lull will send more wardens. Good. Means it's working.
+
+### 4–6 (outline)
+
+```
+JOB 4: NINETY-NINE PROBLEMS (the Graveyard Shift cameo)
+DOREEN: They're towing my van. Council contract. Some night crew in blue.
+VEX: Nothing personal. Council pays by the van. You pay in compliments.
+OBJECTIVE: TAKE THE VAN BACK · DON'T SCRATCH IT
+
+JOB 5: RIBBON CUTTING
+Lull opens a "silent zone". Wreck her limo at the ribbon.
+
+JOB 6: QUIETEST CITY (finale)
+MAYOR LULL: The award judges tour our streets tonight. They will see nothing. That's the point.
+DOREEN: Coach leaves Glass Heights at nine. Make sure they see everything.
+OBJECTIVE: GIVE THE JUDGES A SHOW · 0 / 5,000
+MAYOR LULL (outro): Quietest City has gone to a village with one goat. The goat was louder than you lot, apparently.
+```
+
+Job 6's mayhem counts round the coach (a `mayhem` area can follow a tagged
+car), and its race, fire and turf flare-up are `scene` actions along the
+coach's route.
+
+### Chapter 2 (later)
+
+Lull loses the award and blames "the Curbside". She bans kerbs. Not
+written; an outline when chapter 1 is done.
+
+## The Night Shift (side story)
+
+The **Graveyard Shift** is a night-time tow crew that tows rather more than
+it should. The player answers the docks-yard phone after dark, passes
+Vex's audition and ends up on the crew. Chapter 1 is the war with Deacon
+Pike's Chrome Saints. In chapter 2, *The Ledger*, Pike's money leads to the
+man who was running him all along: the city's Parking Commissioner.
+
+Every Night Shift job rings from `phone-docks`, after dark only. Vex's
+opener on job 1 links it to the main story:
+
+> **VEX:** Heard you've a day job now. Cute. The night's still mine, and wrecks need hooking.
+> **VEX:** Name's Vex. I run the Graveyard Shift. Towing, mostly. The 'mostly' pays better.
+> **VEX:** Audition's simple: bring me a sedan, any sedan, to the docks yard. Don't scratch it. I'm sentimental.
+
+### Night Shift chapter 1: the Chrome Saints (8 jobs, $13,800)
+
+| # | Job | Pay | What happens |
+| --- | --- | --- | --- |
+| 1 | WRONG NUMBER | $500 | Vex's audition: steal a sedan and deliver it to the docks yard without a scratch. |
+| 2 | TUNA RUN | $700 | Pick up Lil' Tuna, stranded in Neon Mile, and take him to the safehouse against the clock. |
+| 3 | SAINTS' PAINT | $1,200 | Steal the Saints' purple sports car, lose the 2 stars they call down and deliver it. |
+| 4 | SPECIAL DELIVERY | $900 | Find three parcels Tuna dropped out of a moving van. ("Why are my parcels warm.") |
+| 5 | SPARE PARTS | $1,500 | Wreck the Saints' three parts vans with a shotgun. Pike's first threat. |
+| 6 | MIDNIGHT EXPRESS | $2,000 | Night. Pike has put a price on Tuna's head: get him to the docks through checkpoints at 3 stars. |
+| 7 | COLLECTION DAY | $2,000 | Take down Pike's armed money man, the Collector, in Maple Flats. His ledger says Pike owes everyone, *including us*. |
+| 8 | LAST CALL | $5,000 | Steal Pike's black sports car, survive his 4-star tip-off and bring it home. The Saints scatter. **CHAPTER 1 COMPLETE.** |
+
+### Night Shift chapter 2: The Ledger (5 jobs, $12,500)
 
 The hook is the Collector's ledger from job 7. Every month Pike paid two
 grand to "C", for "parking". C is **Commissioner Clamp**, who runs the
@@ -87,9 +238,9 @@ ran the streets. With Pike gone, Clamp wants the Graveyard Shift's yard.
 The chapter goes from his ticket to his limo, and it ends with the city
 needing a new tow crew.
 
-### 9. FINE PRINT
+#### 9. FINE PRINT
 
-`m9-fineprint` · phone-oldtown · $1,500
+`m9-fineprint` · $1,500
 
 > **LIL' TUNA:** Cracked the Collector's ledger. Every month Pike paid two grand to someone called 'C'. For 'parking'.
 > **VEX:** And now someone's towed MY tow truck. From MY yard. The ticket's signed 'Commissioner Clamp'.
@@ -105,9 +256,9 @@ The job fails if the truck is wrecked or left behind.
 > **VEX:** C for Clamp. Pike was paying off the Parking Commissioner. We've got a bigger fish to fry, kid.
 > **LIL' TUNA:** Can we not say 'fish' and 'fry' together? Around me? Thanks.
 
-### 10. FALLEN SAINT
+#### 10. FALLEN SAINT
 
-`m10-fallen` · phone-arts · $1,500
+`m10-fallen` · $1,500
 
 > **DEACON PIKE:** Don't hang up. Please. I've never said please before. It tastes like pennies.
 > **DEACON PIKE:** Clamp took everything. My cars, my chrome, my good collar. I live in a Maple Flats bus shelter now.
@@ -121,9 +272,9 @@ The job fails if the truck is wrecked or left behind.
 > **DEACON PIKE:** Every crew in town pays him or walks. I paid. You didn't. So now he wants your yard.
 > **VEX:** He does what we do, but with paperwork. That's disgusting.
 
-### 11. TOW-AWAY ZONE
+#### 11. TOW-AWAY ZONE
 
-`m11-towaway` · phone-docks · $2,000
+`m11-towaway` · $2,000
 
 > **VEX:** Clamp's made all of Neon Mile a tow-away zone. His trucks are hauling off every car on the street.
 > **LIL' TUNA:** They took the ice cream van! With the man still in it! He's still serving, off the back of a truck!
@@ -136,9 +287,9 @@ The job fails if the truck is wrecked or left behind.
 > **COMMISSIONER CLAMP:** Commissioner Clamp. Damaging city vehicles carries a fine of... everything you own. Good evening.
 > **VEX:** He sounds like a voicemail.
 
-### 12. PAPER TRAIL
+#### 12. PAPER TRAIL
 
-`m12-papertrail` · phone-suburbs · $2,500 · night (22:00)
+`m12-papertrail` · $2,500 · night (22:00)
 
 > **DEACON PIKE:** Clamp keeps everything on paper. Every bribe, every tow. Alphabetised. Colour-coded. A monster.
 > **DEACON PIKE:** Tonight four clerks drive his files to the shredder. And every one of them stops for a kebab.
@@ -151,9 +302,9 @@ The job fails if the truck is wrecked or left behind.
 > **VEX:** Box one's the good one. Clamp's been towing the Mayor's cars too. And selling them back to her.
 > **DEACON PIKE:** He towed the Mayor? ...I'm almost proud of him.
 
-### 13. NO PARKING
+#### 13. NO PARKING
 
-`m13-noparking` · phone-oldtown · $5,000 · night (23:45)
+`m13-noparking` · $5,000 · night (23:45)
 
 > **COMMISSIONER CLAMP:** Graveyard Shift. I have read your file. It is thick. From midnight, your yard is a no-parking zone.
 > **VEX:** He's outside his office in Glass Heights, guarding his limo with two traffic wardens.
@@ -165,7 +316,7 @@ The job fails if the truck is wrecked or left behind.
 4. **PARK THE LIMO IN THE DOCKS YARD.**
 
 The job fails if the limo is wrecked or left behind. This is the end of the
-story: **STORY COMPLETE.**
+Night Shift: **NIGHT SHIFT COMPLETE.**
 
 > **VEX:** Clamp's limo. In my yard. After midnight. Tuna, what's the rule?
 > **LIL' TUNA:** NO PARKING! I've had a wheel clamp ready since Tuesday. I've named it Gerald.
@@ -173,23 +324,25 @@ story: **STORY COMPLETE.**
 
 ## How it plays out in the game
 
-- Jobs run in the order above. The next job is the first one the save
-  hasn't passed, so a save that had finished chapter 1 rings for FINE
-  PRINT. The debrief on LAST CALL says CHAPTER 1 COMPLETE (`chapter` on
-  `MissionDef`, `endsChapter()`), and NO PARKING's says STORY COMPLETE.
-- After the story, REPEAT JOBs rotate through all thirteen at half pay.
-- The story is worth 30% of completion, split evenly over all thirteen
-  jobs. A save that had passed chapter 1 drops from 30% to about 18% for
-  the story part until it plays chapter 2.
+- Each arc runs in the order above. Its next job is the first one the save
+  hasn't passed, so a save from before V2 that had finished the Graveyard
+  Shift's chapter 1 rings for FINE PRINT after dark, and for MAKE SOME
+  NOISE by day.
+- The debrief on LAST CALL says CHAPTER 1 COMPLETE (`chapter` on
+  `MissionDef`, `endsChapter()` over the arc), NO PARKING's says NIGHT
+  SHIFT COMPLETE and the main story's last job's STORY COMPLETE.
+- After an arc is done its phone rings with its jobs again as REPEAT JOBs,
+  at half pay.
+- The main story is worth 30% of completion, split evenly over its jobs.
+  The Night Shift isn't weighted: PROGRESS shows it as its own row.
 
 ## Threads for later
 
-- **The Mayor** now owes the Graveyard Shift, or owns it. She could be
-  chapter 3's patron, or its villain.
+- **The Mayor** owes the Graveyard Shift (Clamp's files) and is the main
+  story's villain: who tells whom?
 - **Pike** has a redemption arc going and is living in a bus shelter.
 - **The VIPERS** run Neon Mile in free roam and never appear in the story.
-  With the Saints gone and Clamp out, who's moving in?
 - **Clamp as a lollipop man** outside a Maple Flats school: a cameo
   waiting to happen.
-- **The district names** are placeholders. Settle them, then update
-  chapter 1's text ("arts quarter", "suburbs", "old town") and chapter 2's.
+- **Quiet Wardens** in free roam after the finale (V2-15): two hi-vis
+  wardens walk up to a busker or a queue, lecture, then act.

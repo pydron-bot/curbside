@@ -162,7 +162,7 @@ describe('progress: cash', () => {
 });
 
 describe('progress: completion', () => {
-  const totals = { missions: 8, frenzies: 8, packages: 40, races: ['a', 'b'], exportOrders: 8 };
+  const totals = { missions: Array.from({ length: 8 }, (_, i) => `m${i}`), frenzies: 8, packages: 40, races: ['a', 'b'], exportOrders: 8 };
 
   it('a fresh save is 0%, everything done is 100%', async () => {
     const { completion } = await import('../src/game/progressStats');
@@ -181,6 +181,9 @@ describe('progress: completion', () => {
     const { completion, completionParts, COMPLETION_WEIGHTS } = await import('../src/game/progressStats');
     const s = defaultSave();
     s.missions = ['m1', 'm2', 'm3', 'm4'];
+    expect(completion(s, totals)).toBeCloseTo(COMPLETION_WEIGHTS.missions / 2, 6);
+    // Only the main story's jobs count: a side story's (the Night Shift's) don't.
+    s.missions.push('n1', 'n2', 'n3');
     expect(completion(s, totals)).toBeCloseTo(COMPLETION_WEIGHTS.missions / 2, 6);
     s.medals = { a: 'bronze' };
     expect(completionParts(s, totals).races).toBeCloseTo(1 / 6, 6);

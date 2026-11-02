@@ -16,6 +16,7 @@ import { CarAlarms } from './scenes/alarms';
 import { FireCrews } from './scenes/fireCrews';
 import { Tows } from './scenes/tows';
 import { spawnBeside, type Free, type Spot } from './testSpots';
+import type { SceneHost } from '../systems/missions';
 import { len2 } from '../core/len';
 
 export type SceneId =
@@ -63,6 +64,29 @@ export const SCENES: ReadonlyArray<readonly [SceneId, string]> = [
   ['dogChase', 'DOGS CHASE A RUNNER'],
   ['rain', 'RAIN CROWD'],
 ];
+
+/** Each scene's clock kind (CityLife.featured, the holds), for the ones a story job can feature. */
+export const SCENE_KINDS: Readonly<Record<Exclude<SceneId, 'rain'>, string>> = {
+  ambulance: 'medic',
+  fire: 'fire',
+  tow: 'tow',
+  alarm: 'alarm',
+  chaseCar: 'chase',
+  chaseBike: 'chase',
+  chaseFoot: 'chase',
+  race: 'race',
+  accident: 'accident',
+  doublePark: 'doublePark',
+  bus: 'bus',
+  iceCream: 'iceCream',
+  vendors: 'cart',
+  busker: 'busker',
+  fight: 'fight',
+  mugging: 'mugging',
+  turf: 'turf',
+  dogs: 'dog',
+  dogChase: 'dog',
+};
 
 /** People scenes with a force() of their own, by the scene's `kind`. */
 const PEOPLE_KIND: Partial<Record<SceneId, string>> = {
@@ -235,4 +259,29 @@ export class SceneStarter {
     v.parked = true;
     return this.done(alarms.force(v), 'CAR ALARM', 'NO ALARM');
   }
+}
+
+/**
+ * The story's scenes (a mission's 'scene' action): started round a point,
+ * facing the way the player's going, and featured so no hold (being wanted, a
+ * job on) keeps it off; unfeature() when the job is over, however it ended.
+ */
+export function storyScenes(life: CityLife, starter: SceneStarter): SceneHost {
+  let kind: string | null = null;
+  return {
+    start(id, x, z) {
+      const at = life.d.focus();
+      const was = life.featured;
+      life.featured = SCENE_KINDS[id];
+      starter.start(id, x, z, Math.atan2(at.vx, at.vz), life.d.player.driving);
+      // Didn't start: whatever was featured stays so, and stays whoever's it was (not ours to unfeature unless it was already).
+      if (!starter.ok) life.featured = was;
+      else kind = life.featured;
+      return starter.ok;
+    },
+    unfeature() {
+      if (kind !== null && life.featured === kind) life.featured = null;
+      kind = null;
+    },
+  };
 }

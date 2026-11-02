@@ -5,6 +5,7 @@
 export const RADAR_LEGEND: ReadonlyArray<readonly [icon: string, meaning: string]> = [
   ['H', 'Safehouse: the shop'],
   ['M', 'Ringing payphone: a job'],
+  ['☾', 'Night Shift payphone (after dark)'],
   ['S', "Pay 'n' Spray: lose the heat"],
   ['★', 'Police station'],
   ['+', 'Hospital: where the ambulances go'],

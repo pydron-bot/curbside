@@ -92,7 +92,8 @@ rain on; TURF WAR still waits for its holds). The starting is
 `game/sceneStarter.ts` (`SceneStarter.start(id, x, z, heading)`), shared
 with the title's highlights. SAVE: +1 CRED
 level, max perks, reset CRED, +$10,000, unlock all jobs, jump to any story
-job (it becomes the next job; you land by its payphone), tutorial done /
+job, grouped by arc and chapter (it becomes its arc's next job; you land
+by its payphone, and the clock jumps to 21:00 for a Night Shift job by day), tutorial done /
 reset, reset the save, export (share sheet, else clipboard) and import (a
 pasted save, sanitised like a loaded one: `migrateSave`, `pruneSave`);
 reset and import write the save and reload. Destructive ones take a second
@@ -288,7 +289,8 @@ share sheet mocked.
   with cash, lifetime stats, bests and medals; chains bank into cash (lose
   the chain if WASTED or BUSTED, plus a hospital bill or fine); a CHAOS RUN
   2:00 mode with medals and a results card; frenzies, hidden packages,
-  checkpoint races, hot-car exports, taxi fares and thirteen payphone missions in two chapters
+  checkpoint races, hot-car exports, taxi fares and payphone missions (the
+  main story, KEEP IT LOUD, and the thirteen-job Night Shift side story)
   in free roam; a safehouse shop; PROGRESS in the pause menu.
 - **Feel** (`src/entities/vehicle.ts`, `src/game/combat.ts`,
   `src/systems/projectiles.ts`, `src/world/ramps.ts`, see *Driving and
@@ -1034,7 +1036,8 @@ life.clock.start('ice', life.now) // wind the clock (or .defer(kind, now, s): no
 // BUSY = title, activity, tutorial (+ pace: WANTED_PACE: slower while wanted, never held); LOUD = all four
 // (no city scene now); IN_PLAY = ['title']. spec.ahead: arrives by car, may go on the road ahead while wanted.
 // life.onRoute(x, z): for scenes picking among existing spots: only on a wanted player's way. life.busyRunning().
-// life.featured = kind: the title's highlight (game/attractHighlights.ts) lifts every hold for that kind alone;
+// life.featured = kind: the title's highlight (game/attractHighlights.ts) or a story job's scene (sceneStarter.ts
+//   storyScenes) lifts every hold and the wanted pace for that kind alone;
 // life.lively(kind): d.playing() or featured (use it, not d.playing(), for people gathering to a scene).
 // subject?(out): Scene's optional hook for the highlights: where to look (x, z, vx, vz; cityLife watch()), false when over.
 
@@ -1356,29 +1359,63 @@ are `src/game/modes/*Mode.ts`.
   They bail at 2★ or if the cab loses a quarter of its health.
 - **Payphone missions** (`systems/missions.ts`, `missionsData.ts`,
   `modes/missionMode.ts`): a data-driven engine with steps goto, enter (a
-  tagged car or an archetype), deliver, pickup, destroy, knockOut, survive,
-  loseHeat, collect and race; each with objective text, an optional timer,
-  fail conditions (a tagged car wrecked or left behind) and actions on start
-  / end (spawn a car, parked or with `drive: true` pulling out into traffic
-  with a lane-following driver while staying pinned, or a person; set the
-  wanted level, hand over a gun, a passenger boards / alights). Thirteen jobs for the Graveyard Shift — VEX's
-  tow crew and her mechanic LIL' TUNA — in two chapters: eight against
-  DEACON PIKE's Chrome Saints, then five (*The Ledger*) against
-  COMMISSIONER CLAMP and his city impound (script and cast in
-  `docs/STORY.md`) — from four payphones; the one with a job waiting rings (a ripple of light,
-  the bell within 55 m, 'M' on the radar with an arrow). Answer on foot or
-  by stopping beside it: the call is a card, the job runs with its objective
+  tagged car or an archetype), deliver, pickup, destroy, knockOut,
+  knockOutAll (several people, in any order, counted 0/2), survive,
+  loseHeat, collect, race and mayhem (score this many chaos points in an
+  area: a district, a radius round a point, or round a tagged car or
+  person; anywhere without one); each with objective text, an optional
+  timer, fail conditions (a tagged car wrecked or left behind, a tagged
+  person knocked down) and actions on start / end (spawn a car, parked or
+  with `drive: true` pulling out into traffic with a lane-following driver
+  while staying pinned, or a person; set the wanted level, hand over a gun,
+  a passenger boards / alights; start a city scene). Score awards feed a
+  mayhem step (`MissionRun.award(points, view)`, counted where the player
+  is; the step passes on its next update, never mid-award); the HUD shows
+  `MAKE COBBLE ROW LOUD · 1,200 / 2,500` and the radar points at the area
+  from outside it.
+  - **Scenes a job starts** (`{ do: 'scene', scene, x, z, r? }`,
+    `MissionScenes`): waits until the player is within `r` (110 m) of the
+    point, starts the scene through the TEST menu's `SceneStarter`
+    (`storyScenes(cityLife, starter)`, wired in main.ts with
+    `missions.useScenes`), re-rolls once after 4 s if it couldn't start,
+    then gives up quietly: no step depends on one. A started scene is
+    `CityLife.featured`, so no hold keeps it off (not even the player's
+    stars, apart from a chase's); the job unfeatures it when it ends, by a
+    pass, a fail, WASTED, BUSTED or a quit. One featured kind at a time
+    (the last started).
+  - **Two arcs** (`arc` on `MissionDef`, `arcRings`, `nextInArc`). The main
+    story, **KEEP IT LOUD** (`arc: 'main'`, ids `s1`–`s6`: DOREEN of the
+    ice cream van, LIONEL the busker, against MAYOR LULL's Quiet Streets
+    Act), rings from sunrise to midnight from the city's three phones. The
+    **Night Shift** side story (`arc: 'night'`, the old Graveyard Shift jobs
+    `m1`–`m13` with their ids, so saves keep their progress: VEX's tow crew
+    and LIL' TUNA, eight jobs against DEACON PIKE's Chrome Saints, then
+    five, *The Ledger*, against COMMISSIONER CLAMP) rings only after dark
+    (sunset to sunrise) from the docks-yard phone (`NIGHT_PHONE`), with a
+    moon (☾) on the radar and *☾ NIGHT SHIFT* on the call card. So in the
+    evening both can ring at once, never at the same phone. Each arc rings
+    for its own first job not passed, in data order (an id this build
+    hasn't got, like `s1` until the cold open lands, is skipped); a
+    `direct` job never rings (the glue starts it with
+    `missions.beginNow(def)`) and nothing else in its arc rings until it's
+    passed. Script and cast in `docs/STORY.md`.
+  Answer on foot or by stopping beside a ringing phone (the nearest, if
+  two are; a ripple of light, the bell within 55 m, 'M' or '☾' on the radar
+  with an arrow): the call is a card, the job runs with its objective
   on the activity card and its targets marked (a step any sedan will do
   for rings and blips the three nearest, and the wrong car says NOT A
   SEDAN); MIDNIGHT EXPRESS, PAPER TRAIL and NO PARKING pin the clock at night (a fail or quit puts the
-  hour back). Pay $500–$5,000; fail and the phone rings again. The last
-  job of a chapter debriefs CHAPTER n COMPLETE (`chapter`, `endsChapter`),
-  the very last STORY COMPLETE. Once all
-  thirteen are passed the phones ring with them again in story order as
-  REPEAT JOBs (`replayJob` / `replayReward`): half pay rounded to $50, no
+  hour back). Pay $500–$5,000; fail and the phone rings again. No main
+  story job sets stars or asks you to lose them. The last job of a chapter
+  debriefs CHAPTER n COMPLETE (`chapter`, `endsChapter` over its arc), an
+  arc's very last STORY COMPLETE or NIGHT SHIFT COMPLETE. Once an arc's
+  jobs are all passed its phone rings with them again in order as REPEAT
+  JOBs (`replayJob` / `replayReward`): half pay rounded to $50, no
   completion credit, the debrief says JOB DONE; `stats.jobsReplayed` counts
-  them, keeps the rotation across sessions and shows as *Repeat jobs* on
-  PROGRESS. A banner
+  them (both arcs share the count), keeps the rotation across sessions and
+  shows as *Repeat jobs* on PROGRESS. Completion's 30% story share is the
+  main story's alone; PROGRESS shows *Main story: Keep It Loud* and *Night
+  Shift* as separate rows. A banner
   raised while WASTED / BUSTED is up (MISSION FAILED, RACE OVER) waits for
   the respawn.
 - **Districts and the area card** (`world/districts.ts` DISTRICT_NAMES /

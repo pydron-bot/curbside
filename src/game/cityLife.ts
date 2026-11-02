@@ -259,8 +259,9 @@ export class CityLife {
   /** due() let a car-borne scene go on the road ahead this step: its next spawnCar() looks for a spot there. */
   private armed = false;
   /**
-   * The kind the title's show is directing (game/attractHighlights.ts):
-   * nothing holds it off, and its people gather as in play (lively).
+   * The kind the title's show is directing (game/attractHighlights.ts), or
+   * a story job's scene (sceneStarter.ts storyScenes, cleared when the job
+   * ends): nothing holds it off, and its people gather as in play (lively).
    */
   featured: string | null = null;
 
@@ -435,7 +436,7 @@ export class CityLife {
     w.stars = w.playing ? this.d.stars() : 0;
     w.tutorial = this.d.tutorial();
     if (kind === this.featured) {
-      // Directed (the title's show): no holds, a first run's tutorial and stars included.
+      // Directed (the title's show, a story job's scene): no holds (a first run's tutorial included), nor stars.
       w.playing = true;
       w.activity = w.tutorial = false;
       w.stars = 0;
