@@ -124,6 +124,7 @@ await page.evaluate(() => {
   window.__segment = (seconds, stars) => {
     const m = u.cityLife.inViewMeter;
     m.clear();
+    const placed0 = u.cityLife.routeAhead?.placed ?? 0;
     bot.evade = stars > 0;
     const board = () => {
       const p = u.player.position;
@@ -155,7 +156,7 @@ await page.evaluate(() => {
       if (m.quiet === 0 && wasQuiet > 0) gaps.push(wasQuiet);
       wasQuiet = m.quiet;
     }
-    return { report: u.inView(), gaps, boards, hour: u.look.time.hour };
+    return { report: u.inView(), gaps, boards, hour: u.look.time.hour, ahead: (u.cityLife.routeAhead?.placed ?? 0) - placed0 };
   };
 });
 
@@ -168,7 +169,7 @@ for (const [name, seconds, stars] of segments) {
   const r = await page.evaluate(([s, k]) => window.__segment(s, k), [seconds, stars]);
   const rep = r.report;
   const min = rep.played / 60;
-  console.log(`\n${name}  ${Math.round(rep.played)} s (${min.toFixed(1)} min), seed ${opt.seed}, view ${W}x${H}, ended at hour ${r.hour.toFixed(1)}${r.boards ? `, re-boarded ${r.boards}×` : ''}`);
+  console.log(`\n${name}  ${Math.round(rep.played)} s (${min.toFixed(1)} min), seed ${opt.seed}, view ${W}x${H}, ended at hour ${r.hour.toFixed(1)}${r.boards ? `, re-boarded ${r.boards}×` : ''}${r.ahead ? `, ${r.ahead} put on the road ahead` : ''}`);
   console.log(
     `  incident in view ${Math.round(rep.anyInView)} s (${Math.round((100 * rep.anyInView) / Math.max(1, rep.played))}%) · came into view ${r.gaps.length}× after a quiet spell · gap median ${Math.round(pct(r.gaps, 50)) || '-'} s, p90 ${Math.round(pct(r.gaps, 90)) || '-'} s · longest quiet ${Math.round(rep.longestQuiet)} s · quiet ≥90 s ${rep.longQuiets}×`,
   );
