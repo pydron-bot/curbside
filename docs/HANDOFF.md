@@ -84,6 +84,24 @@ to remove):** the `curbside-*` folders. `curbside-main` is on main; the
 `/home/user/curbside` checkout is on `claude/living-city` (old). Stale dev
 servers may still hold ports 5617 and 5618.
 
+**First device report on 0.12.1 (2026-11-02, iPhone 15 Pro, medium @1.5x):**
+- Heavy mayhem held 60 fps: 6 fires, 6 burning cars, 7 blasts in 10 s, smoke
+  fill up to 5.7, 97 glows; p95 17–18 ms, JS p95 3–4 ms.
+- Glows are now the biggest fill (2.3–3.7× in heavy scenes, against smoke at
+  1–2×): low-resolution glows are the next candidate.
+- The first ~20 s after boot dip to 22–29 fps (max frame 262 ms) and dynamic
+  resolution briefly drops to low: warm-up and asset load. Worth a look.
+- A whole earlier session sat at exactly 30 fps with tiny counts and JS p95 7:
+  almost certainly iOS Low Power Mode (Safari caps at 30 fps), not the game.
+- Small bug: the dip logger counts the gap across an app switch as a dip
+  (p95 145282 ms at a visibility change). Skip frames that span hidden.
+
+**NEXT, when the quota resets:** the user's "that last thing" most likely
+means the shadow cache (performance idea 3, branch `claude/perf-shadows`; see
+Open work 1). Confirm with the user first; low-resolution glows and the
+dip-logger fix are the other candidates. Use one agent with a tight brief,
+ask before deploying, and make it 0.12.2.
+
 ## Where it is
 
 - **Live:** https://deeek.org/curbside/ — GitHub Pages, deployed by
