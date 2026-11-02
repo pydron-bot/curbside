@@ -13,7 +13,8 @@
  *    toolsLook).
  *  - Chime (ice cream van): a press plays the jingle for a while; parked,
  *    the van draws a queue at its hatch (Gathering) that waits there, a
- *    lure for mayhem, until the van drives off or the chime's long over.
+ *    lure for mayhem, until the chime's long over (they walk off) or the
+ *    van drives off (they run after it: scenes/vanNicked.ts).
  *  - Winch (tow truck): a press, stopped, hooks the nearest towable car
  *    within reach of the hook; it's winched up and trails like the city's
  *    tows (towPose), the truck held to TOW_TOP_SPEED. Stop with it in the
@@ -29,6 +30,7 @@ import { forwardSpeed, isBike, speed, type VehicleControls } from '../../entitie
 import { winch, type Pose } from '../../systems/emergency';
 import {
   CHIME_DRAW,
+  CHIME_LEAVE,
   CHIME_QUEUE,
   Chime,
   HOOK_RANGE,
@@ -300,7 +302,9 @@ export class ServiceTools implements Scene {
         this.emit('queue', s.x, s.z);
         break;
       case 'release':
-        this.queue.close();
+        // Driven off from them (not just the chime long over): they're after it (VAN NICKED, unpaid: it's yours).
+        if (life.d.player.driving === t && len2(s.x - this.chime.x, s.z - this.chime.z) > CHIME_LEAVE) life.vanNicked.take(t, this.queue, true, true);
+        else this.queue.close();
         this.emit('release', s.x, s.z);
         break;
     }

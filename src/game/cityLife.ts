@@ -72,6 +72,7 @@ import { Buses } from './scenes/buses';
 import { Buskers } from './scenes/buskers';
 import { Fights } from './scenes/fights';
 import { IceCream } from './scenes/iceCream';
+import { VanNicked } from './scenes/vanNicked';
 import { Muggings } from './scenes/muggings';
 import { Pavement } from './scenes/pavement';
 import { Vendors } from './scenes/vendors';
@@ -176,7 +177,7 @@ export interface CityLifeDeps {
   /** Hand a scene's police car (with `aboard` officers) to the player's pursuit (heat.adopt); false if the force is full. */
   adopt?(v: Vehicle, aboard: number): boolean;
   /** Score the player's part in a scene (a chase joined, a bag handed back, an incident joined or wrecked). */
-  award?(kind: 'takeTheHeat' | 'citizensArrest' | 'haveAGo' | IncidentAward): void;
+  award?(kind: 'takeTheHeat' | 'citizensArrest' | 'haveAGo' | 'raceCrasher' | 'vanNicked' | IncidentAward): void;
   /** The sim's level of detail: off screen, stray dogs think less often (without it, every step). */
   lod?: SimLod;
   /** The quality tier: while wanted, the busy scenes running at once are capped by it (busyCap; uncapped without). */
@@ -260,6 +261,8 @@ export class CityLife {
   readonly shotsFired: ShotsFired;
   /** The player's borrowed service vehicle's tool: hose, chime, winch (V2-09). */
   readonly tools: ServiceTools;
+  /** The queue after the player who drove off in its ice cream van (V2-12). */
+  readonly vanNicked: VanNicked;
   readonly scenes: Scene[] = [];
   /** Each scene's name for diagnostics (scenes order). */
   readonly sceneLabels: string[] = [];
@@ -314,7 +317,8 @@ export class CityLife {
     this.turfWar = this.add(new TurfWar(this));
     this.buses = this.add(new Buses(this));
     const fights = this.add(new Fights(this));
-    this.add(new IceCream(this, fights));
+    this.vanNicked = this.add(new VanNicked(this), 'vanNicked');
+    this.add(new IceCream(this, fights, this.vanNicked));
     this.add(new Vendors(this, fights));
     this.add(new Buskers(this));
     this.witnesses = this.add(new Witnesses(this, this.add(new Muggings(this))), 'witness');
@@ -616,11 +620,12 @@ export class CityLife {
   }
 
   /**
-   * Cars no scene may take: an activity's (d.keep), and the guard's: the
-   * player's borrowed service vehicle and the car on its hook.
+   * Cars no scene may take: an activity's (d.keep), the guard's (the
+   * player's borrowed service vehicle and the car on its hook), and a race
+   * car won off the racers waiting for the player (RACE CRASHER).
    */
   keeps(v: Vehicle): boolean {
-    return this.d.keep(v) || this.tools.guards(v);
+    return this.d.keep(v) || this.tools.guards(v) || this.races.prized(v);
   }
 
   /** Has a scene lost `v` (taken by the player, its driver out, wrecked, burning, recycled)? */
