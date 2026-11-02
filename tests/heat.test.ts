@@ -352,6 +352,27 @@ describe('heat: crimes and clearing', () => {
   });
 });
 
+describe('heat: the stinger', () => {
+  it('bursting tyres is a nuisance, a patrol car an attack on the police; mid-chase it is no fresh crime', () => {
+    const w = world(11);
+    const burst = (police: boolean, own = false) => w.bus.emit({ type: 'tyresBurst', x: 12, z: 9, speed: 15, police, chasing: false, own, byPlayer: true });
+    burst(false);
+    expect(w.heat.wanted.heat).toBeCloseTo(0.1);
+    burst(false, true); // your own car: nothing
+    expect(w.heat.wanted.heat).toBeCloseTo(0.1);
+    burst(true);
+    expect(w.heat.wanted.heat).toBeCloseTo(0.25);
+    // Wanted: the stinger is how you shake them, and the evasion clock keeps running.
+    w.bus.emit({ type: 'pedDown', x: 12, z: 9, cause: 'punch', byPlayer: true, cop: true });
+    const level = w.heat.wanted.level;
+    const heat = w.heat.wanted.heat;
+    expect(level).toBeGreaterThan(0);
+    burst(true);
+    burst(false);
+    expect(w.heat.wanted.heat).toBe(heat);
+  });
+});
+
 describe('heat: traffic reactions', () => {
   it('a driver rammed hard panics, rages or bails out, in about the designed shares', () => {
     const w = world(19);

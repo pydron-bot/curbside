@@ -13,10 +13,12 @@
  * at 0 HP (a knockout, the only thing that scores KNOCKOUT). In a car, a
  * pistol or SMG fires out of either side window at the best target there.
  * The air horn blasts a cone along the aim (systems/airHorn.ts): people
- * scatter, drivers brake; no damage.
+ * scatter, drivers brake; no damage. The stinger is thrown like a grenade
+ * or, in a car, dropped out of the back; it lies across the road and bursts
+ * the tyres of every car that runs over it (systems/stinger.ts).
  */
 import type { EventBus } from '../core/events';
-import { VEHICLE_SPECS, isPoliceArchetype } from '../entities/vehicle';
+import { CAR_BODY, VEHICLE_SPECS, isPoliceArchetype } from '../entities/vehicle';
 import {
   cower,
   hurtPed,
@@ -37,6 +39,7 @@ import {
 } from '../systems/damage';
 import { HORN_RANGE, hornClear, hornHit, startle, startleDriverByHorn } from '../systems/airHorn';
 import { bodyDistance, bodyOf, carCircles } from '../systems/physics';
+import { DROP_BEHIND, STINGER_LENGTH, Stingers, burstTyres, stingerAcross, stingerTouches, stungDriver, type Stinger, type StingerPlace } from '../systems/stinger';
 import { FIRE_RADIUS, MIN_THROW, Projectiles, clampThrowToWalls, throwTarget, type ProjectileWorld } from '../systems/projectiles';
 import type { Award, Score } from '../systems/score';
 import {
@@ -168,6 +171,8 @@ const PED_HIT_RADIUS = 0.45;
 
 export class Combat {
   readonly projectiles = new Projectiles();
+  /** Stingers down on the road. */
+  readonly stingers = new Stingers();
   /** Who the gun is locked on to (a ped), while firing. */
   lock: CrowdPed | null = null;
   /** Where a throw would land now (the landing marker), while one is ready; `blocked`: a wall cut it short. */
@@ -188,6 +193,7 @@ export class Combat {
   private readonly ray = { x: 0, z: 0, r: 0 };
   private readonly hit: Hit = { kind: 'none', ped: null, v: null };
   private readonly target = { x: 0, z: 0 };
+  private readonly place = { x: 0, z: 0, ax: 1, az: 0 };
   private readonly world: ProjectileWorld;
 
   constructor(private readonly d: CombatDeps) {
@@ -197,12 +203,14 @@ export class Combat {
       bottleHits: (x, z, y) => y < 1.3 && this.carAt(x, z, 0.1) !== null,
       explode: (kind, x, z, byPlayer) => this.blast(kind, x, z, byPlayer),
       ignite: (x, z, byPlayer) => d.bus.emit({ type: 'ignite', x, z, radius: FIRE_RADIUS, byPlayer }),
+      lay: (x, z, dirX, dirZ, byPlayer) => this.layStinger(x, z, dirX, dirZ, byPlayer, false),
     };
   }
 
   /** Drop everything in flight and any lock (a fresh run, the title). */
   reset(): void {
     this.projectiles.clear();
+    this.stingers.clear();
     this.playerLit.clear();
     this.lock = null;
     this.marker.show = false;
@@ -217,6 +225,7 @@ export class Combat {
     this.sinceShot += dt;
     this.projectiles.step(dt, this.world);
     this.stepFires(dt);
+    this.stepStingers(dt);
   }
 
   // --- Aim ------------------------------------------------------------------
@@ -285,7 +294,7 @@ export class Combat {
     const kind = p.arsenal.current;
     if (!kind || p.driving || !p.ready || !p.arsenal.ready) return false;
     const spec = WEAPONS[kind];
-    if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov', aim);
+    if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov' | 'stinger', aim);
     if (spec.mode === 'horn') return this.blowHorn(aim);
     // Spread before this shot's bloom; running sprays more.
     const moving = len2(p.ped.vx, p.ped.vz) > 3.5;
@@ -365,7 +374,7 @@ export class Combat {
     return true;
   }
 
-  private throwIt(kind: 'grenade' | 'molotov', aim: AimInput): boolean {
+  private throwIt(kind: 'grenade' | 'molotov' | 'stinger', aim: AimInput): boolean {
     const p = this.d.player;
     const { x, z } = p.ped;
     const blocked = this.throwPoint(WEAPONS[kind].range, aim, this.target);
@@ -426,7 +435,8 @@ export class Combat {
     const p = this.d.player;
     const car = p.driving;
     if (!car || !p.alive) return false;
-    let kind = p.arsenal.current;
+    if (p.arsenal.current === 'stinger') return this.dropStinger(car);
+    let kind: WeaponKind | null = p.arsenal.current;
     if (!kind || !WEAPONS[kind].driveBy) {
       kind = p.arsenal.driveByGun();
       if (!kind) return false;
@@ -451,6 +461,88 @@ export class Combat {
     this.firePellets(kind, ox, oz, Math.atan2(this.dir.x, this.dir.z), spread, s.x, s.z);
     this.alarm(s.x, s.z);
     return true;
+  }
+
+  // --- Stingers --------------------------------------------------------------------
+
+  /**
+   * Where a stinger in hand would lie now (the look's preview): thrown, at
+   * the landing marker; in a car, dropped behind it. False if none is held
+   * or the marker's down. Writes into `out`.
+   */
+  stingerAim(out: StingerPlace): boolean {
+    const p = this.d.player;
+    if (p.arsenal.current !== 'stinger' || !p.alive) return false;
+    const car = p.driving;
+    if (car) {
+      this.dropPoint(car);
+      stingerAcross(this.target.x, this.target.z, Math.sin(car.sim.heading), Math.cos(car.sim.heading), out);
+      return true;
+    }
+    if (!this.marker.show) return false;
+    stingerAcross(this.marker.x, this.marker.z, this.marker.x - p.ped.x, this.marker.z - p.ped.z, out);
+    return true;
+  }
+
+  /** FIRE in a car holding a stinger: out of the back it goes, across the road behind. */
+  private dropStinger(car: Vehicle): boolean {
+    const p = this.d.player;
+    if (!p.arsenal.tryFire()) return false;
+    this.dropPoint(car);
+    this.layStinger(this.target.x, this.target.z, Math.sin(car.sim.heading), Math.cos(car.sim.heading), true, true);
+    return true;
+  }
+
+  /** Where a stinger dropped out of `car` lands (into `target`): DROP_BEHIND m behind the back bumper. */
+  private dropPoint(car: Vehicle): void {
+    const s = car.sim;
+    const back = (s.body ?? CAR_BODY).reach + DROP_BEHIND;
+    this.target.x = s.x - Math.sin(s.heading) * back;
+    this.target.z = s.z - Math.cos(s.heading) * back;
+  }
+
+  /** A strip lands at (x, z), thrown or driven along (dirX, dirZ): across the road it goes. */
+  private layStinger(x: number, z: number, dirX: number, dirZ: number, byPlayer: boolean, dropped: boolean): void {
+    const at = stingerAcross(x, z, dirX, dirZ, this.place);
+    this.stingers.lay(at, byPlayer);
+    this.d.bus.emit({ type: 'stinger', x: at.x, z: at.z, ax: at.ax, az: at.az, length: STINGER_LENGTH, byPlayer, dropped });
+  }
+
+  /** Strips age; any car on the ground that runs over one has its tyres burst. */
+  private stepStingers(dt: number): void {
+    const stingers = this.stingers;
+    stingers.step(dt);
+    if (!stingers.active) return;
+    const list = stingers.list;
+    const vehicles = this.d.vehicles;
+    for (let i = 0; i < vehicles.length; i++) {
+      const v = vehicles[i];
+      if (v.damage.wrecked || (v.damage.flat ?? 0) >= 1) continue;
+      for (let j = 0; j < list.length; j++) {
+        const st = list[j];
+        if (st.alive && stingerTouches(st, v.sim, bodyOf(v.sim))) {
+          this.burst(v, st);
+          break;
+        }
+      }
+    }
+  }
+
+  /** `v` ran over `st`: the slew and the flats, traffic stops a moment, and it's reported. */
+  private burst(v: Vehicle, st: Stinger): void {
+    const d = this.d;
+    const s = v.sim;
+    const speed = len2(s.vx, s.vz);
+    burstTyres(s, v.damage, d.rand);
+    this.stingers.bite(st);
+    if (v.ai && !v.pursuit) stungDriver(v.ai, d.rand);
+    const own = v === d.player.driving;
+    const police = isPoliceArchetype(v.archetype) || v.police === true;
+    if (st.byPlayer && !own) markPlayerHit(v.damage, d.now());
+    d.bus.emit({ type: 'tyresBurst', x: s.x, z: s.z, speed, police, chasing: !!v.pursuit, own, byPlayer: st.byPlayer });
+    if (!st.byPlayer || own || !police || !d.playing()) return;
+    d.bus.emit({ type: 'street', what: 'spiked', x: s.x, z: s.z });
+    if (d.player.alive && !d.player.arrested) d.award(d.score.award('spiked'));
   }
 
   // --- Punches --------------------------------------------------------------------

@@ -10,11 +10,13 @@
  *
  * The air horn is held and aimed like a gun but fires no bullets: each use
  * is one blast of systems/airHorn.ts's cone (game/combat.ts blowHorn).
+ * The stinger is thrown like a grenade on foot and, the one throwable that
+ * goes out of a car, dropped out of the back (systems/stinger.ts).
  */
 import type { Rect } from '../world/city';
 import { len2 } from '../core/len';
 
-export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'grenade' | 'molotov' | 'rocket' | 'horn';
+export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'grenade' | 'molotov' | 'rocket' | 'horn' | 'stinger';
 
 /** How a weapon fires: hitscan bullets, a thrown arc, a flying rocket, or the air horn's blast. */
 export type FireMode = 'gun' | 'throw' | 'launcher' | 'horn';
@@ -42,7 +44,7 @@ export interface WeaponSpec {
   /** Most ammo you can carry. */
   maxAmmo: number;
   automatic: boolean;
-  /** Can be fired out of a car window. */
+  /** Can be fired out of a car window (the stinger: dropped out of the back). */
   driveBy: boolean;
 }
 
@@ -160,9 +162,26 @@ export const WEAPONS: Record<WeaponKind, WeaponSpec> = {
     automatic: false,
     driveBy: false,
   },
+  // Thrown on foot; in a car (driveBy) dropped out of the back across the road.
+  stinger: {
+    label: 'STINGER',
+    mode: 'throw',
+    damage: 0,
+    pellets: 1,
+    interval: 1,
+    spread: 0,
+    bloom: 0,
+    bloomMax: 0,
+    recover: 1,
+    range: 16,
+    pickupAmmo: 2,
+    maxAmmo: 4,
+    automatic: false,
+    driveBy: true,
+  },
 };
 
-export const WEAPON_ORDER: WeaponKind[] = ['pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket', 'horn'];
+export const WEAPON_ORDER: WeaponKind[] = ['pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket', 'horn', 'stinger'];
 /** What an ammo crate tops up: the guns, and the air horn's canister. */
 export const GUNS: readonly WeaponKind[] = ['pistol', 'smg', 'shotgun', 'horn'];
 /** Fraction of a bullet's damage that applies to vehicles. */
@@ -265,11 +284,11 @@ export class Arsenal {
     return k;
   }
 
-  /** The best gun that fires out of a car window, if any (SMG first). */
+  /** The best gun that fires out of a car window, if any (SMG first; the stinger isn't a gun). */
   driveByGun(): WeaponKind | null {
     for (let i = WEAPON_ORDER.length - 1; i >= 0; i--) {
       const k = WEAPON_ORDER[i];
-      if (WEAPONS[k].driveBy && this.has(k)) return k;
+      if (WEAPONS[k].driveBy && WEAPONS[k].mode === 'gun' && this.has(k)) return k;
     }
     return null;
   }
