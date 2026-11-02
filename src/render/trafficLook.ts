@@ -5,8 +5,10 @@
  * double-parked trucks blink in the shared glow batch; the courier's
  * parcel is the props' `package` model (the `things` family), the garbage
  * crew's bins the kerbside `trash_bin` (the `street` family, which is in
- * view nearly everywhere). No mesh or program of its own; nothing
- * allocates per frame. Police lights are the cars'
+ * view nearly everywhere). A player in a street race (RACE CRASHER) sees
+ * the next junction marked on the road (a chevron the way out, a ring),
+ * and the car they won ringed in gold. No mesh or program of its own;
+ * nothing allocates per frame. Police lights are the cars'
  * own (CarMesh.siren).
  */
 import type { Rect } from '../world/city';
@@ -19,17 +21,50 @@ import { near } from './cityLifeLook';
 import type { Effects } from './effects';
 import { GLOW, type GlowSprites } from './glowSprites';
 import type { WorldProps } from './worldProps';
+import { BLOCK_SIZE } from '../world/city';
+import { dirHeading } from '../world/roads';
+import { routeTurn } from '../systems/trafficScenes';
 
 /** Nitro: flame flares per second out of each tailpipe. */
 const FLARE_RATE = 60;
 
-/** Street racers' nitro: exhaust flame while it burns. */
+/** Street racers' nitro: exhaust flame while it burns; the race crasher's next junction and prize. */
 export class RaceLook implements CityLookPart {
   private debt = 0;
+  private time = 0;
 
   constructor(private readonly races: StreetRaces) {}
 
+  draw(glows: GlowSprites, view: Rect): void {
+    const pulse = 0.5 + 0.5 * Math.sin(this.time * 6);
+    const r = this.races.crashing;
+    const c = r?.crasher;
+    if (r && c && c.next < r.route.length) {
+      const n = r.route[c.next];
+      const x = n.ix * BLOCK_SIZE;
+      const z = n.iz * BLOCK_SIZE;
+      if (near(view, x, z, 8)) {
+        const last = c.next === r.route.length - 1;
+        const k = 0.8 + 0.6 * pulse;
+        // The way out of it (the finish: straight on), in the racers' magenta; the finish brighter and gold.
+        const out = dirHeading(routeTurn(r.route, c.next) ?? n.dir);
+        glows.addFlat(x, 0.07, z, out, 4.5, 4.5, (last ? 2 : 1.9) * k, (last ? 1.5 : 0.3) * k, (last ? 0.3 : 1.2) * k, GLOW.chevron);
+        glows.addFlat(x, 0.06, z, this.time, 10, 10, 0.9 * k, (last ? 0.7 : 0.15) * k, (last ? 0.15 : 0.6) * k, GLOW.ring);
+      }
+    }
+    const pz = this.races.prize;
+    if (pz && pz.handed) {
+      const s = pz.v.sim;
+      if (near(view, s.x, s.z, 4)) {
+        const size = (s.body?.reach ?? 2.3) * 2 + 1.2 + pulse * 0.4;
+        const k = 0.7 + 0.5 * pulse;
+        glows.addFlat(s.x, 0.06, s.z, s.heading, size * 0.75, size, 1.8 * k, 1.35 * k, 0.3 * k, GLOW.ring);
+      }
+    }
+  }
+
   update(dt: number, view: Rect, fx: Effects): void {
+    this.time += dt;
     this.debt = Math.min(4, this.debt + dt * FLARE_RATE);
     const n = Math.floor(this.debt);
     if (n <= 0) return;

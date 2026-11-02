@@ -11,6 +11,13 @@
  * police turn up and one of them is chased (scenes/chases.ts pursue()).
  * Crashes are real: a racer that wrecks is out.
  *
+ * RACE CRASHER (V2-12; rules in systems/raceCrasher.ts): pull onto the
+ * race's line at speed beside its racers and you're in it. Nobody slows
+ * for you or lets you catch up; through every junction from there in
+ * turn and through the last first, and you've won: the RACE CRASHER award
+ * (and stamp), and the leader of the rest pulls up and its driver hands
+ * it over (`prize`: no carjack, kept from the city until you take it).
+ *
  * How often: a due race goes ahead with raceOdds(hour) (every one in the
  * dead of night, a quarter by day), else it's put off.
  */
@@ -32,6 +39,9 @@ import type { SceneDriver, Vehicle } from '../population';
 import { SCENE_DROP, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { incident, type Chases } from './chases';
 import { raceRank, racing, type LabelSink } from '../debugLabels';
+import { PRIZE_KEEP, PRIZE_OUT, ahead, joinsRace, passes, routeLeg, toNode } from '../../systems/raceCrasher';
+import { holdStill, stopped } from './service';
+import { streetBody } from './people';
 
 /** Racers: how many, how fast (cruise on the straights / through corners), m/s. */
 const RACERS = [3, 5] as const;
@@ -75,6 +85,18 @@ export interface StreetRace {
   winner: Vehicle | null;
   /** Seconds until the police turn up (Infinity: they won't). */
   police: number;
+  /** The player, once they've pulled onto its line: the junction they're driving to (route.length: through the last). */
+  crasher: { next: number; out: boolean; won: boolean } | null;
+}
+
+/** The race car handed over to the player who won (RACE CRASHER). */
+export interface Prize {
+  v: Vehicle;
+  /** Seconds since it was won; stood still (for the driver getting out). */
+  age: number;
+  still: number;
+  /** Its driver's out: it's the player's to take. */
+  handed: boolean;
 }
 
 export class StreetRaces implements Scene {
@@ -83,6 +105,10 @@ export class StreetRaces implements Scene {
   /** The racer subject() is on. */
   private watched: Vehicle | null = null;
   private readonly out: VehicleControls = { throttle: 0, steer: 0, handbrake: false, boost: false };
+  /** The car the player won, waiting for them (kept from the city: CityLife.keeps). */
+  prize: Prize | null = null;
+  /** Races the player joined / won (diagnostics, tests). */
+  readonly crashed = { joined: 0, won: 0, lost: 0 };
 
   constructor(
     private readonly life: SceneCtx,
@@ -124,17 +150,33 @@ export class StreetRaces implements Scene {
         if (!lead || racer.leg > 0) lead = v;
       }
       if (left > 0 && (r.police -= dt) <= 0) this.callPolice(r);
-      const far = !lead || (life.distance(lead.sim.x, lead.sim.z) > SCENE_DROP && !life.inView(lead.sim.x, lead.sim.z, 4));
-      if (left === 0 || r.age > RACE_TIMEOUT || far) {
+      const racing = this.crash(r);
+      // The player still in it keeps it going (they may have left the rest behind, or seen them all crash out).
+      const far = !racing && (!lead || (life.distance(lead.sim.x, lead.sim.z) > SCENE_DROP && !life.inView(lead.sim.x, lead.sim.z, 4)));
+      if ((left === 0 && !racing) || r.age > RACE_TIMEOUT || far) {
+        if (r.crasher && !r.crasher.out) this.crasherOut(r, false);
         for (const racer of r.racers) this.letGo(racer);
         this.races.splice(i, 1);
       }
     }
+    if (this.prize) this.stepPrize(this.prize, dt);
   }
 
   reset(): void {
     for (const r of this.races) for (const racer of r.racers) this.letGo(racer);
     this.races.length = 0;
+    this.dropPrize();
+  }
+
+  /** Is `v` the car won off the racers, waiting for the player (no scene may take it)? */
+  prized(v: Vehicle): boolean {
+    return this.prize !== null && this.prize.v === v;
+  }
+
+  /** The player in a race, if they're in one: the race. */
+  get crashing(): StreetRace | null {
+    for (const r of this.races) if (r.crasher && !r.crasher.out) return r;
+    return null;
   }
 
   describe(out: LabelSink): void {
@@ -146,7 +188,11 @@ export class StreetRaces implements Scene {
           if (v === r.winner) out.car(v, 'RACE WINNER', 'traffic');
         } else if (out.wants(v.sim.x, v.sim.z)) out.car(v, `RACER ${raceRank(r.racers, i)}/${n}`, 'traffic');
       }
+      const c = r.crasher;
+      const pv = this.life.d.player.driving;
+      if (c && !c.out && pv) out.car(pv, `RACE CRASHER → ${c.next + 1}/${r.route.length}`, 'mission');
     }
+    if (this.prize) out.car(this.prize.v, this.prize.handed ? 'YOUR PRIZE' : 'PRIZE (pulling up)', 'mission');
   }
 
   /** The leader (kept while it's in the top two, so an overtake doesn't swing the view), then the winner. */
@@ -184,7 +230,7 @@ export class StreetRaces implements Scene {
       return false;
     }
     life.clock.start('race', life.now);
-    const race: StreetRace = { route, racers: [], age: 0, winner: null, police: Infinity };
+    const race: StreetRace = { route, racers: [], age: 0, winner: null, police: Infinity, crasher: null };
     this.enter(race, lead);
     // The rest of the grid, nose to tail behind the leader, out of view.
     const n = RACERS[0] + Math.floor(rand() * (RACERS[1] - RACERS[0] + 1));
@@ -268,9 +314,133 @@ export class StreetRaces implements Scene {
       r.winner = v;
       life.emit('raceWon', v.sim.x, v.sim.z);
       life.d.bus.emit({ type: 'horn', x: v.sim.x, z: v.sim.z, duration: 1.4 });
+      // Beaten to it.
+      if (r.crasher && !r.crasher.out) this.crasherOut(r, false);
     }
     this.letGo(racer);
   }
+
+  // --- RACE CRASHER (V2-12) ---------------------------------------------------------
+
+  /**
+   * The player and race `r` this step: pulled onto its line, they're in;
+   * in it, each junction passed in turn, the last one first wins. True
+   * while they're racing.
+   */
+  private crash(r: StreetRace): boolean {
+    const life = this.life;
+    const p = life.d.player;
+    const v = p.driving;
+    const c = r.crasher;
+    if (c?.out) return false;
+    if (!v || !p.alive || p.arrested || !life.d.playing()) {
+      if (c) this.crasherOut(r, false);
+      return false;
+    }
+    const s = v.sim;
+    if (!c) {
+      if (this.crashing) return false;
+      const leg = routeLeg(r.route, s.x, s.z, s.heading);
+      if (leg < 0) return false;
+      let gap = Infinity;
+      for (const racer of r.racers) if (!racer.done) gap = Math.min(gap, Math.hypot(racer.v.sim.x - s.x, racer.v.sim.z - s.z));
+      if (!joinsRace({ leg, legs: r.route.length, speed: Math.hypot(s.vx, s.vz), gap, won: r.winner !== null })) return false;
+      r.crasher = { next: leg, out: false, won: false };
+      this.crashed.joined++;
+      life.emit('raceJoin', s.x, s.z);
+      return true;
+    }
+    while (c.next < r.route.length && passes(r.route[c.next], s.x, s.z)) c.next++;
+    if (c.next < r.route.length) return true;
+    // Through the last junction.
+    if (r.winner) {
+      this.crasherOut(r, false);
+      return false;
+    }
+    r.winner = v;
+    c.won = true;
+    this.crasherOut(r, true);
+    this.crashed.won++;
+    life.emit('raceCrasher', s.x, s.z);
+    life.d.award?.('raceCrasher');
+    this.handOver(r);
+    return false;
+  }
+
+  private crasherOut(r: StreetRace, won: boolean): void {
+    const c = r.crasher;
+    if (!c || c.out) return;
+    c.out = true;
+    if (!won) this.crashed.lost++;
+  }
+
+  /** The leader of the rest (further down the route, then nearer its next junction) pulls up for the player. */
+  private handOver(r: StreetRace): void {
+    let best: Racer | null = null;
+    let bestD = Infinity;
+    for (const racer of r.racers) {
+      const v = racer.v;
+      if (racer.done || this.life.lost(v) || v.pursuit || v.scene !== this.driver) continue;
+      const node = r.route[Math.min(racer.leg, r.route.length - 1)];
+      const d = toNode(node, v.sim.x, v.sim.z);
+      if (best && !ahead(racer.leg, d, best.leg, bestD)) continue;
+      best = racer;
+      bestD = d;
+    }
+    if (!best) return;
+    best.done = true;
+    best.nitro = 0;
+    // The last one's still waiting: it goes back to the city.
+    this.dropPrize();
+    best.v.scene = this.conceder;
+    this.prize = { v: best.v, age: 0, still: 0, handed: false };
+  }
+
+  /** The prize: braked to a stop, its driver out and off; kept for the player until they take it or PRIZE_KEEP runs out. */
+  private stepPrize(pz: Prize, dt: number): void {
+    const life = this.life;
+    const v = pz.v;
+    pz.age += dt;
+    if (life.d.player.driving === v || !v.mesh.root.visible || v.damage.wrecked || pz.age > PRIZE_KEEP) {
+      this.dropPrize();
+      return;
+    }
+    if (pz.handed) return;
+    // Taken off it some other way (its driver dragged out): it's an ordinary car now.
+    if (!v.ai || v.scene !== this.conceder) {
+      pz.handed = true;
+      return;
+    }
+    pz.still = stopped(v.sim, 0.5) ? pz.still + dt : 0;
+    if (pz.still < PRIZE_OUT) return;
+    // The driver gets out and walks off; the car's nobody's, so the player takes it without a carjack.
+    const door = life.doorOf(v.sim);
+    const d = life.addPed(door.x, door.z, v.sim.heading, undefined, streetBody(life));
+    d.agent.street = true;
+    d.model.hail(1.5);
+    life.giveBack(d);
+    v.ai = null;
+    v.scene = null;
+    // Off the director's list (it's not to be retired) but still `ambient` (Population won't recycle it) while it waits.
+    const i = life.owned.indexOf(v);
+    if (i >= 0) life.owned.splice(i, 1);
+    pz.handed = true;
+  }
+
+  /** The prize is taken (or given up on): an ordinary car from here (Population's, if nobody's in it). */
+  private dropPrize(): void {
+    const pz = this.prize;
+    if (!pz) return;
+    this.prize = null;
+    const v = pz.v;
+    if (v.scene === this.conceder) this.life.release(v);
+    if (pz.handed) v.ambient = false;
+  }
+
+  /** The prize's driving: brake to a stop where it is. */
+  private readonly conceder: SceneDriver = {
+    drive: (v: Vehicle): VehicleControls | null => (v.ai ? holdStill(v.sim) : null),
+  };
 
   /** Out of the race: an ordinary driver again. */
   private letGo(racer: Racer): void {
