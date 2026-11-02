@@ -70,6 +70,19 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
+**V2 status (2026-11-02, end of session):** wave 1 is live as **0.14.0**
+(V2-01 in-view meter, V2-02 the city doesn't stop, V2-03 chase handoff,
+V2-04 stamps, V2-05 story scene/mayhem steps, V2-08 Night Shift, s2/s3 of
+KEEP IT LOUD, V2-13 six new incidents); 0.13.1 fixed black slabs on
+desktop High (bloom NaN). Integration branch `claude/v2` = `main`.
+**Next: wave 2**: V2-07 cold open + s1, V2-18 observe mode, V2-09 hose,
+chime and winch, s4–s6 (V2-06), V2-11 scanner, V2-10, V2-12; then the
+iPhone device pass (V2-14) and V2-17 / 1.0.0. Run at most two or three
+streams at once (the container has 4 cores and SwiftShader smoke tests are
+CPU-bound); agents run tsc, tests and a build, and the integrator runs the
+smoke test once after merging, then lets GitHub CI confirm before main.
+Wave 3 candidate: W3-A, a bigger city.
+
 **V2 is planned in `docs/V2_PLAN.md` (2026-11-02).** The owner chose
 direction A, *Have-a-Go* (the city's incidents keep running while you're
 wanted, and you can join them), with B's mayhem (stolen service vehicles'
