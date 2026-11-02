@@ -193,6 +193,8 @@ export class StampDetector {
           found = heavier(found, 'endangeredPandas');
         }
         if (a.kind === 'evaded' && a.points > 0) found = heavier(found, 'nothingToSeeHere');
+        // The chase handoff's moments (scenes/chases.ts) share their score kinds' names.
+        if (a.kind === 'takeTheHeat' || a.kind === 'citizensArrest' || a.kind === 'haveAGo') found = heavier(found, a.kind);
         // The award that takes the combo to the top (the fx director's ×10 flash).
         if (a.multiplier === MAX_COMBO - 1) found = heavier(found, 'absoluteScenes');
         break;

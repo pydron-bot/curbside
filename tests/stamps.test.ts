@@ -175,6 +175,13 @@ describe('stamps: the detector', () => {
     expect(d.handle(wanted(5, 4), 9)).toBe('bluesAndTwos');
   });
 
+  it("stamps the chase handoff's moments from their score awards", () => {
+    for (const kind of ['takeTheHeat', 'citizensArrest', 'haveAGo'] as const) {
+      const d = new StampDetector();
+      expect(d.handle(award(kind), 1), kind).toBe(kind);
+    }
+  });
+
   it('a respawn forgets a half-built chain', () => {
     const d = new StampDetector();
     run(d, [[0, boom()], [1, boom()]]);
