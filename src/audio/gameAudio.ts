@@ -693,10 +693,32 @@ export class GameAudio {
         return this.onStreet(e);
       case 'stamp':
         return this.onStamp();
+      case 'tool':
+        return this.onTool(e);
       default: {
         const unhandled: never = e;
         return unhandled;
       }
+    }
+  }
+
+  /** The player's borrowed service vehicle's tool: the pump's hiss, the van's jingle, the winch's clunk. */
+  private onTool(e: EventOf<'tool'>): void {
+    switch (e.what) {
+      case 'hoseOn':
+      case 'spray':
+        return this.oneShot('door', e, FALLOFF.near, 0.6, 0.2, sfx.spray);
+      case 'chime':
+        return this.chime(e.x, e.z);
+      case 'hook':
+        return this.oneShot('crash', e, FALLOFF.crash, 0.55, 0.15, (v) => sfx.crash(v, 4, true));
+      case 'unhook':
+        return this.oneShot('door', e, FALLOFF.near, 0.55, 0.15, (v) => sfx.door(v, false));
+      case 'noHook':
+        return this.oneShot('door', e, FALLOFF.near, 0.35, 0.1, (v) => sfx.door(v, true));
+      default:
+        // The rest is heard through what it causes (people knocked flat, the pay's sting).
+        return;
     }
   }
 

@@ -7,6 +7,7 @@
 import type { VehicleArchetype } from '../entities/vehicle';
 import type { BlastKind } from '../systems/damage';
 import type { Award } from '../systems/score';
+import type { ToolKind } from '../systems/serviceTools';
 import type { StampId } from '../systems/stamps';
 import type { WantedReason } from '../systems/wanted';
 import type { WeaponKind } from '../systems/weapons';
@@ -114,7 +115,7 @@ export type GameEvent =
       type: 'pedDown';
       x: number;
       z: number;
-      cause: 'vehicle' | 'punch' | 'shot' | 'blast' | 'fire';
+      cause: 'vehicle' | 'punch' | 'shot' | 'blast' | 'fire' | 'water';
       /** Knocked out (0 HP: down for long, then they run), not just knocked over. */
       ko?: boolean;
       byPlayer: boolean;
@@ -183,6 +184,12 @@ export type GameEvent =
    * one every few seconds (systems/stamps.ts).
    */
   | { type: 'stamp'; id: StampId; x: number; z: number }
+  /**
+   * The player's service-vehicle tool (game/scenes/serviceTools.ts) at
+   * (x, z): see ToolWhat. A delivery carries the car's `condition` (health
+   * share 0..1) and `wrecked`; serviceMode pays for it and for `fireOut`.
+   */
+  | { type: 'tool'; tool: ToolKind; what: ToolWhat; x: number; z: number; condition?: number; wrecked?: boolean }
   /** The game was paused or resumed (menu, app switch, lost graphics context). */
   | { type: 'pause'; paused: boolean }
   /**
@@ -274,6 +281,14 @@ export type StreetWhat =
   | 'conga'
   | 'action'
   | 'pyro';
+
+/**
+ * What a borrowed service vehicle's tool did: the hose on, still going (the
+ * pump's hiss, repeated), off, a fire it put out; the chime playing (each
+ * jingle), a queue anchored where the van parked, let go; a car winched on,
+ * dropped, delivered to the docks yard, or nothing in reach.
+ */
+export type ToolWhat = 'hoseOn' | 'spray' | 'hoseOff' | 'fireOut' | 'chime' | 'queue' | 'release' | 'hook' | 'unhook' | 'deliver' | 'noHook';
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;
