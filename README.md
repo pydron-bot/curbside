@@ -213,7 +213,7 @@ share sheet mocked.
   score points; anything within 3 s of the last event raises a ×2…×10
   combo. Best score is kept in localStorage (`curbside.best`).
 - **Weapons** (`src/systems/weapons.ts`, `src/world/pickups.ts`): pistol,
-  SMG, shotgun, grenades, molotovs and rockets, plus health, armour and
+  SMG, shotgun, grenades, molotovs, rockets and the air horn, plus health, armour and
   ammo crates on sidewalks (respawn 30 s); hitscan with lock-on and spread
   bloom, tracers, walls stop bullets, cars take damage; drive-bys.
 - **Fighting back** (`src/systems/crowd.ts`): peds are calm (70%),
@@ -396,8 +396,8 @@ survivable, and spread 60% wider at a running target.
 **The player** (`game/player.ts`): body armour (0–100) soaks every hit
 first and is lost on death; health creeps back to 40 at 4/s after 6 s
 unhurt. Crates: health +50, armour +50, ammo (half a clip for each gun
-owned), weapons (capped: pistol 120, SMG 300, shotgun 48, grenades 12,
-molotovs 10, rockets 8).
+owned, and 3 blasts for an air horn), weapons (capped: pistol 120, SMG 300,
+shotgun 48, grenades 12, molotovs 10, rockets 8, air horn 12).
 
 **On foot** (`game/combat.ts`, `systems/crowd.ts`, `systems/weapons.ts`).
 Everyone, officers included, has 100 HP: pistol 34 (3 hits), SMG 15 (~7),
@@ -431,6 +431,30 @@ something else is held) out of whichever side window has the best target
 within 1.2 rad of square (hostiles first), with ×1.5 spread; an aim
 (mouse, right stick) picks the window. Never hits your own car; heat
 applies like any gunfire.
+
+**The air horn** (W3-B, `systems/airHorn.ts`, `Combat.blowHorn`): held,
+aimed and fired like a pistol (on foot only, no lock-on); a crate is a
+canister of 6 blasts (12 at most; an ammo crate adds 3), one every 1.1 s.
+A blast is a cone 14 m long and ±0.5 rad (~29°) wide, the hose's maths
+(`serviceTools.coneHit`, its jet ±0.23 rad), and a wall between stops it
+for whoever's behind (`hornClear`, the hose's `clipJet` per target). No
+damage and no knock-downs: within 2.5 m people reel (a 0.45 s stagger,
+pushed back) and cover their ears; within 8 m they cover their ears for
+0.7 s (the cower pose) and then run; further off they scatter for 4 s.
+The police, anyone fighting, the fallen and the burning don't budge.
+Drivers in the cone (not the police, not one in a rage) stamp on the brake
+for 0.8–2 s (40% jerk the wheel ±0.6 as they do), sit stalled, then honk
+back (`traffic.startleDriver`). Parked cars in the cone go off
+(`scenes/alarms.ts`; the first blast that sets one off in 40–70 s is a
+chain of the player's: blast, alarm, DOMINO ×2; `LOUD`: not while wanted),
+pigeons and stray dogs scatter, and a scanner line goes out (NOISE
+COMPLAINT IN …, 90 s cooldown). Heat: a public-order nuisance, +0.1 a
+witnessed blast, at most +0.2 per 5 s, so a whole canister never makes a
+star. The sound is a synthesised three-reed chord (`sfx.airHorn`); the look
+is three pale shock rings down the cone from Effects' pooled fake lights
+(no draw call of its own). Pickups: a pink-ringed crate (the ammo box
+model until `pickups.glb` has a `crate_horn`); in the hand, nothing shows
+until `weapons.glb` has an `air_horn` root.
 
 **Stunts** (`world/ramps.ts`, `systems/stunts.ts`). Ten stunt ramps
 (6 × 3.2 m, 1.6 m lip, matching the `ramp` model in props.glb) on road
@@ -566,7 +590,8 @@ Mayhem has a cost now. **Wanted level** (`systems/wanted.ts`, pure): heat
 of any police (car, officer, helicopter): knocking someone down +0.3
 (with your own car: `stepCrowdPed` reports the car that hit them, so a
 unit running down its officer beside you isn't on you),
-carjack +0.35, a shot +0.05 (at most +0.5 per 5 s), an explosion you
+carjack +0.35, a shot +0.05 (at most +0.5 per 5 s), an air horn blast
++0.1 (a nuisance: at most +0.2 per 5 s), an explosion you
 caused +0.6 (not your own car going up, even after you bail out of it
 burning: `explosion.ownCar`), clearly ramming a police car
 +0.6 (bumps in a chase don't count, nor does smashing through a roadblock
@@ -1244,6 +1269,9 @@ player starts and carries it on without them.
   line: SHOTS FIRED IN …), and a patrol comes, the officer walks to the
   spot, has a slow look round for 6 s and they leave. Nobody to make the
   call: it ends there.
+- **The air horn:** a blast that sets a parked car's alarm off is a chain
+  of the player's too (blast, alarm: DOMINO ×2), at most once in 40–70 s
+  and `LOUD` (*Driving and combat*, the air horn).
 - **The patrol and your heat** (`Patrol`, `patrolArrives`): the patrol at
   your mess is the scene's, not a `PoliceForce` unit, so it never sees,
   chases or busts you; a player already gone gets nothing. Only if you're
