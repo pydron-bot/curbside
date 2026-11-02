@@ -62,7 +62,9 @@ export class CarAlarms implements Scene {
       if (!v.parked) continue;
       const s = v.sim;
       if (hornHit(e.x, e.z, e.dirX, e.dirZ, s.x, s.z, s.body?.halfWidth ?? 1, e.reach) < 0) continue;
-      if (this.setOff(v) && !first) first = v;
+      // One already going doesn't start a chain (no DOMINO for the same alarm twice).
+      const was = this.board.sounding(v);
+      if (this.setOff(v) && !was && !first) first = v;
     }
     if (!first || !e.byPlayer || !life.due('airHorn', 0)) return;
     life.clock.start('airHorn', life.now);
