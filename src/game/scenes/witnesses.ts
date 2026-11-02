@@ -14,10 +14,10 @@
 import { scare } from '../../systems/crowd';
 import type { Crime } from '../../systems/wanted';
 import { CALL_SECONDS, DELAYED_CRIMES, react, sees, stepCall, type CallState } from '../../systems/witnesses';
-import type { CrowdPed } from '../population';
+import { inRect, type CrowdPed } from '../population';
 import type { Scene, SceneCtx } from '../cityLife';
 import { witnessText, type LabelSink } from '../debugLabels';
-import { handBack } from './people';
+import { handBack, roomFor } from './people';
 import type { Muggings } from './muggings';
 import { len2 } from '../../core/len';
 
@@ -31,6 +31,12 @@ const CALLERS_EACH = 2;
 const FILM_SECONDS = [4, 8] as const;
 /** After a call gets through, they keep the phone up this long, s. */
 const LINGER = 1.5;
+/** A stamp (game/stamps.ts) gets at most this many filming it... */
+const STAMP_FILMERS = 4;
+/** ...for this long, s... */
+const STAMP_FILM = [3, 5] as const;
+/** ...none closer than this to the player (they're running from it, not filming), m. */
+const STAMP_CLEAR = 6;
 /** A new crime this close to one still being called in goes on the same call, m. */
 const SAME_CALL = 30;
 /** Crimes one call can carry. */
@@ -141,6 +147,58 @@ export class Witnesses implements Scene {
     const report: Report = { x: at.x, z: at.z, crimes: [], calling: 0, through: false };
     this.react(at.x, at.z, report, true);
     return this.phones.length > 0;
+  }
+
+  /**
+   * Named mayhem (a `stamp` at (x, z)): the passers-by in view nearest it
+   * stop and film it for a few seconds. Only people already on the street
+   * (no new spawns) and within the scenes' people cap; no call is made.
+   */
+  film(x: number, z: number): number {
+    const life = this.life;
+    if (!life.d.playing()) return 0;
+    const seen = this.seen;
+    const seenD = this.seenD;
+    seen.length = 0;
+    seenD.length = 0;
+    const view = life.view;
+    for (const c of life.d.population.crowd) {
+      const a = c.agent;
+      // Walking about: anyone running, fighting or hurt has better things to do.
+      if (!a.street || a.scene || a.role !== 'civilian' || a.mode !== 'walk' || a.injured || a.burning > 0) continue;
+      if (!inRect(a.s.x, a.s.z, view, -1)) continue;
+      const d = len2(a.s.x - x, a.s.z - z);
+      if (d < STAMP_CLEAR) continue;
+      let k = seen.length;
+      if (k === STAMP_FILMERS && d >= seenD[k - 1]) continue;
+      if (k === STAMP_FILMERS) k--;
+      else {
+        seen.push(c);
+        seenD.push(d);
+      }
+      while (k > 0 && seenD[k - 1] > d) {
+        seen[k] = seen[k - 1];
+        seenD[k] = seenD[k - 1];
+        k--;
+      }
+      seen[k] = c;
+      seenD[k] = d;
+    }
+    let n = 0;
+    for (let i = 0; i < seen.length && this.phones.length < MAX_PHONES && roomFor(life); i++) {
+      const c = seen[i];
+      life.borrow(c);
+      c.phone = true;
+      this.phones.push({
+        ped: c,
+        role: 'film',
+        call: { phase: 'through', time: 0, needs: 0 },
+        report: null,
+        until: life.now + STAMP_FILM[0] + life.d.rand() * (STAMP_FILM[1] - STAMP_FILM[0]),
+      });
+      n++;
+    }
+    return n;
   }
 
   /** Whoever saw (x, z) reacts: callers on `report` (if any), filmers, runners. `all`: never mind which way they face. */

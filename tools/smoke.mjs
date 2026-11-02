@@ -7,7 +7,9 @@
  * manifest is installable, and once the service worker has the game cached,
  * it boots and plays offline. On the 852×393 profile, REPORT BUG too: the
  * screenshot, the report and the share sheet (mocked: shared, cancelled,
- * refused). Catches the wiring crashes `npm test` can't.
+ * refused). On every profile, a named-mayhem stamp (and on the phones one
+ * in a Chaos Run) must stay clear of the stars, radar, activity card and
+ * score feed. Catches the wiring crashes `npm test` can't.
  *
  *   npx -y -p playwright@1.63.0 node tools/smoke.mjs [--no-build] [--port 4318] [--out smoke-out]
  *
@@ -83,6 +85,71 @@ async function play(page, label) {
   return r;
 }
 
+/** HUD pieces a stamp must never cover. */
+const STAMP_CLEAR_OF = ['#wanted', '#radar', '#activity', '#score', '.hud-status', '#act-banner'];
+
+/**
+ * A named-mayhem stamp (the longest label, with stars up) held mid-show:
+ * on screen, inside the view and clear of the stars, radar, status,
+ * activity card and score feed. `chaos`: in a Chaos Run (its card up).
+ */
+async function stampCheck(page, label, chaos) {
+  const r = await page.evaluate(
+    async ({ chaos, clearOf }) => {
+      const u = window.__ub;
+      const frames = async (n) => {
+        for (let i = 0; i < n; i++) await new Promise((res) => requestAnimationFrame(() => res()));
+      };
+      // Back from REPORT BUG's pause card.
+      if (u.paused) u.setPaused(false);
+      if (chaos) {
+        u.frontDoor.play(u.progress.chaos.titleMode);
+        u.fastForward(5);
+        // Past GO: the count's banner goes on the frame clock.
+        for (let i = 0; i < 20 && !document.querySelector('#act-banner').hidden; i++) await frames(1);
+      }
+      u.testTools.wanted(3);
+      u.stamp('neighbourhoodWatch');
+      await frames(3);
+      // The stars, card and stamp glide when the radio's card comes or goes: measure them settled.
+      await Promise.race([Promise.all(document.getAnimations().filter((a) => a instanceof CSSTransition).map((a) => a.finished.catch(() => {}))), new Promise((res) => setTimeout(res, 5000))]);
+      const box = document.querySelector('#stamp .stamp-box');
+      // Hold the slam at full size (SwiftShader frames take longer than the whole show).
+      for (const a of box.getAnimations()) {
+        a.pause();
+        a.currentTime = 800;
+      }
+      const rect = (el) => {
+        const b = el.getBoundingClientRect();
+        return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, w: b.width, h: b.height };
+      };
+      const s = rect(box);
+      const hits = [];
+      for (const sel of clearOf) {
+        for (const el of document.querySelectorAll(sel)) {
+          const b = rect(el);
+          if (b.w === 0 || b.h === 0) continue;
+          if (s.left < b.right && b.left < s.right && s.top < b.bottom && b.top < s.bottom) hits.push(`${sel} ${Math.round(b.left)},${Math.round(b.top)}–${Math.round(b.right)},${Math.round(b.bottom)}`);
+        }
+      }
+      return {
+        text: box.textContent,
+        opacity: Number(getComputedStyle(box).opacity),
+        inside: s.left >= 0 && s.right <= innerWidth && s.top >= 0 && s.bottom <= innerHeight,
+        activity: !document.querySelector('#activity')?.hidden,
+        stars: !document.querySelector('#wanted')?.hidden,
+        hits,
+        s,
+      };
+    },
+    { chaos, clearOf: STAMP_CLEAR_OF },
+  );
+  const where = `${label}${chaos ? ' (Chaos Run)' : ''}`;
+  check(r.text.startsWith('NEIGHBOURHOOD WATCH') && r.opacity > 0.9 && r.inside, `${where}: stamp shows inside the view (${Math.round(r.s.left)},${Math.round(r.s.top)} ${Math.round(r.s.w)}×${Math.round(r.s.h)})`);
+  check(r.hits.length === 0 && r.stars && (!chaos || r.activity), `${where}: stamp clear of the HUD${r.hits.length ? ` (covers ${r.hits.join(', ')})` : ''}`);
+  await page.screenshot({ path: path.join(opt.out, `${label}${chaos ? '-chaos' : ''}-stamp.png`), timeout: 120000 });
+}
+
 /**
  * REPORT BUG from the pause card (test tools on): a screenshot is taken, the
  * share sheet gets a JPEG and the JSON report, and a cancelled or refused
@@ -149,6 +216,9 @@ try {
     try {
       await play(page, label);
       if (saved?.testTools) await bugReport(page, label);
+      await stampCheck(page, label, false);
+      // The phones: the Chaos Run's card and stars up too (stamps stay on there).
+      if (label.startsWith('iphone')) await stampCheck(page, label, true);
     } catch (e) {
       check(false, `${label}: ${e.message.split('\n')[0]}`);
     }

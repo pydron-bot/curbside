@@ -336,6 +336,17 @@ Night Shift: **NIGHT SHIFT COMPLETE.**
 - The main story is worth 30% of completion, split evenly over its jobs.
   The Night Shift isn't weighted: PROGRESS shows it as its own row.
 
+## Stamps
+
+The names stamped across the screen for the player's biggest mayhem
+(BARBECUE SEASON, ENDANGERED PANDAS, FARES PLEASE …) live with their
+rules in `src/systems/stamps.ts` (the full table is in the README,
+*Named mayhem*). They're in the same voice as the calls: comic, British
+(bank holidays, panda cars, last orders), a phrase you'd hear down the
+pub rather than a game term. At most 20 characters, the line under it at
+most 30 (a test checks, for the 852×340 layout), and never a name from
+another game.
+
 ## Threads for later
 
 - **The Mayor** owes the Graveyard Shift (Clamp's files) and is the main

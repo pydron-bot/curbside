@@ -84,6 +84,9 @@ import { Score, rammed, smashCredit, type Award } from './systems/score';
 import { fullRateDriver, holdAi, nearJunction, vehicleObstacles, type Obstacle } from './systems/traffic';
 import type { PauseReason } from './ui/pauseOverlay';
 import { loadBest } from './ui/scoreHud';
+import { StampHud } from './ui/stampHud';
+import { Stamps } from './game/stamps';
+import type { StampId } from './systems/stamps';
 import { mountTouchControls } from './ui/touchControls';
 import { mountCarButtons } from './ui/carButtons';
 import { CombatHud } from './ui/combatHud';
@@ -561,6 +564,15 @@ const fx = new FxDirector({
   // A blast about to breach a wall throws wall-coloured panels (the destruction test).
   blastPaint: (e, out) => !attract.active && destruction.blastPaint(blastKindOf(e.source), e.x, e.z, out),
 });
+// Named mayhem (game/stamps.ts): the player's big moments get a stamp, and passers-by in view film them.
+const stamps = new Stamps({
+  bus: events,
+  now: () => simTime,
+  live: () => !attract.active && player.alive && !player.arrested,
+  driving: () => player.driving?.archetype ?? null,
+  position: () => player.position,
+});
+events.on('stamp', (e) => cityLife.witnesses.film(e.x, e.z));
 // The destruction test (off by default): blasts near a wall breach it; dust, rubble and its physics.
 const destruction = new Destruction({
   bus: events,
@@ -1257,6 +1269,7 @@ function frame(now: number) {
   // Bikes lean and carry their riders; emergency sirens and the ice cream chime.
   streetLife.update(frameSeconds, focus.x, focus.z, !attract.active);
   combatLook.update(frameSeconds * fx.hitStop.scale * slow);
+  stamps.step();
   updateHud(frameSeconds);
   progress.update(frameSeconds);
   heatPresenter.update(frameSeconds, focus.x, focus.z, playing);
@@ -1367,6 +1380,7 @@ const hud = new Hud(document.body, score, events, {
   },
 });
 const combatHud = new CombatHud(document.getElementById('hud')!);
+new StampHud(document.getElementById('hud')!, events);
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
 // Where the ambulances go.
 radar.setBlip('hospital', { x: cityLife.hospital.x, z: cityLife.hospital.z, kind: 'friend', icon: '+', size: 6 });
@@ -1729,6 +1743,10 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   heat,
   progress,
   combat,
+  /** Named mayhem: detector, arbiter, show(id) (cooldown applies), force(id). */
+  stamps,
+  /** Slam a stamp on now (smoke test, playtests): an id from STAMPS ('barbecueSeason', 'takeTheHeat', …). */
+  stamp: (id: StampId) => stamps.force(id),
   /** The city's own life (game/cityLife.ts): clock, scenes, medics, drops, people, owned, hospital, bays. */
   cityLife,
   /** How much of the city the player has seen (systems/inViewMeter.ts): per-kind seconds in view, starts, seen, unseen. */

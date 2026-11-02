@@ -27,8 +27,10 @@ npx -y -p playwright@1.63.0 node tools/smoke.mjs   # browser smoke test (see bel
 **Smoke test** (`tools/smoke.mjs`): builds the game as Pages does, serves it
 and plays it headless (Chromium + SwiftShader) on desktop 1280×720 and the
 iPhone 15 Pro profile at 852×393 and 852×340: boot, a run, 30 s simulated,
-no page or console errors, under 150 draw calls; then installability and an
-offline boot from the service worker. ~3 min. CI (`.github/workflows/ci.yml`)
+no page or console errors, under 150 draw calls, and a named-mayhem stamp
+(`__ub.stamp(id)`, held mid-show) clear of the stars, radar, status,
+activity card and score feed (on the phones in a Chaos Run too); then
+installability and an offline boot from the service worker. ~3 min. CI (`.github/workflows/ci.yml`)
 runs it with the unit tests, types and GLB contracts on every branch and pull
 request; Pages (`pages.yml`) runs the tests and contracts before deploying
 main.
@@ -867,6 +869,10 @@ people in).
   close by while a call is on goes on the same call. With nobody who saw
   it (or no phone free: 6 at once), heat counts it at once as before.
   Gunfire, explosions and everything against the police stay immediate.
+  After a named-mayhem stamp (Effects and camera, *Named mayhem*),
+  `witnesses.film(x, z)` stops up to four passers-by walking in view (not
+  within 6 m) to film it for 3–5 s: people already on the street, inside
+  the scenes' people cap and the 6 phones, no call made.
 - **Fires and fire trucks** (`scenes/fireCrews.ts`; rules in
   `systems/emergency.ts` FireBoard): a car that blows up leaves its wreck
   burning (the fire follows it if it's shoved), a grenade or rocket within
@@ -2305,6 +2311,9 @@ focusZ, playing)` once per frame after placing cars and people.
   a hiss-and-patter loop.
 - **Overlay** (`src/ui/fxOverlay.ts`, `fx.css`): screen-edge flashes at the
   ×5 and ×10 combo, animated with the Web Animations API.
+- **Stamps**: on a `stamp` event the director holds the sim for 0.12 s
+  (the stamp slams down in it), flashes the edges in the stamp's ink and
+  adds a little shake. See *Named mayhem* below.
 
 Budget: at most 5 draw calls for all of it (fire, smoke, debris, ground
 marks, rain), each skipped when empty, and no program
@@ -2418,6 +2427,63 @@ rig.addTrauma(0..1); rig.kick(dirX, dirZ, metres); rig.punchFov(degrees)
 fx.hitStop.hit(seconds, slow?)             // slow the sim for a moment
 fx.setRain(true | false, seconds?)         // start or stop a shower (missions, debug)
 fx.overlay.edgeFlash(cssColour, strength)
+```
+
+### Named mayhem (stamps)
+
+The player's biggest bits of chaos get a name stamped across the middle of
+the screen, and passers-by in view stop and film it. Rules and table in
+`systems/stamps.ts` (pure, `tests/stamps.test.ts`), the bus wiring in
+`game/stamps.ts`, the element in `ui/stampHud.ts` and `stamp.css`.
+
+| Stamp | For | Weight |
+|---|---|---|
+| BONFIRE NIGHT | six cars going up in one chain | 9 |
+| TAKE THE HEAT | the chase handoff (V2-03, via `show`) | 8 |
+| CITIZEN'S ARREST | the chase handoff (V2-03, via `show`) | 8 |
+| ENDANGERED PANDAS | three police cars wrecked in one pursuit | 7 |
+| HEALTH AND SAFETY | a blast of yours within 20 m of a fire crew hosing | 7 |
+| BARBECUE SEASON | three cars going up in a chain (each within 2.5 s of the last) | 6 |
+| FARES PLEASE | three people knocked down by your bus within 3 s | 6 |
+| BLUES AND TWOS | five stars (once a pursuit) | 6 |
+| BANK HOLIDAY | four car-on-car crashes within 3 s and 30 m of one of yours (only your first counts) | 5 |
+| ABSOLUTE SCENES | the combo reaching ×10 | 5 |
+| NOTHING TO SEE HERE | shaking off a chase of 3+ stars (the EVADED bonus) | 5 |
+| HAVE-A-GO HERO | the mugging bag handed back (V2-03, via `show`) | 5 |
+| NEIGHBOURHOOD WATCH | three gang members knocked down within 5 s | 4 |
+| FREQUENT FLYER | a STUNT worth 3,500+ | 4 |
+| BOWLED OVER | four people knocked down by a car within 3 s | 3 |
+| LAST ORDERS | three people punched down within 6 s | 3 |
+
+- **Detector** (`StampDetector`): reads `explosion`, `award`, `crash`,
+  `pedDown`, `wanted`, `stunt` and `street` (hose / fireOut) for the
+  player's own doing only, with fixed-size windows (`Burst`: n within a
+  span, fires once and re-arms after a gap; `Chain`: links within a gap).
+  Car explosions only count toward a chain (a grenade on an empty road
+  doesn't). A respawn or a bust forgets what's half-counted.
+- **One at a time** (`StampArbiter`): at most one every 4 s; the heaviest
+  offer in a frame wins; a heavier one within 0.6 s of a lighter one
+  replaces it; anything else waits out the cooldown and is dropped once
+  1.5 s old.
+- **Out**: `Stamps.step()` once a frame emits the winner as `stamp {id, x,
+  z}` (the player's position), only in play, alive and free. Listeners:
+  the HUD, the fx director (hit-stop, edge flash), `GameAudio` (a rubber
+  stamp thunk and a quick chord, the music ducked) and the witnesses
+  (filming). Stamps are on in every mode, the Chaos Run included.
+- **HUD**: one element built once; a stamp swaps its text and restarts a
+  CSS animation (two copies of the keyframes, swapped, so no reflow):
+  a 1.9 s slam, hold and fade, nothing running between stamps. Centred
+  across, its top under the stars and their pop line (stepping down with
+  them under the activity card and the radio's card) or at 42%,
+  whichever is lower; a size down at 360 px tall and under, and again
+  under the activity card on the phones (clear of the NOS button). Ink: red for
+  mayhem, cyan for the have-a-go moments, blue for the police ones.
+
+```ts
+stamps.show('takeTheHeat')     // name a moment (cooldown and weights apply)
+stamps.force('barbecueSeason') // now, whatever the cooldown (debug)
+STAMPS[id]                      // { label, sub, weight, tone }
+__ub.stamp('neighbourhoodWatch') // force one from the console / smoke test
 ```
 
 ## Destruction test

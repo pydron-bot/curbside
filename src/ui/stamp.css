@@ -1,0 +1,152 @@
+/* --- Named mayhem stamps (src/ui/stampHud.ts) --- */
+
+/* Centred across, its top edge under the stars and their pop line (which
+   step down under the activity card and the radio's card) or at 42%,
+   whichever is lower: clear of the stars, card and score feed above and
+   the act banner (34%). */
+#stamp {
+  --stamp-act: 0px;
+  --stamp-radio: 0px;
+  position: absolute;
+  left: 50%;
+  top: max(42%, calc(max(4px, var(--safe-t)) + 82px + clamp(18px, 5.4vmin, 26px) + 4.5vmin + var(--stamp-act) + var(--stamp-radio)));
+  transform: translateX(-50%);
+  /* Steps down with the stars as the radio's card comes and goes. */
+  transition: top 0.35s cubic-bezier(0.2, 1.2, 0.4, 1);
+  pointer-events: none;
+}
+
+body[data-activity] #stamp {
+  --stamp-act: calc(var(--act-h) + 2px);
+}
+
+body:has(#radio.in) #stamp {
+  --stamp-radio: 46px;
+}
+
+.stamp-box {
+  --c: #ff4d3a;
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  padding: 4px 14px 5px;
+  border: 3px solid var(--c);
+  border-radius: 8px;
+  outline: 1.5px solid var(--c);
+  outline-offset: 3px;
+  background: rgb(10 6 8 / 0.42);
+  color: var(--c);
+  text-align: center;
+  white-space: nowrap;
+  opacity: 0;
+}
+
+.stamp-box b {
+  font: italic 900 clamp(26px, 10vmin, 58px)/1 var(--display-font);
+  letter-spacing: 0.04em;
+  -webkit-text-stroke: 1.2px rgb(0 0 0 / 0.5);
+  text-shadow: 0 0.05em 0 rgb(0 0 0 / 0.55), 0 0 0.35em color-mix(in srgb, var(--c) 55%, transparent);
+}
+
+/* Long names a size down, so they stay inside the thumbs at 852 wide. */
+.stamp-box.long b {
+  font-size: clamp(22px, 8vmin, 46px);
+}
+
+.stamp-box small {
+  font: 800 clamp(10px, 3.3vmin, 15px)/1.1 var(--hud-font);
+  letter-spacing: 0.12em;
+  color: var(--ink);
+}
+
+/* Safari with its toolbar (852×340): a size down, so it stays above the thumbs' buttons. */
+@media (max-height: 360px) {
+  .stamp-box b {
+    font-size: 9vmin;
+  }
+
+  .stamp-box.long b {
+    font-size: 7vmin;
+  }
+
+  .stamp-box small {
+    font-size: 3vmin;
+  }
+}
+
+/* Phones under the activity card: it sits lower, level with the NOS button, so smaller again to stay clear. */
+@media (max-height: 430px) {
+  body[data-activity] .stamp-box {
+    padding: 3px 10px 4px;
+  }
+
+  body[data-activity] .stamp-box b {
+    font-size: 7.5vmin;
+  }
+
+  body[data-activity] .stamp-box.long b {
+    font-size: 5.6vmin;
+  }
+
+  body[data-activity] .stamp-box small {
+    font-size: 2.6vmin;
+  }
+}
+
+.stamp-box[data-tone='hero'] {
+  --c: var(--neon-cyan);
+}
+
+.stamp-box[data-tone='law'] {
+  --c: #7fa8ff;
+}
+
+/* Two copies of one animation: swapping restarts it with no reflow. */
+.stamp-box.a {
+  animation: stamp-a 1.9s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+
+.stamp-box.b {
+  animation: stamp-b 1.9s cubic-bezier(0.2, 1.3, 0.4, 1) both;
+}
+
+@keyframes stamp-a {
+  0% { opacity: 0; transform: rotate(-3deg) scale(1.9); }
+  9% { opacity: 1; transform: rotate(-3deg) scale(0.95); }
+  14% { transform: rotate(-3deg) scale(1); }
+  82% { opacity: 1; transform: rotate(-3deg) scale(1); }
+  100% { opacity: 0; transform: rotate(-3deg) scale(1.04); }
+}
+
+@keyframes stamp-b {
+  0% { opacity: 0; transform: rotate(-3deg) scale(1.9); }
+  9% { opacity: 1; transform: rotate(-3deg) scale(0.95); }
+  14% { transform: rotate(-3deg) scale(1); }
+  82% { opacity: 1; transform: rotate(-3deg) scale(1); }
+  100% { opacity: 0; transform: rotate(-3deg) scale(1.04); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Two names here too: one name for both wouldn't restart on the next stamp. */
+  .stamp-box.a {
+    animation-name: stamp-fade-a;
+    animation-timing-function: ease-out;
+  }
+
+  .stamp-box.b {
+    animation-name: stamp-fade-b;
+    animation-timing-function: ease-out;
+  }
+
+  @keyframes stamp-fade-a {
+    0% { opacity: 0; transform: rotate(-3deg); }
+    8%, 82% { opacity: 1; transform: rotate(-3deg); }
+    100% { opacity: 0; transform: rotate(-3deg); }
+  }
+
+  @keyframes stamp-fade-b {
+    0% { opacity: 0; transform: rotate(-3deg); }
+    8%, 82% { opacity: 1; transform: rotate(-3deg); }
+    100% { opacity: 0; transform: rotate(-3deg); }
+  }
+}
