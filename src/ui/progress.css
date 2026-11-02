@@ -689,6 +689,21 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
   --who: #ff8a3d;
 }
 
+/* Doreen: ice cream van mint. */
+.dlg-line[data-who='doreen'] .dlg-who {
+  --who: #6fe3c1;
+}
+
+/* Lionel: a busker's stage violet. */
+.dlg-line[data-who='lionel'] .dlg-who {
+  --who: #b98cff;
+}
+
+/* Mayor Lull: council-letter pearl, as quiet as she'd like. */
+.dlg-line[data-who='lull'] .dlg-who {
+  --who: #ece6d6;
+}
+
 .dlg-text {
   display: grid;
   gap: 2px;

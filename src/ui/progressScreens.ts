@@ -149,6 +149,22 @@ export class ResultsCard implements Panel {
  * A phone call or a mission debrief: who's talking, a few lines, the
  * payout, and a button to carry on. Shown over the frozen game.
  */
+/** Speakers with a badge colour of their own (progress.css .dlg-line[data-who]); anyone else gets Vex's pink. */
+export const BADGES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/TUNA/, 'tuna'],
+  [/PIKE/, 'pike'],
+  [/CLAMP/, 'clamp'],
+  [/DOREEN/, 'doreen'],
+  [/LIONEL/, 'lionel'],
+  [/LULL/, 'lull'],
+];
+
+/** A speaker label's badge ('vex' unless it has its own). */
+export function badgeFor(name: string): string {
+  for (const [re, badge] of BADGES) if (re.test(name)) return badge;
+  return 'vex';
+}
+
 export class DialogueCard implements Panel {
   readonly root: HTMLElement;
   readonly nav: MenuNav;
@@ -184,11 +200,10 @@ export class DialogueCard implements Panel {
   /** kicker: small line over the title ('INCOMING CALL', 'MISSION PASSED'). */
   show(kicker: string, title: string, lines: readonly DialogueLine[], reward: string, button: string, showFocus: boolean, done: () => void): void {
     this.done = done;
-    const who = (name: string) => (/TUNA/.test(name) ? 'tuna' : /PIKE/.test(name) ? 'pike' : /CLAMP/.test(name) ? 'clamp' : 'vex');
     const lineHtml = lines
       .map(
         (l) =>
-          `<div class="dlg-line" data-who="${who(l.who)}"><span class="dlg-who">${escapeHtml(l.who.replace(/[^A-Z]/g, '').slice(0, 1))}</span><span class="dlg-text"><b>${escapeHtml(l.who)}</b>${escapeHtml(l.text)}</span></div>`,
+          `<div class="dlg-line" data-who="${badgeFor(l.who)}"><span class="dlg-who">${escapeHtml(l.who.replace(/[^A-Z]/g, '').slice(0, 1))}</span><span class="dlg-text"><b>${escapeHtml(l.who)}</b>${escapeHtml(l.text)}</span></div>`,
       )
       .join('');
     this.card.querySelector('.dlg-body')!.innerHTML = `
