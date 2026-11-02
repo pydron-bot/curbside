@@ -14,6 +14,7 @@ import type { EventBus, EventOf } from '../core/events';
 import type { VehicleControls } from '../entities/vehicle';
 import type { CrowdPed, Vehicle } from '../game/population';
 import { MAX_COMBO } from '../systems/score';
+import { STAMPS, type StampTone } from '../systems/stamps';
 import type { WeaponKind } from '../systems/weapons';
 import type { City, Rect } from '../world/city';
 import type { PickupKind } from '../world/pickups';
@@ -76,6 +77,15 @@ export interface FxDeps {
    */
   blastPaint?: (e: EventOf<'explosion'>, out: Rgb) => boolean;
 }
+
+/** A stamp's edge flash, by its ink (ui/stamp.css). */
+const STAMP_FLASH: Record<StampTone, string> = {
+  mayhem: 'rgb(255 77 58 / 0.75)',
+  hero: 'rgb(46 230 255 / 0.7)',
+  law: 'rgb(127 168 255 / 0.7)',
+};
+/** The beat the stamp lands on: the sim freezes while it slams down (its CSS hits full size at ~0.17 s). */
+const STAMP_FREEZE = 0.12;
 
 const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
   health: { r: 0.35, g: 1, b: 0.45 },
@@ -158,6 +168,13 @@ export class FxDirector {
       this.lastCombat = this.realTime;
     });
     bus.on('playerDied', () => this.d.rig.addTrauma(0.5));
+    // Named mayhem (game/stamps.ts): the world holds still as the stamp lands.
+    bus.on('stamp', (e) => {
+      if (!this.playing) return;
+      this.hitStop.hit(STAMP_FREEZE, 0.1);
+      this.overlay.edgeFlash(STAMP_FLASH[STAMPS[e.id].tone], 0.7);
+      this.d.rig.addTrauma(0.15);
+    });
     bus.on('respawn', () => {
       this.boosting = false;
       this.slowMoIn = 0;
