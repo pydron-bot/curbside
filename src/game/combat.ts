@@ -13,7 +13,9 @@
  * at 0 HP (a knockout, the only thing that scores KNOCKOUT). In a car, a
  * pistol or SMG fires out of either side window at the best target there.
  * The air horn blasts a cone along the aim (systems/airHorn.ts): people
- * scatter, drivers brake; no damage.
+ * scatter, drivers brake; no damage. The taser's darts stun the first
+ * person along the aim (systems/taser.ts), locking on like a gun and
+ * picking out a fleeing suspect first.
  */
 import type { EventBus } from '../core/events';
 import { VEHICLE_SPECS, isPoliceArchetype } from '../entities/vehicle';
@@ -36,6 +38,7 @@ import {
   type BlastKind,
 } from '../systems/damage';
 import { HORN_RANGE, hornClear, hornHit, startle, startleDriverByHorn } from '../systems/airHorn';
+import { TASER_HIT_RADIUS, TASER_RANGE, TASER_SCARE, TASER_SCARE_SECONDS, stun } from '../systems/taser';
 import { bodyDistance, bodyOf, carCircles } from '../systems/physics';
 import { FIRE_RADIUS, MIN_THROW, Projectiles, clampThrowToWalls, throwTarget, type ProjectileWorld } from '../systems/projectiles';
 import type { Award, Score } from '../systems/score';
@@ -287,6 +290,7 @@ export class Combat {
     const spec = WEAPONS[kind];
     if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov', aim);
     if (spec.mode === 'horn') return this.blowHorn(aim);
+    if (spec.mode === 'taser') return this.tase(aim);
     // Spread before this shot's bloom; running sprays more.
     const moving = len2(p.ped.vx, p.ped.vz) > 3.5;
     const spread = p.arsenal.spread * (moving ? RUN_SPREAD : 1);
@@ -362,6 +366,57 @@ export class Combat {
       stalled++;
     }
     this.d.bus.emit({ type: 'airHorn', x: ox, z: oz, dirX: dx, dirZ: dz, reach: HORN_RANGE, byPlayer: true, startled, stalled });
+    return true;
+  }
+
+  /**
+   * One pair of taser darts along the lock or the aim (as a pistol's shot
+   * goes): the first person they reach before a wall or a car, within
+   * TASER_RANGE, is stunned and reported as knocked down (pedDown, cause
+   * 'taser': heat, the chases and the muggings read it like any floor).
+   * Reports `taser` first, hit or miss. No gunfire: nobody else panics.
+   */
+  private tase(aim: AimInput): boolean {
+    const p = this.d.player;
+    if (!p.arsenal.tryFire()) return false;
+    this.sinceShot = 0;
+    const { x, z } = p.ped;
+    this.aimDirection(TASER_RANGE, aim.heading, this.dir, 0);
+    const dx = this.dir.x;
+    const dz = this.dir.z;
+    p.ped.heading = Math.atan2(dx, dz);
+    const ox = x + dx * 0.6;
+    const oz = z + dz * 0.6;
+    this.d.pose?.shoot();
+    let best = TASER_RANGE;
+    for (const r of this.d.grid.near(ox + (dx * TASER_RANGE) / 2, oz + (dz * TASER_RANGE) / 2, TASER_RANGE / 2 + 1)) best = Math.min(best, rayRect(ox, oz, dx, dz, r));
+    for (const v of this.d.vehicles) {
+      if (Math.abs(v.sim.x - ox) > TASER_RANGE + 6 || Math.abs(v.sim.z - oz) > TASER_RANGE + 6) continue;
+      const hitRadius = bodyOf(v.sim).radius * 0.9;
+      for (const q of carCircles(v.sim, this.circles)) best = Math.min(best, rayCircle(ox, oz, dx, dz, this.circle(q.x, q.z, hitRadius)));
+    }
+    let target: CrowdPed | null = null;
+    for (const c of this.d.crowd) {
+      if (c.agent.mode === 'down') continue;
+      const t = rayCircle(ox, oz, dx, dz, this.circle(c.agent.s.x, c.agent.s.z, TASER_HIT_RADIUS));
+      if (t < best) {
+        best = t;
+        target = c;
+      }
+    }
+    const toX = ox + dx * best;
+    const toZ = oz + dz * best;
+    this.d.bus.emit({ type: 'taser', x: ox, z: oz, dirX: dx, dirZ: dz, toX, toZ, hit: target !== null, byPlayer: true });
+    if (!target) return true;
+    const a = target.agent;
+    stun(a, x, z);
+    this.d.bus.emit({ type: 'pedDown', x: a.s.x, z: a.s.z, cause: 'taser', byPlayer: true, cop: a.role === 'cop', gang: a.gang, suspect: a.suspect });
+    if (this.lock === target) this.lock = null;
+    // Those close by back away from it (not a gunshot's panic).
+    for (const c of this.d.crowd) {
+      if (c === target) continue;
+      if (len2(c.agent.s.x - a.s.x, c.agent.s.z - a.s.z) < TASER_SCARE) scare(c.agent, a.s.x, a.s.z, TASER_SCARE_SECONDS);
+    }
     return true;
   }
 
@@ -840,15 +895,17 @@ export class Combat {
     return bodyDistance(s, x, z);
   }
 
-  /** Lock-on candidates: every ped on their feet (not within `near` m of the player), hostiles flagged. */
+  /** Lock-on candidates: every ped on their feet (not within `near` m of the player), hostiles (and, tasing, suspects) flagged. */
   private gatherPeds(near = 0): void {
     this.candidateCount = 0;
     const wanted = this.d.stars() > 0;
     const me = this.d.player.ped;
+    // A taser in hand picks out a fleeing suspect (a mugger, a chase's runner) first.
+    const tasing = this.d.player.arsenal.current === 'taser';
     for (const c of this.d.crowd) {
       const a = c.agent;
       if (a.mode === 'down' || (near > 0 && len2(a.s.x - me.x, a.s.z - me.z) < near)) continue;
-      const hostile = a.mode === 'fight' || a.mode === 'shoot' || (a.role === 'cop' && wanted);
+      const hostile = a.mode === 'fight' || a.mode === 'shoot' || (a.role === 'cop' && wanted) || (tasing && a.suspect === true);
       this.push(a.s.x, a.s.z, hostile, c, null);
     }
   }

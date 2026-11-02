@@ -96,6 +96,12 @@ export type GameEvent =
    * made brake.
    */
   | { type: 'airHorn'; x: number; z: number; dirX: number; dirZ: number; reach: number; byPlayer: boolean; startled: number; stalled: number }
+  /**
+   * A taser's darts from (x, z) along (dirX, dirZ), stopping at (toX, toZ)
+   * (systems/taser.ts): `hit` someone (their pedDown, cause 'taser',
+   * follows), or missed into a wall, a car or thin air.
+   */
+  | { type: 'taser'; x: number; z: number; dirX: number; dirZ: number; toX: number; toZ: number; hit: boolean; byPlayer: boolean }
   /** A molotov burst: a patch of fire of `radius` m at (x, z). */
   | { type: 'ignite'; x: number; z: number; radius: number; byPlayer: boolean }
   /**
@@ -123,7 +129,7 @@ export type GameEvent =
       type: 'pedDown';
       x: number;
       z: number;
-      cause: 'vehicle' | 'punch' | 'shot' | 'blast' | 'fire' | 'water';
+      cause: 'vehicle' | 'punch' | 'shot' | 'blast' | 'fire' | 'water' | 'taser';
       /** Knocked out (0 HP: down for long, then they run), not just knocked over. */
       ko?: boolean;
       byPlayer: boolean;
