@@ -338,7 +338,7 @@ export class ObserveMode implements Panel {
     for (const h of Object.values(HIGHLIGHTS)) this.captions.set(h.kind, h.caption);
 
     // OBSERVE on the title and in the pause menu.
-    d.frontDoor.title.addRowButton('OBSERVE', 'eye', () => this.enterFromTitle());
+    d.frontDoor.title.addEntry('OBSERVE', 'Watch the city', 'eye', 'title-observe', () => this.enterFromTitle());
     d.frontDoor.pause.addButton('OBSERVE', 'eye', () => this.enterFromRun());
     this.listen();
   }

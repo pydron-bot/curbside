@@ -15,12 +15,13 @@ export const OBSERVE_MIN_HEIGHT = 12;
 /** Where it starts, m: the title's cruise. */
 export const OBSERVE_START_HEIGHT = 46;
 /**
- * Highest per quality tier, m: the widest view a tier can draw within the
- * iPhone budget (`medium` measured under 150 draw calls at 852×393, rotated
- * 45°, at noon with shadows: README *Observe mode*). Also bounded by the
- * streets: the crowd lives within 60 m of the focus, traffic within 160 m.
+ * Highest per quality tier, m. Draw calls grow slowly with height (`medium`
+ * at 852×393, turned 45°, at night with a fire and a chase on: 84 at 130 m;
+ * README *Observe mode* has the table), so what bounds it is the streets
+ * (the crowd lives within 60 m of the focus, traffic within 160 m) and the
+ * phone's fill: a lower tier sees less.
  */
-export const OBSERVE_MAX_HEIGHT: Readonly<Record<QualityTierName, number>> = { high: 130, medium: 110, low: 90 };
+export const OBSERVE_MAX_HEIGHT: Readonly<Record<QualityTierName, number>> = { high: 150, medium: 130, low: 100 };
 /** The camera stays this far over the tallest roof round it (its rooftop kit, the near plane), m. */
 export const ROOF_CLEARANCE = 8;
 /** Roofs this close to the camera's ground point count, m. */

@@ -184,18 +184,14 @@ export class TitleScreen implements Panel {
     this.modeItems.set(mode.id, { el, item });
   }
 
-  /** A small button of another system's at the front of the row under the modes (e.g. OBSERVE). */
-  addRowButton(label: string, icon: IconName, activate: () => void): HTMLButtonElement {
-    const b = menuButton(label, { icon, className: 'small' });
-    this.root.querySelector('.title-row')!.prepend(b);
-    this.nav.add({
-      el: b,
-      activate: () => {
-        this.audio.unlock();
-        this.audio.ui('click');
-        activate();
-      },
-    });
+  /**
+   * A button of another system's under PLAY, laid out like a mode (two to a
+   * row) but not starting a run: `activate` does what it does (e.g. OBSERVE).
+   */
+  addEntry(label: string, sub: string, icon: IconName, className: string, activate: () => void): HTMLButtonElement {
+    const b = menuButton(label, { icon, sub, className: `title-mode ${className}` });
+    this.modes.append(b);
+    this.nav.add({ el: b, activate: () => this.select(activate) });
     return b;
   }
 

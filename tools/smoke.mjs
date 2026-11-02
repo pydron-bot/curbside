@@ -9,7 +9,9 @@
  * screenshot, the report and the share sheet (mocked: shared, cancelled,
  * refused). On every profile, a named-mayhem stamp (and on the phones one
  * in a Chaos Run) must stay clear of the stars, radar, activity card and
- * score feed. Catches the wiring crashes `npm test` can't.
+ * score feed. OBSERVE, from the pause menu and from the title: no HUD, under
+ * the budget at the widest zoom, and back out to the paused run or the title.
+ * Catches the wiring crashes `npm test` can't.
  *
  *   npx -y -p playwright@1.63.0 node tools/smoke.mjs [--no-build] [--port 4318] [--out smoke-out]
  *
@@ -192,6 +194,75 @@ async function bugReport(page, label) {
   await page.click('#bug-report .sheet-close');
 }
 
+/**
+ * Observe mode, from the paused run and from the title: it opens with no
+ * HUD (no stars, radar, score or touch controls), only its strip inside the
+ * view; at the widest zoom, turned 45°, it draws under the budget; and
+ * leaving puts back the paused run (same place, same stars) or the title.
+ */
+async function observeCheck(page, label) {
+  const frames = (n) => page.evaluate(async (n) => {
+    for (let i = 0; i < n; i++) await new Promise((res) => requestAnimationFrame(() => res()));
+  }, n);
+  const state = () => page.evaluate(() => {
+    // Laid out on screen (not display:none or hidden).
+    const shown = (sel) => {
+      const el = document.querySelector(sel);
+      const b = el?.getBoundingClientRect();
+      return !!el && getComputedStyle(el).display !== 'none' && b.width > 0 && b.height > 0;
+    };
+    const u = window.__ub;
+    const strip = document.querySelector('.observe-strip').getBoundingClientRect();
+    return {
+      active: u.observe.active,
+      paused: u.paused,
+      title: shown('#title'),
+      hud: ['#hud', '#radar', '#wanted', '#score', '.touch-layer', '#activity'].filter((s) => shown(s)),
+      strip: shown('.observe-strip') && strip.left >= 0 && strip.right <= innerWidth && strip.bottom <= innerHeight,
+      at: [Math.round(u.player.position.x * 100), Math.round(u.player.position.z * 100), u.heat.wanted.level, u.player.health],
+    };
+  });
+  // From the run: paused, then OBSERVE in the pause menu.
+  await page.evaluate(() => window.__ub.paused || window.__ub.setPaused(true));
+  const before = await state();
+  await page.locator('#paused .mbtn', { hasText: 'OBSERVE' }).click({ timeout: 30000 });
+  await frames(2);
+  const run = await state();
+  check(run.active && !run.paused && run.hud.length === 0 && run.strip, `${label}: OBSERVE from the pause menu, no HUD${run.hud.length ? ` (showing ${run.hud.join(', ')})` : ''}`);
+  const wide = await page.evaluate(async () => {
+    const u = window.__ub;
+    u.observe.cam.height = 1000;
+    u.observe.cam.yaw = Math.PI / 4;
+    let calls = 0;
+    for (let i = 0; i < 8; i++) {
+      await new Promise((res) => requestAnimationFrame(() => res()));
+      if (i >= 5) calls = Math.max(calls, u.renderer.info.render.calls);
+    }
+    return { calls, height: Math.round(u.rig.currentHeight), tier: u.observe.d.tier() };
+  });
+  check(wide.calls > 0 && wide.calls < DRAW_BUDGET, `${label}: observe at the widest zoom (${wide.height} m, ${wide.tier}, turned 45°): ${wide.calls} draw calls (budget ${DRAW_BUDGET})`);
+  await page.screenshot({ path: path.join(opt.out, `${label}-observe.png`), timeout: 120000 });
+  await page.keyboard.press('Escape');
+  await frames(2);
+  const back = await state();
+  check(!back.active && back.paused && JSON.stringify(back.at) === JSON.stringify(before.at), `${label}: leaving OBSERVE puts back the paused run (${JSON.stringify(back.at)})`);
+  // From the title.
+  await page.evaluate(() => {
+    const u = window.__ub;
+    u.setPaused(false);
+    u.enterTitle();
+  });
+  await frames(2);
+  await page.locator('#title .mbtn', { hasText: 'OBSERVE' }).click({ timeout: 30000 });
+  await frames(2);
+  const title = await state();
+  check(title.active && !title.title && title.hud.length === 0 && title.strip, `${label}: OBSERVE from the title, no HUD or menu${title.hud.length ? ` (showing ${title.hud.join(', ')})` : ''}`);
+  await page.locator('.observe-exit').click({ timeout: 30000 });
+  await frames(2);
+  const out = await state();
+  check(!out.active && out.title && !out.paused, `${label}: EXIT goes back to the title`);
+}
+
 let server = null;
 let browser = null;
 try {
@@ -219,6 +290,7 @@ try {
       await stampCheck(page, label, false);
       // The phones: the Chaos Run's card and stars up too (stamps stay on there).
       if (label.startsWith('iphone')) await stampCheck(page, label, true);
+      await observeCheck(page, label);
     } catch (e) {
       check(false, `${label}: ${e.message.split('\n')[0]}`);
     }
