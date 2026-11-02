@@ -1,6 +1,7 @@
 /**
  * Street races between NPCs, mostly at night. Now and then (not during a
- * mission, race or Chaos Run, nor while the player is wanted) three to
+ * timed race or a mission that asks; less often while the player is
+ * wanted, and then sometimes on the road ahead of them) three to
  * five fast cars line up nose to tail on a lane off-screen near the player
  * and race a route of junctions (systems/trafficScenes.ts raceRoute:
  * mostly long straights) flat out: overtaking through the oncoming lane,
@@ -14,7 +15,7 @@
  * dead of night, a quarter by day), else it's put off.
  */
 import { CRUISE_SPEED, TURN_SPEED, createDriver, driveAi, type Obstacle } from '../../systems/traffic';
-import { LOUD } from '../../systems/cityScenes';
+import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
 import {
   NITRO_CHANCE,
   NITRO_FROM,
@@ -87,7 +88,7 @@ export class StreetRaces implements Scene {
     private readonly life: SceneCtx,
     private readonly chases: Chases,
   ) {
-    life.clock.define('race', { every: [90, 170], cap: 1, first: 50, range: 150, hold: LOUD });
+    life.clock.define('race', { every: [90, 170], cap: 1, first: 50, range: 150, hold: BUSY, pace: WANTED_PACE, ahead: true });
   }
 
   get running(): number {

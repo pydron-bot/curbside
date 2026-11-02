@@ -9,10 +9,10 @@
  * CityLife.punch: no heat, no score). It ends with one walking off beaten
  * and the other raising a fist, or one knocked out cold, who stays down
  * for the ambulance (scenes/medics.ts). Passers-by stop and watch in a
- * ring (a Gathering crowd) until it's over. At most two at once, held off
- * by anything loud (LOUD): an activity, wanted stars, the tutorial.
+ * ring (a Gathering crowd) until it's over. At most two at once (BUSY:
+ * held off by a timed race and the tutorial; fewer while you're wanted).
  */
-import { LOUD } from '../../systems/cityScenes';
+import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
 import { scare } from '../../systems/crowd';
 import { barges, planFight, type FightPlan } from '../../systems/streetPeople';
 import type { CrowdPed } from '../population';
@@ -54,7 +54,7 @@ export class Fights implements Scene {
   private readonly spare: Gathering[] = [];
 
   constructor(private readonly life: SceneCtx) {
-    life.clock.define('fight', { every: [20, 45], cap: 2, first: 20, range: SHOW_RANGE, hold: LOUD });
+    life.clock.define('fight', { every: [20, 45], cap: 2, first: 20, range: SHOW_RANGE, hold: BUSY, pace: WANTED_PACE });
     life.d.bus.on('bulletHit', (e) => {
       if (e.target !== 'ped' || e.byPlayer || e.fromX === undefined || e.fromZ === undefined) return;
       this.strayHit(e.x, e.z, e.fromX, e.fromZ);

@@ -24,7 +24,7 @@
  * handed to the police (CityLifeDeps.enlist) under normal heat rules.
  */
 import { speed, type VehicleArchetype, type VehicleControls } from '../../entities/vehicle';
-import { LOUD } from '../../systems/cityScenes';
+import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
 import { hurtPed, knockDown, resumeWalking, scare } from '../../systems/crowd';
 import { COP_OUTFIT } from '../../systems/police';
 import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from '../../systems/pursuit';
@@ -126,7 +126,7 @@ export class Chases implements Scene {
   private readonly axis = { x: 0, z: 0 };
 
   constructor(private readonly life: SceneCtx) {
-    life.clock.define('chase', { every: [100, 200], cap: 1, first: 75, range: 160, hold: LOUD });
+    life.clock.define('chase', { every: [100, 200], cap: 1, first: 75, range: 160, hold: BUSY, pace: WANTED_PACE, ahead: true });
   }
 
   get running(): number {

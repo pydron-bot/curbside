@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BUSY,
   IN_PLAY,
   LOUD,
+  WANTED_PACE,
+  WANTED_SCENE_CAP,
+  activityHolds,
+  busyCap,
+  paceFor,
   SCENE_START_RANGE,
   SceneClock,
   ServeQueue,
@@ -159,5 +165,72 @@ describe('nearest', () => {
     ];
     expect(nearest(list, 0, 0, 20, (t) => t.ok)).toBe(list[1]);
     expect(nearest(list, 0, 0, 6, (t) => t.ok)).toBe(null);
+  });
+});
+
+describe('the city does not stop (V2-02): busy holds, the wanted pace, the caps', () => {
+  const W = (o: Partial<SceneWorld> = {}): SceneWorld => ({ ...PLAYING, ...o });
+
+  it('BUSY scenes run through wanted stars, but not behind the title, in a timed race or the tutorial', () => {
+    const spec = { every: [0, 0] as const, cap: 1, hold: BUSY, pace: WANTED_PACE };
+    for (let stars = 0; stars <= 5; stars++) expect(held(spec, W({ stars }))).toBe(false);
+    expect(held(spec, W({ playing: false }))).toBe(true);
+    expect(held(spec, W({ activity: true }))).toBe(true);
+    expect(held(spec, W({ tutorial: true }))).toBe(true);
+    // LOUD is still everything, stars included.
+    expect(held({ every: [0, 0], cap: 1, hold: LOUD }, W({ stars: 1 }))).toBe(true);
+  });
+
+  it('the wanted pace: full with no stars, fewer each star, never none', () => {
+    const spec = { every: [0, 0] as const, cap: 1, pace: WANTED_PACE };
+    expect(paceFor(spec, 0)).toBe(1);
+    for (let s = 1; s <= 5; s++) {
+      expect(paceFor(spec, s)).toBeLessThan(paceFor(spec, s - 1));
+      expect(paceFor(spec, s)).toBeGreaterThan(0.25);
+    }
+    // Past the table: its last; no pace at all: full.
+    expect(paceFor(spec, 9)).toBe(WANTED_PACE[WANTED_PACE.length - 1]);
+    expect(paceFor({ every: [0, 0], cap: 1 }, 5)).toBe(1);
+  });
+
+  it('a paced clock runs slower while wanted (and a featured kind keeps full pace)', () => {
+    const c = new SceneClock(() => 0);
+    c.define('race', { every: [10, 10], cap: 1, first: 10, hold: BUSY, pace: WANTED_PACE });
+    c.define('fire', { every: [10, 10], cap: 1, first: 10, hold: BUSY });
+    c.define('shown', { every: [10, 10], cap: 1, first: 10, pace: WANTED_PACE });
+    const stars = 3;
+    const pace = WANTED_PACE[stars];
+    let t = 0;
+    for (; t < 10 / pace - 0.5; t += 0.5) c.tick(0.5, stars, 'shown');
+    expect(c.due('fire', 10, 0, W({ stars }))).toBe(true);
+    expect(c.due('shown', 10, 0, W({ stars }))).toBe(true);
+    expect(c.due('race', t, 0, W({ stars }))).toBe(false);
+    c.tick(0.5, stars, 'shown');
+    expect(c.due('race', t + 0.5 + 1e-9, 0, W({ stars }))).toBe(true);
+    // No stars: tick changes nothing.
+    const left = c.left('fire', 0);
+    c.tick(100, 0);
+    expect(c.left('fire', 0)).toBe(left);
+    expect(c.busy('race')).toBe(true);
+    expect(c.busy('fire')).toBe(false);
+  });
+
+  it('only a timed race or a mission that asks holds the city; Chaos Run, fares and frenzies do not', () => {
+    expect(activityHolds('race', false)).toBe(true);
+    expect(activityHolds('mission', true)).toBe(true);
+    expect(activityHolds('mission', false)).toBe(false);
+    expect(activityHolds('taxi', false)).toBe(false);
+    expect(activityHolds('frenzy', false)).toBe(false);
+    // Chaos Run isn't a `busy` activity: null.
+    expect(activityHolds(null, false)).toBe(false);
+  });
+
+  it('while wanted, the busy scenes running at once are capped by quality tier', () => {
+    expect(busyCap('medium', 0)).toBe(Infinity);
+    expect(busyCap('high', 2)).toBe(WANTED_SCENE_CAP.high);
+    expect(busyCap('medium', 5)).toBe(WANTED_SCENE_CAP.medium);
+    expect(busyCap('low', 1)).toBe(WANTED_SCENE_CAP.low);
+    expect(WANTED_SCENE_CAP.low).toBeLessThan(WANTED_SCENE_CAP.medium);
+    expect(WANTED_SCENE_CAP.medium).toBeLessThan(WANTED_SCENE_CAP.high);
   });
 });

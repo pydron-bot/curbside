@@ -112,6 +112,7 @@ import { TrafficSignals } from './world/signals';
 import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audio/gameAudio';
 import { StreetLife } from './game/streetLife';
 import { CityLife } from './game/cityLife';
+import { activityHolds } from './systems/cityScenes';
 import { TUTORIAL_DONE } from './game/tutorial';
 import { CityLifeLook } from './render/cityLifeLook';
 import { CityMood } from './game/cityMood';
@@ -441,8 +442,9 @@ const cityLife = new CityLife({
   view: (out) => rig.visibleGround(out),
   playing: () => !attract.active,
   lod: simLod,
-  // Any activity (a mission, a race, a frenzy, a fare) or a Chaos Run holds the loud scenes off.
-  activity: () => progress.busy !== null || progress.chaos.active,
+  // Only a timed race or a mission that asks holds the busy scenes off; Chaos Run, fares and frenzies get the city.
+  activity: () => activityHolds(progress.busy, progress.missions.quiet),
+  tier: () => getQuality().name,
   stars: () => heat.wanted.level,
   tutorial: () => progress.progress.data.tutorial < TUTORIAL_DONE,
   keep: (v) => activityCars.includes(v),

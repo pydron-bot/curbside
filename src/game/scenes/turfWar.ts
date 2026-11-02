@@ -13,7 +13,7 @@
  * respect as ever (game/modes/gangMode.ts hears the same pedDown). Loud:
  * held off by the title, an activity, wanted stars and the tutorial.
  */
-import { LOUD } from '../../systems/cityScenes';
+import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
 import { provoke, scare } from '../../systems/crowd';
 import {
   CREW_SIZE,
@@ -75,7 +75,7 @@ export class TurfWar implements Scene {
 
   constructor(private readonly life: SceneCtx) {
     this.borders = turfBorders();
-    life.clock.define('turf', { every: [140, 260], cap: 1, first: 75, range: START_RING[1], hold: LOUD });
+    life.clock.define('turf', { every: [140, 260], cap: 1, first: 75, range: START_RING[1], hold: BUSY, pace: WANTED_PACE });
     const bus = life.d.bus;
     bus.on('punch', (e) => {
       if (e.byPlayer && e.hit) this.struck(e.x, e.z, PUNCH_HIT);
@@ -133,7 +133,7 @@ export class TurfWar implements Scene {
     for (let tries = 0; tries < 12 && !border; tries++) {
       const b = this.borders[Math.floor(r() * this.borders.length)];
       const d = len2(b.x - at.x, b.z - at.z);
-      if (d < START_RING[0] || !life.near('turf', b.x, b.z)) continue;
+      if (d < START_RING[0] || !life.near('turf', b.x, b.z) || !life.onRoute(b.x, b.z)) continue;
       if (life.inView(b.x - b.alongX * WALK_IN, b.z - b.alongZ * WALK_IN, 4) || life.inView(b.x + b.alongX * WALK_IN, b.z + b.alongZ * WALK_IN, 4)) continue;
       border = b;
     }

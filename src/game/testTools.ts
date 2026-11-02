@@ -412,11 +412,10 @@ export class TestTools {
     pr.flush();
   }
 
-  /** What holds the loud scenes off right now, if anything. */
+  /** What holds the busy scenes off right now, if anything (wanted stars only thin them). */
   private holds(): string {
     const life = this.d.cityLife;
     if (life.d.activity()) return 'ACTIVITY';
-    if (life.d.stars() > 0) return 'WANTED';
     if (life.d.tutorial()) return 'TUTORIAL';
     return '';
   }
