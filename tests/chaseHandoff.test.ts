@@ -415,4 +415,38 @@ describe('chase handoff: in the city', () => {
     w.bus.emit({ type: 'pedDown', x: 12, z: 9, cause: 'punch', byPlayer: true });
     expect(w.heat.wanted.heat).toBeGreaterThan(0);
   });
+
+  it('HAVE-A-GO HERO: flooring a foot chase suspect pays once per chase, no heat', () => {
+    const w = world(21);
+    expect(w.life.chases.begin('foot')).toBe(true);
+    const c = w.life.chases.chases[0];
+    const s = c.suspect!;
+    expect(s.agent.suspect).toBe(true);
+    for (let i = 0; i < 2; i++) w.bus.emit({ type: 'pedDown', x: s.agent.s.x, z: s.agent.s.z, cause: 'punch', byPlayer: true, suspect: true });
+    expect(w.life.chases.joined.haveAGo).toBe(1);
+    expect(w.awards.filter((k) => k === 'haveAGo')).toHaveLength(1);
+    expect(w.log.filter((e) => e.type === 'street' && e.what === 'haveAGo')).toHaveLength(1);
+    expect(w.heat.wanted.heat).toBe(0);
+    // Not the chase's police: shooting one of its officers marks it.
+    expect(c.crime).toBe(false);
+    const o = c.units[0].officers[0];
+    w.bus.emit({ type: 'bulletHit', x: o.agent.s.x + 0.3, z: o.agent.s.z, target: 'ped', byPlayer: true });
+    expect(c.crime).toBe(true);
+  });
+
+  it('one bump per chase car is forgiven just after touching the getaway; the next marks the chase', () => {
+    const w = world(21);
+    const { c, getaway, cars } = startChase(w);
+    w.run(0.5);
+    const cop = cars[0];
+    // Long after any touch: not forgiven.
+    expect(w.life.chases.rammed(cop)).toBe(false);
+    expect(c.crime).toBe(true);
+    c.crime = false;
+    markPlayerHit(getaway.damage, w.life.now);
+    expect(w.life.chases.rammed(cop)).toBe(true);
+    expect(c.crime).toBe(false);
+    expect(w.life.chases.rammed(cop)).toBe(false);
+    expect(c.crime).toBe(true);
+  });
 });

@@ -159,7 +159,10 @@ export class Chases implements Scene {
     // The player's attacks on a chase's police, as the simulation reports them.
     const bus = life.d.bus;
     bus.on('bulletHit', (e) => {
-      if (e.byPlayer && e.police && e.target === 'vehicle') this.attacked(e.x, e.z, 3.5);
+      if (!e.byPlayer) return;
+      if (e.police && e.target === 'vehicle') this.attacked(e.x, e.z, 3.5);
+      // An officer shot (not floored yet): the bullet lands on their edge.
+      else if (e.target === 'ped') this.attacked(e.x, e.z, 1.2);
     });
     bus.on('explosion', (e) => {
       if (e.byPlayer && e.police) this.attacked(e.x, e.z, 4);
