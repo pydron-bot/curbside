@@ -7,14 +7,17 @@
  * (systems/projectiles.ts). No reloading: ammo comes from crates. Each gun's
  * spread blooms as it fires and settles when it stops, so a held trigger
  * sprays and tapped shots land.
+ *
+ * The air horn is held and aimed like a gun but fires no bullets: each use
+ * is one blast of systems/airHorn.ts's cone (game/combat.ts blowHorn).
  */
 import type { Rect } from '../world/city';
 import { len2 } from '../core/len';
 
-export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'grenade' | 'molotov' | 'rocket';
+export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'grenade' | 'molotov' | 'rocket' | 'horn';
 
-/** How a weapon fires: hitscan bullets, a thrown arc, or a flying rocket. */
-export type FireMode = 'gun' | 'throw' | 'launcher';
+/** How a weapon fires: hitscan bullets, a thrown arc, a flying rocket, or the air horn's blast. */
+export type FireMode = 'gun' | 'throw' | 'launcher' | 'horn';
 
 export interface WeaponSpec {
   label: string;
@@ -140,11 +143,28 @@ export const WEAPONS: Record<WeaponKind, WeaponSpec> = {
     automatic: false,
     driveBy: false,
   },
+  // A canister of blasts (ammo: blasts left); the cone's reach is HORN_RANGE.
+  horn: {
+    label: 'AIR HORN',
+    mode: 'horn',
+    damage: 0,
+    pellets: 1,
+    interval: 1.1,
+    spread: 0,
+    bloom: 0,
+    bloomMax: 0,
+    recover: 1,
+    range: 14,
+    pickupAmmo: 6,
+    maxAmmo: 12,
+    automatic: false,
+    driveBy: false,
+  },
 };
 
-export const WEAPON_ORDER: WeaponKind[] = ['pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket'];
-/** Guns that bullets come out of (an ammo crate tops these up). */
-export const GUNS: readonly WeaponKind[] = ['pistol', 'smg', 'shotgun'];
+export const WEAPON_ORDER: WeaponKind[] = ['pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket', 'horn'];
+/** What an ammo crate tops up: the guns, and the air horn's canister. */
+export const GUNS: readonly WeaponKind[] = ['pistol', 'smg', 'shotgun', 'horn'];
 /** Fraction of a bullet's damage that applies to vehicles. */
 export const VEHICLE_SHARE = 0.35;
 /** Drive-bys spray: spread × this out of a moving car's window. */
@@ -166,8 +186,8 @@ export class Arsenal {
   }
 
   /**
-   * An ammo crate: half a pickup's worth for every gun owned (at least a
-   * pistol's clip if none). Returns false when every gun is already full.
+   * An ammo crate: half a pickup's worth for every gun owned, the horn's
+   * canister too (at least a pistol's clip if none). Returns false when every gun is already full.
    */
   addAmmo(): boolean {
     let owned = false;

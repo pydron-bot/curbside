@@ -12,6 +12,7 @@ const COLORS: Record<PickupKind, string> = {
   grenade: '#8fd14f',
   molotov: '#ff7a1a',
   rocket: '#d94dff',
+  horn: '#ff5fb4',
   health: '#5be36a',
   armour: '#3fd2ff',
   ammo: '#ffd23f',
@@ -53,6 +54,8 @@ export const PICKUP_MODELS: Readonly<Record<PickupKind, string>> = {
   grenade: 'crate_grenade',
   molotov: 'crate_molotov',
   rocket: 'crate_rocket',
+  // No crate_horn in pickups.glb yet: the ammo box stands in, in the horn's pink ring.
+  horn: 'ammo_box',
   health: 'health_kit',
   armour: 'armour',
   ammo: 'ammo_box',

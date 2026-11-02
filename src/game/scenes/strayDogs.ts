@@ -70,6 +70,7 @@ export class StrayDogs implements Scene {
     life.clock.define('dog', { every: [2, 5], cap: MAX_DOGS, first: 1 });
     const bus = life.d.bus;
     bus.on('shot', (e) => this.pack.startle(e.x, e.z));
+    bus.on('airHorn', (e) => this.pack.startle(e.x, e.z));
     bus.on('explosion', (e) => {
       this.pack.knock(e.x, e.z, BLAST);
       this.pack.startle(e.x, e.z, BLAST_SCARE);

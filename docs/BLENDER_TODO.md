@@ -702,3 +702,18 @@ future Blender pass. The code works round each one for now:
   ends x ±1.6–1.72); the flag pole is at (+1.95, game +0.32) as asked.
 - **Not made:** scaffolding, a water barrier, a work van (the optional extras).
 
+
+## 11. The air horn (W3-B, requested 2026-11-02)
+
+The air horn weapon is in the game (README → *Driving and combat*, the air
+horn) with nothing in the hand and the ammo box standing in for its crate.
+The held model swaps in by name; the crate needs a one-line code change:
+
+- **`weapons.glb` root `air_horn`** (same grip/`muzzle` contract as the
+  pistol, §1/§8): a red canister ~0.2 m with a flared trumpet ~0.15 m on
+  top pointing +Z, held one-handed in the pistol's `Aim` pose; `muzzle`
+  at the bell's mouth (the code guesses 0.22 m ahead, 0.06 m up). ≤ 120 tris.
+- **`pickups.glb` root `crate_horn`**: the gun crate with an air horn on
+  the lid (the game rings it pink, `#ff5fb4`); then point
+  `PICKUP_MODELS.horn` (`src/render/pickupMesh.ts`) and the `things`
+  family's list (`src/render/worldProps.ts`) at it.

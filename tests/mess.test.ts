@@ -39,6 +39,7 @@ import {
   type CrashCheck,
 } from '../src/systems/mess';
 import { held } from '../src/systems/cityScenes';
+import { HORN_RANGE } from '../src/systems/airHorn';
 import { Score } from '../src/systems/score';
 import { driverFor, type Obstacle } from '../src/systems/traffic';
 import { generateCity, type Rect } from '../src/world/city';
@@ -447,5 +448,61 @@ describe('shots fired', () => {
     w.heat.wanted.heat = 1.5;
     w.bus.emit({ type: 'shot', x: 9.5, z: 40, dirX: 0, dirZ: 1, weapon: 'pistol', byPlayer: true });
     expect(w.life.shotsFired.call).toBeNull();
+  });
+});
+
+describe('air horn', () => {
+  const blast = (w: World, byPlayer = true) =>
+    w.bus.emit({ type: 'airHorn', x: 9.5, z: 40, dirX: 0, dirZ: 1, reach: HORN_RANGE, byPlayer, startled: 0, stalled: 0 });
+
+  it('sets off the parked cars in its cone: the blast, then the alarm, DOMINO ×2 (once in a while)', () => {
+    const w = world(5);
+    w.life.featured = 'airHorn';
+    const ahead = w.car('sedan', 11, 48, 0);
+    ahead.parked = true;
+    const beside = w.car('sedan', 7, 45, 0);
+    beside.parked = true;
+    const behind = w.car('sedan', 9.5, 30, 0);
+    behind.parked = true;
+    blast(w);
+    const alarms = CarAlarms.of(w.life)!;
+    expect(alarms.board.sounding(ahead)).toBe(true);
+    expect(alarms.board.sounding(beside)).toBe(true);
+    expect(alarms.board.sounding(behind)).toBe(false);
+    expect(w.dominoes().map((e) => [e.what, e.depth, e.root])).toEqual([
+      ['airHorn', 1, 'player'],
+      ['alarm', 2, 'player'],
+    ]);
+    expect(w.awards).toEqual(['DOMINO ×2']);
+    expect(w.log.filter((e) => e.type === 'street' && e.what === 'noise')).toHaveLength(1);
+    // The next blast sets alarms off but starts no chain until the clock's run down.
+    const another = w.car('sedan', 9.5, 50, 0);
+    another.parked = true;
+    w.run(2);
+    blast(w);
+    expect(alarms.board.sounding(another)).toBe(true);
+    expect(w.dominoes()).toHaveLength(2);
+    expect(w.awards).toEqual(['DOMINO ×2']);
+  });
+
+  it("no chain from someone else's horn, with nothing to set off, or while wanted", () => {
+    const w = world(5);
+    w.life.featured = 'airHorn';
+    blast(w); // nothing parked in reach
+    const parked = w.car('sedan', 9.5, 46, 0);
+    parked.parked = true;
+    blast(w, false);
+    expect(CarAlarms.of(w.life)!.board.sounding(parked)).toBe(true);
+    expect(w.dominoes()).toHaveLength(0);
+    const free = { playing: true, activity: false, stars: 0, opening: false };
+    expect(held(w.life.clock.spec('airHorn'), free)).toBe(false);
+    expect(held(w.life.clock.spec('airHorn'), { ...free, stars: 1 })).toBe(true);
+  });
+
+  it('the heat of a blast: a nuisance on its own is no star', () => {
+    const w = world(5);
+    blast(w);
+    expect(w.heat.wanted.heat).toBeGreaterThan(0);
+    expect(w.heat.wanted.level).toBe(0);
   });
 });

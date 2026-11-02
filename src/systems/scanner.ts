@@ -53,7 +53,8 @@ export type StreetTopic =
   | 'bagReturned'
   | 'raceJoin'
   | 'raceCrasher'
-  | 'vanNicked';
+  | 'vanNicked'
+  | 'noise';
 
 /** The player's own: a star up, a district crossed or a car switched while wanted, and how it ended. */
 export type YouTopic = 'wanted' | 'heading' | 'switched' | 'evaded' | 'respray' | 'busted';
@@ -206,6 +207,7 @@ export const TOPICS: Readonly<Record<ScannerTopic, TopicSpec>> = {
   raceJoin: { priority: 3, cooldown: 60, lines: ['GATECRASHER IN THE {place} RACE. NOBODY INVITED THEM.'] },
   raceCrasher: { priority: 3, cooldown: 60, lines: ['RACE IN {place} WON BY A GATECRASHER. RACERS FUMING.'] },
   vanNicked: { priority: 2, cooldown: 90, lines: ["ICE CREAM VAN NICKED IN {place}. QUEUE IN PURSUIT."] },
+  noise: { priority: 1, cooldown: 90, lines: ['NOISE COMPLAINT IN {place}. SOME CLOWN WITH AN AIR HORN.', 'NOISE COMPLAINT, {place}. FOOTBALL FAN, PROBABLY.'] },
   // The player's own (wanted lines: WANTED_LINES by stars).
   wanted: { priority: 4, cooldown: 0, lines: [] },
   heading: { priority: 4, cooldown: 30, lines: ['{suspect} HEADING INTO {place}.', '{suspect} NOW IN {place}. STAY ON IT.'] },
@@ -253,6 +255,7 @@ export const STREET_TOPICS: Readonly<Partial<Record<StreetWhat, StreetTopic>>> =
   raceJoin: 'raceJoin',
   raceCrasher: 'raceCrasher',
   vanNicked: 'vanNicked',
+  noise: 'noise',
 };
 
 /** Street events that end an incident: its scene's pings close by go. */

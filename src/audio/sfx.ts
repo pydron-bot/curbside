@@ -512,6 +512,34 @@ export function horn(v: Voice, duration: number): void {
 }
 
 /**
+ * The air horn (W3-B): a blast of compressed air through a brass reed, a
+ * loud, slightly sour chord (three saws a minor third and a fourth apart)
+ * that bends up into pitch as the pressure arrives, with the hiss of the
+ * valve opening under it. ~0.8 s.
+ */
+export function airHorn(v: Voice): void {
+  const t = v.t;
+  const len = 0.75;
+  const p = vary(0.04);
+  const bp = v.filter('bandpass', 1200 * p, 0.7);
+  const sh = v.shaper(3);
+  const g = v.gain();
+  for (const hz of [466 * p, 554 * p, 740 * p]) {
+    const o = v.osc('sawtooth', hz * 0.9, t, t + len + 0.1);
+    o.frequency.setValueAtTime(hz * 0.9, t);
+    o.frequency.exponentialRampToValueAtTime(hz, t + 0.06);
+    o.detune.value = rnd(-10, 10);
+    o.connect(bp);
+  }
+  v.chain(bp, sh, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.55, t + 0.025);
+  g.gain.setValueAtTime(0.5, t + len - 0.1);
+  g.gain.linearRampToValueAtTime(0, t + len);
+  noiseHit(v, v.bank.white, t, 'highpass', 3000, 0.7, 0.18, 0.005, 0.05);
+}
+
+/**
  * One cycle (ALARM_CYCLE s) of a car alarm through its little horn speaker:
  * pattern 0 whoops (rising sweeps), 1 a hi-lo two-tone, 2 chirps then two
  * honks. Repeated by the street event while it sounds.

@@ -161,6 +161,9 @@ export class Heat {
     bus.on('bulletHit', (e) => {
       if (e.byPlayer && e.police) this.crime('shootCop', e.x, e.z);
     });
+    bus.on('airHorn', (e) => {
+      if (e.byPlayer) this.crime('nuisance', e.x, e.z);
+    });
     bus.on('explosion', (e) => {
       // Your own car going up isn't a crime (what it takes with it is).
       if (!e.byPlayer || e.ownCar || !this.live) return;

@@ -90,6 +90,12 @@ export type GameEvent =
   | { type: 'shot'; x: number; z: number; dirX: number; dirZ: number; weapon: WeaponKind | null; byPlayer: boolean; driveBy?: boolean }
   /** A grenade or molotov was thrown from (x, z) toward (toX, toZ). */
   | { type: 'throw'; x: number; z: number; toX: number; toZ: number; weapon: 'grenade' | 'molotov'; byPlayer: boolean }
+  /**
+   * An air horn blast from (x, z) along (dirX, dirZ) (systems/airHorn.ts's
+   * cone, `reach` m). startled: people it sent running; stalled: drivers it
+   * made brake.
+   */
+  | { type: 'airHorn'; x: number; z: number; dirX: number; dirZ: number; reach: number; byPlayer: boolean; startled: number; stalled: number }
   /** A molotov burst: a patch of fire of `radius` m at (x, z). */
   | { type: 'ignite'; x: number; z: number; radius: number; byPlayer: boolean }
   /**
@@ -303,7 +309,9 @@ export type StreetWhat =
   // Gatecrashing (V2-12): the player joined a street race, won it (RACE CRASHER), drove off in an ice cream van from its queue.
   | 'raceJoin'
   | 'raceCrasher'
-  | 'vanNicked';
+  | 'vanNicked'
+  // The player's air horn (W3-B) went off in someone's face: a noise complaint for the scanner.
+  | 'noise';
 
 /**
  * What a borrowed service vehicle's tool did: the hose on, still going (the

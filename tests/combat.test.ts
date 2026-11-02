@@ -10,6 +10,8 @@ import { KO_SECONDS, PED_HP, STAGGER_SECONDS, hurtPed, spawnPed, stepCrowdPed } 
 import { createDamage, damageStage, stepDamage } from '../src/systems/damage';
 import { Score } from '../src/systems/score';
 import { WEAPONS, type WeaponKind } from '../src/systems/weapons';
+import { HORN_STALL } from '../src/systems/airHorn';
+import { driverFor } from '../src/systems/traffic';
 import { StaticGrid } from '../src/world/collision';
 import { random } from './helpers';
 
@@ -499,5 +501,74 @@ describe('pickups', () => {
     expect(w.player.arsenal.ammo.get('pistol')).toBeGreaterThan(before);
     expect(w.combat.collect('rocket')).toBe(true);
     expect(w.player.arsenal.current).toBe('rocket');
+  });
+});
+
+describe('air horn', () => {
+  it('startles the people in its cone (reel, ears, scatter) without hurting anyone; not behind, not past a wall, not the police', () => {
+    // A wall across x 2..8 at z 6..7: whoever's behind it from the player is shielded.
+    const w = setup({ walls: [{ minX: 2, minZ: 6, maxX: 8, maxZ: 7 }] });
+    const close = ped(0, 1.8);
+    const near = ped(-1, 5);
+    const far = ped(0.5, 12);
+    const behind = ped(0, -4);
+    const wide = ped(8, 4); // ~63° off the aim
+    const walled = ped(5, 10); // in the cone, but the wall is in the way
+    const cop = ped(-1.5, 7);
+    cop.agent.role = 'cop';
+    w.crowd.push(close, near, far, behind, wide, walled, cop);
+    w.player.arsenal.pickUp('horn');
+    expect(w.player.arsenal.current).toBe('horn');
+    expect(w.combat.fire(noAim)).toBe(true);
+    expect(close.agent.stagger).toBeGreaterThan(0);
+    expect(close.agent.cower).toBeGreaterThan(0);
+    expect(near.agent.cower).toBeGreaterThan(0);
+    expect(near.agent.stagger).toBe(0);
+    for (const c of [close, near, far]) expect(c.agent.mode).toBe('flee');
+    expect(far.agent.cower).toBe(0);
+    for (const c of [behind, wide, walled, cop]) expect(c.agent.mode).not.toBe('flee');
+    for (const c of [close, near, far]) expect(c.agent.hp).toBe(PED_HP);
+    const blast = w.log.find((e) => e.type === 'airHorn');
+    expect(blast).toMatchObject({ type: 'airHorn', byPlayer: true, startled: 3, stalled: 0 });
+    // No knock-downs, no gunfire.
+    expect(w.log.some((e) => e.type === 'pedDown' || e.type === 'shot')).toBe(false);
+  });
+
+  it('blasts along the aim, and drivers in the cone brake and stall (not the police)', () => {
+    const w = setup();
+    const rand = random(5);
+    const ahead = car(10, 0, 'sedan');
+    ahead.ai = driverFor(ahead.sim, rand);
+    const cop = car(12, 2, 'police');
+    cop.ai = driverFor(cop.sim, rand);
+    cop.police = true;
+    const off = car(0, 10, 'sedan');
+    off.ai = driverFor(off.sim, rand);
+    w.vehicles.push(ahead, cop, off);
+    w.player.arsenal.pickUp('horn');
+    // Aimed east (+X), away from the facing.
+    expect(w.combat.fire({ heading: Math.PI / 2, reach: 1, ground: null })).toBe(true);
+    expect(ahead.ai.startled).toBeGreaterThanOrEqual(HORN_STALL[0]);
+    expect(cop.ai.startled).toBe(0);
+    expect(off.ai.startled).toBe(0);
+    expect(w.log.find((e) => e.type === 'airHorn')).toMatchObject({ stalled: 1, dirX: 1 });
+  });
+
+  it('a canister of blasts, one every interval, refilled by ammo crates', () => {
+    const w = setup();
+    w.player.arsenal.pickUp('horn');
+    expect(w.player.arsenal.ammo.get('horn')).toBe(WEAPONS.horn.pickupAmmo);
+    expect(w.combat.fire(noAim)).toBe(true);
+    expect(w.combat.fire(noAim)).toBe(false); // still cooling down
+    w.step(WEAPONS.horn.interval + 0.05);
+    expect(w.combat.fire(noAim)).toBe(true);
+    expect(w.player.arsenal.ammo.get('horn')).toBe(WEAPONS.horn.pickupAmmo - 2);
+    expect(w.combat.collect('ammo')).toBe(true);
+    expect(w.player.arsenal.ammo.get('horn')).toBe(WEAPONS.horn.pickupAmmo - 2 + Math.ceil(WEAPONS.horn.pickupAmmo / 2));
+    // Empty: back to fists (nothing else held).
+    w.player.arsenal.ammo.set('horn', 1);
+    w.step(WEAPONS.horn.interval + 0.05);
+    expect(w.combat.fire(noAim)).toBe(true);
+    expect(w.player.arsenal.current).toBeNull();
   });
 });
