@@ -630,6 +630,10 @@ export class GameAudio {
         return this.onShot(e);
       case 'airHorn':
         return this.oneShot('horn', e, FALLOFF.gun, e.byPlayer ? 0.9 : 0.7, 0.3, sfx.airHorn, 0.3);
+      case 'taser': {
+        const hit = e.hit;
+        return this.oneShot('gun', e, FALLOFF.punch, e.byPlayer ? 0.85 : 0.7, 0.15, (v) => sfx.taser(v, hit), hit ? 0.15 : 0);
+      }
       case 'bulletHit':
         return this.onBulletHit(e);
       case 'punch':

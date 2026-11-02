@@ -540,6 +540,40 @@ export function airHorn(v: Voice): void {
 }
 
 /**
+ * A taser (W3-B): the cartridge's nitrogen pop and a snap of the doors,
+ * then, if the darts land, ~0.8 s of the current: a dry, fast ticking
+ * crackle (one noise source gated ~20 times a second, each tick a little
+ * different) over a thin electrical buzz.
+ */
+export function taser(v: Voice, hit: boolean): void {
+  const t = v.t;
+  const p = vary(0.05);
+  noiseHit(v, v.bank.white, t, 'bandpass', 2600 * p, 0.9, 0.55, 0.001, 0.012);
+  thump(v, t, 320 * p, 120, 0.04, 0.3, 0.015, 'triangle');
+  if (!hit) return;
+  const start = t + 0.05;
+  const len = 0.8;
+  const n = v.noise(v.bank.white, start, start + len + 0.05);
+  const hp = v.filter('highpass', 2200 * p, 0.8);
+  const ticks = v.gain();
+  v.chain(n, hp, ticks, v.input);
+  ticks.gain.setValueAtTime(0, start);
+  for (let at = start; at < start + len; at += 0.045 + Math.random() * 0.012) {
+    const peak = (0.35 + Math.random() * 0.35) * (1 - (at - start) / (len * 1.6));
+    ticks.gain.setValueAtTime(peak, at);
+    ticks.gain.setTargetAtTime(0, at + 0.002, 0.006);
+  }
+  const buzz = v.osc('sawtooth', 110 * p, start, start + len + 0.05);
+  const bp = v.filter('bandpass', 1800, 2);
+  const bg = v.gain();
+  v.chain(buzz, bp, bg, v.input);
+  bg.gain.setValueAtTime(0, start);
+  bg.gain.linearRampToValueAtTime(0.12, start + 0.02);
+  bg.gain.setValueAtTime(0.1, start + len - 0.08);
+  bg.gain.linearRampToValueAtTime(0, start + len);
+}
+
+/**
  * One cycle (ALARM_CYCLE s) of a car alarm through its little horn speaker:
  * pattern 0 whoops (rising sweeps), 1 a hi-lo two-tone, 2 chirps then two
  * honks. Repeated by the street event while it sounds.
