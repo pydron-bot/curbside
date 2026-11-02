@@ -200,11 +200,14 @@ export class StampDetector {
       case 'crash': {
         if (e.against !== 'vehicle' || e.impact < PILEUP_IMPACT) break;
         if (e.involvesPlayer) {
-          if (now - this.pileAt > PILEUP_SPAN) {
+          const fresh = now - this.pileAt > PILEUP_SPAN;
+          if (fresh) {
             this.pileX = e.x;
             this.pileZ = e.z;
           }
           this.pileAt = now;
+          // Only the player's first crash counts: cops ramming you four times isn't a pile-up.
+          if (!fresh) break;
         }
         // Only crashes round one of the player's count, and only after it.
         if (now - this.pileAt > PILEUP_SPAN || Math.abs(e.x - this.pileX) > PILEUP_RANGE || Math.abs(e.z - this.pileZ) > PILEUP_RANGE) break;
@@ -280,8 +283,8 @@ export class StampArbiter {
   private pendingAt = 0;
 
   offer(id: StampId, now: number): void {
-    // Ties go to the newer: it's fresher.
-    if (this.pending === null || STAMPS[id].weight >= STAMPS[this.pending].weight) {
+    // Ties go to the newer: it's fresher. One past STALE is gone already, whatever it weighed.
+    if (this.pending === null || now - this.pendingAt > STAMP_STALE || STAMPS[id].weight >= STAMPS[this.pending].weight) {
       this.pending = id;
       this.pendingAt = now;
     }

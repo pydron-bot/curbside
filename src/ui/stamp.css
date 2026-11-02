@@ -74,6 +74,25 @@ body:has(#radio.in) #stamp {
   }
 }
 
+/* Phones under the activity card: it sits lower, level with the NOS button, so smaller again to stay clear. */
+@media (max-height: 430px) {
+  body[data-activity] .stamp-box {
+    padding: 3px 10px 4px;
+  }
+
+  body[data-activity] .stamp-box b {
+    font-size: 7.5vmin;
+  }
+
+  body[data-activity] .stamp-box.long b {
+    font-size: 5.6vmin;
+  }
+
+  body[data-activity] .stamp-box small {
+    font-size: 2.6vmin;
+  }
+}
+
 .stamp-box[data-tone='hero'] {
   --c: var(--neon-cyan);
 }
@@ -108,13 +127,24 @@ body:has(#radio.in) #stamp {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .stamp-box.a,
-  .stamp-box.b {
-    animation-name: stamp-fade;
+  /* Two names here too: one name for both wouldn't restart on the next stamp. */
+  .stamp-box.a {
+    animation-name: stamp-fade-a;
     animation-timing-function: ease-out;
   }
 
-  @keyframes stamp-fade {
+  .stamp-box.b {
+    animation-name: stamp-fade-b;
+    animation-timing-function: ease-out;
+  }
+
+  @keyframes stamp-fade-a {
+    0% { opacity: 0; transform: rotate(-3deg); }
+    8%, 82% { opacity: 1; transform: rotate(-3deg); }
+    100% { opacity: 0; transform: rotate(-3deg); }
+  }
+
+  @keyframes stamp-fade-b {
     0% { opacity: 0; transform: rotate(-3deg); }
     8%, 82% { opacity: 1; transform: rotate(-3deg); }
     100% { opacity: 0; transform: rotate(-3deg); }

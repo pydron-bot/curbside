@@ -48,6 +48,11 @@ export class Stamps {
 
   /** Once a frame: emit the stamp that's due, if any. */
   step(): void {
+    // Not in play: nothing is used up (a forced one is dropped), so the cooldown isn't spent on a stamp nobody saw.
+    if (!this.d.live()) {
+      this.forced = null;
+      return;
+    }
     const now = this.d.now();
     let id = this.arbiter.step(now);
     if (this.forced !== null) {
@@ -56,7 +61,7 @@ export class Stamps {
       this.arbiter.shown = id;
       this.arbiter.shownAt = now;
     }
-    if (id === null || !this.d.live()) return;
+    if (id === null) return;
     const at = this.d.position();
     this.d.bus.emit({ type: 'stamp', id, x: at.x, z: at.z });
   }

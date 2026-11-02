@@ -2310,7 +2310,7 @@ the screen, and passers-by in view stop and film it. Rules and table in
 | BARBECUE SEASON | three cars going up in a chain (each within 2.5 s of the last) | 6 |
 | FARES PLEASE | three people knocked down by your bus within 3 s | 6 |
 | BLUES AND TWOS | five stars (once a pursuit) | 6 |
-| BANK HOLIDAY | four car-on-car crashes within 3 s and 30 m of one of yours | 5 |
+| BANK HOLIDAY | four car-on-car crashes within 3 s and 30 m of one of yours (only your first counts) | 5 |
 | ABSOLUTE SCENES | the combo reaching ×10 | 5 |
 | NOTHING TO SEE HERE | shaking off a chase of 3+ stars (the EVADED bonus) | 5 |
 | HAVE-A-GO HERO | the mugging bag handed back (V2-03, via `show`) | 5 |
@@ -2339,7 +2339,8 @@ the screen, and passers-by in view stop and film it. Rules and table in
   a 1.9 s slam, hold and fade, nothing running between stamps. Centred
   across, its top under the stars and their pop line (stepping down with
   them under the activity card and the radio's card) or at 42%,
-  whichever is lower; a size down at 360 px tall and under. Ink: red for
+  whichever is lower; a size down at 360 px tall and under, and again
+  under the activity card on the phones (clear of the NOS button). Ink: red for
   mayhem, cyan for the have-a-go moments, blue for the police ones.
 
 ```ts

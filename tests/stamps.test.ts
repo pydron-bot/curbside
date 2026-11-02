@@ -120,6 +120,13 @@ describe('stamps: the detector', () => {
     expect(run(e, [[0, crash(0, true)], [0.5, crash(PILEUP_RANGE + 5, false)], [0.6, crash(1, false, 3)], [1, crash(2, false)], [3.5, crash(2, false)]])).toEqual([null, null, null, null, null]);
   });
 
+  it('the player rammed (or ramming) again and again is not a pile-up: only their first crash counts', () => {
+    const d = new StampDetector();
+    expect(run(d, [[0, crash(0, true)], [0.6, crash(1, true)], [1.2, crash(2, true)], [1.8, crash(3, true)], [2.4, crash(4, true)]])).toEqual([null, null, null, null, null]);
+    // ...though the others piling in round it still do.
+    expect(run(d, [[2.6, crash(2, false)], [2.8, crash(3, false)], [3, crash(4, false)]])).toEqual([null, null, 'bankHoliday']);
+  });
+
   it('a bus through a crowd: FARES PLEASE at three; any other car needs four (BOWLED OVER)', () => {
     const d = new StampDetector();
     d.driving = 'bus';
@@ -199,6 +206,16 @@ describe('stamps: one at a time', () => {
     expect(a.step(STAMP_COOLDOWN + 1)).toBe(null);
   });
 
+  it('a heavier one gone stale does not block a lighter one offered after it', () => {
+    const a = new StampArbiter();
+    a.offer('lastOrders', 0);
+    a.step(0);
+    a.offer('bonfireNight', 1);
+    a.step(1);
+    a.offer('bowledOver', 1 + STAMP_STALE + 0.1);
+    expect(a.step(STAMP_COOLDOWN)).toBe('bowledOver');
+  });
+
   it('the bigger stamp wins: in one step, and over a lighter one just shown', () => {
     const a = new StampArbiter();
     a.offer('barbecueSeason', 0);
@@ -268,6 +285,20 @@ describe('stamps: on the bus', () => {
     stamps.force('frequentFlyer');
     stamps.step();
     expect(shown.map((s) => s.id)).toEqual(['citizensArrest', 'frequentFlyer']);
+  });
+
+  it('a step out of play spends nothing: the stamp waiting and the cooldown are still there after', () => {
+    const { w, stamps, shown } = rig();
+    stamps.show('lastOrders');
+    w.live = false;
+    stamps.step();
+    stamps.force('bowledOver');
+    stamps.step();
+    expect(stamps.arbiter.shown).toBe(null);
+    w.live = true;
+    w.t = 0.5;
+    stamps.step();
+    expect(shown.map((s) => s.id)).toEqual(['lastOrders']);
   });
 
   it('a respawn clears a stamp still waiting', () => {
