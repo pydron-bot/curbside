@@ -1,6 +1,6 @@
 /**
  * A session's performance over time, for device tests without a desktop
- * console: a compact sample every 10 s in a fixed ring, plus timestamped
+ * console: a compact sample every 10 s (every 2 s for the first 30) in a fixed ring, plus timestamped
  * events (tier / ratio steps, context loss, audio and visibility changes),
  * and "dips": what was on screen when frames ran slow (a ring too, so the
  * size stays bounded). Persisted to storage (throttled) so a crash or a reload keeps it. Pure: the
@@ -10,7 +10,10 @@
 import { roundCounts, type SceneCounts } from './sceneCounts';
 
 export const SAMPLE_EVERY_MS = 10_000;
-/** An hour of samples at 10 s. */
+/** The first BOOT_MS sample this often instead (start-up: loads, warm-up), ms. */
+export const BOOT_SAMPLE_EVERY_MS = 2_000;
+export const BOOT_MS = 30_000;
+/** About an hour of samples at 10 s (after the boot ones). */
 export const SAMPLE_CAPACITY = 360;
 export const EVENT_CAPACITY = 200;
 /** Storage writes at most this often (plus on pagehide), ms. */
@@ -68,6 +71,8 @@ export interface SessionDip {
   tier: string;
   ratio: number;
   dc: number;
+  /** The window's JS p95, ms (absent in logs from before it was kept). */
+  js?: number;
   n: SceneCounts;
 }
 
@@ -108,7 +113,8 @@ export class SessionLog {
 
   /** True when a sample is due (call often; cheap). */
   due(nowMs: number): boolean {
-    return nowMs - this.lastSampleAt >= SAMPLE_EVERY_MS;
+    const every = nowMs - this.startMs < BOOT_MS ? BOOT_SAMPLE_EVERY_MS : SAMPLE_EVERY_MS;
+    return nowMs - this.lastSampleAt >= every;
   }
 
   /** Append a sample (rounded for a compact report); the oldest goes once the ring is full. */
@@ -151,6 +157,7 @@ export class SessionLog {
       dc: d.dc,
       n: roundCounts(d.n),
     };
+    if (d.js !== undefined) entry.js = r1(d.js);
     if (this.dips.length < DIP_CAPACITY) this.dips.push(entry);
     else {
       this.dips[this.dipHead] = entry;

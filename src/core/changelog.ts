@@ -15,6 +15,16 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.12.2',
+    date: '2026-11-02',
+    title: 'Better performance reports',
+    notes: [
+      'Coming back to the game after switching apps no longer shows up as a slow moment in the performance log.',
+      'The performance log looks closer at the first 30 seconds after the game starts, and notes when each model finishes loading.',
+      'The game no longer lowers its graphics settings while models are still loading.',
+    ],
+  },
+  {
     version: '0.12.1',
     date: '2026-11-02',
     title: 'Lighter smoke',

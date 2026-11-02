@@ -146,6 +146,8 @@ export interface DipWindow {
   fps: number;
   p95: number;
   max: number;
+  /** The window's JS p95 (main-thread ms per frame): high with slow frames means CPU-bound, low means the GPU (or the browser). */
+  js: number;
 }
 
 /**
@@ -157,17 +159,21 @@ export interface DipWindow {
  */
 export class DipDetector {
   private readonly frames = new Float32Array(WINDOW_SLOTS);
+  private readonly js = new Float32Array(WINDOW_SLOTS);
   private n = 0;
   private count = 0;
   private elapsed = 0;
   private sinceDip = Infinity;
   /** The window that made the last dip. */
-  readonly last: DipWindow = { fps: 0, p95: 0, max: 0 };
+  readonly last: DipWindow = { fps: 0, p95: 0, max: 0, js: 0 };
 
-  /** One frame's interval, ms. True when it closes a window that is a dip. */
-  sample(intervalMs: number): boolean {
+  /** One frame's interval and its JS time, ms. True when it closes a window that is a dip. */
+  sample(intervalMs: number, jsMs = 0): boolean {
     if (!(intervalMs > 0) || !Number.isFinite(intervalMs)) return false;
-    if (this.n < WINDOW_SLOTS) this.frames[this.n++] = intervalMs;
+    if (this.n < WINDOW_SLOTS) {
+      this.js[this.n] = jsMs > 0 ? jsMs : 0;
+      this.frames[this.n++] = intervalMs;
+    }
     this.count++;
     this.elapsed += intervalMs;
     this.sinceDip += intervalMs;
@@ -176,8 +182,13 @@ export class DipDetector {
     const n = this.n;
     f.fill(Infinity, n);
     f.sort();
-    const p95 = f[Math.min(n - 1, Math.max(0, Math.ceil(0.95 * n) - 1))];
+    const rank95 = Math.min(n - 1, Math.max(0, Math.ceil(0.95 * n) - 1));
+    const p95 = f[rank95];
     const max = f[n - 1];
+    const js = this.js;
+    js.fill(Infinity, n);
+    js.sort();
+    const jsP95 = js[rank95];
     const fps = (this.count * 1000) / this.elapsed;
     const enough = this.count >= DIP_MIN_FRAMES;
     this.n = 0;
@@ -188,6 +199,7 @@ export class DipDetector {
     this.last.fps = fps;
     this.last.p95 = p95;
     this.last.max = max;
+    this.last.js = jsP95;
     return true;
   }
 

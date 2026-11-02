@@ -43,6 +43,18 @@ describe('dip detector', () => {
     expect(d.last.fps).toBeCloseTo(33.3, 0);
   });
 
+  it("keeps the window's JS p95: CPU-bound and GPU-bound dips read apart", () => {
+    const cpu = new DipDetector();
+    let fired = false;
+    for (let t = 0; t < 2000 && !fired; t += 30) fired = cpu.sample(30, 26);
+    expect(fired).toBe(true);
+    expect(cpu.last.js).toBeCloseTo(26);
+    const gpu = new DipDetector();
+    fired = false;
+    for (let t = 0; t < 2000 && !fired; t += 30) fired = gpu.sample(30, 4);
+    expect(gpu.last.js).toBeCloseTo(4);
+  });
+
   it('fires at most once per cooldown while it stays slow', () => {
     const d = new DipDetector();
     const dips = run(d, 20_000, 30);
