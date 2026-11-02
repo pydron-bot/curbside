@@ -1,6 +1,7 @@
 import { BUILD_ID } from '../core/build';
 import { VERSION } from '../core/changelog';
 import type { InputDevice } from '../core/input';
+import { onSettingsChange } from '../core/settings';
 import './core.css';
 import { ICONS, type IconName } from './icons';
 import { MenuNav, menuButton, type Panel } from './menu';
@@ -47,6 +48,8 @@ export class PauseOverlay implements Panel {
   private reason: PauseReason = 'paused';
   private armed: HTMLButtonElement | null = null;
   private armTimer = 0;
+  /** addButton's gated buttons (checked as the menu shows and on a settings change). */
+  private readonly gates: Array<{ el: HTMLElement; shown: () => boolean }> = [];
 
   constructor(
     private readonly el: HTMLElement,
@@ -120,6 +123,7 @@ export class PauseOverlay implements Panel {
       this.menu.hidden = false;
       this.corner.hidden = false;
     }
+    this.refresh();
     // Opening fresh: Resume is highlighted, ready for Enter / A.
     if (this.el.hidden) this.nav.focusElement(this.resumeBtn);
     this.el.hidden = false;
@@ -138,12 +142,21 @@ export class PauseOverlay implements Panel {
   /**
    * Another system's button in the menu grid, before RESTART (e.g. PROGRESS,
    * SHOP). Hide it with `hidden`: hidden buttons are skipped by navigation.
+   * With `shown`, it shows only while that passes (checked as the menu opens).
    */
-  addButton(label: string, icon: IconName, activate: () => void): HTMLButtonElement {
+  addButton(label: string, icon: IconName, activate: () => void, shown?: () => boolean): HTMLButtonElement {
     const b = menuButton(label, { icon });
     this.grid.insertBefore(b, this.grid.querySelector('.risky'));
     this.nav.add({ el: b, activate });
+    if (shown) {
+      if (this.gates.length === 0) onSettingsChange(() => this.refresh());
+      this.gates.push({ el: b, shown });
+    }
     return b;
+  }
+
+  private refresh(): void {
+    for (const g of this.gates) g.el.hidden = !g.shown();
   }
 
   /**

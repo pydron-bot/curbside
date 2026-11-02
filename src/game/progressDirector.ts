@@ -53,9 +53,10 @@ import { Progress, bustFine, hospitalBill } from './progress';
 import { ChainBank, chainLive } from './progressBank';
 import { pruneSave } from './progressSave';
 import { TAXI_GOAL, completion } from './progressStats';
-import { sideModesOpen } from './opening';
+import { SIDE_MODES, pastOpening, sideModesOpen, stillToCome, titleOffer, type TitleOffer } from './opening';
 import { OpeningMode } from './modes/openingMode';
 import { len2 } from '../core/len';
+import { settings } from '../core/settings';
 
 /** Stand on the safehouse door this long to open the shop, s. */
 const SHOP_HOLD = 0.4;
@@ -110,6 +111,9 @@ export class ProgressDirector implements ModeCtx {
   private homeBlip = false;
   /** The side modes were open last step (a story job opening them says so). */
   private sideOpen: boolean;
+  /** OBSERVE has been offered (its notice waits for a quiet moment; once, REPLAY OPENING or not). */
+  private observeTold: boolean;
+  private observeNotice = false;
 
   constructor(d: DirectorDeps) {
     this.deps = d;
@@ -145,6 +149,7 @@ export class ProgressDirector implements ModeCtx {
     pruneSave(this.progress.data, { missions: this.missions.missions.map((m) => m.id) });
     this.opening = new OpeningMode(this, this.missions);
     this.sideOpen = sideModesOpen(this.progress.data);
+    this.observeTold = pastOpening(this.progress.data) || settings.testTools;
     this.gangs = new GangMode(this);
     this.area = new AreaMode(this, new AreaCard(document.body), this.gangs);
     // Perks are off while a score or a time is being set.
@@ -158,6 +163,7 @@ export class ProgressDirector implements ModeCtx {
     this.titleCash.className = 'title-cash';
     this.titleCash.innerHTML = 'CASH <b></b>';
     d.frontDoor.title.addInfo(this.titleCash);
+    d.frontDoor.title.gateExtras(() => this.offer.extras);
     this.refreshTitle();
     d.frontDoor.pause.addButton('PROGRESS', 'chevron', () => this.openStats());
     this.shopButton = d.frontDoor.pause.addButton('SHOP', 'plusSquare', () => this.openShop());
@@ -202,6 +208,11 @@ export class ProgressDirector implements ModeCtx {
 
   get sideModes(): boolean {
     return this.freeRoam && sideModesOpen(this.progress.data);
+  }
+
+  /** What the title (and the pause menu's OBSERVE) offers this save. */
+  get offer(): TitleOffer {
+    return titleOffer(this.progress.data, settings.testTools);
   }
 
   get focusRing(): boolean {
@@ -310,8 +321,12 @@ export class ProgressDirector implements ModeCtx {
     const open = sideModesOpen(this.progress.data);
     if (open !== this.sideOpen) {
       this.sideOpen = open;
-      if (open) this.notice('SIDE JOBS OPEN · CHAOS RUN ON THE TITLE', 'progress');
+      if (open) {
+        this.notice('SIDE JOBS OPEN · CHAOS RUN ON THE TITLE', 'progress');
+        this.notice(`${SIDE_MODES.slice(1).join(', ').toUpperCase()} IN THE STREETS`, 'progress');
+      }
     }
+    this.stepObserveNotice();
     // Free roam's best as it's beaten (the Chaos Run records its own at the end).
     const total = this.deps.score.total;
     if (!this.chaos.active && !this.deps.player.tainted && total > this.progress.best('free')) this.progress.recordBest('free', total);
@@ -526,10 +541,15 @@ export class ProgressDirector implements ModeCtx {
       exportOrders: ORDERS_PER_LIST,
     });
     const medalRaces = RACES.filter((r) => p.medal(r.id)).length;
+    // Locked side modes aren't listed as things to do yet: STILL TO COME says when they open.
+    const side = sideModesOpen(s);
+    const sideOnly = <T>(rows: T[]): T[] => (side ? rows : []);
+    const toCome = stillToCome(s);
     return {
       completion: done,
       cash: p.cash,
       sections: [
+        ...(toCome ? [{ title: 'STILL TO COME', ...toCome }] : []),
         {
           title: 'STORY & ACTIVITIES',
           rows: [
@@ -543,22 +563,24 @@ export class ProgressDirector implements ModeCtx {
               const r = this.gangs.respect(g.id);
               return { label: `${g.name[0]}${g.name.slice(1).toLowerCase()} respect`, value: `${r > 0 ? '+' : ''}${r}`, bar: (r + RESPECT_MAX) / (2 * RESPECT_MAX) };
             }),
-            { label: 'Frenzies beaten', value: `${s.frenzies.length}/${FRENZIES.length}`, bar: s.frenzies.length / FRENZIES.length },
+            ...sideOnly([{ label: 'Frenzies beaten', value: `${s.frenzies.length}/${FRENZIES.length}`, bar: s.frenzies.length / FRENZIES.length }]),
             { label: 'Hidden packages', value: `${s.packages.length}/${PACKAGE_COUNT}`, bar: s.packages.length / PACKAGE_COUNT },
-            { label: 'Races with a medal', value: `${medalRaces}/${RACES.length}`, bar: medalRaces / RACES.length },
-            { label: 'Taxi fares', value: `${st.fares}`, bar: st.fares / TAXI_GOAL },
-            { label: 'Cars exported', value: `${st.exportsDelivered}`, bar: s.exports.lists > 0 ? 1 : s.exports.done.length / ORDERS_PER_LIST },
+            ...sideOnly([
+              { label: 'Races with a medal', value: `${medalRaces}/${RACES.length}`, bar: medalRaces / RACES.length },
+              { label: 'Taxi fares', value: `${st.fares}`, bar: st.fares / TAXI_GOAL },
+              { label: 'Cars exported', value: `${st.exportsDelivered}`, bar: s.exports.lists > 0 ? 1 : s.exports.done.length / ORDERS_PER_LIST },
+            ]),
           ],
-          chips: { label: 'EXPORT ORDERS', items: this.exports.orders.map((o) => ({ text: o.label, done: o.done })) },
+          chips: side ? { label: 'EXPORT ORDERS', items: this.exports.orders.map((o) => ({ text: o.label, done: o.done })) } : undefined,
         },
         this.credSection(),
         {
           title: 'BEST',
           rows: [
-            { label: 'Chaos Run', value: n(p.best(CHAOS_RUN_ID)), medal: p.medal(CHAOS_RUN_ID) },
+            ...sideOnly([{ label: 'Chaos Run', value: n(p.best(CHAOS_RUN_ID)), medal: p.medal(CHAOS_RUN_ID) }]),
             { label: 'Free roam run', value: n(p.best('free')) },
-            ...RACES.map((r) => ({ label: r.name, value: s.raceTimes[r.id] !== undefined ? formatRaceTime(s.raceTimes[r.id]) : '—', medal: p.medal(r.id) })),
-            { label: 'Best taxi streak', value: `${s.taxi.bestStreak}` },
+            ...sideOnly(RACES.map((r) => ({ label: r.name, value: s.raceTimes[r.id] !== undefined ? formatRaceTime(s.raceTimes[r.id]) : '—', medal: p.medal(r.id) }))),
+            ...sideOnly([{ label: 'Best taxi streak', value: `${s.taxi.bestStreak}` }]),
           ],
         },
         {
@@ -603,11 +625,22 @@ export class ProgressDirector implements ModeCtx {
   /** The title shows the career: cash, and the Chaos Run's best and medal (once the side modes are open). */
   private refreshTitle(): void {
     const title = this.deps.frontDoor.title;
-    if (sideModesOpen(this.progress.data)) title.addMode(this.chaosTitleMode());
+    if (this.offer.sideModes) title.addMode(this.chaosTitleMode());
     else title.removeMode(this.chaos.titleMode.id);
     const cash = this.progress.cash;
     this.titleCash.hidden = cash <= 0;
     this.titleCash.querySelector('b')!.textContent = `$${fmt(cash)}`;
+  }
+
+  /** OBSERVE opened with the cold open: say so once the getaway's heat is lost and nothing's running. */
+  private stepObserveNotice(): void {
+    if (!this.observeTold && pastOpening(this.progress.data)) {
+      this.observeTold = true;
+      this.observeNotice = true;
+    }
+    if (!this.observeNotice || this.busy || !this.live || this.deps.heat.wanted.level > 0) return;
+    this.observeNotice = false;
+    this.notice('OBSERVE OPEN · WATCH THE CITY FROM THE TITLE', 'progress');
   }
 
   /** Feed line on driving into a Pay 'n' Spray: what it'll cost. */

@@ -1759,6 +1759,7 @@ observe = new ObserveMode({
   best: () => score.best,
   setPaused: (p) => setPaused(p),
   moved: () => maintainPopulation(true, false),
+  offered: () => progress.offer.observe,
 });
 // REPORT BUG (pause card corner and the Diagnostics sheet, with test tools or the perf overlay on).
 const bugReport = new BugReportSheet(document.body, {

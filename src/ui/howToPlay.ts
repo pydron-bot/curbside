@@ -75,7 +75,7 @@ const TIPS = [
   ['Survive', 'Grab health and armour crates. WASTED costs the chain, your guns and a hospital bill; your best score is kept.'],
   ['CRED', 'Every life earns CRED: points, time, stars and cash. Fill a level and the WASTED or BUSTED screen offers three perks; pick one, it stays for good. Perks are off in the Chaos Run and races.'],
   ['Cash & shop', "Spend it at the safehouse door ('H' on the radar): armour, ammo, upgrades. SHOP is in the pause menu nearby."],
-  ['Activities', "Purple gems start frenzies; ringing payphones ('M') give jobs; 'R' starts a race; '$' buys the cars on its list; a taxi earns fares; 40 packages hide in alleys. PROGRESS in the pause menu tracks it all."],
+  ['Activities', "Purple gems start frenzies; ringing payphones ('M') give jobs; 'R' starts a race; '$' buys the cars on its list; a taxi earns fares; 40 packages hide in alleys. Frenzies, races, exports, fares and the Chaos Run open after the second story job, MAKE SOME NOISE. PROGRESS in the pause menu tracks it all."],
   ['Radar', RADAR_LEGEND_LINE],
 ] as const;
 

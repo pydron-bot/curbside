@@ -31,7 +31,9 @@ no page or console errors, under 150 draw calls, and a named-mayhem stamp
 (`__ub.stamp(id)`, held mid-show) clear of the stars, radar, status,
 activity card and score feed (on the phones in a Chaos Run too), and the
 police scanner's subtitle (`__ub.scanner.say()`) clear of all that, the
-stamp, the radio's card and the thumbs, on foot and in a car; then
+stamp, the radio's card and the thumbs, on foot and in a car; a fresh
+save's title is PLAY and SETTINGS (OBSERVE too with Test tools on) and
+gains OBSERVE, CHARACTER and HOW TO PLAY after the cold open; then
 installability and an offline boot from the service worker. ~3 min. CI (`.github/workflows/ci.yml`)
 runs it with the unit tests, types and GLB contracts on every branch and pull
 request; Pages (`pages.yml`) runs the tests and contracts before deploying
@@ -62,8 +64,9 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Menus | arrows + Enter, Esc / Backspace back | tap | D-pad / left stick + A, B back |
 | Next radio station | R | tap the "now playing" card (it shows as a chase comes in: tap it for the radio) | Select / View |
 
-OBSERVE (on the title and in the pause menu) is a free camera over the city
-with no player: its controls are under *UI → Observe mode*.
+OBSERVE (on the title and in the pause menu, once the cold open has run or
+with Test tools on) is a free camera over the city with no player: its
+controls are under *UI → Observe mode*.
 
 Settings (title or pause menu): master / effects / music volume, sound with
 the iPhone silent switch on, graphics quality, touch steering
@@ -252,7 +255,8 @@ share sheet mocked.
   traffic and now and then cuts to a city scene: *Title highlights* under
   *UI*) with PLAY, a mode list other systems extend, settings, how to
   play, the best score and a small MORE AT DEEEK.ORG link to the hub (title
-  only, never the pause menu); the first tap unlocks audio, shaders are warmed
+  only, never the pause menu). A fresh save's title is PLAY and SETTINGS
+  only (*Prune for newcomers* under *Progression*); the first tap unlocks audio, shaders are warmed
   behind it; a one-time "Add to Home Screen" tip on iPhone Safari. Pause
   menu (resume, settings, how to play, restart, quit to title) that still
   offers waiting app updates and covers a lost GL context. A rotate-your-
@@ -1652,9 +1656,29 @@ are `src/game/modes/*Mode.ts`.
 - **Side modes wait for story job 2** (`sideModesOpen`): Chaos Run (on
   the title), frenzies, races, exports and taxi fares are hidden, and not
   offered in the street (`ModeCtx.sideModes`), until `s2-noise` is passed
-  ("SIDE JOBS OPEN · CHAOS RUN ON THE TITLE" when it happens) or the save
-  has the `sideModes` unlock (a veteran's save, at migration). Hidden
-  packages, the shop and the payphones are there from the start.
+  ("SIDE JOBS OPEN · CHAOS RUN ON THE TITLE" when it happens, then a line
+  naming the street ones) or the save has the `sideModes` unlock (a
+  veteran's save, at migration). Hidden packages, the shop and the
+  payphones are there from the start.
+- **Prune for newcomers** (V2-17; `titleOffer`, `pastOpening`,
+  `stillToCome` in `game/opening.ts`, tested in `tests/newcomer.test.ts`):
+  a fresh save's title is PLAY and SETTINGS (plus INSTALL where the
+  browser offers it, the version, the hub link and the iPhone install
+  tip). Past the cold open (`save.opening`, or a passed job or the side
+  modes, so REPLAY OPENING doesn't take a played save's title back): OBSERVE,
+  CHARACTER and HOW TO PLAY (in the pause menu from the start). Past
+  `s2-noise`: CHAOS RUN. OBSERVE, on the title and in the pause menu, also
+  shows whenever Test tools are on (a testing mode); otherwise it's never
+  offered mid cold open. The gates are `TitleScreen.gateExtras`,
+  `addEntry(…, shown)` and `PauseOverlay.addButton(…, shown)`, checked as
+  the menu opens and on a settings change (`ProgressDirector.offer`).
+  What's locked is said rather than appearing silently: PROGRESS opens
+  with STILL TO COME (OBSERVE after the getaway; Chaos Run, races,
+  frenzies, exports and taxi fares after MAKE SOME NOISE) and leaves the
+  locked modes' rows and bests out until then; "OBSERVE OPEN · WATCH THE
+  CITY FROM THE TITLE" comes in the feed once, when the getaway's heat is
+  lost and nothing's running; How to Play's *Activities* names the gate.
+  A veteran's save sees everything as before.
 - **Bank your chaos** (`game/progressBank.ts`): when a combo chain ends (the
   combo window has run out and no drift is sliding), its points become cash:
   points / 10 × (1 + 0.5 × the highest wanted level during the chain), with
@@ -1900,7 +1924,8 @@ are `src/game/modes/*Mode.ts`.
   852×340 with the iPhone's safe areas.
 - **PROGRESS** in the pause menu (`ui/progressScreens.ts`): completion %
   (`game/progressStats.ts`: story 30%, frenzies, packages and races 15%
-  each, exports and taxi 10%, the Chaos Run 5%), cash, each activity's
+  each, exports and taxi 10%, the Chaos Run 5%), cash, STILL TO COME while
+  anything's locked, each activity's
   progress, the export list, bests with medals, and the lifetime stats
   (up / down scroll it on a keyboard or gamepad).
 
@@ -3271,7 +3296,9 @@ in `tests/observe.test.ts`) hands you the camera over the live city with
 no player: no HUD, radar, score, stars or touch controls
 (`body[data-scene='observe']`). It's on the title beside CHAOS RUN
 (`TitleScreen.addEntry`: laid out like a mode, starts no run) and in the
-pause menu (`PauseOverlay.addButton`).
+pause menu (`PauseOverlay.addButton`), both once the cold open has run or
+whenever Test tools are on (`ObserveDeps.offered`, from
+`ProgressDirector.offer`).
 
 | | Keyboard & mouse | Touch | Gamepad |
 |---|---|---|---|
