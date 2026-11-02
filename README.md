@@ -213,7 +213,7 @@ share sheet mocked.
   score points; anything within 3 s of the last event raises a ×2…×10
   combo. Best score is kept in localStorage (`curbside.best`).
 - **Weapons** (`src/systems/weapons.ts`, `src/world/pickups.ts`): pistol,
-  SMG, shotgun, grenades, molotovs, rockets and the air horn, plus health, armour and
+  SMG, shotgun, grenades, molotovs, rockets, the air horn and smoke grenades, plus health, armour and
   ammo crates on sidewalks (respawn 30 s); hitscan with lock-on and spread
   bloom, tracers, walls stop bullets, cars take damage; drive-bys.
 - **Fighting back** (`src/systems/crowd.ts`): peds are calm (70%),
@@ -397,7 +397,7 @@ survivable, and spread 60% wider at a running target.
 first and is lost on death; health creeps back to 40 at 4/s after 6 s
 unhurt. Crates: health +50, armour +50, ammo (half a clip for each gun
 owned, and 3 blasts for an air horn), weapons (capped: pistol 120, SMG 300,
-shotgun 48, grenades 12, molotovs 10, rockets 8, air horn 12).
+shotgun 48, grenades 12, molotovs 10, rockets 8, air horn 12, smoke grenades 6).
 
 **On foot** (`game/combat.ts`, `systems/crowd.ts`, `systems/weapons.ts`).
 Everyone, officers included, has 100 HP: pistol 34 (3 hits), SMG 15 (~7),
@@ -455,6 +455,40 @@ is three pale shock rings down the cone from Effects' pooled fake lights
 (no draw call of its own). Pickups: a pink-ringed crate (the ammo box
 model until `pickups.glb` has a `crate_horn`); in the hand, nothing shows
 until `weapons.glb` has an `air_horn` root.
+
+**The smoke grenade** (W3-B, `systems/smoke.ts`, `Combat.pourSmoke` /
+`stepSmoke`): thrown like a grenade (20 m at most, the grenade's arc and
+bounce); a crate is 2 (6 at most). It hisses into life 1.2 s after the
+throw and pours a cloud that billows from 2.5 m to 6.5 m across in 1.5 s
+(a road and a pavement either side), thick for 9 s, then thins away over
+2.5 s, which is only the look: a thinning cloud does nothing. At most 2
+clouds at once (another throw replaces the oldest). **Sight**
+(`systems/sight.ts` `sees`, `SmokeView.blocks`): nobody sees into, out of
+or through a thick cloud beyond arm's length (2.5 m), so a police car or
+officer inside one or looking through it loses you and drops into search,
+and the helicopter's spotlight finds nothing but smoke while you're in
+one. **Police cars** that drive into it are confused (`Daze`, one per
+unit in `systems/police.ts`): a third each crawl to a stop, stop dead with
+their hazards blinking, or take a wrong turn at the next junction
+(`wrongWay`, at most 9 m/s, forgotten after 12 s), so a chase visibly
+scatters; a crawl or a stop ends 0.6 s after they're out of it, a wrong
+turn is taken whatever the cloud does. **Officers on foot** (and anyone
+fighting or shooting) stop and cough, no running, no shots; **people**
+cough and walk out of it; **traffic** brakes hard and sits there until
+it's clear (rear-end shunts welcome). The player's cloud puts a scanner
+line out (SMOKE ON THE STREET IN …, 60 s cooldown); it's no crime. The
+look (`render/smokeLook.ts`) is billows from Effects' soft smoke pool in
+the low-resolution pass like every other smoke, scaled by the tier's
+`particleScale` (about 17 live per cloud on low, 26 on medium, 34 on
+high, under the low tier's `smokeMax`), so it adds no draw call while
+anything else smokes and one otherwise; emission stops 1.2 s before the
+cloud stops being thick, so it thins as its effect ends. The budget check
+is `tools/tune/mayhem.mjs --scenario smoke --seconds 12` (two clouds on
+the player on foot). The sound is the cap's pop and ~3 s of gas hiss over
+a low rush (`sfx.smokePop`), and coughs (`sfx.cough`, deeper for an
+officer, one at a time). Pickups: a pale-grey-ringed crate (the grenade
+crate until `pickups.glb` has a `crate_smoke`); in the hand, nothing shows
+until `weapons.glb` has a `smoke_grenade` root.
 
 **Stunts** (`world/ramps.ts`, `systems/stunts.ts`). Ten stunt ramps
 (6 × 3.2 m, 1.6 m lip, matching the `ramp` model in props.glb) on road
