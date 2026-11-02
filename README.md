@@ -1439,7 +1439,7 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   On foot: a parked car peaks at gain 0.2 against the car radio (−14 dB)
   2.5 m off, a shop 0.19 at 3.5 m, the boombox 0.6 at 4 m and still 0.05 at
   26 m; a switch is silent for about 0.5 s.
-- **`mayhem.mjs [--tier medium|low|high|all] [--time day|night|both] [--scenario mayhem|single] [--no-city-fires] [--step 50] [--dpr 3] [--shot dir]`**:
+- **`mayhem.mjs [--tier medium|low|high|all] [--time day|night|both] [--scenario mayhem|single|drive] [--no-city-fires] [--step 50] [--dpr 3] [--shot dir] [--shots 2,17] [--fx auto|off|on] [--fx-scale 0.25]`**:
   heavy mayhem on the iPhone profile (unlike the others it renders: real
   frames stepped by `__ub.stepFrame(ms)`, Rapier loaded, god mode and the
   destruction test on). Blows up four cars and three walls round the
@@ -1448,7 +1448,14 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   particles, the transparent fill projected from the camera (screens of
   overdraw; SwiftShader can't time the GPU), glows and their fill, draw
   calls, fires and rubble. `--dpr 1` is faster and gives the same fill
-  (a share of the screen). Numbers under *Effects and camera*.
+  (a share of the screen). `drive` blows nothing up: a bot drives the
+  nearest car round, handbraking into turns (tyre smoke). Smoke work is
+  the soft particles' fill, or offscreen their fill × scale² × 1.25 plus
+  the composite's tiles; `--fx off|on` forces the low-resolution smoke
+  path off or on, `--fx-scale` tries another scale (dev server only), and
+  `--shots` saves the frames at those seconds (with `--fx auto`, each
+  also from the same frame with smoke at full and at low resolution).
+  JS ms is the median frame. Numbers under *Effects and camera*.
 
 ## Layout
 
@@ -1759,6 +1766,11 @@ the first time it comes into view.
   frames the view. Desktops render into a half-float buffer so the 'high'
   tier can bloom (threshold follows the time of day: only real lights bloom
   by day). Cars' paint and glass alone reflect a PMREM studio environment.
+  On the medium and low tiers heavy smoke is drawn at half resolution and
+  composited back (*Low-resolution smoke* under *Effects and camera*).
+  Bloom is left as it is: phones never bloom (no HDR pipeline), and
+  desktop 'high' runs `UnrealBloomPass` from half resolution (5 mips,
+  linear-sampled taps, 13 passes, ~2.2 screens written).
 
 
 ### People
@@ -2216,6 +2228,40 @@ under 0.1 screens even with six fires. Without the living city's fires
 of 1.96: its fires (each wreck and hit wall burns 75 s) add ~20% to the
 mean fill, ~20% more live fire particles and eight glows, but the peak is
 the blasts', as it was before the city.
+
+**Low-resolution smoke** (`render/lowResFx.ts`; the pure plan, cost model
+and switch in `lowResFxPlan.ts`, tested). On tiers with `fxScale` under 1
+(medium and low: 0.5; high draws them with the scene) the soft particles
+(smoke, dust) can render before the scene into a half-size target with no
+MSAA: colour plus their alpha-weighted view depth, depth-tested against
+every building as an instanced box (one depth-only draw). A composite then
+lays them over the scene, one instance per covered tile of a 16×8 grid,
+with `gl_FragDepth` at the smoke's mean depth less 3 m, tested against the
+real depth: crisp building edges, no halo, and cars don't notch it. Each
+frame it projects the particles' quads to tiles and goes offscreen only
+when that saves fill (with hysteresis), so normal driving costs nothing. On
+phones the target is flagged as an XR target so the particles tone-map and
+encode as on the canvas; it needs `EXT_color_buffer_(half_)float`, else
+smoke stays full size. The programs are precompiled with the scene's
+(`Look.precompile`, also after a lost context) and the target follows the
+drawing buffer. `look.lowFx.mode` (`auto`, `off`, `on`) is for tests and
+screenshots. Smoke work is in full-resolution screens of fragment work
+(offscreen: fill × scale² × 1.25 for the depth output, plus the composite's
+tiles); 0.12.0 → 0.12.1, same seed, day, iPhone profile:
+
+| Run, tier | smoke fill → work, peak | mean | frames offscreen | draw calls (peak) |
+|---|---|---|---|---|
+| mayhem, medium | 7.41 → 3.06 | 1.25 → 0.79 | 50% | 60 → 60 |
+| mayhem, low | 2.40 → 1.50 | 0.59 → 0.51 | 20% | 31 → 33 |
+| one car, medium | 5.60 → 2.04 | 0.55 → 0.28 | 85% | 52 → 54 |
+| one car, low | 1.61 → 0.74 | 0.23 → 0.18 | 36% | 29 → 31 |
+| driving (tyre smoke), medium | 0.35 → 0.34 | 0.06 → 0.06 | 0% | 58 → 58 |
+
+Shots of the same frame drawn both ways differ by under 1/255 on average.
+Low stays at half scale: a quarter roughly halves its smoke work again but
+softens the smoke visibly. The occluder boxes ignore breach holes, parapets,
+rooftop kit and trees; the XR-target flag leans on three r186 internals
+(recheck on an upgrade).
 
 API for other systems:
 
