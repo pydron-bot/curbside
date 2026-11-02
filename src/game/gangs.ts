@@ -13,7 +13,7 @@
  *
  * modes/gangMode.ts puts the members on the street and reads these rules.
  */
-import { pavement } from './modes/places';
+import { corePavement } from './modes/places';
 import type { BodyKind } from './bodies';
 import type { District } from '../world/districts';
 
@@ -163,10 +163,10 @@ export function placeHangouts(gangs: readonly GangDef[] = GANGS): Hangout[] {
   const out: Hangout[] = [];
   for (const g of gangs) {
     g.hangouts.forEach(([bx, bz, edge, t], i) => {
-      const centre = pavement(bx, bz, edge, t);
+      const centre = corePavement(bx, bz, edge, t);
       const members: Array<{ x: number; z: number }> = [];
       // Along the pavement, a couple of metres apart (the edge is ~45 m long).
-      for (let k = 0; k < CREW_SIZE; k++) members.push(pavement(bx, bz, edge, t + (k - (CREW_SIZE - 1) / 2) * 0.05));
+      for (let k = 0; k < CREW_SIZE; k++) members.push(corePavement(bx, bz, edge, t + (k - (CREW_SIZE - 1) / 2) * 0.05));
       out.push({ id: `${g.id}-${i}`, gang: g, x: centre.x, z: centre.z, members });
     });
   }

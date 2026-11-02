@@ -4,6 +4,7 @@ import {
   Color,
   CustomBlending,
   DynamicDrawUsage,
+  Group,
   HalfFloatType,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
@@ -24,7 +25,7 @@ import {
   type Camera,
   type WebGLRenderer,
 } from 'three';
-import { TILES_X, TILES_Y, coverShare, emptyCover, lowResPays, lowResSize, particleCover, type TargetSize } from './lowResFxPlan';
+import { TILES_X, TILES_Y, coverShare, emptyCover, lowResPays, lowResSize, occluderChunks, particleCover, type TargetSize } from './lowResFxPlan';
 import type { Rect } from '../world/city';
 import { isHdr } from './post';
 import { getQuality } from './quality';
@@ -265,8 +266,12 @@ export class LowResFx {
 /** The composite's depth test treats the smoke as this much nearer, m (taller than a car, lower than a storey). */
 const COMPOSITE_BIAS = 3;
 
-/** Every building as a box, depth only: what hides smoke in the offscreen pass. */
-function buildingBoxes(buildings: ReadonlyArray<Rect & { height: number }>): InstancedMesh {
+/**
+ * Every building as a box, depth only: what hides smoke in the offscreen
+ * pass. One batch per 256 m chunk, culled whole, so a bigger city (W3-A)
+ * draws only the boxes round the camera.
+ */
+function buildingBoxes(buildings: ReadonlyArray<Rect & { height: number }>): Group {
   const geo = new BoxGeometry(1, 1, 1);
   geo.translate(0, 0.5, 0);
   const material = new ShaderMaterial({
@@ -280,18 +285,20 @@ function buildingBoxes(buildings: ReadonlyArray<Rect & { height: number }>): Ins
       }`,
     colorWrite: false,
   });
-  const mesh = new InstancedMesh(geo, material, Math.max(1, buildings.length));
+  const group = new Group();
+  group.name = 'fxOccluders';
   const m = new Matrix4();
-  buildings.forEach((b, i) => {
-    m.makeScale(b.maxX - b.minX, b.height, b.maxZ - b.minZ);
-    m.setPosition((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2);
-    mesh.setMatrixAt(i, m);
-  });
-  mesh.count = buildings.length;
-  // Thousands of boxes are a few thousand triangles: cheaper drawn whole than culled.
-  mesh.frustumCulled = false;
-  mesh.name = 'fxOccluders';
-  return mesh;
+  for (const chunk of occluderChunks(buildings)) {
+    const mesh = new InstancedMesh(geo, material, chunk.length);
+    chunk.forEach((b, i) => {
+      m.makeScale(b.maxX - b.minX, b.height, b.maxZ - b.minZ);
+      m.setPosition((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2);
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.computeBoundingSphere();
+    group.add(mesh);
+  }
+  return group;
 }
 
 /**

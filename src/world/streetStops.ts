@@ -14,7 +14,7 @@
  *   suburbs. One stands where Deacon Pike waits in Maple Flats
  *   (systems/missionsData.ts: pikeStop).
  */
-import { isCarPark, lotBytes, type City } from './city';
+import { core, isCarPark, lotBytes, type City } from './city';
 import { KERB_LINE, WALK_LINE, blockSide, type BlockSide, type Placer } from './kerbs';
 import { dirHeading, laneKey, type Dir } from './roads';
 import type { Roadworks } from './roadworks';
@@ -115,7 +115,7 @@ export function placeBusStops(city: City, rand: () => number, placer: Placer, wo
     return true;
   };
   for (const [bx, bz, side, t] of FIXED_STOPS) {
-    const b = city.blocks.find((k) => k.bx === bx && k.bz === bz);
+    const b = city.blocks.find((k) => k.bx === core(bx) && k.bz === core(bz));
     if (b) tryStop(blockSide(b, side), t);
   }
   for (const b of city.blocks) {

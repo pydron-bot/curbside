@@ -129,7 +129,11 @@ each stream its own smoke port and scratch dir: `smoke.mjs` starts
 another stream's build. Agents run tsc, tests and a build (one smoke run
 at most, timing failures under load are noise); the integrator re-runs
 after merging and GitHub CI (uncontended) is the arbiter before main.
-Wave 3 candidate: W3-A, a bigger city.
+Wave 3 candidate: W3-A, a bigger city. **Groundwork on `claude/w3-city`**
+(not merged): `?city=24` / `?city=32` grows a ring round today's city,
+which stays block for block; the measurements, the inventory of everything
+placed by hand and the decisions left for the owner are in
+`docs/W3A_CITY.md`.
 
 **V2 is planned in `docs/V2_PLAN.md` (2026-11-02).** The owner chose
 direction A, *Have-a-Go* (the city's incidents keep running while you're

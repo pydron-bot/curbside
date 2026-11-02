@@ -9,6 +9,7 @@ import {
   lowResCost,
   lowResPays,
   lowResSize,
+  occluderChunks,
   particleCover,
 } from '../src/render/lowResFxPlan';
 import { QUALITY_TIERS } from '../src/render/quality';
@@ -144,5 +145,16 @@ describe('low-resolution soft particles: when it pays', () => {
     expect(lowResCost(1, 0.55, 0.5)).toBeLessThan(1);
     expect(lowResPays(1, 0.55, 0.5, false)).toBe(false);
     expect(lowResPays(1, 0.55, 0.5, true)).toBe(true);
+  });
+});
+
+describe('occluder chunks (W3-A)', () => {
+  it('groups buildings by the 256 m chunk their middle is in, every building once', () => {
+    const box = (x: number, z: number) => ({ minX: x - 2, maxX: x + 2, minZ: z - 2, maxZ: z + 2, height: 6 });
+    const bs = [box(10, 10), box(250, 20), box(260, 20), box(-10, 10), box(-300, -700)];
+    const chunks = occluderChunks(bs);
+    expect(chunks.flat()).toHaveLength(bs.length);
+    expect(chunks.map((c) => c.length).sort()).toEqual([1, 1, 1, 2]);
+    expect(chunks.find((c) => c.includes(bs[0]))).toContain(bs[1]);
   });
 });

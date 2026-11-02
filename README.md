@@ -2230,6 +2230,12 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   round again, its race, fire and turf flare-up started, 3,100–5,700
   real points over runs.
 
+- **`citySize.mjs [--sizes 16,24,32] [--runs 2] [--only desktop|iphone] [--no-build]`**:
+  the W3-A spike. Builds and serves the game like the smoke test, boots it
+  at each `?city=` size, and reports boot time (to `window.__ub`), JS heap
+  after a GC, and draw calls at the spawn, in the ring and in observe at
+  the widest zoom. Numbers in `docs/W3A_CITY.md`.
+
 ## Layout
 
 ```
@@ -2684,6 +2690,14 @@ and every new program is compiled behind the current frame.
   rubble uses a `lampList` variant of the city's prop material, one more
   program compiled at start-up. The fx debris boxes were already on plain
   Lambert with no lamp light.
+- **City size** (`world/city.ts`, W3-A groundwork; `docs/W3A_CITY.md`):
+  the shipped city is 16 × 16 blocks, the *core*. `?city=24` or
+  `?city=32` in the URL (`CURBSIDE_CITY` under Node) builds a ring of
+  blocks round it, and the core comes out block for block the same: it's
+  generated first from the seed's stream, the ring from its own, and
+  hand-placed spots are written in core blocks (`core()`,
+  `corePavement`). `tests/cityCore.test.ts` pins the core's fingerprint at
+  any size. A trial size saves under `curbside.save.city24`.
 - **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new

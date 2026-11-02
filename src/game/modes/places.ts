@@ -7,7 +7,7 @@
  * open lot, away from the spray bays and the police station.
  */
 import { cornerPoint } from '../../systems/crowd';
-import { BLOCKS_PER_SIDE, type City } from '../../world/city';
+import { core, type City } from '../../world/city';
 import { bayFor, placeSprayShops, type SprayShop } from '../../world/landmarks';
 import { len2 } from '../../core/len';
 
@@ -28,10 +28,15 @@ export function pavement(bx: number, bz: number, edge: number, t: number): { x: 
   return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t };
 }
 
-/** The safehouse door: on the pavement 16 m east of the spawn corner, in view as you start. */
-export const SAFEHOUSE: Spot = { id: 'safehouse', ...pavement(8, 8, 0, 16.5 / 45) };
+/** `pavement` round core block (bx, bz): hand-placed spots use these, so they stay put in a bigger city. */
+export function corePavement(bx: number, bz: number, edge: number, t: number): { x: number; z: number } {
+  return pavement(core(bx), core(bz), edge, t);
+}
 
-/** Payphones (one per quarter of the city), as [block x, block z, edge, t]. */
+/** The safehouse door: on the pavement 16 m east of the spawn corner, in view as you start. */
+export const SAFEHOUSE: Spot = { id: 'safehouse', ...corePavement(8, 8, 0, 16.5 / 45) };
+
+/** Payphones (one per quarter of the city), as [core block x, core block z, edge, t]. */
 const PHONE_SPOTS: ReadonlyArray<readonly [string, number, number, number, number]> = [
   ['phone-oldtown', 5, 6, 2, 0.32],
   ['phone-arts', 10, 4, 3, 0.62],
@@ -40,7 +45,7 @@ const PHONE_SPOTS: ReadonlyArray<readonly [string, number, number, number, numbe
 ];
 
 export function placePayphones(): Spot[] {
-  return PHONE_SPOTS.map(([id, bx, bz, edge, t]) => ({ id, ...pavement(bx, bz, edge, t) }));
+  return PHONE_SPOTS.map(([id, bx, bz, edge, t]) => ({ id, ...corePavement(bx, bz, edge, t) }));
 }
 
 /** Frenzy tokens, spread round the city (ids match FRENZIES). */
@@ -56,10 +61,10 @@ const FRENZY_SPOTS: ReadonlyArray<readonly [string, number, number, number, numb
 ];
 
 export function placeFrenzyTokens(): Spot[] {
-  return FRENZY_SPOTS.map(([id, bx, bz, edge, t]) => ({ id, ...pavement(bx, bz, edge, t) }));
+  return FRENZY_SPOTS.map(([id, bx, bz, edge, t]) => ({ id, ...corePavement(bx, bz, edge, t) }));
 }
 
-/** The docks: an open lot in the industrial quarter (south-east), not a spray bay's. */
+/** The docks: an open lot in the industrial quarter (south-east), not a spray bay's (core blocks). */
 const DOCKS_TARGET = [13, 12] as const;
 
 /**
@@ -68,14 +73,16 @@ const DOCKS_TARGET = [13, 12] as const;
  */
 export function placeDocks(city: City): SprayShop {
   const taken = new Set(placeSprayShops(city).map((s) => s.id));
+  const tx = core(DOCKS_TARGET[0]);
+  const tz = core(DOCKS_TARGET[1]);
   const blocks = city.blocks
     .filter((b) => b.kind !== 'buildings')
-    .sort((a, b) => len2(a.bx - DOCKS_TARGET[0], a.bz - DOCKS_TARGET[1]) - len2(b.bx - DOCKS_TARGET[0], b.bz - DOCKS_TARGET[1]));
+    .sort((a, b) => len2(a.bx - tx, a.bz - tz) - len2(b.bx - tx, b.bz - tz));
   for (const b of blocks) {
     const bay = bayFor(b.bx, b.bz, city);
     if (bay && !taken.has(bay.id)) return { ...bay, id: 'docks' };
   }
   // No open lot anywhere (not with the shipped seed): a pavement spot instead.
-  const p = pavement(BLOCKS_PER_SIDE - 3, BLOCKS_PER_SIDE - 4, 0, 0.5);
+  const p = corePavement(13, 12, 0, 0.5);
   return { id: 'docks', x: p.x, z: p.z, heading: 0, halfWidth: 3.6, halfLength: 4.6 };
 }

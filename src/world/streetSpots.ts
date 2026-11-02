@@ -11,7 +11,7 @@
  * right. Parked cars stand against that kerb mid-block (clear of the
  * junctions, their crossings and the lane traffic drives in).
  */
-import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, lotBytes, type Block, type City } from './city';
+import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, core, lotBytes, type Block, type City } from './city';
 import { DIR_VEC, canLeave, dirHeading, nodeValid, type Dir } from './roads';
 import { len2 } from '../core/len';
 
@@ -83,7 +83,8 @@ const WALK_INSET = ROAD_WIDTH / 2 + SIDEWALK / 2;
  * HOSPITAL_TARGET, on its north side; ambulances pull up at the kerb there.
  */
 export function placeHospital(city: City): Hospital {
-  const [tx, tz] = HOSPITAL_TARGET;
+  const tx = core(HOSPITAL_TARGET[0]);
+  const tz = core(HOSPITAL_TARGET[1]);
   let best = city.blocks[0];
   let bestD = Infinity;
   for (const b of city.blocks) {

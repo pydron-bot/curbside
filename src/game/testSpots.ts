@@ -5,7 +5,7 @@
  * (beside the player, on the road when one is close) and the quick-teleport
  * landmarks. Pure: the caller says what's blocked (`Free`).
  */
-import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type City } from '../world/city';
+import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, inCoreBlock, type City } from '../world/city';
 import type { District } from '../world/districts';
 import { LANE_OFFSET } from '../world/roads';
 
@@ -189,13 +189,16 @@ export function spawnBeside(x: number, z: number, heading: number, free: Free, m
   return null;
 }
 
-/** The middle of a district's blocks (a landmark for the quick teleports; snap it before use). */
+/**
+ * The middle of a district's blocks in the core city, where its story spots
+ * are (a landmark for the quick teleports; snap it before use).
+ */
 export function districtCentre(city: City, district: District): { x: number; z: number } {
   let x = 0;
   let z = 0;
   let n = 0;
   for (const b of city.blocks) {
-    if (b.district !== district) continue;
+    if (b.district !== district || !inCoreBlock(b.bx, b.bz)) continue;
     x += (b.interior.minX + b.interior.maxX) / 2;
     z += (b.interior.minZ + b.interior.maxZ) / 2;
     n++;

@@ -14,7 +14,7 @@ import {
   wrapHour,
 } from '../src/render/timeOfDay';
 import { planBuildings } from '../src/world/buildingPlans';
-import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, generateCity, type Rect } from '../src/world/city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, core, generateCity, type Rect } from '../src/world/city';
 import { DISTRICTS, MAX_HEIGHT, districtOf, pickWeighted } from '../src/world/districts';
 import { LAMP_OFFSET, generateStreetLamps } from '../src/world/streetLamps';
 
@@ -137,7 +137,7 @@ describe('districts and building plans', () => {
   it('uses every district, each in one or more connected-looking regions', () => {
     const seen = new Set(city.blocks.map((b) => b.district));
     expect([...seen].sort()).toEqual([...DISTRICTS].sort());
-    expect(districtOf(7, 7)).toBe('downtown');
+    expect(districtOf(core(7), core(7))).toBe('downtown');
     expect(districtOf(0, 0)).toBe(districtOf(0, 0));
   });
 
@@ -214,7 +214,7 @@ describe('street lamps', () => {
   const lamps = generateStreetLamps();
 
   it('stand on the sidewalk, just in from the kerb', () => {
-    expect(lamps.length).toBe(16 * 16 * 4 * 3);
+    expect(lamps.length).toBe(BLOCKS_PER_SIDE ** 2 * 4 * 3);
     for (const l of lamps) {
       const gx = l.x + HALF_EXTENT;
       const gz = l.z + HALF_EXTENT;

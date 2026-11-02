@@ -16,8 +16,8 @@ import { DISTRICTS, DISTRICT_STYLES, PAVINGS } from './districts';
 
 /** Ground extends one block past the city on every side (ring road, walls, then the water). */
 const GROUND_SIZE = 2 * HALF_EXTENT + 2 * BLOCK_SIZE;
-/** Resolution of the baked contact-shadow texture (~1.1 m per texel over the whole ground). */
-const AO_SIZE = 1024;
+/** Resolution of the baked contact-shadow texture (~1.1 m per texel over the whole ground: 1024 for the core city). */
+const AO_SIZE = Math.round((GROUND_SIZE * 1024) / 1152);
 
 /** What a block's lot is drawn as (block data texture, red channel). */
 const LOT_KIND = { buildings: 0, park: 1, plaza: 2, parking: 3 } as const;

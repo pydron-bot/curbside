@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createVehicleState } from '../src/entities/vehicle';
 import { blockAt, cornerPoint, cower, hurtPed, knockDown, scare, spawnPed, stepCrowdPed } from '../src/systems/crowd';
 import { collidePedStatic } from '../src/systems/physics';
-import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, generateCity } from '../src/world/city';
+import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, core, generateCity } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
 import { random } from './helpers';
 
@@ -10,10 +10,10 @@ const DT = 1 / 60;
 
 describe('crowd', () => {
   it('corner points sit on the sidewalk, not the road or the lot', () => {
-    const p = cornerPoint(8, 8, 0); // block whose NW corner is the origin intersection
+    const p = cornerPoint(core(8), core(8), 0); // block whose NW corner is the origin intersection
     expect(p.x).toBeCloseTo(ROAD_WIDTH / 2 + 1.5);
     expect(p.z).toBeCloseTo(ROAD_WIDTH / 2 + 1.5);
-    expect(blockAt(p.x, p.z)).toEqual({ bx: 8, bz: 8 });
+    expect(blockAt(p.x, p.z)).toEqual({ bx: core(8), bz: core(8) });
   });
 
   it('walks between corners and crosses streets over time', () => {

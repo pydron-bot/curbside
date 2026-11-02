@@ -7,12 +7,14 @@
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, SIDEWALK, WORLD_LIMIT, type City } from '../world/city';
 import type { District } from '../world/districts';
 
-/** Map resolution: about native for a ~100 px radar at 2x showing ±60 m. */
-export const MAP_PX_PER_M = 1.5;
 /** Dark ground drawn beyond the walls, m. */
 export const MAP_MARGIN = 30;
 /** Half the map's extent in metres (it's centred on the world origin). */
 export const MAP_EXTENT = WORLD_LIMIT + MAP_MARGIN;
+/** The map canvas's side is kept to this, px (a bigger city, W3-A, draws a little coarser rather than a 40 MB canvas). */
+const MAP_MAX_PX = 2048;
+/** Map resolution: about native for a ~100 px radar at 2x showing ±60 m (1.5 for the core city). */
+export const MAP_PX_PER_M = Math.min(1.5, MAP_MAX_PX / (2 * MAP_EXTENT));
 
 const ASPHALT = '#262932';
 const LANE = 'rgba(255, 214, 92, 0.22)';

@@ -8,7 +8,7 @@
  * else a park with nothing in the way), so you drive off the street,
  * across the pavement and straight in.
  */
-import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, blockInterior, type City, type Rect } from './city';
+import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, CORE_OFFSET, blockInterior, core, type City, type Rect } from './city';
 import { len2 } from '../core/len';
 
 export interface SprayShop {
@@ -49,7 +49,9 @@ const WALK_INSET = ROAD_WIDTH / 2 + SIDEWALK / 2;
 export function placeSprayShops(city: City): SprayShop[] {
   const shops: SprayShop[] = [];
   const used = new Set<string>();
-  for (const [tx, tz] of SHOP_TARGETS) {
+  for (const [cx, cz] of SHOP_TARGETS) {
+    const tx = core(cx);
+    const tz = core(cz);
     const blocks = [...city.blocks]
       .filter((b) => b.kind !== 'buildings' && !used.has(`${b.bx},${b.bz}`))
       .sort((a, b) => len2(a.bx - tx, a.bz - tz) - len2(b.bx - tx, b.bz - tz));
@@ -87,7 +89,7 @@ export function bayFor(bx: number, bz: number, city: City): SprayShop | null {
     const x = cx + ox * (halfSpan - BAY_HALF_LENGTH - 0.4);
     const z = cz + oz * (halfSpan - BAY_HALF_LENGTH - 0.4);
     const shop: SprayShop = {
-      id: `spray-${bx}-${bz}`,
+      id: `spray-${bx - CORE_OFFSET}-${bz - CORE_OFFSET}`, // core blocks: the same id at any city size
       x,
       z,
       heading: Math.atan2(-ox, -oz),
@@ -125,7 +127,8 @@ export function shopRect(shop: SprayShop, margin = 0): Rect {
  * near STATION_TARGET, on its south side, facing the road.
  */
 export function placeStation(city: City): Station {
-  const [tx, tz] = STATION_TARGET;
+  const tx = core(STATION_TARGET[0]);
+  const tz = core(STATION_TARGET[1]);
   let best = city.blocks[0];
   let bestD = Infinity;
   for (const b of city.blocks) {

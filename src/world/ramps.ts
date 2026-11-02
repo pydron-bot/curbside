@@ -15,7 +15,7 @@
  */
 import { launch, type VehicleState } from '../entities/vehicle';
 import { BLOCK_SIZE, ROAD_WIDTH, type Rect } from './city';
-import { DIR_VEC, MAX_NODE, dirHeading, type Dir } from './roads';
+import { CORE_MAX_NODE, DIR_VEC, dirHeading, type Dir } from './roads';
 import { mulberry32 } from './random';
 import { len2 } from '../core/len';
 
@@ -91,12 +91,12 @@ export function rampAt(ix: number, iz: number, d: Dir, kind: RampKind = 'ramp'):
 /**
  * The city's ramps, the same every game: one a block east of the spawn
  * corner, the rest spread over the inner roads (never the outer ring),
- * well apart.
+ * well apart. In the core city: a bigger city's ring has none yet (W3-A).
  */
 export function placeRamps(seed: number, count = RAMP_COUNT): Ramp[] {
   const rand = mulberry32(seed ^ 0x7a3b);
   const ramps: Ramp[] = [rampAt(0, 0, 1)];
-  const inner = MAX_NODE - 1;
+  const inner = CORE_MAX_NODE - 1;
   for (let tries = 0; ramps.length < count && tries < 4000; tries++) {
     const ix = Math.floor(rand() * (inner * 2 + 1)) - inner;
     const iz = Math.floor(rand() * (inner * 2 + 1)) - inner;
@@ -118,7 +118,7 @@ export function placeRamps(seed: number, count = RAMP_COUNT): Ramp[] {
 export function placeKickers(seed: number, ramps: readonly Ramp[], count = KICKER_COUNT): Ramp[] {
   const rand = mulberry32(seed ^ 0x51c4);
   const out: Ramp[] = [];
-  const inner = MAX_NODE - 1;
+  const inner = CORE_MAX_NODE - 1;
   for (let tries = 0; out.length < count && tries < 4000; tries++) {
     const ix = Math.floor(rand() * (inner * 2 + 1)) - inner;
     const iz = Math.floor(rand() * (inner * 2 + 1)) - inner;

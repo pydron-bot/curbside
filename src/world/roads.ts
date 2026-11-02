@@ -3,7 +3,7 @@
  * the city) is a two-way road, so intersections are integer node coordinates
  * (ix, iz) at world (ix·BLOCK_SIZE, iz·BLOCK_SIZE). Traffic drives on the right.
  */
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, ROAD_WIDTH } from './city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, CORE_BLOCKS, ROAD_WIDTH } from './city';
 
 export type Dir = 0 | 1 | 2 | 3; // N (-Z), E (+X), S (+Z), W (-X)
 export const DIRS: readonly Dir[] = [0, 1, 2, 3];
@@ -16,6 +16,10 @@ export const DIR_VEC: Record<Dir, { x: number; z: number }> = {
 
 /** Furthest node index from the centre (outer ring road). */
 export const MAX_NODE = BLOCKS_PER_SIDE / 2;
+/** The core city's outer ring road (W3-A): MAX_NODE in the shipped city, an inner road in a bigger one. */
+export const CORE_MAX_NODE = CORE_BLOCKS / 2;
+/** Junctions in the city, for numbering them. */
+const NODE_COUNT = (2 * MAX_NODE + 1) ** 2;
 /** Lane centre distance from the road centreline. */
 export const LANE_OFFSET = ROAD_WIDTH / 4;
 /** Where cars aim to be before / after crossing an intersection. */
@@ -46,7 +50,7 @@ export function laneKey(ix: number, iz: number, d: Dir): number {
 export function segmentKey(ax: number, az: number, bx: number, bz: number): number {
   const a = (ax + MAX_NODE) * (2 * MAX_NODE + 1) + az + MAX_NODE;
   const b = (bx + MAX_NODE) * (2 * MAX_NODE + 1) + bz + MAX_NODE;
-  return Math.min(a, b) * 1024 + Math.max(a, b);
+  return Math.min(a, b) * NODE_COUNT + Math.max(a, b);
 }
 
 export function nodeValid(ix: number, iz: number): boolean {

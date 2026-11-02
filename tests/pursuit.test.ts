@@ -14,9 +14,9 @@ import {
   type PursuitTarget,
 } from '../src/systems/pursuit';
 import { createDriver, rerouteAi } from '../src/systems/traffic';
-import { BLOCK_SIZE, generateCity } from '../src/world/city';
+import { BLOCK_SIZE, HALF_EXTENT, generateCity } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
-import { LANE_OFFSET } from '../src/world/roads';
+import { LANE_OFFSET, MAX_NODE } from '../src/world/roads';
 import { random } from './helpers';
 
 const DT = 1 / 60;
@@ -74,7 +74,7 @@ describe('pursuit maths', () => {
     // Goal straight behind: not straight on (that leads away); a turn starts the loop back.
     expect([1, 3]).toContain(routeToward(0, 0, 0, 0, 3 * BLOCK_SIZE));
     // At the north-east corner heading north, the goal north-east: only west is possible... or a U-turn.
-    expect([2, 3]).toContain(routeToward(8, -8, 0, 600, -600));
+    expect([2, 3]).toContain(routeToward(MAX_NODE, -MAX_NODE, 0, HALF_EXTENT + 88, -HALF_EXTENT - 88));
   });
 
   it('knows when it is alongside a car', () => {

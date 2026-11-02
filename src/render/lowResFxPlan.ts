@@ -133,3 +133,18 @@ export function lowResPays(fill: number, share: number, scale: number, wasOn: bo
   if (scale >= 1 || fill <= 0) return false;
   return lowResCost(fill, share, scale) < fill * (wasOn ? 1 : SWITCH_ON);
 }
+
+/** Side of an occluder batch, m: the city's render chunk (world/cityMesh.ts). */
+export const OCCLUDER_CHUNK = 256;
+
+/** Buildings grouped by the 256 m chunk their middle is in (non-empty groups only). */
+export function occluderChunks<T extends { minX: number; minZ: number; maxX: number; maxZ: number }>(buildings: readonly T[]): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const b of buildings) {
+    const key = `${Math.floor((b.minX + b.maxX) / 2 / OCCLUDER_CHUNK)},${Math.floor((b.minZ + b.maxZ) / 2 / OCCLUDER_CHUNK)}`;
+    const list = groups.get(key);
+    if (list) list.push(b);
+    else groups.set(key, [b]);
+  }
+  return [...groups.values()];
+}

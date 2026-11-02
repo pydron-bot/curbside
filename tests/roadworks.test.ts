@@ -6,7 +6,7 @@ import { collideVehicleStatic } from '../src/systems/physics';
 import { createDriver, driveAi } from '../src/systems/traffic';
 import { SAFEHOUSE, placeDocks } from '../src/game/modes/places';
 import { RACES } from '../src/game/modes/races';
-import { BLOCK_SIZE, ROAD_WIDTH, SIDEWALK, generateCity } from '../src/world/city';
+import { BLOCK_SIZE, CORE_BLOCKS, ROAD_WIDTH, SIDEWALK, generateCity } from '../src/world/city';
 import { StaticGrid, circleVsRect } from '../src/world/collision';
 import { dressCity } from '../src/world/dressing';
 import { generatePickups } from '../src/world/pickups';
@@ -180,7 +180,9 @@ describe('vendors and bus stops', () => {
   const blocked = (x: number, z: number, r: number) => solids.near(x, z, r).some((b) => circleVsRect(x, z, r, b) !== null);
 
   it('puts food carts on the busy kerbs downtown, in the parks and on the open plazas', () => {
-    const kerb = street.vendors.filter((v) => v.setting === 'kerb');
+    // (The core city's: a bigger city's ring has no downtown.)
+    const coreHalf = (CORE_BLOCKS * BLOCK_SIZE) / 2;
+    const kerb = street.vendors.filter((v) => v.setting === 'kerb' && Math.abs(v.x) < coreHalf && Math.abs(v.z) < coreHalf);
     expect(kerb.length).toBeGreaterThan(30);
     expect(street.vendors.filter((v) => v.setting === 'park').length).toBeGreaterThan(10);
     expect(street.vendors.filter((v) => v.setting === 'plaza').length).toBeGreaterThan(5);

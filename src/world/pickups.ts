@@ -6,7 +6,7 @@
  */
 import { cornerPoint } from '../systems/crowd';
 import { WEAPONS, type WeaponKind } from '../systems/weapons';
-import { BLOCKS_PER_SIDE } from './city';
+import { BLOCKS_PER_SIDE, CORE_BLOCKS, core, inCoreBlock } from './city';
 import { mulberry32 } from './random';
 
 export type PickupKind = WeaponKind | 'health' | 'armour' | 'ammo';
@@ -45,21 +45,33 @@ export function pickupLabel(kind: PickupKind): string {
   return `+ ${WEAPONS[kind].label}`;
 }
 
+/** `count` crates in the core city; a bigger city's ring gets as many again per core-sized area. */
 export function generatePickups(seed: number, count = 56): Pickup[] {
-  const rand = mulberry32(seed ^ 0x51ed);
   const out: Pickup[] = [];
-  for (let i = 0; i < count; i++) {
-    const bx = Math.floor(rand() * BLOCKS_PER_SIDE);
-    const bz = Math.floor(rand() * BLOCKS_PER_SIDE);
-    const edge = Math.floor(rand() * 4);
-    const a = cornerPoint(bx, bz, edge);
-    const b = cornerPoint(bx, bz, edge + 1);
-    const t = 0.25 + rand() * 0.5;
-    let r = rand();
-    let kind: PickupKind = 'pistol';
-    for (const [k, w] of KINDS) if ((r -= w) <= 0) { kind = k; break; }
-    out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, kind, respawnAt: 0 });
-  }
+  const scatter = (rand: () => number, n: number, block: () => [number, number]) => {
+    for (let i = 0; i < n; i++) {
+      const [bx, bz] = block();
+      const edge = Math.floor(rand() * 4);
+      const a = cornerPoint(bx, bz, edge);
+      const b = cornerPoint(bx, bz, edge + 1);
+      const t = 0.25 + rand() * 0.5;
+      let r = rand();
+      let kind: PickupKind = 'pistol';
+      for (const [k, w] of KINDS) if ((r -= w) <= 0) { kind = k; break; }
+      out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, kind, respawnAt: 0 });
+    }
+  };
+  const rand = mulberry32(seed ^ 0x51ed);
+  scatter(rand, count, () => [core(Math.floor(rand() * CORE_BLOCKS)), core(Math.floor(rand() * CORE_BLOCKS))]);
+  const ringRand = mulberry32(seed ^ 0x51ee);
+  const ring = Math.round((count * (BLOCKS_PER_SIDE ** 2 - CORE_BLOCKS ** 2)) / CORE_BLOCKS ** 2);
+  scatter(ringRand, ring, () => {
+    for (;;) {
+      const bx = Math.floor(ringRand() * BLOCKS_PER_SIDE);
+      const bz = Math.floor(ringRand() * BLOCKS_PER_SIDE);
+      if (!inCoreBlock(bx, bz)) return [bx, bz];
+    }
+  });
   // Something to play with right at the start: a pistol and, round the
   // corner, grenades and armour (clear of the safehouse door at 16.5 m).
   const starters: Array<[PickupKind, number, number]> = [
@@ -68,7 +80,7 @@ export function generatePickups(seed: number, count = 56): Pickup[] {
     ['armour', 22, 0],
   ];
   for (const [kind, dx, dz] of starters) {
-    const at = cornerPoint(8, 8, 0);
+    const at = cornerPoint(core(8), core(8), 0);
     out.push({ x: at.x + dx, z: at.z + dz, kind, respawnAt: 0 });
   }
   return out;

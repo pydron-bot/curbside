@@ -13,7 +13,7 @@
  * grid (kerbs) and the pavement paths, so everything spawns clear of
  * buildings; the docks and the safehouse are passed in.
  */
-import { pavement } from '../game/modes/places';
+import { corePavement } from '../game/modes/places';
 import { BLOCK_SIZE, ROAD_WIDTH, SIDEWALK } from '../world/city';
 import { DIR_VEC, dirHeading, type Dir } from '../world/roads';
 import { NIGHT_PHONE, type MissionDef } from './missions';
@@ -77,18 +77,18 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
   const pike = kerbside(5, 6, 0, 30);
   // Vex waits at the docks yard for whatever you bring her.
   const vex = besideBay(docks);
-  const tuna = pavement(9, 3, 2, 0.5);
-  const tuna2 = pavement(11, 2, 3, 0.5);
-  const collector = pavement(3, 12, 0, 0.5);
-  const parcels = [pavement(10, 9, 0, 0.5), pavement(12, 6, 3, 0.4), pavement(9, 12, 1, 0.6)];
+  const tuna = corePavement(9, 3, 2, 0.5);
+  const tuna2 = corePavement(11, 2, 3, 0.5);
+  const collector = corePavement(3, 12, 0, 0.5);
+  const parcels = [corePavement(10, 9, 0, 0.5), corePavement(12, 6, 3, 0.4), corePavement(9, 12, 1, 0.6)];
   // Chapter 2. Vex's tow truck, impounded on a Glass Heights kerb.
   const shiftTruck = kerb(-1, 0, 2, 26);
   // Pike, down on his luck at a Maple Flats bus stop.
-  const pikeStop = pavement(3, 11, 1, 0.5);
+  const pikeStop = corePavement(3, 11, 1, 0.5);
   // Clamp's trucks out working Neon Mile (they drive off as you arrive).
   const tows = [kerb(2, -4, 1, 20), kerb(6, -1, 1, 20), kerb(5, -5, 3, 20)];
   // Four boxes of files outside four kebab shops round town (two in Cobble Row, Neon Mile, Rustwater).
-  const files = [pavement(6, 2, 2, 0.5), pavement(13, 3, 1, 0.5), pavement(2, 6, 0, 0.5), pavement(11, 11, 3, 0.5)];
+  const files = [corePavement(6, 2, 2, 0.5), corePavement(13, 3, 1, 0.5), corePavement(2, 6, 0, 0.5), corePavement(11, 11, 3, 0.5)];
   // Clamp's limo outside his office in Glass Heights, Clamp beside it, a warden either side.
   const limo = kerb(1, -1, 0, 26);
   const clamp = kerbside(1, -1, 0, 26);
@@ -96,8 +96,8 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
   // KEEP IT LOUD. Cobble Row, the street the player wired: a crossing in the middle of it.
   const cobble = { x: -4 * BLOCK_SIZE, z: -4 * BLOCK_SIZE };
   // Lull's two wardens writing Lionel up in Glass Heights; Lionel hiding round the corner.
-  const lullWardens = [pavement(9, 6, 0, 0.35), pavement(9, 6, 0, 0.7)];
-  const lionel = pavement(9, 6, 1, 0.55);
+  const lullWardens = [corePavement(9, 6, 0, 0.35), corePavement(9, 6, 0, 0.7)];
+  const lionel = corePavement(9, 6, 1, 0.55);
   // Where Lionel plays on Neon Mile.
   const mile = kerb(5, -4, 0, 26);
   const spareLionel = [{ down: 'lionel', reason: 'NOT LIONEL! HE WAS ON YOUR SIDE' }];

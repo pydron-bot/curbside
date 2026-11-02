@@ -3,6 +3,7 @@ import { PLAYER_ON_FOOT, createPedState, stepPedestrian } from '../src/entities/
 import { SEDAN, createVehicleState, speed, stepVehicle } from '../src/entities/vehicle';
 import { collidePedStatic, collideVehicleStatic, collideVehicles } from '../src/systems/physics';
 import {
+  BLOCKS_PER_SIDE,
   BLOCK_SIZE,
   HALF_EXTENT,
   ROAD_WIDTH,
@@ -25,7 +26,7 @@ describe('city generator', () => {
   });
 
   it('fills most blocks with buildings and has some parks', () => {
-    expect(city.blocks).toHaveLength(256);
+    expect(city.blocks).toHaveLength(BLOCKS_PER_SIDE ** 2);
     expect(city.buildings.length).toBeGreaterThan(400);
     expect(city.trees.length).toBeGreaterThan(20);
   });

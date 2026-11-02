@@ -21,7 +21,7 @@
  * alone), nor on top of anything placed before it.
  */
 import { planBuildings, type BuildingPlan } from './buildingPlans';
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, blockInterior, type Building, type City, type Rect } from './city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, blockInterior, inCoreBlock, type Block, type Building, type City, type Rect } from './city';
 import type { District } from './districts';
 import { placeFrontages } from './frontages';
 import { mulberry32 } from './random';
@@ -331,8 +331,25 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
   const vendors = placeVendors(city, mulberry32((city.seed * 2654435761) ^ 0xf00d), placer);
   placeFrontages(city, opts.plans ?? planBuildings(city), mulberry32((city.seed * 2654435761) ^ 0xcafe), placer);
 
-  const rand = mulberry32((city.seed * 2654435761) ^ 0x7e11);
-  for (const b of city.blocks) {
+  // The core city's kerbs and alleys, then a bigger city's ring from a stream
+  // of its own, so the core's furniture stays put at any size (W3-A).
+  const coreRand = mulberry32((city.seed * 2654435761) ^ 0x7e11);
+  const ringRand = mulberry32((city.seed * 2654435761) ^ 0x7e12);
+  for (const ring of [false, true]) {
+    const rand = ring ? ringRand : coreRand;
+    const blocks = city.blocks.filter((b) => inCoreBlock(b.bx, b.bz) !== ring);
+    dressBlocks(city, blocks, rand, clear, put);
+    placeDumpsters(city.buildings.filter((b) => inCoreBlock(...blockOf(b)) !== ring), rand, clear, put);
+  }
+  return { props, solids, knockables, roadworks, vendors, busStops };
+}
+
+/** Block (bx, bz) a building stands in. */
+const blockOf = (b: Rect): [number, number] => [Math.floor(((b.minX + b.maxX) / 2 + HALF_EXTENT) / BLOCK_SIZE), Math.floor(((b.minZ + b.maxZ) / 2 + HALF_EXTENT) / BLOCK_SIZE)];
+
+/** Kerbside furniture round each block, bollards round plazas, trees in parks. */
+function dressBlocks(city: City, blocks: readonly Block[], rand: () => number, clear: (x: number, z: number, r: number) => boolean, put: Put): void {
+  for (const b of blocks) {
     for (let side = 0; side < 4; side++) {
       const s = blockSide(b, side);
       const { at, toRoad } = s;
@@ -365,8 +382,6 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
     }
     if (b.kind === 'park') plantTrees(city, b.bx, b.bz, b.district, put);
   }
-  placeDumpsters(city, rand, clear, put);
-  return { props, solids, knockables, roadworks, vendors, busStops };
 }
 
 /** A rect in a prop's own frame (x across, z along its facing), turned by a whole number of quarters into the world. */
@@ -414,11 +429,10 @@ function hash2(x: number, z: number): number {
  * along a shared stretch, about a third of those gaps get one against a
  * wall a few metres in from the pavement, long side along the alley.
  */
-function placeDumpsters(city: City, rand: () => number, clear: (x: number, z: number, r: number) => boolean, put: Put): void {
+function placeDumpsters(buildings: readonly Building[], rand: () => number, clear: (x: number, z: number, r: number) => boolean, put: Put): void {
   const byBlock = new Map<number, Building[]>();
-  for (const b of city.buildings) {
-    const bx = Math.floor(((b.minX + b.maxX) / 2 + HALF_EXTENT) / BLOCK_SIZE);
-    const bz = Math.floor(((b.minZ + b.maxZ) / 2 + HALF_EXTENT) / BLOCK_SIZE);
+  for (const b of buildings) {
+    const [bx, bz] = blockOf(b);
     const key = bx * BLOCKS_PER_SIDE + bz;
     let list = byBlock.get(key);
     if (!list) byBlock.set(key, (list = []));

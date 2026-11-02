@@ -11,8 +11,10 @@
 
 import { defaultCred, sanitiseCred, type CredSave } from './cred';
 import { SIDE_MODES_UNLOCK } from './opening';
+import { BLOCKS_PER_SIDE, CORE_BLOCKS } from '../world/city';
 
-export const SAVE_KEY = 'curbside.save';
+/** A trial of a bigger city (`?city=24`, W3-A) saves apart: its packages and pickups aren't the shipped city's. */
+export const SAVE_KEY = BLOCKS_PER_SIDE === CORE_BLOCKS ? 'curbside.save' : `curbside.save.city${BLOCKS_PER_SIDE}`;
 export const SAVE_VERSION = 1;
 /** Where the free-roam best score lived before the save existed. */
 const LEGACY_BEST_KEY = 'curbside.best';

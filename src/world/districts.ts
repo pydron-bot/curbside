@@ -6,7 +6,7 @@
  * yards and pastel suburbs — so the map has landmarks and you can tell where
  * you are from a glance at the roofs and pavements.
  */
-import { BLOCKS_PER_SIDE, BLOCK_SIZE } from './city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, CORE_BLOCKS, CORE_OFFSET } from './city';
 import { len2 } from '../core/len';
 
 export type District = 'downtown' | 'oldtown' | 'arts' | 'industrial' | 'residential';
@@ -149,14 +149,19 @@ const DOWNTOWN_RADIUS = 3.1;
  * with gently wavy borders so they don't read as a ruled grid.
  */
 export function districtOf(bx: number, bz: number): District {
-  // (Read at call time: city.ts imports this module, so its constants aren't ready at load.)
-  const centre = (BLOCKS_PER_SIDE - 1) / 2;
-  const dx = bx - centre;
-  const dz = bz - centre;
+  // In core blocks, so the core keeps its districts at any city size; a bigger
+  // city's ring carries the quarters on outward until it gets districts of its
+  // own (W3-A). (Read at call time: city.ts imports this module, so its
+  // constants aren't ready at load.)
+  const cx = bx - CORE_OFFSET;
+  const cz = bz - CORE_OFFSET;
+  const centre = (CORE_BLOCKS - 1) / 2;
+  const dx = cx - centre;
+  const dz = cz - centre;
   if (len2(dx, dz) < DOWNTOWN_RADIUS) return 'downtown';
   // Wobble the quarter borders by up to a block, depending on how far out you are.
-  const wx = dx + Math.sin(bz * 0.9 + 1.3) * 0.9;
-  const wz = dz + Math.sin(bx * 0.8 + 0.4) * 0.9;
+  const wx = dx + Math.sin(cz * 0.9 + 1.3) * 0.9;
+  const wz = dz + Math.sin(cx * 0.8 + 0.4) * 0.9;
   if (wz < 0) return wx < 0 ? 'oldtown' : 'arts';
   return wx < 0 ? 'residential' : 'industrial';
 }

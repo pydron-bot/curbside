@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ROUTE_AHEAD, ROUTE_EVERY, RouteAhead, onRoute, routeAheadSpot } from '../src/systems/routeAhead';
-import type { Rect } from '../src/world/city';
+import { HALF_EXTENT, type Rect } from '../src/world/city';
 import { random } from './helpers';
 
 /** The phone's view round (x, z) at speed: about 90 × 40 m. */
@@ -51,7 +51,8 @@ describe('route-ahead placement', () => {
 
   it('nothing off the edge of the city', () => {
     // At the north edge driving out of town: no lane ahead to put anything on.
-    expect(routeAheadSpot(2, -500, 0, -20, viewAt(2, -500), random(5), free)).toBeNull();
+    const edge = -HALF_EXTENT + 12;
+    expect(routeAheadSpot(2, edge, 0, -20, viewAt(2, edge), random(5), free)).toBeNull();
   });
 
   it('the throttle: only while wanted, at most once per ROUTE_EVERY seconds, fresh after a reset', () => {

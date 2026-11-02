@@ -6,6 +6,12 @@
  * block edges (multiples of BLOCK_SIZE from the origin), so (0,0) is an
  * intersection. Each block is a road band, a sidewalk ring, then a buildable
  * interior that becomes buildings, a park or a plaza.
+ *
+ * Size (W3-A): the shipped city is the 16 × 16 core. A bigger one (`?city=24`
+ * in the URL, CURBSIDE_CITY=24 under Node) adds a ring of blocks round it and
+ * leaves the core exactly as it was, block for block: the core is generated
+ * first from the same stream, the ring after from its own. Hand-placed spots
+ * are written in core blocks (`core()`) so they stay put.
  */
 import { buildingHeight, districtOf, type District } from './districts';
 import { mulberry32 } from './random';
@@ -14,7 +20,31 @@ import { len2 } from '../core/len';
 export const BLOCK_SIZE = 64;
 export const ROAD_WIDTH = 16;
 export const SIDEWALK = 3;
-export const BLOCKS_PER_SIDE = 16;
+/** Today's city, kept in the middle of any bigger one. */
+export const CORE_BLOCKS = 16;
+/** Sizes the city can be built at: the core plus whole 256 m chunks (4 blocks) of ring. */
+export const CITY_SIZES: readonly number[] = [16, 24, 32];
+export const BLOCKS_PER_SIDE = chosenSize();
+/** Ring blocks on each side of the core (0 for the shipped city). */
+export const CORE_OFFSET = (BLOCKS_PER_SIDE - CORE_BLOCKS) / 2;
+/** Block index of core block `b`: hand-placed spots are written in core blocks. */
+export const core = (b: number): number => b + CORE_OFFSET;
+/** Is block (bx, bz) part of the core? */
+export const inCoreBlock = (bx: number, bz: number): boolean =>
+  bx >= CORE_OFFSET && bz >= CORE_OFFSET && bx < CORE_OFFSET + CORE_BLOCKS && bz < CORE_OFFSET + CORE_BLOCKS;
+
+/** The size asked for: `?city=N` in the page's URL, or CURBSIDE_CITY under Node (tests, tools); else the core. */
+function chosenSize(): number {
+  let asked: string | null | undefined;
+  try {
+    asked = new URLSearchParams(globalThis.location?.search ?? '').get('city');
+  } catch {
+    asked = null;
+  }
+  asked ??= (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.CURBSIDE_CITY;
+  const n = Number(asked);
+  return CITY_SIZES.includes(n) ? n : CORE_BLOCKS;
+}
 /** Half the city's extent; roads at ±HALF_EXTENT are the outer ring road. */
 export const HALF_EXTENT = (BLOCKS_PER_SIDE * BLOCK_SIZE) / 2;
 /** Boundary walls sit just outside the outer ring road. */
@@ -86,28 +116,35 @@ export function blockInterior(bx: number, bz: number): Rect {
 }
 
 export function generateCity(seed = 1337): City {
-  const rand = mulberry32(seed);
   const blocks: Block[] = [];
   const buildings: Building[] = [];
   const trees: Tree[] = [];
+  const addBlock = (bx: number, bz: number, rand: () => number) => {
+    const interior = blockInterior(bx, bz);
+    const district = districtOf(bx, bz);
 
-  for (let bx = 0; bx < BLOCKS_PER_SIDE; bx++) {
-    for (let bz = 0; bz < BLOCKS_PER_SIDE; bz++) {
-      const interior = blockInterior(bx, bz);
-      const district = districtOf(bx, bz);
+    const roll = rand();
+    const kind: BlockKind = roll < 0.1 ? 'park' : roll < 0.16 ? 'plaza' : 'buildings';
+    blocks.push({ bx, bz, kind, district, interior });
 
-      const roll = rand();
-      const kind: BlockKind = roll < 0.1 ? 'park' : roll < 0.16 ? 'plaza' : 'buildings';
-      blocks.push({ bx, bz, kind, district, interior });
-
-      if (kind === 'buildings') {
-        for (const lot of subdivide(interior, rand, 0)) {
-          buildings.push(makeBuilding(lot, district, rand));
-        }
-      } else if (kind === 'park') {
-        plantTrees(interior, rand, trees);
+    if (kind === 'buildings') {
+      for (const lot of subdivide(interior, rand, 0)) {
+        buildings.push(makeBuilding(lot, district, rand));
       }
+    } else if (kind === 'park') {
+      plantTrees(interior, rand, trees);
     }
+  };
+
+  // The core first, from the seed's own stream (so it's the same at any size),
+  // then the ring from its own.
+  const rand = mulberry32(seed);
+  for (let bx = 0; bx < CORE_BLOCKS; bx++) {
+    for (let bz = 0; bz < CORE_BLOCKS; bz++) addBlock(core(bx), core(bz), rand);
+  }
+  const ringRand = mulberry32(seed ^ 0x7e1a9);
+  for (let bx = 0; bx < BLOCKS_PER_SIDE; bx++) {
+    for (let bz = 0; bz < BLOCKS_PER_SIDE; bz++) if (!inCoreBlock(bx, bz)) addBlock(bx, bz, ringRand);
   }
 
   const obstacles: Rect[] = [

@@ -17,6 +17,7 @@ import {
   validCourse,
 } from '../src/game/modes/races';
 import { generateCity } from '../src/world/city';
+import { MAX_NODE } from '../src/world/roads';
 
 const city = generateCity(1337);
 
@@ -30,7 +31,8 @@ describe('races: courses', () => {
   it('rejects diagonal legs, standing still and courses off the map', () => {
     expect(validCourse({ id: 'x', name: '', nodes: [[0, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5], [1, 6], [1, 7]] })).toBe(false);
     expect(validCourse({ id: 'x', name: '', nodes: [[0, 0], [0, 0], [0, 1], [0, 2], [0, 3], [0, 4], [0, 5], [0, 6]] })).toBe(false);
-    expect(validCourse({ id: 'x', name: '', nodes: [[0, 0], [0, 9], [1, 9], [2, 9], [3, 9], [4, 9], [5, 9], [6, 9]] })).toBe(false);
+    const off = MAX_NODE + 1;
+    expect(validCourse({ id: 'x', name: '', nodes: [[0, 0], [0, off], [1, off], [2, off], [3, off], [4, off], [5, off], [6, off]] })).toBe(false);
   });
 
   it('length, corners and a developer time to race against', () => {

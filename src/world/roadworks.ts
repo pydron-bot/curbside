@@ -14,11 +14,12 @@
  * the toilet are solid. Never on a race leg (`quiet`), near a reserved spot
  * (mission cars at the kerb, ramps) or on the outer ring road.
  */
-import type { City, Rect } from './city';
+import { BLOCKS_PER_SIDE, CORE_BLOCKS, CORE_OFFSET, inCoreBlock, type City, type Rect } from './city';
 import { dirHeading, segmentKey, type Dir } from './roads';
 import { blockSide, onRing, type BlockSide, type Placer } from './kerbs';
 import type { StreetPropKind } from './streetProps';
 import { len2 } from '../core/len';
+import { mulberry32 } from './random';
 
 export interface Roadworks {
   /** The lane whose kerb side is closed: travelling `dir` toward junction (ix, iz) (roads.ts). */
@@ -63,16 +64,40 @@ const LAYOUTS: ReadonlyArray<readonly number[]> = [
   [4, 2, 3],
 ];
 
+/** Is this side on the core city's outer ring road (the shipped city's edge)? */
+function onCoreRing(s: BlockSide): boolean {
+  const b = s.block;
+  const lo = CORE_OFFSET;
+  const hi = CORE_OFFSET + CORE_BLOCKS - 1;
+  return (s.side === 0 && b.bz === lo) || (s.side === 2 && b.bz === hi) || (s.side === 3 && b.bx === lo) || (s.side === 1 && b.bx === hi);
+}
+
+/**
+ * ROADWORKS_COUNT sites in the core city, from `rand`; a bigger city's ring
+ * gets as many again per core-sized area from a stream of its own, so the
+ * core's sites stay put.
+ */
 export function placeRoadworks(city: City, rand: () => number, placer: Placer, quiet: ReadonlySet<number>): Roadworks[] {
-  const sides: BlockSide[] = [];
+  const coreSides: BlockSide[] = [];
+  const ringSides: BlockSide[] = [];
   for (const b of city.blocks) {
+    const inCore = inCoreBlock(b.bx, b.bz);
     for (let side = 0; side < 4; side++) {
       const s = blockSide(b, side);
-      if (!onRing(s)) sides.push(s);
+      if (inCore) {
+        if (!onCoreRing(s)) coreSides.push(s);
+      } else if (!onRing(s)) ringSides.push(s);
     }
   }
   const out: Roadworks[] = [];
-  for (let tries = 0; tries < 600 && out.length < ROADWORKS_COUNT; tries++) {
+  placeSites(coreSides, ROADWORKS_COUNT, rand, placer, quiet, out);
+  const ring = Math.round((ROADWORKS_COUNT * (BLOCKS_PER_SIDE ** 2 - CORE_BLOCKS ** 2)) / CORE_BLOCKS ** 2);
+  if (ring > 0) placeSites(ringSides, out.length + ring, mulberry32(Math.floor(rand() * 2 ** 32) ^ 0x7e1a9), placer, quiet, out);
+  return out;
+}
+
+function placeSites(sides: readonly BlockSide[], upTo: number, rand: () => number, placer: Placer, quiet: ReadonlySet<number>, out: Roadworks[]): void {
+  for (let tries = 0; tries < 600 && out.length < upTo; tries++) {
     const s = sides[Math.floor(rand() * sides.length)];
     // The work area is barrels every 3 m: 9, 12 or 15 m of them.
     const length = 9 + Math.floor(rand() * 3) * 3;
@@ -116,5 +141,4 @@ export function placeRoadworks(city: City, rand: () => number, placer: Placer, q
       area: { minX: Math.min(c0.x, c1.x), minZ: Math.min(c0.z, c1.z), maxX: Math.max(c0.x, c1.x), maxZ: Math.max(c0.z, c1.z) },
     });
   }
-  return out;
 }
