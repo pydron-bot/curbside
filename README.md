@@ -665,7 +665,8 @@ heat.shops / heat.station                 // landmarks (world/landmarks.ts)
 ## City life
 
 The city getting on with its day around the player, none of it the
-player's heat or score: the knocked out stay down until an ambulance takes
+player's heat or score unless they join in (a mugger's bag, the
+incidents' cash, awards and calls to the police): the knocked out stay down until an ambulance takes
 them to the hospital, cars stand parked at the kerbs and in the car parks,
 and an armed person knocked out drops their gun for you to pick up. One
 director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
@@ -955,6 +956,105 @@ life.races.begin() · life.accidents.begin() · .towables(out) · life.doublePar
 // Street events: chase, suspectRuns, arrest, suspectDown, race, raceWon, accident, fight, doublePark.
 ```
 
+**Incidents** (V2-13; rules pure and tested in `systems/incidents.ts`,
+`tests/incidents.test.ts`). Six more things that happen whether you're
+there or not, each with an obvious way to join in or wreck it. One of
+each at a time, never back to back (each clock's wait is longer than the
+incident lasts), only at their hours (the game clock: 30 s a game hour),
+within the 24-person `PEOPLE_CAP`. Each scene's holds are its `HOLD`
+constant at the top of the file (`LOUD` for the van, the kebab shop, the
+funeral and the conga; `IN_PLAY` for the hydrant and the film shoot).
+
+- **Cash-in-transit van** (`scenes/cashRun.ts`, 08:00–18:00, every
+  220–360 s): an armoured van (the ordinary `van` in `#4a5560`) brought
+  into traffic does three kerb stops mid-block, hazards on: a guard in a
+  dark uniform and pale helmet steps out of the back (`cashRun`: its back
+  doors), carries the box (`package`) to the shop door, waits inside 3 s
+  and carries it back. **Wreck it:** knock the guard down while he's out,
+  ram the van under 45% health (or wreck it, set it alight) or drive off
+  in it, and cash spills (`cashSpill`): 5 bundles from the van, 2 from the
+  box, the `cash` model in a pulsing green ring for 40 s, $30–70 each,
+  picked up on foot (1.3 m) or driving over (2.6 m) through
+  `deps.reward`. With the player within 35 m: **CASH GRAB** (300,
+  `deps.award`), the guard and his mate from the cab come at you with
+  their fists for 18 s, and it's called in (four `assault` calls through
+  `deps.callIn`: one star). The van's left in the road, towable.
+- **Kebab chucking-out time** (`scenes/kebab.ts`, 00:45–03:30 in the Neon
+  Mile and Cobble Row, every 150–260 s): a neon shopfront 18–90 m off
+  spills out over 75–105 s (`kebabPhase`: spill, peak, drain), up to 8 at
+  once out of the door (`kebab`: a hand bell rung twice), swaying about
+  the pavement out front, lurching sideways and singing (a cheer); 40%
+  queue at the kerb for a taxi (`kerbOf`: the kerb straight out from the
+  shop), and a taxi (one in traffic within 130 m, else brought in) pulls
+  up every 10–18 s for the front one or two. A fifth of the way in two
+  have words face to face, and 45% of the time it comes to blows
+  (`Fights.start`: the shove, the fists, a ring watching). Then they drift
+  home. **Join in:** they're drunk, half of them `fighter`s: shove one and
+  it's on (provoked, they're let go swinging: `people.ts` letGo). The
+  shop's strip light spills warm onto the pavement at night.
+- **Funeral procession** (`scenes/funeral.ts`, 09:00–16:00, every
+  240–400 s): a black `limo` for the hearse and two or three black sedans
+  at 5.5 m/s, 8.5 m apart; the hearse drives as calm traffic (lights,
+  turns) and waits for anyone dropping back, the family's cars follow its
+  exact line (`Trail`, `backOf`, `followSpeed`); calm traffic doesn't
+  overtake, so it queues behind. A bell tolls every 9 s near it
+  (`funeral`). **Wreck it:** cut through the line between two of its
+  cars (`cutsThrough`), hit one, or take one: they stop, two mourners in
+  black get out of each car and come at you for 16 s (**NO RESPECT**,
+  250), then walk back, get in and carry on (without a car you took).
+- **Burst hydrant** (`scenes/hydrants.ts`, any time a hydrant is knocked
+  over by any car: the `crash` event's `prop`, every 45–60 s at most):
+  it geysers for 40 s (`geyserStrength`: build, full, easing off over
+  the last 8; a `hydrant` gush every 3.5 s), a column of water drops and
+  mist (`render/incidentsLook.ts`) over a wet sheen. The spray (up to
+  2.5 m) bowls over anyone in it, at most once in 3 s each (the player
+  too, on foot), throws scooter riders off (`deps.throwRider`, as a hard
+  crash does) and shoves cars aside. Up to 8 gather to gawp 5.5 m back,
+  pointing and cheering; by day when it's dry three kids in bright tops
+  play round the edge, soaked and whooping. Other hydrants knocked in the
+  meantime spray as before (`knockFx`, 14 s).
+- **Hen or stag conga** (`scenes/conga.ts`, 20:00–02:30 where the
+  district's `NIGHTLIFE` is at least 0.3, every 180–300 s): six to nine in
+  matching tops (hens in pink, stags in green: `PARTY_OUTFITS`) put down
+  at a pavement corner out of view 28–85 m off, conga round the block a
+  pace apart, the leader walking the corners and the rest on its line, a
+  lurch to the side every fourth beat and the chant every 3.4 s
+  (`conga`: da-da-da, da-da-da-HEY). **Join in:** a fight within 24 m
+  and a third of the line piles in (`setOn` the fighters), rejoining the
+  tail after; a blast, a hard crash or a knockout of yours within 45 m and
+  the whole line stops and cheers. Drive through them and those flattened
+  drop out. 70–110 s, then they go on their way.
+- **Film shoot** (`scenes/filmShoot.ts`, 08:00–23:00 in Glass Heights,
+  every 240–400 s): a set roped off at a kerb out of view 30–110 m off
+  (the parking strip and the pavement, `SET_HALF` 18 × 5.2 m, so the lane
+  stays open; 14 `traffic_cone`s along its ends and road side, a hard
+  white wash of film light): the star car (a red `sports`), the picture
+  car (a grey sedan), a director (red beret), a clapper, and two extras
+  as police in the force's colours with a tell (a passer-by's build, no
+  kit, the shirt a costume-shop blue, the cap the wrong blue). Passers-by
+  watch from either end. Each 26 s take: marks, ACTION (`action`: the
+  clapperboard and a brass stab), the extras run at the picture car, the
+  staged blast at 14 s (`pyro`: Effects' explosion, nothing hurt, the
+  car left smoking), the crowd cheers, CUT, re-dressed. **Make it real:**
+  steal either car, knock someone down on the set, fire a gun within
+  30 m or set off a real blast within 22 m, or drive onto it fast or into
+  its cars: **THAT'S A WRAP** (400), the extras, crew and crowd scatter,
+  and the real police get the call (one star). 100–140 s.
+
+All six are in the TEST menu's scenes (`CASH-IN-TRANSIT VAN`, `KEBAB
+CHUCKING-OUT`, `FUNERAL PROCESSION`, `BURST HYDRANT`, `CONGA LINE`, `FILM
+SHOOT`: each scene's `force()`, any hour, any district) and the title's
+highlights (`CASH RUN`, `CHUCKING-OUT TIME`, `FUNERAL`, `BURST MAIN`,
+`CONGA`, `ON SET`; `Highlight.hours` keeps the night's to the title's
+night and the day's to its day).
+
+```ts
+// CityLifeDeps (main.ts wires them): award?(kind) → score.award ('cashGrab' | 'wrapped' | 'noRespect'),
+//   throwRider?(v) → main's throwRider, knockHydrant?(x, z, range) → knockables.nearest + knock + knockProp.
+// Events: crash.prop (the knocked prop's kind); street: cashRun, cashSpill, kebab, funeral, hydrant, conga, action, pyro.
+// Knockables.nearest(kind, x, z, range) · .knock(item); people.ts streetBody(life, onScreen?) · letGo(life, c).
+```
+
 **The director.** `main.ts` creates one and calls `step(dt)` every sim step
 (after combat), `maintain(seed)` with population upkeep, `reset()` with a
 fresh run; a car with a `scene` is driven by `v.scene.drive(v, obstacles,
@@ -1045,7 +1145,11 @@ most 24. Each scene's optional `describe(out)` labels what it holds
 (parcel)`, `BUS → stop`, `BUS STOP 2`, `QUEUE 3`, `ICE CREAM (open 36s)`,
 `VENDOR`, `BUSKER 80s`, `WATCHING`, `FIGHTER`, `ONLOOKER`, `MUGGER
 (running)`, `VICTIM`, `BAG 31s`, `WITNESS (calling 2.1s)`, `DOG (chasing)`,
-`SHELTERING`, `HANGING OUT`), the missions theirs (`MISSION: tag`, `VEX`,
+`SHELTERING`, `HANGING OUT`, `CASH VAN (stop 1/3)`, `GUARD (cash box)`,
+`CASH $45`, `KEBAB (peak 40s)`, `DRUNK (arguing)`, `TAXI QUEUE 2`,
+`HEARSE (procession)`, `MOURNER (after you 9s)`, `BURST HYDRANT 30s`,
+`GAWPING`, `PLAYING IN IT`, `HEN DO (conga)`, `FILM SET ACTION · take 2 ·
+80s`, `EXTRA (fake cop)`, `STAR CAR`), the missions theirs (`MISSION: tag`, `VEX`,
 `MISSION CAR: tag`, `FARE`), then `describeWorld` the rest by their flags
 (the player's police `COP (pursuit)` / `POLICE (roadblock)`, gangs and turf
 crews in their colours `VIPERS (fighting)`, `INJURED`, `ON PHONE`, `KO`,
@@ -1114,6 +1218,17 @@ chased by the police plus a truck +9, an accident plus a truck +4 (±3
 frame noise). The same places unforced: 39.4–44.9 calls on average before,
 44.3–57.0 after (most of it which traffic models are in view); smoke test
 56 / 56 on the iPhone sizes, 68 on desktop.
+Incidents: no new mesh, program or batch (the van, taxi, limo, sedans and
+sports car are traffic models; everyone wears a passer-by's body already
+drawn in view, `streetBody(life, true)`; water, cash, cones and lights in
+Effects' pools, the glow batch and the `street` / `things` families).
+iPhone profile, the seven places after 20 s, nothing forced: 39.5 (47)
+calls before and after at 13:00, 42.1 (53) → 42.8 (53) at 02:00 with the
+kebab shop open at two of them (the rest is the traffic the shifted
+random stream brings). Each forced and watched, the drop when its people
+and cars are hidden in the same frame: kebab 0, cash van 0, conga 0,
+hydrant +2 (the passers-by who stopped to gawp), funeral +2 (the limo),
+film shoot +2.
 
 ## Progression
 
