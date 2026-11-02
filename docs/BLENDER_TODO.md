@@ -271,6 +271,9 @@ now against this contract:
 
 ## 10. Street props, round 2 (`props.glb`, requested 2026-11-01)
 
+**Done 2026-11-02** (local Blender 5.2.3, `npm run assets`): all twenty roots below are in
+props.glb within their budgets (`check_assets.py` now enforces them); notes at the end of this file.
+
 Road works, food carts, bus shelters and more kerbside furniture are in the
 game (README → *World*), drawn as box stand-ins (`src/render/propStandIns.ts`,
 which is also the best picture of each: sizes, colours, material names)
@@ -679,3 +682,23 @@ future Blender pass. The code works round each one for now:
   some shape (the door, hood, bumper and wheel are fine).
 - **Bikes:** Pike's coat still passes through the seat when he rides, as
   noted in §9.
+
+### §10 notes (2026-11-02, street props round 2)
+
+- **All twenty roots are in props.glb**, named as the table; the stand-ins no longer draw.
+  Triangles: barrel 58, work barrier 46, roadwork sign 40, steel plate 10, trench 22,
+  skip 56, mini digger 100, toilet 40, hot-dog cart 98, coffee cart 108, fruit stand 78,
+  bus shelter 120, bike rack 80, planter 26, meter 40, recycling bin 40, café table 68,
+  vending machine 40, ATM 40, shopping cart 32. `check_assets.py` checks each against
+  its §10 budget.
+- **Low-tri helpers** in `blender/lib/common.py`: `open_box` (a box without its bottom,
+  10 tris), `prism` (a banded drum, no bottom), `fan` (an umbrella's top in segments) and
+  `strips` (a striped canopy, one-sided). Umbrellas and canopies are top faces only:
+  the camera never sees under them.
+- **Café umbrellas:** the two `paint` quarters take the instance tint, and café tables
+  were placed with none (white), so `world/frontages.ts` now gives them a fixed red
+  (`CAFE_RED`). Pass another colour there to vary them.
+- **Bus shelter:** the solid parts stay inside the game's walls (back y 0.33–0.45,
+  ends x ±1.6–1.72); the flag pole is at (+1.95, game +0.32) as asked.
+- **Not made:** scaffolding, a water barrier, a work van (the optional extras).
+

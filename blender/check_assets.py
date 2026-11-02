@@ -29,6 +29,13 @@ TWO_WHEELERS = {"scooter": 600, "cop_bike": 600}
 BUDGET = {"pigeon": 40, "character": 600, "vehicle": 1500, "vehicle_heli": 1500, "prop": 300, "debris": 80}
 # Large props that are allowed more than the small-prop budget.
 PROP_BUDGET_OVERRIDE = {"rocket": 60, "frenzy_token": 120, "spray_booth": 300, "streetlamp": 300, "traffic_light": 300, "water_tank": 300, "palm": 300, "ramp": 300}
+# Street props, round 2 (docs/BLENDER_TODO.md §10): one shared draw for the street family, so tight.
+PROP_BUDGET_OVERRIDE.update({
+    "traffic_barrel": 60, "work_barrier": 60, "roadwork_sign": 60, "steel_plate": 12, "work_trench": 40,
+    "skip": 80, "mini_digger": 150, "portable_toilet": 40, "food_cart_hotdog": 120, "food_cart_coffee": 120,
+    "fruit_stand": 120, "bus_shelter": 150, "bike_rack": 80, "planter": 50, "parking_meter": 40,
+    "recycling_bin": 40, "cafe_table": 80, "vending_machine": 40, "atm": 40, "shopping_cart": 40,
+})
 
 problems = []
 

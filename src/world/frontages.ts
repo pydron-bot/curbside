@@ -18,6 +18,8 @@ const ATM: Readonly<Record<District, number>> = { downtown: 0.08, oldtown: 0.03,
 const VENDING_COLOURS = ['#c82a2a', '#2a5cc8', '#2f9a4a', '#e07a1a'];
 /** How far out from the wall each stands (its middle), and its half-depth, m. */
 const OUT = { cafe_table: [0.7, 0.4], vending_machine: [0.45, 0.4], atm: [0.35, 0.3] } as const;
+/** Café umbrellas' `paint` quarters: one fixed red for now (the other two quarters are cream). */
+const CAFE_RED = '#b8322e';
 
 export function placeFrontages(city: City, plans: readonly BuildingPlan[], rand: () => number, placer: Placer): void {
   city.buildings.forEach((b, i) => {
@@ -38,9 +40,9 @@ export function placeFrontages(city: City, plans: readonly BuildingPlan[], rand:
       };
       if (cafe) {
         if (width >= 5) {
-          at('cafe_table', mid - 1.1);
-          at('cafe_table', mid + 1.1);
-        } else at('cafe_table', mid);
+          at('cafe_table', mid - 1.1, CAFE_RED);
+          at('cafe_table', mid + 1.1, CAFE_RED);
+        } else at('cafe_table', mid, CAFE_RED);
       }
       if (vending && width >= 3) at('vending_machine', shop.from + 0.7, tint);
       if (atm && width >= 3) at('atm', shop.to - 0.6);

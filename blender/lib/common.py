@@ -207,3 +207,110 @@ def render_thumbnail(path, target_height=1.8):
     scene.render.film_transparent = True
     scene.render.filepath = str(path)
     bpy.ops.render.render(write_still=True)
+
+
+# ---------------------------------------------------------------- low-tri parts (street props, round 2)
+
+def _mesh_object(name, bm, mats):
+    mesh = bpy.data.meshes.new(name)
+    bm.normal_update()
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    for m in mats:
+        obj.data.materials.append(m)
+    shade_flat(obj)
+    return obj
+
+
+def open_box(name, size, location, mat):
+    """A box without its bottom face (nobody sees under a prop): 10 tris instead of 12."""
+    import bmesh
+
+    obj = box(name, size, location, mat)
+    bm = bmesh.new()
+    bm.from_mesh(obj.data)
+    bm.normal_update()
+    bmesh.ops.delete(bm, geom=[f for f in bm.faces if f.normal.z < -0.9], context="FACES")
+    bm.to_mesh(obj.data)
+    bm.free()
+    return obj
+
+
+def prism(name, rings, band_mats, cap_mat, verts=6, centre=(0.0, 0.0), spin=0.0):
+    """
+    An upright drum in bands, no bottom: rings [(z, radius), ...] from the bottom up;
+    band_mats[i] colours the sides between ring i and i + 1, cap_mat the top.
+    2 * verts tris per band, verts - 2 for the cap.
+    """
+    import bmesh
+
+    mats = []
+    for m in [*band_mats, cap_mat]:
+        if m not in mats:
+            mats.append(m)
+    bm = bmesh.new()
+    loops = []
+    for z, r in rings:
+        loops.append([bm.verts.new((centre[0] + r * math.cos(spin + 2 * math.pi * i / verts),
+                                    centre[1] + r * math.sin(spin + 2 * math.pi * i / verts), z)) for i in range(verts)])
+    for b, m in enumerate(band_mats):
+        lo, hi = loops[b], loops[b + 1]
+        for i in range(verts):
+            j = (i + 1) % verts
+            f = bm.faces.new((lo[i], lo[j], hi[j], hi[i]))
+            f.material_index = mats.index(m)
+    cap = bm.faces.new(loops[-1])
+    cap.material_index = mats.index(cap_mat)
+    bmesh.ops.triangulate(bm, faces=list(bm.faces))
+    return _mesh_object(name, bm, mats)
+
+
+def fan(name, radius, z, apex, mat_for, segs=8, centre=(0.0, 0.0), spin=0.0):
+    """
+    An umbrella or parasol seen from above: `segs` triangles from a rim at height z up to
+    an apex `apex` m higher; mat_for(i) picks each segment's material (top side only).
+    """
+    import bmesh
+
+    mats = []
+    for i in range(segs):
+        if mat_for(i) not in mats:
+            mats.append(mat_for(i))
+    bm = bmesh.new()
+    top = bm.verts.new((centre[0], centre[1], z + apex))
+    rim = [bm.verts.new((centre[0] + radius * math.cos(spin + 2 * math.pi * i / segs),
+                         centre[1] + radius * math.sin(spin + 2 * math.pi * i / segs), z)) for i in range(segs)]
+    for i in range(segs):
+        f = bm.faces.new((rim[i], rim[(i + 1) % segs], top))
+        f.material_index = mats.index(mat_for(i))
+    return _mesh_object(name, bm, mats)
+
+
+def strips(name, x0, x1, ys, z0, z1, mats_cycle):
+    """
+    A striped canopy or awning, one-sided and facing up: bands across X from x0 to x1 between
+    successive ys, sloping from height z0 at ys[0] to z1 at ys[-1], coloured in turn. 2 tris a band.
+    """
+    import bmesh
+
+    mats = []
+    for m in mats_cycle:
+        if m not in mats:
+            mats.append(m)
+    bm = bmesh.new()
+    span = ys[-1] - ys[0]
+    row = []
+    for y in ys:
+        z = z0 + (z1 - z0) * (y - ys[0]) / span
+        row.append((bm.verts.new((x0, y, z)), bm.verts.new((x1, y, z))))
+    for i in range(len(ys) - 1):
+        (a, b), (c, d) = row[i], row[i + 1]
+        f = bm.faces.new((a, b, d, c))
+        f.normal_update()
+        if f.normal.z < 0:
+            f.normal_flip()
+        f.material_index = mats.index(mats_cycle[i % len(mats_cycle)])
+    bmesh.ops.triangulate(bm, faces=list(bm.faces))
+    return _mesh_object(name, bm, mats)

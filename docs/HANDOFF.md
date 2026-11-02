@@ -326,7 +326,9 @@ still get the offline shell.
    direction, vendor spot) and `dressing.street.busStops` (wait spot, where
    a bus pulls in, its lane) are used by item 12 (the shelters are now
    the only bus stops; walkers step round a kerb cart's queue). **For the device pass:**
-   whether the stand-ins read from the phone's camera. (The street
+   whether the new models read from the phone's camera (all twenty
+   round-2 kinds are real models in props.glb since 0.13.0, 2026-11-02;
+   BLENDER_TODO §10 notes). (The street
    family's vertex cost is fixed on `claude/perf-props`: each prop now runs
    only its own model; README *Families*.) Not done: scaffolding, a work van, water barriers.
 
