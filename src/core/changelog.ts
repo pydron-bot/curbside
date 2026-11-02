@@ -15,6 +15,14 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.13.1',
+    date: '2026-11-02',
+    title: 'No more black screen on High',
+    notes: [
+      'On the High graphics setting, part of the screen could turn black and stay black, mostly with cars driving in view. The glow effect could pick up one bad pixel and smear it across the screen; it now ignores bad pixels and caps extreme brightness.',
+    ],
+  },
+  {
     version: '0.13.0',
     date: '2026-11-02',
     title: 'Real street furniture',

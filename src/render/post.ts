@@ -116,6 +116,7 @@ export class PostEffects {
     }
     const size = renderer.getDrawingBufferSize(new Vector2());
     this.bloom = new UnrealBloomPass(size, 0.55, 0.45, 0.9);
+    sanitizeBloomInput(this.bloom);
     onQualityChange(() => this.apply());
     this.apply();
   }
@@ -143,6 +144,38 @@ export class PostEffects {
     this.renderer.setEffects(getQuality().bloom ? [this.bloom] : []);
   }
 }
+
+/** Brightest radiance the bloom takes in: well above any glow's (~3–20), far below half float's 65504. */
+export const BLOOM_INPUT_MAX = 64;
+
+/**
+ * Bloom's bright pass, made safe. One NaN or infinite pixel in the HDR buffer
+ * (a half-float overflow where additive glows stack, or a bad shader value on
+ * some GPUs) is a single dead pixel on its own, but the bloom blurs it through
+ * five mip levels and adds it back, and NaN poisons every pixel it touches:
+ * big blocky black slabs that stay while the source is on screen (seen on
+ * desktop Chrome, 'high' only). The bright pass drops non-finite texels and
+ * caps the rest before anything is blurred.
+ */
+export function sanitizeBloomInput(bloom: UnrealBloomPass): void {
+  const material = bloom.materialHighPassFilter;
+  const read = 'vec4 texel = texture2D( tDiffuse, vUv );';
+  if (!material.fragmentShader.includes(read)) throw new Error('UnrealBloomPass high pass changed: update sanitizeBloomInput');
+  material.fragmentShader = material.fragmentShader.replace(read, `${read}\n${BLOOM_SANITIZE}`);
+  material.needsUpdate = true;
+}
+
+/**
+ * GLSL: zero NaN (and negative) channels, then cap, which also turns +Inf
+ * into the cap. A comparison with NaN is false, so `!(x >= 0.0)` catches it
+ * without isnan, which some drivers optimise away.
+ */
+export const BLOOM_SANITIZE = /* glsl */ `
+  if (!(texel.r >= 0.0)) texel.r = 0.0;
+  if (!(texel.g >= 0.0)) texel.g = 0.0;
+  if (!(texel.b >= 0.0)) texel.b = 0.0;
+  if (!(texel.a >= 0.0)) texel.a = 0.0;
+  texel = min(texel, vec4(${BLOOM_INPUT_MAX.toFixed(1)}));`;
 
 /** A soft dark vignette over the game view: a CSS layer, free on the GPU. */
 export function mountVignette(parent: HTMLElement): HTMLElement {

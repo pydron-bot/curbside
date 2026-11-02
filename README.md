@@ -1774,7 +1774,11 @@ the first time it comes into view.
   composited back (*Low-resolution smoke* under *Effects and camera*).
   Bloom is left as it is: phones never bloom (no HDR pipeline), and
   desktop 'high' runs `UnrealBloomPass` from half resolution (5 mips,
-  linear-sampled taps, 13 passes, ~2.2 screens written).
+  linear-sampled taps, 13 passes, ~2.2 screens written). Its bright pass is
+  sanitised (`sanitizeBloomInput` in `render/post.ts`): NaN texels become 0
+  and the rest are capped at `BLOOM_INPUT_MAX` (64), because the blur would
+  otherwise spread one NaN or overflowed pixel into big black blocks (seen
+  on desktop Chrome, 0.13.0).
 
 
 ### People
