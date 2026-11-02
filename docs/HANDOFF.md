@@ -443,9 +443,15 @@ past a scene or not); read them as "something now happens in a pursuit"
 rather than a rate. Free roam moves only within the seeds' noise (stars
 there are cleared as they come, so little changed).
 
-**Not yet:** chases started while you're wanted still break off at once
-(`stepChase`, the chase stream's V2-03), so none is seen in a pursuit
-here; the 5-minute pursuits run by day (17–19 h), when races are mostly
+**Review fix:** chases started while you were wanted broke off on their
+next step (`stepChase`), units and all driving off, so the counts above
+include some that did; chases now wait for no stars (`CHASE_HOLD` in
+`scenes/chases.ts`) until the chase stream's V2-03 lets one carry on.
+Re-run after that, pursuit only (`--roam 0 --pursuit 300`, so at night,
+hour ~2–3): an incident in view 12 / 12 / 7 s (seeds 1/2/3), coming into
+view 4× / 4× / 3×, 1 race each on the road ahead, no chase started.
+
+**Not yet:** no chase is seen in a pursuit until V2-03; the 5-minute pursuits run by day (17–19 h), when races are mostly
 put off; and free roam's p90 gap is still over 90 s on one seed in three
 (placement in free roam, or new incidents, is the next lever).
 

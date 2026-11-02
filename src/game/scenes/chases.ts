@@ -1,7 +1,7 @@
 /**
  * Police chases that have nothing to do with the player. Now and then
- * (never while the player is wanted, nor during a mission, race or Chaos
- * Run) a getaway comes through: a car or a scooter driven flat out in a
+ * (never while the player is wanted, nor in a timed race or a mission
+ * that asks for quiet) a getaway comes through: a car or a scooter driven flat out in a
  * panic, running the lights, with one or two police cars on its tail,
  * lights and sirens going (traffic pulls over),
  * ramming, PITting and boxing it in like they would the player
@@ -24,7 +24,7 @@
  * handed to the police (CityLifeDeps.enlist) under normal heat rules.
  */
 import { speed, type VehicleArchetype, type VehicleControls } from '../../entities/vehicle';
-import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
+import { BUSY, WANTED_PACE, type SceneHold } from '../../systems/cityScenes';
 import { hurtPed, knockDown, resumeWalking, scare } from '../../systems/crowd';
 import { COP_OUTFIT } from '../../systems/police';
 import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from '../../systems/pursuit';
@@ -117,6 +117,14 @@ export interface Chase {
   readonly target: PursuitTarget;
 }
 
+/**
+ * BUSY plus stars: a chase started while the player is wanted would break
+ * off on its next step (stepChase), its units driving off. Until the
+ * handoff (V2-03) takes a chase into the pursuit, none starts then; its
+ * pace and `ahead` are already set for when it does.
+ */
+const CHASE_HOLD: readonly SceneHold[] = [...BUSY, 'wanted'];
+
 export class Chases implements Scene {
   readonly chases: Chase[] = [];
   /** How each chase ended (tests, __ub): counts by outcome. */
@@ -126,7 +134,7 @@ export class Chases implements Scene {
   private readonly axis = { x: 0, z: 0 };
 
   constructor(private readonly life: SceneCtx) {
-    life.clock.define('chase', { every: [100, 200], cap: 1, first: 75, range: 160, hold: BUSY, pace: WANTED_PACE, ahead: true });
+    life.clock.define('chase', { every: [100, 200], cap: 1, first: 75, range: 160, hold: CHASE_HOLD, pace: WANTED_PACE, ahead: true });
   }
 
   get running(): number {

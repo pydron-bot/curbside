@@ -723,6 +723,8 @@ export class CityLife {
       m.sample(i, running, running > 0 && s.subject!(out) && inRect(out.x, out.z, view, 0), dt);
     }
     m.tick(dt);
+    // A harness clear()ed it: count the next line from there.
+    if (this.meterLogAt - m.played > METER_LOG_EVERY) this.meterLogAt = m.played + METER_LOG_EVERY;
     if (m.played >= this.meterLogAt) {
       this.meterLogAt = m.played + METER_LOG_EVERY;
       this.d.log?.('inview', m.line());

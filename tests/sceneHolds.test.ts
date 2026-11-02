@@ -37,7 +37,8 @@ describe('scene holds per kind (V2-02)', () => {
       const spec = clock.spec(kind);
       expect(clock.busy(kind), kind).toBe(true);
       for (let stars = 0; stars <= 5; stars++) {
-        expect(held(spec, { ...PLAYING, stars }), `${kind} at ${stars}`).toBe(false);
+        // Chases wait for no stars until the handoff (V2-03): one started now would break off at once.
+        expect(held(spec, { ...PLAYING, stars }), `${kind} at ${stars}`).toBe(kind === 'chase' && stars > 0);
         expect(paceFor(spec, stars), `${kind} at ${stars}`).toBe(WANTED_PACE[stars]);
         expect(paceFor(spec, stars)).toBeGreaterThan(0);
       }
@@ -57,7 +58,7 @@ describe('scene holds per kind (V2-02)', () => {
         ['frenzy', false, false],
         [null, false, false], // free roam, or Chaos Run (not a `busy` activity)
       ] as const) {
-        expect(held(spec, { ...PLAYING, activity: activityHolds(busy, quiet), stars: 3 }), `${kind} in ${busy}`).toBe(holds);
+        expect(held(spec, { ...PLAYING, activity: activityHolds(busy, quiet), stars: kind === 'chase' ? 0 : 3 }), `${kind} in ${busy}`).toBe(holds);
       }
     }
   });

@@ -683,10 +683,12 @@ no longer hold them: each busy kind's clock runs at `WANTED_PACE` of its
 pace (1 with no stars, then 0.75, 0.6, 0.5, 0.4, 0.35 at 1–5 stars:
 fewer, never none; `SceneClock.tick`), and while wanted at most
 `WANTED_SCENE_CAP` of them run at once (high 4, medium 3, low 2: scene
-cars on top of the police on a phone). Fires keep their full pace (your
+cars on top of the police on a phone). Chases alone still wait for no stars
+(`CHASE_HOLD`): one started in a pursuit would break off on its next
+step, until the chase handoff (V2-03) takes it into the pursuit. Fires keep their full pace (your
 fires get their trucks); buskers still pack up for stars. **On the road
-ahead:** while wanted, a scene that arrives by car (a chase or a race:
-spec `ahead`) is put, at most once every 45 s, on a lane 60–150 m ahead
+ahead:** while wanted, a scene that arrives by car (a race; a chase once
+V2-03 lets one start while wanted: spec `ahead`) is put, at most once every 45 s, on a lane 60–150 m ahead
 of the player's way (within 45°), off-screen, coming toward them
 (`routeAheadSpot`, armed by `life.due()` for that step's `spawnCar()`),
 and accidents and turf wars pick only traffic and borders within 60° of
@@ -903,8 +905,9 @@ people in).
 
 **Traffic scenes** (`claude/city-traffic`; rules pure and tested in
 `systems/trafficScenes.ts`). Chases, races and accidents are `BUSY` (held
-off by the title, a timed race or quiet mission and the tutorial; fewer
-while you're wanted, and then on your way) and only one
+off by the title, a timed race or quiet mission and the tutorial; races
+and accidents fewer while you're wanted, and then on your way; chases
+not while you're wanted, until V2-03) and only one
 of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
 
 - **Police chases** (`scenes/chases.ts`, every 100–200 s): a getaway car
