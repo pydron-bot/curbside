@@ -364,7 +364,8 @@ export class Kebabs implements Scene {
     if (beat === 1 && g.timer % 1.2 < dt) g.a.model.hail(0.6);
     if (g.timer < g.length) return;
     k.argument = null;
-    if (g.blows) {
+    // Within the scuffles' own cap (two at once): else it's words only.
+    if (g.blows && this.fights.running < life.clock.spec('fight').cap) {
       // To blows: a scuffle like any other (the shove, fists, a ring watching).
       this.fights.start(g.a, g.b).plan.backsDown = false;
       return;

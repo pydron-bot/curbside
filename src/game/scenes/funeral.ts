@@ -177,7 +177,8 @@ export class Funerals implements Scene {
   private bringIn(): void {
     const life = this.life;
     const hour = life.d.hour?.() ?? life.d.mood?.hour ?? 13;
-    if (!inHours(hour, FUNERAL_HOURS) || !roomFor(life, 8)) {
+    // The procession is all cars: room for a car's mourners is enough (each car's only get out if there's room).
+    if (!inHours(hour, FUNERAL_HOURS) || !roomFor(life, 2)) {
       life.clock.defer('funeral', life.now, 15);
       return;
     }
@@ -379,8 +380,12 @@ export class Funerals implements Scene {
     if (life.lost(lead) || lead.scene !== this.hearse) return false;
     // A car the player made off with is out of it; the rest close up behind the hearse.
     for (let i = c.cars.length - 1; i >= 1; i--) {
-      if (c.cars[i] === life.d.player.driving || c.cars[i].damage.wrecked) c.cars.splice(i, 1);
-      else c.cars[i].scene = this.follower;
+      const v = c.cars[i];
+      if (v === life.d.player.driving || v.damage.wrecked || v.damage.burning || !v.mesh.root.visible) {
+        // Let go, or it's never retired (the director keeps a car a scene is driving).
+        if (v.scene === this.follower) life.release(v);
+        c.cars.splice(i, 1);
+      } else v.scene = this.follower;
     }
     c.trail.reset(lead.sim.x, lead.sim.z, lead.sim.heading, FUNERAL_GAP * c.cars.length + 4);
     c.phase = 'procession';

@@ -23,7 +23,7 @@ import type { CrowdPed } from '../population';
 import { watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { secs, type LabelSink } from '../debugLabels';
 import type { Fights } from './fights';
-import { handBack, letGo, roomFor, streetBody } from './people';
+import { PEOPLE_CAP, handBack, letGo, roomFor, streetBody } from './people';
 import { len2 } from '../../core/len';
 
 /** It piles into fights: held off by anything loud. */
@@ -154,7 +154,7 @@ export class Congas implements Scene {
     const life = this.life;
     const at = life.d.focus();
     const hour = life.d.hour?.() ?? life.d.mood?.hour ?? 13;
-    if (!congaTime(hour, NIGHTLIFE[districtAt(at.x, at.z)]) || !roomFor(life, CONGA_SIZE[1] + 2)) {
+    if (!congaTime(hour, NIGHTLIFE[districtAt(at.x, at.z)]) || !roomFor(life, CONGA_SIZE[0])) {
       life.clock.defer('conga', life.now, 12);
       return;
     }
@@ -190,7 +190,8 @@ export class Congas implements Scene {
     const from = cornerPoint(bx, bz, corner, { x: 0, z: 0 });
     const to = cornerPoint(bx, bz, (corner + (clockwise ? 1 : 3)) & 3, this.p);
     const heading = Math.atan2(to.x - from.x, to.z - from.z);
-    const n = CONGA_SIZE[0] + Math.floor(rand() * (CONGA_SIZE[1] - CONGA_SIZE[0] + 1));
+    // As long a line as there's room for (the shortest regardless: the TEST menu's).
+    const n = Math.max(CONGA_SIZE[0], Math.min(CONGA_SIZE[0] + Math.floor(rand() * (CONGA_SIZE[1] - CONGA_SIZE[0] + 1)), PEOPLE_CAP - life.people.length));
     const c: Conga = {
       party,
       dancers: [],

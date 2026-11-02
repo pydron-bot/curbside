@@ -66,6 +66,8 @@ const SHOT_RANGE = 30;
 const BLAST_RANGE = 22;
 /** Once it's real, everyone's gone in this long, s. */
 const SCATTER = 8;
+/** The director, the clapper and the two extras: all it needs room for (the crowd only gathers while there's room). */
+const CREW = 4;
 
 type Phase = 'shoot' | 'real';
 
@@ -187,7 +189,7 @@ export class FilmShoots implements Scene {
     const life = this.life;
     const hour = life.d.hour?.() ?? life.d.mood?.hour ?? 13;
     const at = life.d.focus();
-    if (!inHours(hour, FILM_HOURS) || districtAt(at.x, at.z) !== FILM_DISTRICT || !roomFor(life, 8)) {
+    if (!inHours(hour, FILM_HOURS) || districtAt(at.x, at.z) !== FILM_DISTRICT || !roomFor(life, CREW)) {
       life.clock.defer('filmShoot', life.now, 12);
       return;
     }

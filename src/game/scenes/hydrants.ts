@@ -198,6 +198,7 @@ export class Hydrants implements Scene {
       const k = b.kids[i];
       const a = k.ped.agent;
       if (!life.present(k.ped) || !a.scene || a.mode === 'flee' || a.mode === 'fight' || a.mode === 'shoot') {
+        this.kidsIn.delete(a);
         handBack(life, k.ped);
         b.kids.splice(i, 1);
         continue;
@@ -259,7 +260,11 @@ export class Hydrants implements Scene {
 
   private end(b: Burst): void {
     b.crowd.close();
-    for (const k of b.kids) handBack(this.life, k.ped);
+    for (const k of b.kids) {
+      // Walking on as anyone: the spray bowls them over like anyone.
+      this.kidsIn.delete(k.ped.agent);
+      handBack(this.life, k.ped);
+    }
     b.kids.length = 0;
   }
 }
