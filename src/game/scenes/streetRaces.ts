@@ -425,8 +425,15 @@ export class StreetRaces implements Scene {
       pz.finishing = false;
       if (v.ai && (!v.scene || v.scene === this.driver) && !life.lost(v)) v.scene = this.conceder;
     }
-    // Taken off it some other way (its driver dragged out, another scene): it's an ordinary car now.
-    if (!v.ai || v.scene !== this.conceder) {
+    if (v.scene !== this.conceder) {
+      // Another scene's now (the police after it), or wrecked on the way: no prize. Nobody in it: it's waiting all the same.
+      if (v.ai || life.lost(v)) this.dropPrize();
+      else pz.handed = true;
+      return;
+    }
+    if (!v.ai) {
+      // Its driver's gone already (dragged out): it's waiting.
+      v.scene = null;
       pz.handed = true;
       return;
     }
