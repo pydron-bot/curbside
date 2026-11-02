@@ -320,6 +320,8 @@ export class FilmShoots implements Scene {
       return true;
     }
     if (!life.present(s.director) || s.director.agent.mode === 'down' || s.age > s.length + 6) return false;
+    // Its cars recycled (the player long gone) or blown up for real: that's the day done.
+    if (!s.hero.mesh.root.visible || !s.picture.mesh.root.visible || s.picture.damage.wrecked || s.hero.damage.wrecked) return false;
     const was = takePhase(s.take);
     s.take += dt;
     if (s.take >= TAKE.end) {
