@@ -1466,3 +1466,41 @@ export function clapper(v: Voice): void {
     perc(g.gain, s, 0.22, 0.01, off ? 0.12 : 0.05);
   }
 }
+
+/**
+ * The police scanner keying up (V2-11): a squelch of band-limited hiss, a
+ * few syllables of radio burble under it, and the two-pip roger at the end.
+ * Non-positional: it's the player's own scanner.
+ */
+export function squelch(v: Voice, syllables: number): void {
+  const t = v.t;
+  const len = 0.12 + syllables * 0.075;
+  noiseHit(v, v.bank.white, t, 'bandpass', 1900, 1.1, 0.32, 0.004, 0.035);
+  // Pseudo-speech: a buzz through a formant that steps between vowels, gated per syllable.
+  const buzz = v.osc('sawtooth', rnd(125, 155), t + 0.06, t + 0.08 + len);
+  const formant = v.filter('bandpass', 900, 4);
+  const band = v.filter('highpass', 350, 0.7);
+  const g = v.gain();
+  v.chain(buzz, formant, band, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  for (let i = 0; i < syllables; i++) {
+    const at = t + 0.07 + i * 0.075;
+    formant.frequency.setValueAtTime(rnd(600, 2200), at);
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(0.11 * vary(0.3), at + 0.012);
+    g.gain.linearRampToValueAtTime(0, at + 0.06);
+  }
+  // The hiss bed, and the roger pips.
+  noiseHit(v, v.bank.pink, t + 0.05, 'bandpass', 2600, 0.8, 0.05, 0.02, len * 0.4);
+  const end = t + 0.1 + len;
+  for (const [hz, off] of [
+    [1250, 0],
+    [1650, 0.07],
+  ] as const) {
+    const o = v.osc('square', hz, end + off, end + off + 0.08);
+    const lp = v.filter('lowpass', 2600, 0.7);
+    const pg = v.gain();
+    v.chain(o, lp, pg, v.input);
+    perc(pg.gain, end + off, 0.07, 0.002, 0.018);
+  }
+}

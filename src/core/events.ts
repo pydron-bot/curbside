@@ -6,6 +6,7 @@
  */
 import type { VehicleArchetype } from '../entities/vehicle';
 import type { BlastKind } from '../systems/damage';
+import type { ScannerPriority, ScannerTopic } from '../systems/scanner';
 import type { Award } from '../systems/score';
 import type { ToolKind } from '../systems/serviceTools';
 import type { StampId } from '../systems/stamps';
@@ -190,6 +191,12 @@ export type GameEvent =
    * share 0..1) and `wrecked`; serviceMode pays for it and for `fireOut`.
    */
   | { type: 'tool'; tool: ToolKind; what: ToolWhat; x: number; z: number; condition?: number; wrecked?: boolean }
+  /**
+   * The police scanner said a line (game/scanner.ts, V2-11): about a street
+   * incident at (x, z), or about the player while wanted. `hold`: seconds
+   * the subtitle stays up.
+   */
+  | { type: 'scanner'; kind: ScannerTopic; text: string; priority: ScannerPriority; x: number; z: number; hold: number }
   /** The game was paused or resumed (menu, app switch, lost graphics context). */
   | { type: 'pause'; paused: boolean }
   /**
