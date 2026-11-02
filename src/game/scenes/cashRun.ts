@@ -28,16 +28,18 @@ import {
   CASH_VAN_BUNDLES,
   CashBundles,
   GUARD_CHASE,
-  ROBBER_RANGE,
   ROBBERY_CALL,
   carrying,
   cashSpill,
   inHours,
+  robbedByPlayer,
   scatter,
   stepCashTrip,
   type CashTrip,
+  type RobberySense,
 } from '../../systems/incidents';
 import { resumeWalking } from '../../systems/crowd';
+import { blamesPlayer } from '../../systems/damage';
 import type { Obstacle } from '../../systems/traffic';
 import type { VehicleControls } from '../../entities/vehicle';
 import { BLOCK_SIZE, ROAD_WIDTH, SIDEWALK } from '../../world/city';
@@ -46,7 +48,7 @@ import { BUS_PULL_IN, roadPoint, segmentValid } from '../../world/streetSpots';
 import type { CrowdPed, SceneDriver, Vehicle } from '../population';
 import { SCENE_RANGE, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { secs, type LabelSink } from '../debugLabels';
-import { handBack, streetBody } from './people';
+import { handBack, roomFor, streetBody } from './people';
 import { holdStill, pullIn, stopped } from './service';
 import { len2 } from '../../core/len';
 
@@ -64,6 +66,9 @@ const REACH = 1.1;
 const LEG_GIVE_UP = 10;
 /** A round that's taken this long is over (it drives off), s. */
 const ROUND_MAX = 200;
+/** A knock-down of the player's this close to where the guard fell, this recently, was them, m / s. */
+const KNOCK_MATCH = 2;
+const KNOCK_RECENT = 1.5;
 
 type Phase = 'drive' | 'pull' | 'stop' | 'robbed' | 'leave';
 
@@ -100,10 +105,20 @@ export class CashRuns implements Scene {
   private readonly rear = { x: 0, z: 0 };
   private readonly left = { m: 0 };
   private readonly driver: SceneDriver;
+  /** The player's last knock-down (anyone): where and when, to tell whose doing a fallen guard was. */
+  private knockX = 0;
+  private knockZ = 0;
+  private knockAt = -Infinity;
 
   constructor(private readonly life: SceneCtx) {
     life.clock.define('cashRun', { ...CASH_CLOCK, hold: HOLD });
     this.driver = { drive: (v, obstacles) => this.drive(v, obstacles) };
+    life.d.bus.on('pedDown', (e) => {
+      if (!e.byPlayer || e.isPlayer) return;
+      this.knockX = e.x;
+      this.knockZ = e.z;
+      this.knockAt = life.now;
+    });
   }
 
   get running(): number {
@@ -191,7 +206,8 @@ export class CashRuns implements Scene {
   private bringIn(): void {
     const life = this.life;
     const hour = life.d.hour?.() ?? life.d.mood?.hour ?? 13;
-    if (!inHours(hour, CASH_HOURS)) {
+    // The guard and his mate (once it's robbed) come on top of the scenes' people.
+    if (!inHours(hour, CASH_HOURS) || !roomFor(life, 2)) {
       life.clock.defer('cashRun', life.now, 15);
       return;
     }
@@ -266,7 +282,12 @@ export class CashRuns implements Scene {
           carrying: g !== null && r.trip.leg !== 'aboard',
         });
     if (how) {
-      this.rob(r, how);
+      const s = g?.agent.s;
+      this.rob(r, how, {
+        taken,
+        vanBlamed: blamesPlayer(v.damage, life.now),
+        guardByPlayer: s !== undefined && life.now - this.knockAt < KNOCK_RECENT && len2(s.x - this.knockX, s.z - this.knockZ) < KNOCK_MATCH,
+      });
       return true;
     }
     if (!v.mesh.root.visible || (v.scene !== this.driver && !taken)) return false;
@@ -325,7 +346,7 @@ export class CashRuns implements Scene {
     const life = this.life;
     const v = r.v;
     const ai = v.ai;
-    if (!ai || ai.phase !== 'approach' || life.now < r.next) return;
+    if (!ai || ai.phase !== 'approach' || life.now < r.next || !roomFor(life, 1)) return;
     const along = Math.abs(ai.ix * BLOCK_SIZE - v.sim.x) + Math.abs(ai.iz * BLOCK_SIZE - v.sim.z);
     if (along < 34 || along > 56) return;
     const stopAt = along - 14;
@@ -363,7 +384,7 @@ export class CashRuns implements Scene {
   }
 
   /** Done over: the cash goes everywhere, and if it was the player the guards are after them and it's called in. */
-  private rob(r: Round, how: 'van' | 'guard'): void {
+  private rob(r: Round, how: 'van' | 'guard', blame: RobberySense): void {
     const life = this.life;
     const rand = life.d.rand;
     const v = r.v;
@@ -382,7 +403,7 @@ export class CashRuns implements Scene {
     // The crew out of the cab (unless it's the player's now), the van left where it stands.
     if (v.scene === this.driver) v.scene = null;
     const pl = life.d.player;
-    if (v !== pl.driving && v.ai && !v.damage.wrecked) {
+    if (v !== pl.driving && v.ai && !v.damage.wrecked && roomFor(life, 1)) {
       v.ai = null;
       v.towable = true;
       const door = life.doorOf(v.sim);
@@ -390,9 +411,8 @@ export class CashRuns implements Scene {
       r.mate.agent.street = true;
       r.mate.agent.temper = 'fighter';
     }
-    // The player's doing (they're close by, or in it): CASH GRAB, the guards after them, and it's called in.
-    const me = pl.position;
-    if (!life.d.playing() || !pl.alive || len2(me.x - x, me.z - z) > ROBBER_RANGE) return;
+    // The player's doing (they took it, rammed or shot it, or flattened the guard): CASH GRAB, the guards after them, and it's called in.
+    if (!life.d.playing() || !pl.alive || !robbedByPlayer(how, blame)) return;
     r.chase = GUARD_CHASE;
     life.d.award?.('cashGrab');
     for (const crime of ROBBERY_CALL) life.d.callIn?.(crime);

@@ -975,8 +975,10 @@ funeral and the conga; `IN_PLAY` for the hydrant and the film shoot).
   in it, and cash spills (`cashSpill`): 5 bundles from the van, 2 from the
   box, the `cash` model in a pulsing green ring for 40 s, $30–70 each,
   picked up on foot (1.3 m) or driving over (2.6 m) through
-  `deps.reward`. With the player within 35 m: **CASH GRAB** (300,
-  `deps.award`), the guard and his mate from the cab come at you with
+  `deps.reward`. When it's the player's doing (they drove off in it,
+  hurt the van in the last 10 s, or flattened the guard themselves:
+  `robbedByPlayer`; a van the traffic hit spills for anyone and blames
+  nobody): **CASH GRAB** (300, `deps.award`), the guard and his mate from the cab come at you with
   their fists for 18 s, and it's called in (four `assault` calls through
   `deps.callIn`: one star). The van's left in the road, towable.
 - **Kebab chucking-out time** (`scenes/kebab.ts`, 00:45–03:30 in the Neon

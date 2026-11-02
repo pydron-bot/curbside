@@ -35,6 +35,7 @@ import {
   madeReal,
   onSet,
   playsInIt,
+  robbedByPlayer,
   ropePost,
   scatter,
   sprayReach,
@@ -136,6 +137,18 @@ describe('cash-in-transit van', () => {
     expect(cashSpill({ ...base, burning: true })).toBe('van');
     expect(cashSpill({ ...base, guardDown: true })).toBeNull();
     expect(cashSpill({ ...base, guardDown: true, carrying: true })).toBe('guard');
+  });
+
+  it("the robbery is the player's only when they did it: not for a van the traffic hit or a guard a hydrant flattened", () => {
+    const none = { taken: false, vanBlamed: false, guardByPlayer: false };
+    expect(robbedByPlayer('van', none)).toBe(false);
+    expect(robbedByPlayer('guard', none)).toBe(false);
+    expect(robbedByPlayer('van', { ...none, taken: true })).toBe(true);
+    expect(robbedByPlayer('van', { ...none, vanBlamed: true })).toBe(true);
+    // A rammed van doesn't make a guard someone else knocked down the player's, nor the other way.
+    expect(robbedByPlayer('guard', { ...none, vanBlamed: true })).toBe(false);
+    expect(robbedByPlayer('van', { ...none, guardByPlayer: true })).toBe(false);
+    expect(robbedByPlayer('guard', { ...none, guardByPlayer: true })).toBe(true);
   });
 
   it('bundles scatter apart, lie a while, and are taken within reach', () => {

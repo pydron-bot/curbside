@@ -84,8 +84,6 @@ export const CASH_PICK_FOOT = 1.3;
 export const CASH_PICK_CAR = 2.6;
 /** The guards are after whoever did it for this long, s; and give up past this far, m. */
 export const GUARD_CHASE = 18;
-/** The robbery is the player's if they're this close when it spills, m. */
-export const ROBBER_RANGE = 35;
 /** A robbery called in: about a star's worth (heat.called each). */
 export const ROBBERY_CALL: readonly Crime[] = ['assault', 'assault', 'assault', 'assault'];
 
@@ -133,6 +131,25 @@ export function cashSpill(s: CashSense): 'van' | 'guard' | null {
   if (s.wrecked || s.burning || s.health < CASH_SPILL_HEALTH) return 'van';
   if (s.guardDown && s.carrying) return 'guard';
   return null;
+}
+
+export interface RobberySense {
+  /** The player drove off in the van. */
+  taken: boolean;
+  /** The player hurt the van lately (systems/damage.ts blamesPlayer). */
+  vanBlamed: boolean;
+  /** The player knocked the guard down (a pedDown of theirs where he fell). */
+  guardByPlayer: boolean;
+}
+
+/**
+ * Was the spill the player's doing? Only what they did themselves: a van
+ * a taxi ran into, or a guard the traffic or a burst hydrant knocked over,
+ * spills its cash for anyone, but nobody's after the player for it.
+ */
+export function robbedByPlayer(how: 'van' | 'guard', s: RobberySense): boolean {
+  if (s.taken) return true;
+  return how === 'van' ? s.vanBlamed : s.guardByPlayer;
 }
 
 /** Where the `i`th of `n` bundles lands round (x, z) (a rough ring, so they don't stack), into `out`. */
