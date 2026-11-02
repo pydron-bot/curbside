@@ -25,7 +25,9 @@ export type Crime =
   /** Blew up a police car. */
   | 'copCarWrecked'
   /** Drove off in a police car: at least one star, witnessed or not. */
-  | 'copCarStolen';
+  | 'copCarStolen'
+  /** Took a getaway the police were chasing (TAKE THE HEAT): at least two stars, witnessed or not. */
+  | 'tookGetaway';
 
 /** Why the level changed (on the 'wanted' event). */
 export type WantedReason = 'crime' | 'lost' | 'evaded' | 'respray' | 'busted' | 'died' | 'reset';
@@ -42,9 +44,12 @@ export const CRIME_HEAT: Record<Crime, number> = {
   copDown: 1,
   copCarWrecked: 1,
   copCarStolen: 0,
+  tookGetaway: 0,
 };
+/** Crimes that set a floor (stars) instead of adding heat, and count unseen: the police are right there, or it's on the radio. */
+export const CRIME_FLOOR: Partial<Record<Crime, number>> = { copCarStolen: 1, tookGetaway: 2 };
 /** Crimes against the police: the only way past 3 stars. */
-const AGAINST_POLICE: ReadonlySet<Crime> = new Set<Crime>(['ramCop', 'shootCop', 'copDown', 'copCarWrecked', 'copCarStolen']);
+const AGAINST_POLICE: ReadonlySet<Crime> = new Set<Crime>(['ramCop', 'shootCop', 'copDown', 'copCarWrecked', 'copCarStolen', 'tookGetaway']);
 /** Crimes against civilians raise heat to just under 4 stars at most. */
 export const CIVILIAN_CAP = 3.999;
 /** A crime within this distance of a cop (m) is witnessed even off-screen. */
@@ -125,17 +130,18 @@ export class Wanted {
 
   /**
    * Report a crime. Unwitnessed crimes cost nothing (stealing a police car
-   * always does: it has a radio). Returns true if the heat went up.
+   * or a getaway always does: CRIME_FLOOR). Returns true if the heat went up.
    */
   commit(crime: Crime, witnessed: boolean): boolean {
-    if (!witnessed && crime !== 'copCarStolen') return false;
+    const floor = CRIME_FLOOR[crime];
+    if (!witnessed && floor === undefined) return false;
     const before = this.heat;
     const prev = this.level;
     this.lastCrime = this.time;
     // Seen doing it: the evasion clock starts over.
     if (witnessed) this.unseen = 0;
-    if (crime === 'copCarStolen') {
-      this.heat = Math.max(this.heat, 1);
+    if (floor !== undefined) {
+      this.heat = Math.max(this.heat, floor);
     } else {
       let amount = CRIME_HEAT[crime];
       if (crime === 'gunfire') amount = this.gunfire.take(amount, this.time);

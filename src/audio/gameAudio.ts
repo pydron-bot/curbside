@@ -720,6 +720,14 @@ export class GameAudio {
         const pattern = alarmPattern(e.x, e.z);
         return this.oneShot('horn', e, FALLOFF.horn, 0.4, 0.2, (v) => sfx.carAlarm(v, pattern));
       }
+      case 'takeTheHeat':
+        // The chase's cars are yours now: a whoop as they swing in behind.
+        return this.oneShot('horn', e, FALLOFF.siren, 0.7, 0.15, sfx.sirenWhoop, 0.3);
+      case 'citizensArrest':
+        // The suspect's door; the award plays the sting.
+        return this.oneShot('door', e, FALLOFF.near, 0.6, 0.2, (v) => sfx.door(v, true));
+      case 'haveAGo':
+        return; // heard through the knock-down and the award's sting
       default:
         // Sirens are continuous (StreetLife); the rest is heard through what it causes (shots, crashes, horns).
         return;

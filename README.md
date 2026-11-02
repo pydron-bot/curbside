@@ -548,7 +548,10 @@ burning: `explosion.ownCar`), clearly ramming a police car
 +0.6 (bumps in a chase don't count, nor does smashing through a roadblock
 or a chasing cop driving into you), bullets into one +0.15 (capped),
 knocking down an officer +1 (at most +1 per 5 s), wrecking a police car
-+1; stealing one sets at least 1★. Knocking a civilian down and carjacking
++1; stealing one sets at least 1★, and taking a police chase's getaway
+at least 2★ (`tookGetaway`; both in `CRIME_FLOOR`: they count unseen).
+Flooring a fleeing suspect (a chase's, a mugger: `pedDown.suspect`) isn't
+an assault. Knocking a civilian down and carjacking
 seen only by passers-by (no police near) wait for one of them to phone it
 in, 3–5 s, and can be stopped (City life, *Witnesses*). Civilian crimes stop at 3★; 4–5★ need
 attacks on the police. Below a star, heat fades after 10 quiet seconds.
@@ -625,7 +628,11 @@ gunfire, and pull over to the kerb and slow for a siren behind them (or
 coming head-on).
 
 **Score:** COP RAM 200, COP CAR WRECKED 750, EVADED 1,000 × peak stars
-for losing a 3★+ chase. **Audio:** a star gained plays the star sting, a
+for losing a 3★+ chase; joining a city police chase (City life, *Traffic
+scenes*): TAKE THE HEAT 500, CITIZEN'S ARREST 400, HAVE-A-GO HERO 250.
+Officers never fire on a player with no stars (`holdsFire`, checked in
+main.ts's crowd step: a scene's officer whose own fight is over would
+otherwise fall back on the player). **Audio:** a star gained plays the star sting, a
 chase lost or resprayed the success chime, BUSTED its own sting (cuffs,
 cell door) with the world muffled; the wanted level is the music's
 intensity floor; sirens wail, yelp when ramming, two-tone when boxing in
@@ -657,6 +664,7 @@ heat.wanted.force(stars)                  // scripted chases, missions
 heat.wanted.clear(reason)                 // e.g. a mission's reward
 heat.called(crime)                        // a witness's call got through (HeatDeps.witnesses held it: City life, Witnesses)
 heat.police.units / .heli / .seen          // read the response
+heat.adopt(v, aboard)                     // a scene's police car joins the pursuit (police.adopt, within the level's unit cap)
 heat.shops / heat.station                 // landmarks (world/landmarks.ts)
 // Bus: { type: 'wanted', level, prev, reason } · { type: 'busted', fine } · { type: 'horn', x, z, duration }
 //      { type: 'respray', x, z, cleared }; pedDown/explosion/bulletHit/enterVehicle carry `cop` / `police` flags.
@@ -683,11 +691,11 @@ no longer hold them: each busy kind's clock runs at `WANTED_PACE` of its
 pace (1 with no stars, then 0.75, 0.6, 0.5, 0.4, 0.35 at 1–5 stars:
 fewer, never none; `SceneClock.tick`), and while wanted at most
 `WANTED_SCENE_CAP` of them run at once (high 4, medium 3, low 2: scene
-cars on top of the police on a phone). Chases alone still wait for no stars
-(`CHASE_HOLD`): one started in a pursuit would break off on its next
-step, until the chase handoff (V2-03) takes it into the pursuit. Fires keep their full pace (your
+cars on top of the police on a phone). Chases run on past a player wanted
+for something else; only the player's own part in one (the chase handoff,
+`systems/chaseHandoff.ts`) changes it. Fires keep their full pace (your
 fires get their trucks); buskers still pack up for stars. **On the road
-ahead:** while wanted, a scene that arrives by car (a race; a chase once
+ahead:** while wanted, a scene that arrives by car (a race; a chase, now
 V2-03 lets one start while wanted: spec `ahead`) is put, at most once every 45 s, on a lane 60–150 m ahead
 of the player's way (within 45°), off-screen, coming toward them
 (`routeAheadSpot`, armed by `life.due()` for that step's `spawnCar()`),
@@ -838,8 +846,10 @@ people in).
   (`nextCorner`), ringed in red; the victim shouts and points (waving,
   facing them) for 5 s. Knock the mugger over and the bag drops (a pulsing
   amber ring, 45 s): walk over it to hand it back (`bagReturned`, the
-  victim cheers, **$50** through `deps.reward` → `progress.pay`; cash, not
-  CRED). Knocking the mugger down isn't called in by passers-by. Ignored,
+  victim cheers: HAVE-A-GO HERO, the `haveAGo` award and **$50** through
+  `deps.reward` → `progress.pay`; cash, not CRED). Knocking the mugger
+  down isn't an assault (`PedAgent.suspect` while they run) nor called in
+  by passers-by. Ignored,
   they get away (65 m clear, or 35 s).
 - **Witnesses** (`heat.ts` hook `witnesses`, `scenes/witnesses.ts`): a
   **lesser crime** (`DELAYED_CRIMES`: knocking a civilian down, a
@@ -907,7 +917,7 @@ people in).
 `systems/trafficScenes.ts`). Chases, races and accidents are `BUSY` (held
 off by the title, a timed race or quiet mission and the tutorial; races
 and accidents fewer while you're wanted, and then on your way; chases
-not while you're wanted, until V2-03) and only one
+too, run past you by the handoff) and only one
 of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
 
 - **Police chases** (`scenes/chases.ts`, every 100–200 s): a getaway car
@@ -928,13 +938,36 @@ of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
   **Not the player's heat:** the chase's officers always have the suspect
   (or nobody) as their target, are no unit of `PoliceForce` (so they
   never see, bust or report the player), and are never left in a fighting
-  mode without an opponent (that would turn them on the player). Attack
-  them or ram their cars and the usual crimes apply (they're `cop` peds
-  and police-model cars); with any star the chase breaks off and its
-  officers on foot are handed to the police as strays
-  (`CityLifeDeps.enlist` → `heat.police.strays`), who then act under the
-  normal rules (and bust a player who stands there). No chase starts while
-  the player has stars.
+  mode without an opponent (that would turn them on the player). A chase
+  runs on while the player is wanted for something else.
+  **Joining in** (`systems/chaseHandoff.ts`, pure and tested; asked first
+  thing every chase step: `continue | takeHeat | turnedOn | breakOff`):
+  - **TAKE THE HEAT:** get in the getaway and the chase is yours. The
+    radio has it at once (`tookGetaway` via `CityLifeDeps.callIn`: at
+    least 2★), then the chase cars within 80 m become police units chasing
+    you (`CityLifeDeps.adopt` → `heat.adopt` → `PoliceForce.adopt`, as
+    many as the level's unit cap allows, off the director's list); any
+    others go back to traffic with their lights off, so no car is left
+    with a siren and nobody driving it. A siren whoop plays.
+  - **Turned on:** attack its police (ram a car, shoot one, floor an
+    officer, steal a car: bus `bulletHit`/`explosion`/`pedDown` near its
+    cars and officers, `HeatDeps.rammedSceneCop`) and once you're wanted
+    for it they come after you the same way (officers on foot to
+    `heat.police.strays`), or from over 80 m off the chase just breaks
+    off. A single bump that costs no star is shrugged off.
+  - **CITIZEN'S ARREST:** ram or box the getaway so it stops within 12 m
+    of a patrol car, within 5 s of your last touch on it
+    (`damage.lastPlayerHit`): the suspect gives up even if armed, **$150**
+    through `deps.reward` and the score award; ramming the getaway is no
+    crime (its panicking driver doesn't count it), and one bump on each
+    chase car within 3 s of touching the getaway is forgiven (touch
+    steering is imprecise).
+  - **HAVE-A-GO HERO:** a suspect on the run (or a mugger) carries
+    `PedAgent.suspect` (cleared once they give up or are cuffed): flooring
+    them isn't an assault, and the first time a chase pays the award (so
+    does throwing the rider off a getaway scooter).
+  Score kinds `takeTheHeat`, `citizensArrest`, `haveAGo` go through
+  `CityLifeDeps.award`, each with a street event of the same name.
 - **Street races** (`scenes/streetRaces.ts`, every 90–170 s, then
   `raceOdds(hour)`: all at 22–4 h, 60% in the evening and before dawn, 25%
   by day, else put off 20–45 s; `CityLifeDeps.hour` is `look.time.hour`,
@@ -977,8 +1010,9 @@ of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
 
 ```ts
 life.chases.begin(kind?) · .pursue(v) · .chases · .ended   // 'car' | 'bike' | 'foot'; counts by outcome
+life.chases.joined · .rammed(v) · .isGetaway(v)               // how the player joined in; heat's ram hook; a getaway still chased
 life.races.begin() · life.accidents.begin() · .towables(out) · life.doubleParking.begin(force?, job?)
-// Street events: chase, suspectRuns, arrest, suspectDown, race, raceWon, accident, fight, doublePark.
+// Street events: chase, suspectRuns, arrest, suspectDown, takeTheHeat, citizensArrest, haveAGo, race, raceWon, accident, fight, doublePark.
 ```
 
 **The director.** `main.ts` creates one and calls `step(dt)` every sim step

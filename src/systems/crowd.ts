@@ -85,6 +85,8 @@ export interface PedAgent {
   scene?: boolean;
   /** Knocked out and waiting for the ambulance: stays down until collected (or let go). */
   injured?: boolean;
+  /** Fleeing a crime (a chase's suspect, a mugger on the run): flooring them isn't an assault. */
+  suspect?: boolean;
 }
 
 /** Hit points everyone starts with. */

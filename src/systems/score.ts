@@ -14,7 +14,11 @@ export type ScoreKind =
   | 'copRam'
   | 'copWreck'
   | 'evaded'
-  | 'stunt';
+  | 'stunt'
+  // Joining a police chase (scenes/chases.ts, muggings.ts).
+  | 'takeTheHeat'
+  | 'citizensArrest'
+  | 'haveAGo';
 
 export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   nearMiss: 100,
@@ -29,6 +33,9 @@ export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   evaded: 0,
   // All bonus: see systems/stunts.ts.
   stunt: 0,
+  takeTheHeat: 500,
+  citizensArrest: 400,
+  haveAGo: 250,
 };
 
 export const LABELS: Record<ScoreKind, string> = {
@@ -43,6 +50,9 @@ export const LABELS: Record<ScoreKind, string> = {
   copWreck: 'COP CAR WRECKED',
   evaded: 'EVADED',
   stunt: 'STUNT',
+  takeTheHeat: 'TAKE THE HEAT',
+  citizensArrest: "CITIZEN'S ARREST",
+  haveAGo: 'HAVE-A-GO HERO',
 };
 
 /** Shaking off a chase of this many stars or more earns the EVADED bonus. */

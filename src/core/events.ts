@@ -113,6 +113,8 @@ export type GameEvent =
       cop?: boolean;
       /** The one knocked over was a gang member: the gang's id. */
       gang?: string;
+      /** The one knocked over was fleeing a crime (a chase's suspect, a mugger): not an assault. */
+      suspect?: boolean;
     }
   | { type: 'carjack'; x: number; z: number }
   /** police: the car belongs to the police (a unit's, or the police model). */
@@ -241,7 +243,11 @@ export type StreetWhat =
   | 'witnessCall'
   // Traffic: two cars collided on their own, a truck double-parked in the lane.
   | 'accident'
-  | 'doublePark';
+  | 'doublePark'
+  // The player in a police chase (scenes/chases.ts): took the getaway and its cops, stopped it by a patrol, floored a suspect.
+  | 'takeTheHeat'
+  | 'citizensArrest'
+  | 'haveAGo';
 
 export type GameEventType = GameEvent['type'];
 export type EventOf<T extends GameEventType> = Extract<GameEvent, { type: T }>;

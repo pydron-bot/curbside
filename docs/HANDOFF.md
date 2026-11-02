@@ -445,8 +445,8 @@ there are cleared as they come, so little changed).
 
 **Review fix:** chases started while you were wanted broke off on their
 next step (`stepChase`), units and all driving off, so the counts above
-include some that did; chases now wait for no stars (`CHASE_HOLD` in
-`scenes/chases.ts`) until the chase stream's V2-03 lets one carry on.
+include some that did; chases waited for no stars until the chase
+handoff (V2-03) was merged, and now run while you're wanted.
 Re-run after that, pursuit only (`--roam 0 --pursuit 300`, so at night,
 hour ~2–3): an incident in view 12 / 12 / 7 s (seeds 1/2/3), coming into
 view 4× / 4× / 3×, 1 race each on the road ahead, no chase started.
