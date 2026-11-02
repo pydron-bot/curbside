@@ -15,7 +15,9 @@
  * score feed, and the police scanner's subtitle clear of all that, the
  * radio's card and the thumbs, on foot and in a car. OBSERVE, from the pause
  * menu and from the title: no HUD, under the budget at the widest zoom, and
- * back out to the paused run or the title. Catches the wiring crashes
+ * back out to the paused run or the title. The best-moment picture: a
+ * stamp, then WASTED shows its photo and caption clear of WASTED and the
+ * controls, and SHARE hands the (mocked) share sheet a JPEG. Catches the wiring crashes
  * `npm test` can't.
  *
  *   npx -y -p playwright@1.63.0 node tools/smoke.mjs [--no-build] [--port 4318] [--out smoke-out]
@@ -422,6 +424,118 @@ async function observeCheck(page, label) {
   check(!out.active && out.title && !out.paused, `${label}: EXIT goes back to the title`);
 }
 
+/** What the best-moment card must stay clear of on WASTED: its title, numbers and timer, the pause button, the corners' HUD and the thumbs. */
+const MOMENT_CLEAR_OF = ['.wasted-title', '.wasted-stats', '.wasted-timer', '.hud-pause', '#radar', '#score', '#wanted', '.tbtn', '.stick-base', '.aim-base', '.pedal-pad'];
+
+/**
+ * The best-moment picture (V2-16): a stamp (the longest name) photographed
+ * as it lands, then WASTED: the picture and caption show inside the view,
+ * clear of WASTED's own pieces and the controls; SHARE hands the share
+ * sheet (mocked) a JPEG, a refused share saves it; the respawn lets it go.
+ */
+async function momentCheck(page, label) {
+  const r = await page.evaluate(
+    async ({ clearOf }) => {
+      const u = window.__ub;
+      const frames = async (n) => {
+        for (let i = 0; i < n; i++) await new Promise((res) => requestAnimationFrame(() => res()));
+      };
+      if (u.paused) u.setPaused(false);
+      if (u.observe?.active) u.observe.exit();
+      u.startGame();
+      u.fastForward(1);
+      await frames(2);
+      u.stamp('neighbourhoodWatch');
+      await frames(2);
+      const pic = u.moment.picture;
+      const shot = pic ? { w: pic.width, h: pic.height, copy: Math.round(u.moment.copyMs * 10) / 10 } : null;
+      // Held on WASTED while it's measured (SwiftShader frames are slow enough to run the respawn's 3 s out).
+      u.testTools.timeScale = 0;
+      u.player.hurt(1e6);
+      const btn = document.querySelector('#wasted .moment-share');
+      for (let i = 0; i < 60 && btn.disabled; i++) await frames(1);
+      // The entrance animations at their end.
+      for (const a of document.getAnimations()) {
+        if (a instanceof CSSAnimation && a.effect?.target?.closest?.('#wasted')) {
+          a.pause();
+          a.currentTime = 3000;
+        }
+      }
+      const rect = (el) => {
+        const b = el.getBoundingClientRect();
+        return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, w: b.width, h: b.height };
+      };
+      const card = document.querySelector('#wasted .moment');
+      const s = rect(card);
+      const hits = [];
+      for (const sel of clearOf) {
+        for (const el of document.querySelectorAll(sel)) {
+          const b = rect(el);
+          if (b.w === 0 || b.h === 0 || getComputedStyle(el).visibility === 'hidden') continue;
+          if (s.left < b.right && b.left < s.right && s.top < b.bottom && b.top < s.bottom) hits.push(`${sel} ${Math.round(b.left)},${Math.round(b.top)}–${Math.round(b.right)},${Math.round(b.bottom)}`);
+        }
+      }
+      // Every line of the caption inside the card.
+      const spill = [...card.querySelectorAll('figcaption > *, .moment-share')].filter((el) => {
+        const b = rect(el);
+        // (The button's own overflow is its bigger touch target.)
+        return b.left < s.left - 1 || b.right > s.right + 1 || b.top < s.top - 1 || b.bottom > s.bottom + 1 || (el.tagName !== 'BUTTON' && el.scrollWidth > el.clientWidth + 1);
+      });
+      return {
+        shot,
+        wasted: !document.querySelector('#wasted').hidden,
+        shown: !card.hidden && Number(getComputedStyle(card).opacity) > 0.9,
+        caption: card.querySelector('figcaption').innerText.replace(/\s+/g, ' '),
+        ready: !btn.disabled,
+        inside: s.left >= 0 && s.right <= innerWidth && s.top >= 0 && s.bottom <= innerHeight,
+        spill: spill.map((el) => el.tagName.toLowerCase()),
+        hits,
+        s,
+      };
+    },
+    { clearOf: MOMENT_CLEAR_OF },
+  );
+  check(r.shot && r.shot.w > 0 && r.shot.w <= 800, `${label}: a stamp is photographed as it lands (${r.shot ? `${r.shot.w}×${r.shot.h}, copy ${r.shot.copy} ms` : 'none'})`);
+  check(
+    r.wasted && r.shown && r.ready && /NEIGHBOURHOOD WATCH three of the crew down/.test(r.caption) && r.inside && r.spill.length === 0,
+    `${label}: WASTED shows the picture and caption inside the view (${Math.round(r.s.left)},${Math.round(r.s.top)} ${Math.round(r.s.w)}×${Math.round(r.s.h)}: "${r.caption}"${r.spill.length ? `; spills: ${r.spill.join(', ')}` : ''})`,
+  );
+  check(r.hits.length === 0, `${label}: the picture is clear of WASTED and the controls${r.hits.length ? ` (covers ${r.hits.join(', ')})` : ''}`);
+  await page.screenshot({ path: path.join(opt.out, `${label}-moment.png`), timeout: 120000 });
+  await page.evaluate(() => {
+    window.__shareMode = 'ok';
+    window.__shared = null;
+    navigator.canShare = () => true;
+    navigator.share = async (data) => {
+      window.__shared = { files: data.files.map((f) => ({ name: f.name, type: f.type, size: f.size })), text: data.text };
+      if (window.__shareMode === 'deny') throw new DOMException('Not allowed', 'NotAllowedError');
+    };
+  });
+  const share = async (mode) => {
+    await page.evaluate((m) => {
+      window.__shareMode = m;
+      document.querySelector('#wasted .moment-share span').textContent = 'SHARE';
+    }, mode);
+    await page.click('#wasted .moment-share', { timeout: 30000 });
+    await page.waitForFunction(() => document.querySelector('#wasted .moment-share span').textContent !== 'SHARE', null, { timeout: 30000 });
+    return page.evaluate(() => ({ said: document.querySelector('#wasted .moment-share span').textContent, shared: window.__shared }));
+  };
+  const ok = await share('ok');
+  const f = ok.shared?.files ?? [];
+  check(
+    ok.said === 'SHARED' && f.length === 1 && f[0].type === 'image/jpeg' && /^curbside-neighbourhood-watch-.*\.jpg$/.test(f[0].name) && f[0].size > 5000 && ok.shared.text.startsWith('NEIGHBOURHOOD WATCH'),
+    `${label}: SHARE sends the picture as a JPEG (${f.map((x) => `${x.name} ${Math.round(x.size / 1024)} KB`).join(', ') || 'nothing'})`,
+  );
+  check((await share('deny')).said === 'SAVED', `${label}: a refused share saves the picture instead`);
+  const gone = await page.evaluate(() => {
+    const u = window.__ub;
+    u.testTools.timeScale = 1;
+    u.fastForward(5);
+    return { alive: u.player.alive, picture: u.moment.picture !== null, card: !document.querySelector('#wasted .moment').hidden };
+  });
+  check(gone.alive && !gone.picture && !gone.card, `${label}: the respawn lets the picture go (${JSON.stringify(gone)})`);
+}
+
 let server = null;
 let browser = null;
 try {
@@ -451,6 +565,7 @@ try {
       // The phones: the Chaos Run's card and stars up too (stamps stay on there).
       if (label.startsWith('iphone')) await stampCheck(page, label, true);
       await observeCheck(page, label);
+      await momentCheck(page, label);
     } catch (e) {
       check(false, `${label}: ${e.message.split('\n')[0]}`);
     }
