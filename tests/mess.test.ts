@@ -297,6 +297,8 @@ describe('your crash becomes their problem', () => {
     expect(theirs.towable).toBe(true);
     const driver = m.driver!;
     expect(w.population.crowd).toContain(driver);
+    // The city's own tows leave it for now: the patrol comes first.
+    expect(w.life.accidents.waiting(theirs)).toBe(true);
 
     // A patrol on its way, then there: the officer takes a statement.
     expect(w.run(40, () => m.phase === 'statement')).toBe(true);

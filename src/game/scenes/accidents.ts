@@ -43,6 +43,7 @@ import type { LabelSink } from '../debugLabels';
 import { BUSY_RANGE, SITE_RANGE, adoptVerdict, type AdoptVerdict, type Cause } from '../../systems/mess';
 import { FIRE_AT } from '../../systems/damage';
 import { Patrol } from './patrol';
+import { Tows } from './tows';
 import { handBack } from './people';
 
 type Phase = 'closing' | 'crashed' | 'argue' | 'fight' | 'sorted' | 'left';
@@ -323,9 +324,10 @@ export class Accidents implements Scene {
     return true;
   }
 
-  /** Is `v` the car of the player's mess? */
-  isMess(v: Vehicle): boolean {
-    return this.messOf(v) !== null;
+  /** Is `v` the car of the player's mess, not yet ready for its tow (the city's tows leave it till then)? */
+  waiting(v: Vehicle): boolean {
+    const m = this.messOf(v);
+    return m !== null && m.phase !== 'tow';
   }
 
   /** An ordinary car on the road nobody else has a use for (the tow can take it; not the player's, not kept). */
@@ -432,7 +434,15 @@ export class Accidents implements Scene {
     switch (m.phase) {
       case 'argue':
         this.messArgue(m);
-        if (m.called && !m.patrol && m.timer > MESS_NO_POLICE) this.messPhase(m, 'tow');
+        if (m.called && m.timer > MESS_NO_POLICE) {
+          // Nobody came (or it's stuck in traffic): stood down, and on to the tow.
+          if (m.patrol) {
+            m.patrol.leave();
+            this.leaving.push(m.patrol);
+            m.patrol = null;
+          }
+          this.messPhase(m, 'tow');
+        }
         return true;
       case 'statement':
         this.messStatement(m, dt);
@@ -512,7 +522,8 @@ export class Accidents implements Scene {
     const car = m.car;
     if (!m.towed && (m.towAsk -= dt) <= 0) {
       m.towAsk = TOW_ASK_EVERY;
-      const link = life.d.follow?.('tow', car.sim.x, car.sim.z, m.cause) ?? null;
+      // A city tow already on its way for it (it's towable now) counts; else one through the starter.
+      const link = this.towFor(car) ? life.chain(m.cause, 'tow', car.sim.x, car.sim.z) : (life.d.follow?.('tow', car.sim.x, car.sim.z, m.cause) ?? null);
       if (link) {
         m.cause = link;
         m.towed = true;
@@ -531,6 +542,12 @@ export class Accidents implements Scene {
       m.driver = null;
     }
     return m.patrol !== null;
+  }
+
+  /** Is a city tow on its way to `car` (Tows.towing only counts it once it's lined up)? */
+  private towFor(car: Vehicle): boolean {
+    for (const t of Tows.of(this.life)?.tows ?? []) if (t.car === car) return true;
+    return false;
   }
 
   private messPhase(m: Mess, phase: MessPhase): void {

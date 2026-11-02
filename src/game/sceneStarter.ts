@@ -21,7 +21,7 @@ import type { Player } from './player';
 import { trafficPaint, type Population, type Vehicle } from './population';
 import { CarAlarms } from './scenes/alarms';
 import { FireCrews } from './scenes/fireCrews';
-import { Tows } from './scenes/tows';
+import { MAX_TOWS, Tows } from './scenes/tows';
 import { spawnBeside, type Free, type Spot } from './testSpots';
 import type { SceneHost } from '../systems/missions';
 import { len2 } from '../core/len';
@@ -315,7 +315,8 @@ export class SceneStarter {
     const p = this.d.player;
     const car = this.nearest(x, z, FOLLOW_TOW, (v) => v.towable === true && !v.ai && !v.scene && v !== p.driving && !life.keeps(v));
     const tows = this.d.cityLife.scenes.find((s): s is Tows => s instanceof Tows);
-    return this.done(car !== null && (tows?.force(car) ?? false), 'TOW TRUCK CALLED', 'NO TOW TRUCK FREE');
+    // A crash's own tow comes even while the city's one is out (two at most).
+    return this.done(car !== null && (tows?.force(car, MAX_TOWS + 1) ?? false), 'TOW TRUCK CALLED', 'NO TOW TRUCK FREE');
   }
 
   /** The visible vehicle nearest (x, z) within `range` m that `ok` takes, or null. */
