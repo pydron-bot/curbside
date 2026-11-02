@@ -1792,6 +1792,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   stamp: (id: StampId) => stamps.force(id),
   /** The police scanner: say(topic) (now, at the player's), setEnabled(on), feed (pings, stars, said). */
   scanner,
+  scannerHud,
   /** The city's own life (game/cityLife.ts): clock, scenes, medics, drops, people, owned, hospital, bays. */
   cityLife,
   /** How much of the city the player has seen (systems/inViewMeter.ts): per-kind seconds in view, starts, seen, unseen. */
