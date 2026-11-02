@@ -167,8 +167,8 @@ export class Medics implements Scene {
   /** Passers-by knocked out cold near the player stay down as patients (up to the cap). */
   private findPatients(): void {
     const life = this.life;
-    // Behind the title nobody calls an ambulance: people get up as before.
-    if (this.patients.length >= MAX_PATIENTS || !life.d.playing()) return;
+    // Behind the title nobody calls an ambulance: people get up as before (in Observe they're called).
+    if (this.patients.length >= MAX_PATIENTS || !life.live) return;
     for (const c of life.d.population.crowd) {
       const a = c.agent;
       if (a.mode !== 'down' || !a.ko || a.injured || !a.street || a.scene || a.role !== 'civilian') continue;

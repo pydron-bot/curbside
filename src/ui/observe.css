@@ -1,0 +1,212 @@
+/* --- Observe mode (src/ui/observeMode.ts): one small strip over the city, nothing else --- */
+#observe {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  pointer-events: none;
+  color: var(--ink);
+  font-family: var(--hud-font);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#observe[hidden] {
+  display: none;
+}
+
+/* The canvas takes drags, pinches and twists: no browser panning or zooming over it. */
+body[data-scene='observe'] #app canvas {
+  touch-action: none;
+  cursor: grab;
+}
+
+body[data-scene='observe'] #app canvas:active {
+  cursor: grabbing;
+}
+
+/* A fade across to a far incident (like the title's cut). */
+.observe-fade {
+  position: absolute;
+  inset: 0;
+  background: #05050a;
+  opacity: 0;
+}
+
+.observe-ui {
+  position: absolute;
+  left: 50%;
+  bottom: var(--edge-b);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  max-width: calc(100% - var(--edge-l) - var(--edge-r));
+  transform: translateX(-50%);
+  transition: opacity 0.6s ease;
+}
+
+/* Idle: gone, and out of the way of taps on the city (the first touch brings it back). */
+.observe-ui.idle {
+  opacity: 0;
+}
+
+.observe-ui.idle .observe-strip {
+  pointer-events: none;
+}
+
+.observe-strip {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: rgb(12 12 18 / 0.78);
+  box-shadow: 0 6px 22px rgb(0 0 0 / 0.45), inset 0 0 0 1px rgb(255 255 255 / 0.1);
+  pointer-events: auto;
+}
+
+.observe-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ink);
+  font: italic 900 11px/1 var(--display-font);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.observe-btn svg {
+  flex: none;
+  width: 19px;
+  height: 19px;
+}
+
+.observe-btn:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+
+.observe-btn:active {
+  transform: scale(0.95);
+}
+
+.observe-btn.on {
+  color: var(--neon-cyan);
+}
+
+.observe-exit {
+  color: var(--neon-pink);
+}
+
+.observe-note,
+.observe-hints {
+  font: 800 10px/1.2 var(--hud-font);
+  letter-spacing: 0.16em;
+  text-align: center;
+  text-shadow: var(--hud-shadow);
+}
+
+.observe-note {
+  min-height: 12px;
+  color: var(--neon-yellow);
+}
+
+.observe-hints {
+  color: var(--ink-dim);
+}
+
+.observe-hints kbd {
+  display: inline-block;
+  min-width: 16px;
+  margin: 0 2px 0 6px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  background: rgb(255 255 255 / 0.14);
+  font: 800 9px/1 var(--hud-font);
+  letter-spacing: 0.04em;
+}
+
+.observe-hints kbd + kbd {
+  margin-left: 0;
+}
+
+.observe-hints kbd.pad {
+  border-radius: 9px;
+}
+
+/* Where you are, or what you cut to: top right, as on the title. */
+.observe-caption {
+  position: absolute;
+  top: calc(var(--edge-t) + 6px);
+  right: var(--edge-r);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  opacity: 0;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.9);
+}
+
+.observe-caption b {
+  padding-right: 7px;
+  border-right: 3px solid var(--neon-pink);
+  color: #fff;
+  font: italic 900 15px/1 var(--display-font);
+  letter-spacing: 0.04em;
+}
+
+.observe-caption span {
+  padding-right: 10px;
+  color: var(--neon-cyan);
+  font: 800 9px/1 var(--hud-font);
+  letter-spacing: 0.2em;
+}
+
+.observe-caption span:empty {
+  display: none;
+}
+
+/* The palette: every city scene, in a grid. */
+.observe-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 6px;
+}
+
+.observe-grid .mbtn {
+  min-height: 40px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+/* A landscape phone: a tighter strip; with Safari's toolbar showing (340 high) the hints go. */
+@media (max-height: 420px) {
+  .observe-btn {
+    padding: 0 8px;
+    font-size: 10px;
+  }
+
+  .observe-btn svg {
+    width: 17px;
+    height: 17px;
+  }
+}
+
+@media (max-height: 360px) {
+  .observe-hints {
+    display: none;
+  }
+}
+
+@media (max-width: 700px) {
+  .observe-btn b {
+    display: none;
+  }
+}

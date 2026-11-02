@@ -68,7 +68,7 @@ export class Vendors implements Scene {
     const busy = cartBusyness(life.d.hour?.() ?? 13);
     for (const st of this.stands) {
       const q = st.queue;
-      if (scan && life.d.playing() && roomFor(life, 2)) {
+      if (scan && life.live && roomFor(life, 2)) {
         q.spec.joinChance = 0.08 + 0.4 * busy;
         q.recruit();
         this.keepVendor(st);

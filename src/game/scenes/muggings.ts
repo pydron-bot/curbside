@@ -89,7 +89,7 @@ export class Muggings implements Scene {
     const life = this.life;
     if ((this.scan -= dt) <= 0) {
       this.scan = 1;
-      if (life.d.playing() && life.due('mugging', this.muggings.length) && roomFor(life, 2)) this.look();
+      if (life.live && life.due('mugging', this.muggings.length) && roomFor(life, 2)) this.look();
     }
     for (let i = this.muggings.length - 1; i >= 0; i--) {
       const m = this.muggings[i];

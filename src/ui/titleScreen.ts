@@ -3,7 +3,7 @@ import { VERSION } from '../core/changelog';
 import './title.css';
 import type { GameAudio } from '../audio/gameAudio';
 import type { InputDevice } from '../core/input';
-import { ICONS } from './icons';
+import { ICONS, type IconName } from './icons';
 import { onInstallAvailable, promptInstall } from './installPrompt';
 import { MenuNav, menuButton, type NavItem, type Panel } from './menu';
 import { fmt } from './scoreHud';
@@ -182,6 +182,17 @@ export class TitleScreen implements Panel {
     this.modes.append(el);
     const item = this.nav.add({ el, activate: () => this.select(() => this.opts.onMode(mode)) });
     this.modeItems.set(mode.id, { el, item });
+  }
+
+  /**
+   * A button of another system's under PLAY, laid out like a mode (two to a
+   * row) but not starting a run: `activate` does what it does (e.g. OBSERVE).
+   */
+  addEntry(label: string, sub: string, icon: IconName, className: string, activate: () => void): HTMLButtonElement {
+    const b = menuButton(label, { icon, sub, className: `title-mode ${className}` });
+    this.modes.append(b);
+    this.nav.add({ el: b, activate: () => this.select(activate) });
+    return b;
   }
 
   /** A line of another system's under the best score (e.g. cash); the hub link stays last. */

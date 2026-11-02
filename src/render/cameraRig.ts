@@ -69,6 +69,12 @@ export class CameraRig {
   /** Gentler camera: less shake, no roll, no FOV punches. */
   reducedMotion = false;
   /**
+   * The view turned about the vertical, radians (Observe mode's free
+   * camera); 0, as everywhere else, keeps screen-up along world -Z. The
+   * look-ahead stays in world axes, so leave it at 0 with a lead set.
+   */
+  yaw = 0;
+  /**
    * How fast the world moves this frame relative to real time (hit-stop
    * slows it). The velocity feed-forward is scaled by it, or the view would
    * run on ahead of a frozen car and spring back; shake keeps real time.
@@ -154,9 +160,11 @@ export class CameraRig {
     this.fov.kick(-degrees * Math.sqrt(this.fov.stiffness) * 2.4);
   }
 
-  snapTo(x: number, z: number): void {
+  /** Straight to (x, z), at `height` m if given (else it eases on from where it is). */
+  snapTo(x: number, z: number, height?: number): void {
     this.x = x;
     this.z = z;
+    if (height !== undefined) this.height = height;
     this.leadX = this.leadZ = 0;
     this.aimLeadX = this.aimLeadZ = this.aimWantX = this.aimWantZ = 0;
     this.timeScale = 1;
@@ -258,9 +266,14 @@ export class CameraRig {
     const amp = s * h * this.opts.shakeOffset;
     const jx = amp * smoothNoise(t, 1) + this.kickX.value;
     const jz = amp * smoothNoise(t, 2) + this.kickZ.value;
-    this.camera.position.set(this.x + jx, h, this.z + back + jz);
+    // Behind the look point along screen-down, and screen-up (rolled by the shake), both turned by yaw.
+    const sy = Math.sin(this.yaw);
+    const cy = Math.cos(this.yaw);
+    this.camera.position.set(this.x + jx + sy * back, h, this.z + jz + cy * back);
     const roll = this.reducedMotion ? 0 : s * this.opts.shakeRoll * smoothNoise(t * 0.8, 3);
-    this.camera.up.set(Math.sin(roll), 0, -Math.cos(roll));
+    const ux = Math.sin(roll);
+    const uz = -Math.cos(roll);
+    this.camera.up.set(ux * cy + uz * sy, 0, uz * cy - ux * sy);
     this.camera.lookAt(this.x + jx, 0, this.z + jz);
     const fov = this.baseFov + this.fov.value;
     if (Math.abs(fov - this.camera.fov) > 1e-4) {
