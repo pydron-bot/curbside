@@ -325,10 +325,9 @@ still get the offline shell.
    direction, vendor spot) and `dressing.street.busStops` (wait spot, where
    a bus pulls in, its lane) are used by item 12 (the shelters are now
    the only bus stops; walkers step round a kerb cart's queue). **For the device pass:**
-   whether the stand-ins read from the phone's camera, and the street
-   family's vertex cost (5,976 vertices per instance, was 3,276; every
-   instance runs every model's vertices, dropped early) in a busy downtown
-   view. Not done: scaffolding, a work van, water barriers.
+   whether the stand-ins read from the phone's camera. (The street
+   family's vertex cost is fixed on `claude/perf-props`: each prop now runs
+   only its own model; README *Families*.) Not done: scaffolding, a work van, water barriers.
 
 12. **City people: done 2026-11-01** on `claude/city-people` (README *City
    life*, *People*; built on item 10's base). The bus shelters are the only

@@ -279,13 +279,13 @@ name with no code change. Same contract as §3: one root per prop, origin on
 the ground at the middle of the footprint, game +Z is the **front** (the
 side named below), Y up, metres, flat colours, no textures.
 
-**Triangle budget matters more here than for §3.** All of these join the
-`street` family (one draw call for every kerbside model), and each instance
-of the family runs every model's vertices through the vertex shader (the
-other models' vertices are dropped early, but they still run). The family
-was ~1,100 tris (3,276 vertices); the stand-ins add 900 tris (2,700 vertices) for the 20 roots. Please keep
-each root to the budget below (≤ 60 for the small, frequent ones) and
-leave out faces nobody sees (undersides, the inside of a skip).
+**Triangle budget.** All of these join the `street` family (one draw call
+for every kerbside model). Each instance runs only its own model's
+vertices (rounded up to the family's chunk of 126; README *Families*), so a
+root's triangles cost once per copy in view: the small, frequent ones
+(meters, bins, cones, barrels) add up most. Please keep each root to the
+budget below (≤ 60 for the small, frequent ones) and leave out faces
+nobody sees (undersides, the inside of a skip).
 
 Material names: any name works for a fixed colour; these get special
 shading (`src/render/propModels.ts` `surfaceFor`): `barrier_orange`,
