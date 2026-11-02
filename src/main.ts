@@ -86,6 +86,7 @@ import { fullRateDriver, holdAi, nearJunction, vehicleObstacles, type Obstacle }
 import type { PauseReason } from './ui/pauseOverlay';
 import { loadBest } from './ui/scoreHud';
 import { StampHud } from './ui/stampHud';
+import { MomentCard } from './ui/momentCard';
 import { Stamps } from './game/stamps';
 import { Scanner } from './game/scanner';
 import { ScannerHud } from './ui/scannerHud';
@@ -1285,7 +1286,8 @@ function frame(now: number) {
   // Computed once: fx.simScale advances the hit-stop.
   // TEST's slow motion scales it like a hit-stop (people, pigeons and combat effects too, below).
   const slow = testTools.timeScale;
-  const simDt = frameSeconds * fx.simScale(frameSeconds) * (observe?.holdsRun ? 1 : progress.simScale()) * slow;
+  // The best-moment picture's share sheet holds WASTED, like a card.
+  const simDt = frameSeconds * fx.simScale(frameSeconds) * (observe?.holdsRun ? 1 : progress.simScale()) * slow * moment.simScale();
   const alpha = loop.advance(simDt, simulate);
 
   // Interpolate render state between the last two sim steps.
@@ -1349,6 +1351,8 @@ function frame(now: number) {
 
   look.update(frameSeconds, viewOfPlayer());
   look.render(rig.camera);
+  // Copied in the same task as the draw, only on the frame a life's better stamp lands.
+  moment.afterRender();
   labels.update(frameSeconds, viewW, viewH, playing);
   resolution.sample(elapsed);
   const jsMs = performance.now() - t0;
@@ -1437,6 +1441,14 @@ const hud = new Hud(document.body, score, events, {
 });
 const combatHud = new CombatHud(document.getElementById('hud')!);
 new StampHud(document.getElementById('hud')!, events);
+// The life's best stamped moment, photographed as it lands and shown on WASTED / BUSTED (ui/momentCard.ts).
+const moment = new MomentCard(document.getElementById('wasted')!, {
+  bus: events,
+  source: renderer.domElement,
+  lost: () => contextLost,
+  hour: () => look.time.hour,
+  log: (kind, detail) => logEvent(kind, detail),
+});
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
 // Where the ambulances go.
 radar.setBlip('hospital', { x: cityLife.hospital.x, z: cityLife.hospital.z, kind: 'friend', icon: '+', size: 6 });
@@ -1860,6 +1872,8 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   stamps,
   /** Slam a stamp on now (smoke test, playtests): an id from STAMPS ('barbecueSeason', 'takeTheHeat', …). */
   stamp: (id: StampId) => stamps.force(id),
+  /** The best-moment picture: best (the life's stamp), picture, copyMs, encodeMs, holding. */
+  moment,
   /** The police scanner: say(topic) (now, at the player's), setEnabled(on), feed (pings, stars, said). */
   scanner,
   scannerHud,
