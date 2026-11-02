@@ -15,6 +15,19 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.12.0',
+    date: '2026-11-02',
+    title: 'Smoother city, livelier title',
+    notes: [
+      'The title camera keeps the action in the open space right of the menu.',
+      'After a while the title screen cuts to something happening in the city (a police chase, a street race, a fire, a turf war, the ice cream van...) and follows it, with a caption.',
+      'Street props draw only their own shapes: 3–9× fewer triangles per frame, same look.',
+      'Small props and rubble are lit by just the street lamps that reach them at night.',
+      'People, traffic and dogs far off screen think less often; anything near you or in a fight stays at full speed.',
+      'TEST → Scenes: dogs chase a runner.',
+    ],
+  },
+  {
     version: '0.11.0',
     date: '2026-11-01',
     title: 'Version numbers, bug reports and smoother mayhem',
