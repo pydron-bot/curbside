@@ -198,7 +198,9 @@ export class Rain {
           float a;
           if (vSplash > 0.5) {
             float r = length(vUv * 2.0 - 1.0);
-            a = exp(-pow((r - 0.75) * 9.0, 2.0)) * vFade * 0.33;
+            // t*t, not pow(t, 2.0): pow of a negative base is undefined in GLSL (NaN on some GPUs).
+            float t = (r - 0.75) * 9.0;
+            a = exp(-t * t) * vFade * 0.33;
           } else {
             float across = abs(vUv.x * 2.0 - 1.0);
             a = (1.0 - across) * vUv.y * vFade * 0.75;
