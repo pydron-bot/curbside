@@ -124,6 +124,21 @@ export const ICONS = {
   ),
   chevron: svg('<path d="M4 18 12 6l8 12-8-4z" fill="currentColor"/>'),
   /** A beetle: REPORT BUG. */
+  /** The fire truck's hose: a nozzle and its spray. */
+  hose: svg(
+    '<path d="M2.5 10.5h6l3.5-1.5v6l-3.5-1.5h-6z" fill="currentColor"/>' +
+      '<path d="M14.5 9.5 20 6.5M14.5 12h6.5M14.5 14.5l5.5 3" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-dasharray="2.2 1.8"/>',
+  ),
+  /** The ice cream van's chime: a hand bell. */
+  chime: svg(
+    '<path d="M12 3.2a1.4 1.4 0 0 1 1.4 1.4v.7A5.8 5.8 0 0 1 17.8 11v3.6l2 2.6H4.2l2-2.6V11a5.8 5.8 0 0 1 4.4-5.7v-.7A1.4 1.4 0 0 1 12 3.2z" fill="currentColor"/>' +
+      '<path d="M9.8 19.4a2.2 2.2 0 0 0 4.4 0" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',
+  ),
+  /** The tow truck's winch: a hook on its line. */
+  winch: svg(
+    '<path d="M12 2.5v9.5a4 4 0 1 1-4-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>' +
+      '<path d="M8.5 2.5h7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>',
+  ),
   bug: svg(
     '<ellipse cx="12" cy="14" rx="5" ry="6.2" fill="currentColor"/><circle cx="12" cy="6.6" r="2.6" fill="currentColor"/><path d="M7 11H3.5M7 15H3M7.6 18.8 4.5 21M17 11h3.5M17 15h4M16.4 18.8l3.1 2.2M10.3 4.6 8.6 2.6M13.7 4.6l1.7-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
   ),

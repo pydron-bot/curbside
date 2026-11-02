@@ -44,6 +44,7 @@ import { RaceMode } from './modes/raceMode';
 import { RACES, formatRaceTime } from './modes/races';
 import { SHOP_ITEMS, TOUGH_SKIN_HEALTH, canBuy, sprayPrice } from './modes/shop';
 import { TaxiMode } from './modes/taxiMode';
+import { ServiceMode } from './modes/serviceMode';
 import { PERKS, PERK_RANKS, levelFor, pendingLevels, rankOf } from './cred';
 import { CredKeeper } from './credKeeper';
 import { BUST_FINE } from './heat';
@@ -82,6 +83,8 @@ export class ProgressDirector implements ModeCtx {
   readonly races: RaceMode;
   readonly exports: ExportMode;
   readonly taxi: TaxiMode;
+  /** Borrowed Blues: duty pay for the hose and the tow side job, Vex's tow contracts. */
+  readonly service: ServiceMode;
   readonly missions: MissionMode;
   readonly gangs: GangMode;
   readonly area: AreaMode;
@@ -138,13 +141,14 @@ export class ProgressDirector implements ModeCtx {
     this.exports = new ExportMode(this, d.city);
     this.taxi = new TaxiMode(this);
     this.missions = new MissionMode(this, this.exports.docks, this.dialogue);
+    this.service = new ServiceMode(this, d.tools ?? null, this.dialogue);
     pruneSave(this.progress.data, { missions: this.missions.missions.map((m) => m.id) });
     this.gangs = new GangMode(this);
     this.area = new AreaMode(this, new AreaCard(document.body), this.gangs);
     // Perks are off while a score or a time is being set.
     this.cred = new CredKeeper(this, () => this.chaos.active || this.races.running);
     // Card owners first: a running mode claims the activity card before a passive one.
-    this.modes = [this.chaos, this.frenzies, this.races, this.missions, this.taxi, this.exports, this.packages, this.gangs, this.area];
+    this.modes = [this.chaos, this.frenzies, this.races, this.missions, this.taxi, this.service, this.exports, this.packages, this.gangs, this.area];
 
     // --- Title and pause ---
     d.frontDoor.title.addMode(this.chaosTitleMode());

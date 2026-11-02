@@ -26,6 +26,7 @@ import type { Nitro } from '../nitro';
 import type { Player } from '../player';
 import type { Population, Vehicle } from '../population';
 import type { Progress } from '../progress';
+import type { ServiceTools } from '../scenes/serviceTools';
 
 /**
  * HUD text rebuilt only when what it shows changes: the per-frame HUD code
@@ -68,6 +69,8 @@ export interface ProgressDeps {
   nitro: Nitro;
   /** Haptic ticks for the cards (a refused purchase). */
   haptics?: Haptics;
+  /** The borrowed service vehicles' tools (cityLife.tools): what serviceMode pays for. */
+  tools?: ServiceTools;
   /** False behind the title (attract mode). */
   playing(): boolean;
   /** Quit to the title screen. */

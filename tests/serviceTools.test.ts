@@ -6,12 +6,16 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import type { ColorRepresentation } from 'three';
-import { EventBus, type GameEvent } from '../src/core/events';
+import { EventBus, type GameEvent, type ToolWhat } from '../src/core/events';
 import { VEHICLE_BODIES, VEHICLE_HEALTH, createVehicleState, type VehicleArchetype } from '../src/entities/vehicle';
 import { CityLife } from '../src/game/cityLife';
 import { Player } from '../src/game/player';
 import { Population, type Vehicle } from '../src/game/population';
+import type { ModeCtx } from '../src/game/modes/context';
+import { ServiceMode } from '../src/game/modes/serviceMode';
 import { FIRE_TRUCK, FireCrews } from '../src/game/scenes/fireCrews';
+import type { ServiceTools } from '../src/game/scenes/serviceTools';
+import type { DialogueCard } from '../src/ui/progressScreens';
 import { ServiceRun } from '../src/game/scenes/service';
 import { Tows } from '../src/game/scenes/tows';
 import type { CarMesh } from '../src/render/carMesh';
@@ -27,6 +31,7 @@ import {
   Chime,
   CONTRACT_EVERY,
   CONTRACT_FIRST,
+  CONTRACT_PAY,
   DUTY_STREAK_BONUS,
   DUTY_STREAK_EVERY,
   HOOK_RANGE,
@@ -568,5 +573,98 @@ describe('the guard in the city', () => {
     w.run(0.1);
     const again = ServiceRun.call(w.life, FIRE_TRUCK, 9.5, 60);
     expect(again?.v).toBe(truck);
+  });
+});
+
+describe('duty pay (serviceMode)', () => {
+  /** Does nothing, whatever's asked of it. */
+  const anything = (): never => new Proxy(() => anything(), { get: () => anything() }) as never;
+  function duty(hour = 22) {
+    const bus = new EventBus();
+    const player = new Player(bus, 0, 0);
+    const paid: [number, string][] = [];
+    const shown: string[] = [];
+    const tools = { hooked: null as Vehicle | null, delivered: null as Vehicle | null, yard: { x: 500, z: 500 }, winchUp: 1, chime: { on: false, anchored: false }, queue: { members: [] } };
+    const spawned: Vehicle[] = [];
+    const ctx = {
+      deps: { bus, player, input: { lastDevice: 'keyboard' }, look: { time: { hour } }, radar: anything(), audio: anything(), rand: random(5) },
+      live: true,
+      freeRoam: true,
+      busy: null as string | null,
+      focusRing: false,
+      ui: anything(),
+      pay: (n: number, _reason: string, label: string) => (paid.push([n, label]), n),
+      notice() {},
+      blip() {},
+      unblip() {},
+      unpin() {},
+      openModal() {},
+      closeModal() {},
+      spawnCar: (archetype: VehicleArchetype, _paint: string, x: number, z: number, heading: number) => {
+        const sim = createVehicleState(x, z, heading);
+        const v = { archetype, sim, mesh: { root: { visible: true } }, damage: createDamage(100), ai: null } as unknown as Vehicle;
+        spawned.push(v);
+        return v;
+      },
+    };
+    const card = { show: (head: string, _t: string, _l: unknown, _r: string, _b: string, _f: boolean, done: () => void) => (shown.push(head), done()) };
+    const mode = new ServiceMode(ctx as unknown as ModeCtx, tools as unknown as ServiceTools, card as unknown as DialogueCard);
+    const truck = (archetype: VehicleArchetype) => {
+      const sim = createVehicleState(0, 0, 0);
+      return { archetype, sim, damage: createDamage(100), mesh: { root: { visible: true } } } as unknown as Vehicle;
+    };
+    const tool = (what: ToolWhat, condition?: number, wrecked?: boolean) => bus.emit({ type: 'tool', tool: 'winch', what, x: 0, z: 0, condition, wrecked });
+    return { bus, player, paid, shown, tools, spawned, mode, truck, tool };
+  }
+
+  it('pays for each fire the hose puts out, a streak bonus every third, and getting out loses the streak', () => {
+    const d = duty();
+    d.player.enter(d.truck('firetruck'));
+    d.mode.step(DT);
+    for (let i = 0; i < DUTY_STREAK_EVERY; i++) d.tool('fireOut');
+    expect(d.paid.filter(([, l]) => l === 'FIRE OUT').length).toBe(DUTY_STREAK_EVERY);
+    expect(d.paid.some(([n]) => n === DUTY_STREAK_BONUS)).toBe(true);
+    d.player.exit();
+    d.mode.step(DT);
+    d.player.enter(d.truck('firetruck'));
+    d.mode.step(DT);
+    d.paid.length = 0;
+    for (let i = 0; i < DUTY_STREAK_EVERY - 1; i++) d.tool('fireOut');
+    expect(d.paid.some(([n]) => n === DUTY_STREAK_BONUS)).toBe(false);
+  });
+
+  it("pays the yard's price by condition for a delivery", () => {
+    const d = duty();
+    d.player.enter(d.truck('tow_truck'));
+    d.mode.step(DT);
+    d.tool('deliver', 0.9, false);
+    d.tool('deliver', 0.2, true);
+    expect(d.paid).toEqual([
+      [towPay(0.9, false).pay, 'TOWED · CLEAN'],
+      [SCRAP_PAY, 'TOWED · SCRAP'],
+    ]);
+  });
+
+  it("Vex rings after dark with a contract; her wreck delivered pays the contract on top", () => {
+    const d = duty(23);
+    d.player.enter(d.truck('tow_truck'));
+    for (let t = 0; t < CONTRACT_FIRST + 1; t += DT) d.mode.step(DT);
+    expect(d.shown.length).toBe(1);
+    expect(d.spawned.length).toBe(1);
+    const wreck = d.spawned[0];
+    expect(wreck.towable).toBe(true);
+    d.tools.delivered = wreck;
+    d.tool('deliver', 0.4, false);
+    expect(d.paid.some(([n, l]) => n === CONTRACT_PAY && l === "VEX'S CONTRACT")).toBe(true);
+    // Not again straight away.
+    for (let t = 0; t < 10; t += DT) d.mode.step(DT);
+    expect(d.shown.length).toBe(1);
+  });
+
+  it('Vex never rings by day', () => {
+    const d = duty(13);
+    d.player.enter(d.truck('tow_truck'));
+    for (let t = 0; t < CONTRACT_FIRST + 5; t += DT) d.mode.step(DT);
+    expect(d.shown.length).toBe(0);
   });
 });
