@@ -60,6 +60,12 @@ const LULL = 'MAYOR LULL';
 
 /** Clamp's tow trucks: traffic-cone orange, apart from the city's yellow ones. */
 const CLAMP_ORANGE = '#e0661f';
+/** Doreen's van behind the Shift's truck on the hook, m centre to centre (the truck's reach 3.5, the hook's gap, the van's 2.8). */
+const HOOK_BEHIND = 6.9;
+/** The Graveyard Shift's blue (Vex's truck, the crew's). */
+const SHIFT_BLUE = '#3c5a8c';
+/** Doreen: ice cream van mint. */
+const DOREEN_MINT = '#bfe8d8';
 /** Wardens' hi-vis (Clamp's in the Night Shift, Lull's in the main story). */
 const HI_VIS = '#d4e23c';
 
@@ -95,6 +101,29 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
   // Where Lionel plays on Neon Mile.
   const mile = kerb(5, -4, 0, 26);
   const spareLionel = [{ down: 'lionel', reason: 'NOT LIONEL! HE WAS ON YOUR SIDE' }];
+  // The Graveyard Shift's truck on Neon Mile with Doreen's van on its hook, and Doreen's pitch in Cobble Row.
+  const shiftTow = kerb(2, -5, 1, 26);
+  const hookedVan = kerb(2, -5, 1, 26 - HOOK_BEHIND);
+  const pitch = kerb(-3, -5, 1, 30);
+  const doreen = kerbside(-3, -5, 1, 30);
+  const vanFails = [
+    { wrecked: 'doreenvan', reason: "DOREEN'S VAN IS WRECKED" },
+    { damaged: 'doreenvan', reason: "YOU SCRATCHED DOREEN'S VAN" },
+  ];
+  // The Mayor's limo at her ribbon outside the Town Hall in Glass Heights.
+  const ribbon = kerb(-2, 0, 1, 26);
+  // The judges' coach: leaves Glass Heights and tours Cobble Row and Neon Mile, round and round.
+  const coach = kerb(-1, 0, 0, 26);
+  const tour: Array<[number, number]> = [
+    [-1, -3],
+    [-4, -4],
+    [0, -6],
+    [3, -5],
+    [3, -2],
+    [0, -1],
+  ];
+  // Along it: a race in Cobble Row, a fire on the Mile, a turf flare-up where the Mile meets Glass Heights.
+  const node = (i: number) => ({ x: tour[i][0] * BLOCK_SIZE, z: tour[i][1] * BLOCK_SIZE });
 
   return [
     // ── KEEP IT LOUD (the main story) ──
@@ -193,6 +222,113 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
           r: 9,
           text: 'GET LIONEL TO NEON MILE',
           done: [{ do: 'alight', tag: 'lionel' }],
+        },
+      ],
+    },
+    {
+      id: 's4-problems',
+      title: 'NINETY-NINE PROBLEMS',
+      arc: 'main',
+      phone: 'phone-arts',
+      reward: 2000,
+      // The Night Shift's one cameo: Lull has hired Vex's crew to tow the traders' vans.
+      intro: [
+        { who: DOREEN, text: "They're towing my van. Council contract. Some night crew in blue." },
+        { who: VEX, text: 'Nothing personal. Council pays by the van. You pay in compliments.' },
+        { who: DOREEN, text: "It's on their hook on Neon Mile. Box them in at a light. Not one scratch, mind. She's vintage." },
+      ],
+      outro: [
+        { who: DOREEN, text: "Not a scratch. Thirty years she's played Greensleeves. She's earned a lie-down." },
+        { who: VEX, text: "Council's docking my pay for that. Worth it. You drive like somebody's nan." },
+        { who: DOREEN, text: 'Free cones for life. Small ones. Lovely.' },
+      ],
+      steps: [
+        {
+          kind: 'enter',
+          tag: 'doreenvan',
+          text: "TAKE THE VAN BACK · DON'T SCRATCH IT",
+          // The truck pulls away as you come; caught standing (a light, boxed in), carjacked or stopped, the crew lets the van go.
+          start: [
+            { do: 'spawnCar', tag: 'shifttow', archetype: 'tow_truck', paint: SHIFT_BLUE, ...shiftTow, drive: true, wait: 35, cruise: 10 },
+            { do: 'spawnCar', tag: 'doreenvan', archetype: 'ice_cream_van', paint: DOREEN_MINT, ...hookedVan },
+            { do: 'tow', tag: 'doreenvan', truck: 'shifttow' },
+          ],
+          fail: vanFails,
+        },
+        {
+          kind: 'deliver',
+          tag: 'doreenvan',
+          x: pitch.x,
+          z: pitch.z,
+          r: 9,
+          text: 'BRING IT TO DOREEN IN COBBLE ROW',
+          start: [{ do: 'spawnPed', tag: 'doreen', ...doreen, shirt: DOREEN_MINT, body: 'player_f' }],
+          fail: [...vanFails, { lost: 'doreenvan', reason: "YOU LEFT DOREEN'S VAN BEHIND" }],
+        },
+      ],
+    },
+    {
+      id: 's5-ribbon',
+      title: 'RIBBON CUTTING',
+      arc: 'main',
+      phone: 'phone-oldtown',
+      reward: 2500,
+      intro: [
+        { who: LULL, text: "Mayor Lull. Today I open our first Silent Zone, in Glass Heights. Please don't clap." },
+        { who: DOREEN, text: "She cuts her ribbon, then she's off in that limo. I want it in bits." },
+        { who: LIONEL, text: 'Take these. I call them fireworks. The council calls them evidence.' },
+      ],
+      outro: [
+        { who: LULL, text: 'Mayor Lull. The Silent Zone is closed for repairs. As is my limo. Quietly.' },
+        { who: LIONEL, text: "That bang! The reverb! Glass Heights hasn't had applause like it since the eighties." },
+        { who: DOREEN, text: "She'll be cross now. Lovely." },
+      ],
+      steps: [
+        {
+          kind: 'destroy',
+          tags: ['lulllimo'],
+          text: "WRECK THE MAYOR'S LIMO",
+          // Parked at the ribbon until you're close (or it's hit), then off into traffic.
+          start: [
+            { do: 'give', weapon: 'grenade' },
+            { do: 'spawnCar', tag: 'lulllimo', archetype: 'limo', paint: '#ece6da', ...ribbon, drive: true, wait: 50 },
+          ],
+        },
+      ],
+    },
+    {
+      id: 's6-quietest',
+      title: 'QUIETEST CITY',
+      arc: 'main',
+      phone: 'phone-suburbs',
+      reward: 5000,
+      // The coach leaves at nine.
+      hour: 21,
+      intro: [
+        { who: LULL, text: "Mayor Lull. The award judges tour our streets tonight. They will see nothing. That's the point." },
+        { who: DOREEN, text: 'Coach leaves Glass Heights at nine. Make sure they see everything.' },
+        { who: LIONEL, text: "I've done a running order. A race, a fire, a punch-up. Then me, obviously." },
+      ],
+      outro: [
+        { who: LULL, text: 'Quietest City has gone to a village with one goat. The goat was louder than you lot, apparently.' },
+        { who: LIONEL, text: 'A judge asked for my autograph. Well. He asked where the toilets were. Same thing.' },
+        { who: DOREEN, text: "'Curbside nuisances', she wrote. Can't even spell kerb. We're the Curbside, then. Lovely." },
+      ],
+      steps: [
+        {
+          kind: 'mayhem',
+          points: 5000,
+          // Counted round the coach wherever it's got to (its radius: in sight of its windows, more or less).
+          near: { x: coach.x, z: coach.z, r: 100, tag: 'coach' },
+          text: 'GIVE THE JUDGES A SHOW',
+          start: [
+            // It waits at its kerb until you turn up, then tours at a sightseer's pace.
+            { do: 'spawnCar', tag: 'coach', archetype: 'bus', paint: '#24305e', ...coach, drive: true, wait: 60, cruise: 8, route: tour },
+            // Each once you're within 140 m of its crossing: you're with the coach, a little behind or ahead of it.
+            { do: 'scene', scene: 'race', ...node(1), r: 140 },
+            { do: 'scene', scene: 'fire', ...node(3), r: 140 },
+            { do: 'scene', scene: 'turf', ...node(4), r: 140 },
+          ],
         },
       ],
     },
