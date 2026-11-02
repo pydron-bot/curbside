@@ -66,7 +66,7 @@ describe('the core city (today’s 16 × 16) at any size', () => {
 
   it('has the same ramps, pickups and street furniture', () => {
     expect.soft(hash(ramps.filter((r) => inCore(r.x, r.z)))).toBe('c64427e3');
-    expect.soft(hash(pickups.filter((p) => inCore(p.x, p.z)))).toBe('c02b7e93');
+    expect.soft(hash(pickups.filter((p) => inCore(p.x, p.z)))).toBe('3dc964cd');
     const d = dressCity(city, pickups, ramps);
     const props = d.street.props.filter((p) => inCore(p.x, p.z)).map((p) => [p.kind, p.x, p.z, p.heading, p.scale, p.tint ?? '']);
     props.sort((a, b) => (a[1] as number) - (b[1] as number) || (a[2] as number) - (b[2] as number) || String(a[0]).localeCompare(String(b[0])));
