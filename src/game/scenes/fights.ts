@@ -16,7 +16,7 @@ import { LOUD } from '../../systems/cityScenes';
 import { scare } from '../../systems/crowd';
 import { barges, planFight, type FightPlan } from '../../systems/streetPeople';
 import type { CrowdPed } from '../population';
-import type { Scene, SceneCtx } from '../cityLife';
+import { watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { labelMembers, type LabelSink } from '../debugLabels';
 import { Gathering } from './gathering';
 import { handBack, roomFor } from './people';
@@ -91,6 +91,15 @@ export class Fights implements Scene {
       out.ped(f.b, how, 'people');
       labelMembers(out, f.ring.members, 'ONLOOKER', false);
     }
+  }
+
+  /** The first scuffle's middle (the in-view meter). */
+  subject(out: Subject): boolean {
+    const f = this.fights[0];
+    if (!f) return false;
+    const a = f.a.agent.s;
+    const b = f.b.agent.s;
+    return watch(out, (a.x + b.x) / 2, (a.z + b.z) / 2);
   }
 
   /** Is `c` in a scuffle here? */

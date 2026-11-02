@@ -466,6 +466,7 @@ const cityLife = new CityLife({
   reward: (cash, label) => progress.pay(cash, 'street', label),
   callIn: (crime) => heat.called(crime),
   enlist: (officer) => heat.police.strays.push(officer),
+  log: (kind, detail) => logEvent(kind, detail),
 });
 maintainCity = (seed) => cityLife.maintain(seed);
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
@@ -1721,6 +1722,8 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   combat,
   /** The city's own life (game/cityLife.ts): clock, scenes, medics, drops, people, owned, hospital, bays. */
   cityLife,
+  /** How much of the city the player has seen (systems/inViewMeter.ts): per-kind seconds in view, starts, seen, unseen. */
+  inView: () => cityLife.inViewMeter.report(),
   /** The TEST menu's actions (game/testTools.ts): scene(id), spawn(archetype), teleport(x, z), timeScale... */
   testTools,
   /** The title's highlights (game/attractHighlights.ts): show (phase, current), subject, caption, step(dt). */

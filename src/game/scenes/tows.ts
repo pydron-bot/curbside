@@ -19,7 +19,7 @@ import { towPose, towPriority, winch, type Pose, type TowLook } from '../../syst
 import { LOUD } from '../../systems/cityScenes';
 import type { Obstacle } from '../../systems/traffic';
 import type { SceneDriver, Vehicle } from '../population';
-import { SCENE_RANGE, type Scene, type SceneCtx } from '../cityLife';
+import { SCENE_RANGE, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { FireCrews } from './fireCrews';
 import { ServiceRun, holdStill, pullIn, stopped, type ServiceSpec } from './service';
 import type { LabelSink } from '../debugLabels';
@@ -88,6 +88,14 @@ export class Tows implements Scene, SceneDriver {
 
   get running(): number {
     return this.tows.length;
+  }
+
+  /** The first tow's truck (the in-view meter). */
+  subject(out: Subject): boolean {
+    const t = this.tows[0];
+    if (!t) return false;
+    const s = t.truck.sim;
+    return watch(out, s.x, s.z, s.vx, s.vz);
   }
 
   /** Is `v` a tow's (its truck, or the car on the hook)? */

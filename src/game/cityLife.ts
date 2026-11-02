@@ -81,6 +81,7 @@ import { DoubleParking } from './scenes/doubleParking';
 import { len2 } from '../core/len';
 import type { LabelSink } from './debugLabels';
 import type { SimLod } from '../systems/simLod';
+import { InViewMeter } from '../systems/inViewMeter';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
 export const SCENE_RANGE = 150;
@@ -95,6 +96,12 @@ const PARK_SEED_TRIES = 80;
 const LOT_SHARE = 0.45;
 /** What's parked: ordinary cars, the odd van or pickup. */
 const PARK_MIX: readonly VehicleArchetype[] = ['sedan', 'sedan', 'compact', 'compact', 'taxi', 'pickup', 'van', 'sports', 'muscle', 'sedan'];
+/** The in-view meter samples this often, s (a few times a second is plenty for seconds in view). */
+const METER_EVERY = 0.25;
+/** The meter's line goes in the session log after every this much play, s. */
+const METER_LOG_EVERY = 120;
+/** Kinds that count as "an incident in view" (the loud ones and fires; not buses, buskers, vans, dogs). */
+const INCIDENTS: ReadonlySet<string> = new Set(['chase', 'race', 'accident', 'fight', 'mugging', 'turf', 'fire', 'tow']);
 /** NPC punches (people a scene set on each other), HP; one in this many knocks them over. */
 const NPC_PED_PUNCH = 16;
 const NPC_PED_KNOCK = 0.2;
@@ -147,6 +154,8 @@ export interface CityLifeDeps {
   enlist?(officer: CrowdPed): void;
   /** The sim's level of detail: off screen, stray dogs think less often (without it, every step). */
   lod?: SimLod;
+  /** A line in the session log (the in-view meter's, every METER_LOG_EVERY s of play). */
+  log?(kind: string, detail: string): void;
 }
 
 /** A scene's view of the director. */
@@ -226,6 +235,13 @@ export class CityLife {
   private readonly world: SceneWorld = { playing: false, activity: false, stars: 0, tutorial: false };
   private scanTimer = 0;
   private tidyTimer = 0;
+  private meterTimer = 0;
+  private meterLogAt = METER_LOG_EVERY;
+  /** How much of each kind the player sees (scenes with a subject), in play only. */
+  readonly inViewMeter: InViewMeter;
+  /** The scenes the meter watches (parallel to inViewMeter.kinds). */
+  private readonly metered: Scene[] = [];
+  private readonly meterOut: Subject = { x: 0, z: 0, vx: 0, vz: 0 };
   /**
    * The kind the title's show is directing (game/attractHighlights.ts):
    * nothing holds it off, and its people gather as in play (lively).
@@ -258,6 +274,16 @@ export class CityLife {
     this.accidents = this.add(new Accidents(this));
     this.doubleParking = this.add(new DoubleParking(this));
     this.add(new Pavement(this), 'pavement');
+    const kinds: string[] = [];
+    for (let i = 0; i < this.scenes.length; i++) {
+      if (!this.scenes[i].subject) continue;
+      this.metered.push(this.scenes[i]);
+      kinds.push(this.sceneLabels[i]);
+    }
+    this.inViewMeter = new InViewMeter(
+      kinds,
+      kinds.map((k) => INCIDENTS.has(k)),
+    );
   }
 
   /**
@@ -301,6 +327,10 @@ export class CityLife {
     if ((this.tidyTimer -= dt) <= 0) {
       this.tidyTimer = 1;
       this.tidy();
+    }
+    if ((this.meterTimer -= dt) <= 0) {
+      this.meterTimer = METER_EVERY;
+      if (this.d.playing()) this.meter(METER_EVERY);
     }
     this.drops.step(now);
     const p = this.d.player;
@@ -358,6 +388,7 @@ export class CityLife {
     this.looks.clear();
     this.drops.clear();
     this.clock.reset(this.now);
+    this.inViewMeter.cut();
   }
 
   /** Debug labels: every scene describes what it holds. */
@@ -619,6 +650,23 @@ export class CityLife {
   }
 
   // --- Internals ----------------------------------------------------------------
+
+  /** One in-view sample: each metered scene's count and whether its subject is on screen. */
+  private meter(dt: number): void {
+    const view = this.view;
+    const out = this.meterOut;
+    const m = this.inViewMeter;
+    for (let i = 0; i < this.metered.length; i++) {
+      const s = this.metered[i];
+      const running = s.running;
+      m.sample(i, running, running > 0 && s.subject!(out) && inRect(out.x, out.z, view, 0), dt);
+    }
+    m.tick(dt);
+    if (m.played >= this.meterLogAt) {
+      this.meterLogAt = m.played + METER_LOG_EVERY;
+      this.d.log?.('inview', m.line());
+    }
+  }
 
   /** Armed people knocked out drop their gun (once each); a civilian who lost theirs fights with fists after. */
   private scanDrops(now: number): void {

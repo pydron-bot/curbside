@@ -393,6 +393,34 @@ still get the offline shell.
 Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
 launch ramp landing at a corner checkpoint (is that a feature?).
 
+## V2 in-view numbers
+
+How much of the living city a driving player sees (V2-01): the meter
+(`systems/inViewMeter.ts`, `__ub.inView()`, an `inview` line in the session
+log every 2 minutes of play) and `tools/tune/inview.mjs`: a bot drives the
+iPhone landscape view (852×393) for 20 minutes of free roam (stars cleared),
+then 5 minutes of a 2-star pursuit kept at 2. "Incident" means a chase,
+race, accident, fight, mugging, turf war, fire or tow; seconds are the
+scene's subject on screen. Three seeds (1, 2, 3).
+
+**Baseline (before V2-02, everything loud held while wanted):**
+
+| | seed 1 | seed 2 | seed 3 |
+|---|---|---|---|
+| Free roam: an incident in view | 68 s (6%) | 50 s (4%) | 73 s (6%) |
+| Free roam: came into view after a quiet spell | 32× | 22× | 27× |
+| Free roam: gap median / p90 | 28 / 92 s | 19 / 91 s | 43 / 69 s |
+| Free roam: longest quiet (stretches ≥ 90 s) | 136 s (4) | 369 s (3) | 208 s (1) |
+| 2-star pursuit: an incident in view | 0 s | 0 s | 1 s (a fire) |
+| 2-star pursuit: loud scenes started | 0 | 0 | 0 |
+
+Free roam per kind, seed 1 (in view s / started / seen / ended unseen):
+tow 28/17/9/8, busker 19/15/5/10, accident 11/6/3/3, race 10/7/5/1,
+mugging 8/9/6/3, turf 7/4/1/3, chase 6/9/3/6, fight 0/2/0/2, fire 0/6/0/4.
+The ice cream van (56 started), the bus (29) and stray dogs (235) were
+never in view from a moving car. The pursuit is the gap V2-02 is for: the
+city stops dead the moment you have a star.
+
 ## Working conventions that worked
 
 - Big features as **streams in separate git worktrees** (`git worktree add

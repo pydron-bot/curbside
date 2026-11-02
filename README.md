@@ -1021,6 +1021,19 @@ holdStill(sim) · stopped(sim) · pullIn(sim, x, z, heading, cruise, obstacles, 
 //      coins, mugger ring, bag and phone screens are render/peopleLook.ts.
 ```
 
+**How much of it is seen** (`systems/inViewMeter.ts`, pure, tested). The
+director samples every scene with a `subject()` 4 times a second in play
+(`CityLife.inViewMeter`): per kind, seconds with its subject on screen, how
+many started, how many were seen at all and how many ended unseen, and the
+quiet stretches with no incident (chase, race, accident, fight, mugging,
+turf, fire, tow) in view (longest, and how many ran 90 s or more). Typed
+arrays, so sampling allocates nothing. `__ub.inView()` returns a copy; the
+session log gets an `inview` line every 2 minutes of play ("played 600 s ·
+any 40 s · quiet max 95 s (1) · race 12/2/1/1 …": seconds/started/seen/
+unseen). `tools/tune/inview.mjs` drives the phone view through free roam
+and a pursuit with it (*Tuning harnesses*); the numbers are in HANDOFF
+(*V2 in-view numbers*).
+
 **Adding a scene.** Write `src/game/scenes/<name>.ts` with a class that
 implements `Scene`: in its constructor `life.clock.define(kind, spec)`
 (pick its holds: `LOUD` for anything that could get in the player's way);
@@ -1391,6 +1404,17 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   2 busted. `--perks` maxes every CRED perk; 2026-11-01 (12 chases each,
   seed 1): stock car lost at a median 33 s without, 45 s with; tough car
   2 of 12 down to 3 stars with them, none without; no escapes either way.
+- **`inview.mjs [--roam 1200] [--pursuit 300] [--stars 2] [--seed 1] [--view 852x393]`**:
+  how much of the living city a driving player sees (*City life*, the
+  in-view meter). A junction-to-junction bot drives the phone view through
+  `--roam` seconds of free roam (stars cleared as they come), then a
+  `--stars` pursuit (kept there, evading the police like `heat.mjs`), in
+  1/8 s `fastForward` chunks, moving the camera and the clock between them;
+  per segment: seconds with an incident in view, how often one came into
+  view after a quiet spell and the gaps (median, p90, longest), and per
+  kind seconds in view, started, seen, ended unseen. ~1 min a run. The
+  numbers, before and after the city stopped holding off for stars, are in
+  HANDOFF (*V2 in-view numbers*).
 - **`music.mjs <out-dir> [station-id …]`**: renders stations offline
   (`audioLib.mjs`: the game's own audio modules on an OfflineAudioContext
   in the page, ticked like the 25 ms timer) to MP3 (WAV without ffmpeg) for
