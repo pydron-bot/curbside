@@ -707,7 +707,7 @@ future Blender pass. The code works round each one for now:
 
 The air horn weapon is in the game (README → *Driving and combat*, the air
 horn) with nothing in the hand and the ammo box standing in for its crate.
-Both swap in by name with no code change:
+The held model swaps in by name; the crate needs a one-line code change:
 
 - **`weapons.glb` root `air_horn`** (same grip/`muzzle` contract as the
   pistol, §1/§8): a red canister ~0.2 m with a flared trumpet ~0.15 m on
