@@ -95,6 +95,12 @@ export interface HeatDeps {
    * the scene knows it's been attacked.
    */
   rammedSceneCop?(v: Vehicle): boolean;
+  /**
+   * The player's car hit `v`, an ordinary calm driver, at `impact` m/s: true
+   * if the city takes the crash over (scenes/accidents.ts adopt: the driver
+   * stops and gets out), and that driver doesn't panic, rage or bail.
+   */
+  adoptCrash?(v: Vehicle, impact: number): boolean;
 }
 
 export class Heat {
@@ -243,7 +249,8 @@ export class Heat {
   /**
    * The player's car hit `other` hard (impact > 6 m/s closing). Ramming a
    * police car is a crime (if the player did the ramming); an ordinary
-   * driver panics, flies into a rage or bails out.
+   * driver stops for the city to sort out (adoptCrash), or panics, flies
+   * into a rage or bails out.
    */
   playerCrash(other: Vehicle, impact: number): void {
     const own = this.deps.player.driving;
@@ -270,6 +277,7 @@ export class Heat {
     }
     const ai = other.ai;
     if (!ai || other.damage.wrecked || ai.mood !== 'calm' || other.pursuit) return;
+    if (this.deps.adoptCrash?.(other, impact)) return;
     const reaction = reactToHit(ai, this.deps.rand);
     if (reaction === 'rage') {
       other.pursuit = createPursuit(ai, 1, RAGE_CRUISE, RAGE_TOP, false);

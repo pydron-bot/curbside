@@ -76,6 +76,8 @@ export class RoadsideLook implements CityLookPart {
       if (c.a.towable && !c.a.ai) hazards(glows, view, c.a);
       if (c.b.towable && !c.b.ai) hazards(glows, view, c.b);
     }
+    // The player's mess (V2-10): the other car, once its driver's out.
+    if (on) for (const m of this.accidents.mine) if (m.car.towable && !m.car.ai) hazards(glows, view, m.car);
     if (!props.loaded) return;
     for (const s of this.parking.stops) {
       const working = s.phase === 'work' || s.phase === 'back';

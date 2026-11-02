@@ -99,6 +99,7 @@ import { AttractCamera, LEAD_ATTRACT } from './ui/attract';
 import { TitleCamera } from './ui/titleCamera';
 import { AttractHighlights } from './game/attractHighlights';
 import { storyScenes } from './game/sceneStarter';
+import { dominoAward } from './systems/mess';
 import { FrontDoor } from './ui/frontDoor';
 import { addDiagnosticsButton, Diagnostics } from './ui/diagnostics';
 import { blockBrowserGestures } from './ui/gestures';
@@ -417,6 +418,7 @@ const heat = new Heat({
   signals,
   witnesses: (crime, x, z) => cityLife.witnesses.report(crime, x, z),
   rammedSceneCop: (v) => cityLife.chases.rammed(v),
+  adoptCrash: (v, impact) => cityLife.accidents.adopt(v, impact),
 });
 addHeatLook(look, heat, {
   scene,
@@ -487,6 +489,8 @@ const cityLife = new CityLife({
   adopt: (v, aboard) => heat.adopt(v, aboard),
   award: (kind) => award(score.award(kind)),
   throwRider: (v) => throwRider(v, 8),
+  // A scene's consequence started through the TEST menu's starter (V2-10: a crash's tow, the alarm by the shots).
+  follow: (id, x, z, cause) => testTools.starter.follow(id, x, z, cause),
   knockHydrant: (x, z, range) => {
     const k = look.props.loaded ? knockables.nearest('hydrant', x, z, range) : null;
     if (!k || !knockables.knock(k)) return null;
@@ -495,6 +499,8 @@ const cityLife = new CityLife({
   },
 });
 maintainCity = (seed) => cityLife.maintain(seed);
+// A chain the player set off in the city pays DOMINO ×N (systems/mess.ts).
+events.on('domino', (e) => award(dominoAward(score, e)));
 towHooked = () => cityLife.tools.hooked;
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
 look.addGlowSource((g, view) => cityLook.draw(g, view));

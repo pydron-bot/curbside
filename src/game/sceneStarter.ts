@@ -5,6 +5,13 @@
  * scenes look round the camera's focus themselves (CityLifeDeps.focus);
  * the fire, the tow and the alarm get a car put down near the point given.
  * Nothing here is a cheat by itself: TestTools taints the life.
+ *
+ * A scene started as the consequence of another (V2-10, systems/mess.ts)
+ * comes with its `cause`: the started scene is the next link of that
+ * chain (CityLife.chain: the `domino` event, DOMINO ×N when the player's
+ * the root), and it only uses what's already there (the tow takes a
+ * towable car near the point, the alarm a parked car near it; no car is
+ * put down for it). CityLifeDeps.follow is follow() here.
  */
 import { createVehicleState, type VehicleArchetype } from '../entities/vehicle';
 import { applyDamage, stepDamage } from '../systems/damage';
@@ -18,6 +25,7 @@ import { Tows } from './scenes/tows';
 import { spawnBeside, type Free, type Spot } from './testSpots';
 import type { SceneHost } from '../systems/missions';
 import { len2 } from '../core/len';
+import { SHOT_ALARM_RANGE, type Cause } from '../systems/mess';
 
 export type SceneId =
   | 'ambulance'
@@ -128,6 +136,8 @@ const PEOPLE_KIND: Partial<Record<SceneId, string>> = {
 const FIRE_RING = [11, 24] as const;
 /** The car for the tow truck is left this far off, m. */
 const TOW_RING = [8, 18] as const;
+/** A tow that follows from another scene takes a towable car this close to the point, m. */
+const FOLLOW_TOW = 30;
 
 export interface SceneStarterDeps {
   cityLife: CityLife;
@@ -144,6 +154,9 @@ export interface SceneStarterDeps {
 export class SceneStarter {
   /** Did the last start() get one going? */
   ok = false;
+  /** The last start() with a cause that got going: its link (else null). */
+  caused: Cause | null = null;
+  private cause: Cause | null = null;
   private ignore: Vehicle | null = null;
   private readonly spot: Spot = { x: 0, z: 0, heading: 0 };
 
@@ -153,9 +166,28 @@ export class SceneStarter {
    * Start `id` round (x, z), facing `heading` (where a car is put down),
    * leaving `ignore` (the player's car) out of the room check. Returns a
    * notice for the TEST sheet; `ok` says whether it started. 'rain' is the
-   * TEST menu's own.
+   * TEST menu's own. With a `cause` it's the next link of that chain
+   * (`caused`), using only what's there.
    */
-  start(id: SceneId, x: number, z: number, heading: number, ignore: Vehicle | null = null): string {
+  start(id: SceneId, x: number, z: number, heading: number, ignore: Vehicle | null = null, cause: Cause | null = null): string {
+    this.caused = null;
+    this.cause = cause;
+    try {
+      const note = this.begin(id, x, z, heading, ignore);
+      if (this.ok && cause && id !== 'rain') this.caused = this.d.cityLife.chain(cause, SCENE_KINDS[id], x, z);
+      return note;
+    } finally {
+      this.cause = null;
+    }
+  }
+
+  /** Start `id` round (x, z) as the next link of `cause`'s chain: the link, or null if it didn't start. */
+  follow(id: SceneId, x: number, z: number, cause: Cause): Cause | null {
+    this.start(id, x, z, 0, null, cause);
+    return this.caused;
+  }
+
+  private begin(id: SceneId, x: number, z: number, heading: number, ignore: Vehicle | null): string {
     const life = this.d.cityLife;
     this.ok = false;
     switch (id) {
@@ -253,6 +285,8 @@ export class SceneStarter {
 
   /** A car blown up a safe way off; a fire truck comes for it. */
   private fire(x: number, z: number, heading: number, ignore: Vehicle | null): string {
+    // A follow-on never blows a car up of its own accord.
+    if (this.cause) return 'NO FIRE TO FOLLOW';
     const spot = this.beside(x, z, heading, FIRE_RING[0], FIRE_RING[1], ignore);
     if (!spot) return 'NO ROOM FOR A FIRE HERE';
     const v = this.place('sedan', spot);
@@ -266,6 +300,7 @@ export class SceneStarter {
 
   /** An abandoned car left in the road nearby, and a tow truck for it. */
   private tow(x: number, z: number, heading: number, ignore: Vehicle | null): string {
+    if (this.cause) return this.towNear(x, z);
     const spot = this.beside(x, z, heading, TOW_RING[0], TOW_RING[1], ignore);
     if (!spot) return 'NO ROOM FOR A CAR HERE';
     const v = this.place('compact', spot);
@@ -274,10 +309,38 @@ export class SceneStarter {
     return this.done(tows?.force(v) ?? false, 'TOW TRUCK CALLED', 'NO TOW TRUCK FREE');
   }
 
+  /** A follow-on tow: a towable car already near the point (a crash left there), nothing put down. */
+  private towNear(x: number, z: number): string {
+    const life = this.d.cityLife;
+    const p = this.d.player;
+    const car = this.nearest(x, z, FOLLOW_TOW, (v) => v.towable === true && !v.ai && !v.scene && v !== p.driving && !life.keeps(v));
+    const tows = this.d.cityLife.scenes.find((s): s is Tows => s instanceof Tows);
+    return this.done(car !== null && (tows?.force(car) ?? false), 'TOW TRUCK CALLED', 'NO TOW TRUCK FREE');
+  }
+
+  /** The visible vehicle nearest (x, z) within `range` m that `ok` takes, or null. */
+  private nearest(x: number, z: number, range: number, ok: (v: Vehicle) => boolean): Vehicle | null {
+    let best: Vehicle | null = null;
+    let bestD = range;
+    for (const v of this.d.vehicles) {
+      if (!v.mesh.root.visible || !ok(v)) continue;
+      const d = len2(v.sim.x - x, v.sim.z - z);
+      if (d < bestD) {
+        bestD = d;
+        best = v;
+      }
+    }
+    return best;
+  }
+
   /** The nearest parked car's alarm (one parked beside the point if there's none). */
   private alarm(x: number, z: number, heading: number, ignore: Vehicle | null): string {
     const alarms = CarAlarms.of(this.d.cityLife);
     if (!alarms) return 'NO ALARMS';
+    if (this.cause) {
+      const car = this.nearest(x, z, SHOT_ALARM_RANGE, (v) => v.parked === true && !v.damage.wrecked);
+      return this.done(car !== null && alarms.force(car), 'CAR ALARM', 'NO PARKED CAR NEAR');
+    }
     if (alarms.force()) return this.done(true, 'CAR ALARM', '');
     const spot = this.beside(x, z, heading, 6, 16, ignore);
     if (!spot) return 'NO PARKED CAR NEAR';

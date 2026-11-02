@@ -42,6 +42,7 @@ export type StreetTopic =
   | 'hydrant'
   | 'conga'
   | 'filmShoot'
+  | 'shotsFired'
   | 'doublePark'
   | 'alarm'
   | 'busker'
@@ -182,6 +183,14 @@ export const TOPICS: Readonly<Record<ScannerTopic, TopicSpec>> = {
     life: 140,
     lines: ["FILM CREW IN {place}. THOSE AREN'T REAL OFFICERS.", "FILM SHOOT, {place}. IF IT GOES BANG, IT'S MEANT TO."],
   },
+  shotsFired: {
+    priority: 2,
+    cooldown: 90,
+    scene: 'shotsFired',
+    track: true,
+    life: 60,
+    lines: ['SHOTS FIRED IN {place}. UNIT ATTENDING.', 'GUNFIRE REPORTED, {place}. HAVE A LOOK ROUND.'],
+  },
   doublePark: { priority: 1, cooldown: 120, lines: ['LORRY DOUBLE-PARKED IN {place}. TUTTING ADVISED.'] },
   alarm: { priority: 1, cooldown: 120, lines: ["CAR ALARM IN {place}. NOBODY'S COMING.", 'ANOTHER ALARM IN {place}. SAME FITTER, PROBABLY.'] },
   busker: { priority: 1, cooldown: 180, lines: ['BUSKER IN {place}. NOISE COMPLAINT LOGGED.'] },
@@ -225,6 +234,7 @@ export const STREET_TOPICS: Readonly<Partial<Record<StreetWhat, StreetTopic>>> =
   hydrant: 'hydrant',
   conga: 'conga',
   action: 'filmShoot',
+  shotsFired: 'shotsFired',
   doublePark: 'doublePark',
   alarm: 'alarm',
   busker: 'busker',
