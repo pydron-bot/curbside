@@ -13,8 +13,14 @@ import type { Station } from '../audio/music/stations';
 import { events } from '../core/events';
 
 const SHOW_MS = 2600;
-/** A stamp's whole show, ms (ui/stamp.css's 1.9 s animation). */
-const STAMP_MS = 1900;
+/** How often the card looks again while a stamp is still showing, ms. */
+const STAMP_RECHECK_MS = 250;
+
+/** Is a mayhem stamp (ui/stampHud.ts) still in its show? */
+function stampShowing(): boolean {
+  const box = document.querySelector('#stamp .stamp-box');
+  return !!box && box.getAnimations().some((a) => a.playState !== 'finished');
+}
 
 export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(station?: Station): void } {
   const el = document.createElement('div');
@@ -42,7 +48,6 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
   // A mayhem stamp needs the space under the stars more than the station name
   // does (on a phone under an activity card, the card pushed it onto NOS):
   // the card leaves as a stamp lands and waits for its show to end.
-  let stampEnds = 0;
   let waitTimer = 0;
 
   const hide = () => {
@@ -54,10 +59,9 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
 
   /** The radio's card (`station`, or the car radio's), or the chase's while it plays and no station is asked for. */
   const show = (station?: Station) => {
-    const wait = stampEnds - performance.now();
-    if (wait > 0) {
+    if (stampShowing()) {
       window.clearTimeout(waitTimer);
-      waitTimer = window.setTimeout(() => show(station), wait);
+      waitTimer = window.setTimeout(() => show(station), STAMP_RECHECK_MS);
       return;
     }
     const chase = !station && audio.playingScore;
@@ -95,10 +99,7 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
     show();
   });
   events.on('exitVehicle', () => (inCar = false));
-  events.on('stamp', () => {
-    stampEnds = performance.now() + STAMP_MS;
-    hide();
-  });
+  events.on('stamp', hide);
   el.addEventListener('pointerdown', (e) => {
     e.stopPropagation();
     audio.nextStation();

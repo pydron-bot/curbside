@@ -93,6 +93,22 @@ body:has(#radio.in) #stamp {
   }
 }
 
+/* Safari with its toolbar (852×340) under the activity card: smaller again,
+   so a long name's corner stays off NOS (CI's fonts set it ~8% wider). */
+@media (max-height: 360px) {
+  body[data-activity] .stamp-box b {
+    font-size: 6.8vmin;
+  }
+
+  body[data-activity] .stamp-box.long b {
+    font-size: 4.9vmin;
+  }
+
+  body[data-activity] .stamp-box small {
+    font-size: 2.4vmin;
+  }
+}
+
 .stamp-box[data-tone='hero'] {
   --c: var(--neon-cyan);
 }
