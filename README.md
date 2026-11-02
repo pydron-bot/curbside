@@ -695,7 +695,7 @@ cars on top of the police on a phone). Chases run on past a player wanted
 for something else; only the player's own part in one (the chase handoff,
 `systems/chaseHandoff.ts`) changes it. Fires keep their full pace (your
 fires get their trucks); buskers still pack up for stars. **On the road
-ahead:** while wanted, a scene that arrives by car (a race; a chase, now
+ahead:** while wanted, a scene that arrives by car (a race; a chase, now that
 V2-03 lets one start while wanted: spec `ahead`) is put, at most once every 45 s, on a lane 60–150 m ahead
 of the player's way (within 45°), off-screen, coming toward them
 (`routeAheadSpot`, armed by `life.due()` for that step's `spawnCar()`),
