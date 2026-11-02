@@ -1,18 +1,21 @@
 /**
- * The story: payphone jobs for the Graveyard Shift, a night-time tow crew
- * that tows rather more than it should, run by VEX, with her mechanic
- * LIL' TUNA. Chapter 1 (eight jobs) is the war with DEACON PIKE and his
- * Chrome Saints; chapter 2, THE LEDGER (five jobs), follows Pike's payments
- * to COMMISSIONER CLAMP, who runs the city's parking and impound. Each job
- * pays and unlocks the next; the phones ring when a job is waiting. The
- * script and the cast are in docs/STORY.md. Positions come from the road
- * grid (kerbs) and the pavement paths, so everything spawns clear of
- * buildings; the docks and the safehouse are passed in.
+ * The story jobs, in two arcs. The main story, KEEP IT LOUD (arc 'main', ids
+ * s1-s6): Mayor Lull's Quiet Streets Act has banned car alarms, chimes and
+ * buskers, and the kerb traders (DOREEN of the ice cream van, LIONEL the
+ * busker) hire the sacked alarm fitter to keep the city loud. It rings by
+ * day and in the evening from the city's phones. The Night Shift side story
+ * (arc 'night', the old Graveyard Shift jobs m1-m13, ids kept so saves keep
+ * their progress) rings only after dark from the docks-yard phone: VEX's
+ * tow crew, chapter 1 the war with DEACON PIKE's Chrome Saints, chapter 2
+ * THE LEDGER and COMMISSIONER CLAMP. Each job pays and unlocks the next in
+ * its arc. The script and the cast are in docs/STORY.md. Positions come from
+ * the road grid (kerbs) and the pavement paths, so everything spawns clear
+ * of buildings; the docks and the safehouse are passed in.
  */
 import { pavement } from '../game/modes/places';
 import { BLOCK_SIZE, ROAD_WIDTH, SIDEWALK } from '../world/city';
 import { DIR_VEC, dirHeading, type Dir } from '../world/roads';
-import type { MissionDef } from './missions';
+import { NIGHT_PHONE, type MissionDef } from './missions';
 
 type Point = { x: number; z: number };
 
@@ -49,9 +52,14 @@ const VEX = 'VEX';
 const TUNA = "LIL' TUNA";
 const PIKE = 'DEACON PIKE';
 const CLAMP = 'COMMISSIONER CLAMP';
+const DOREEN = 'DOREEN';
+const LIONEL = 'LIONEL';
+const LULL = 'MAYOR LULL';
 
 /** Clamp's tow trucks: traffic-cone orange, apart from the city's yellow ones. */
 const CLAMP_ORANGE = '#e0661f';
+/** Wardens' hi-vis (Clamp's in the Night Shift, Lull's in the main story). */
+const HI_VIS = '#d4e23c';
 
 export function buildMissions(docks: Point & { heading?: number; halfWidth?: number; halfLength?: number }, safehouse: Point): MissionDef[] {
   const saintCar = kerb(-4, 4, 1, 26);
@@ -77,15 +85,97 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
   const limo = kerb(1, -1, 0, 26);
   const clamp = kerbside(1, -1, 0, 26);
   const wardens = [kerbside(1, -1, 0, 18), kerbside(1, -1, 0, 34)];
+  // KEEP IT LOUD. Cobble Row, the street the player wired: a crossing in the middle of it.
+  const cobble = { x: -4 * BLOCK_SIZE, z: -4 * BLOCK_SIZE };
+  // Lull's two wardens writing Lionel up in Glass Heights; Lionel hiding round the corner.
+  const lullWardens = [pavement(9, 6, 0, 0.35), pavement(9, 6, 0, 0.7)];
+  const lionel = pavement(9, 6, 1, 0.55);
+  // Where Lionel plays on Neon Mile.
+  const mile = kerb(5, -4, 0, 26);
+  const spareLionel = [{ down: 'lionel', reason: 'NOT LIONEL! HE WAS ON YOUR SIDE' }];
 
   return [
+    // ── KEEP IT LOUD (the main story; s1, the cold open, comes with the opening) ──
+    {
+      id: 's2-noise',
+      title: 'MAKE SOME NOISE',
+      arc: 'main',
+      phone: 'phone-oldtown',
+      reward: 1000,
+      intro: [
+        { who: DOREEN, text: "Doreen, from the ice cream van. You're the alarm fitter Lull sacked. I lost my chimes the same night." },
+        { who: DOREEN, text: 'Twenty years you wired Cobble Row. Every alarm on that street is yours. Remind them.' },
+      ],
+      outro: [
+        { who: DOREEN, text: "Heard that from the docks. The council's lodged a complaint. Lovely." },
+        { who: LULL, text: 'Mayor Lull. Noise in Cobble Row has been noted. Wardens are on their way. Quietly.' },
+      ],
+      steps: [
+        {
+          kind: 'mayhem',
+          points: 2500,
+          near: { ...cobble, district: 'oldtown' },
+          text: 'MAKE COBBLE ROW LOUD',
+          // A street race through it: something to crash into.
+          start: [{ do: 'scene', scene: 'race', ...cobble, r: 160 }],
+        },
+      ],
+    },
+    {
+      id: 's3-quiet',
+      title: 'QUIET PLEASE',
+      arc: 'main',
+      phone: 'phone-suburbs',
+      reward: 1500,
+      intro: [
+        { who: LIONEL, text: 'Two wardens have nicked my hat. My hat is my livelihood. And my hat.' },
+        { who: LIONEL, text: "They're in Glass Heights, writing me up for unlicensed joy. I'm hiding behind a bin." },
+        { who: DOREEN, text: 'Flatten the wardens, pick Lionel up and get him to Neon Mile. The Mile likes a song.' },
+      ],
+      outro: [
+        { who: LIONEL, text: "I'd pay you, but it's in the hat, and the hat's evidence." },
+        { who: LIONEL, text: 'Neon Mile! An audience! Several of them are even awake!' },
+        { who: DOREEN, text: "Lull will send more wardens. Good. Means it's working." },
+      ],
+      steps: [
+        {
+          kind: 'knockOutAll',
+          tags: ['lullwarden1', 'lullwarden2'],
+          text: 'FLATTEN THE WARDENS',
+          fail: spareLionel,
+          start: [
+            ...lullWardens.map((p, i) => ({ do: 'spawnPed' as const, tag: `lullwarden${i + 1}`, ...p, shirt: HI_VIS, hostile: true, body: 'ped_stocky' as const })),
+            // A busker's red waistcoat.
+            { do: 'spawnPed', tag: 'lionel', ...lionel, shirt: '#a8322b', body: 'ped_slim' },
+          ],
+        },
+        { kind: 'enter', text: 'GET A CAR', fail: spareLionel },
+        {
+          kind: 'pickup',
+          tag: 'lionel',
+          text: 'PICK UP LIONEL',
+          fail: spareLionel,
+          done: [{ do: 'board', tag: 'lionel' }],
+        },
+        {
+          kind: 'deliver',
+          x: mile.x,
+          z: mile.z,
+          r: 9,
+          text: 'GET LIONEL TO NEON MILE',
+          done: [{ do: 'alight', tag: 'lionel' }],
+        },
+      ],
+    },
+    // ── NIGHT SHIFT, chapter 1: the Chrome Saints ──
     {
       id: 'm1-audition',
       title: 'WRONG NUMBER',
-      phone: 'phone-oldtown',
+      arc: 'night',
+      phone: NIGHT_PHONE,
       reward: 500,
       intro: [
-        { who: VEX, text: "You the one who keeps setting my street on fire? Don't answer. I like a confident driver." },
+        { who: VEX, text: "Heard you've a day job now. Cute. The night's still mine, and wrecks need hooking." },
         { who: VEX, text: "Name's Vex. I run the Graveyard Shift. Towing, mostly. The 'mostly' pays better." },
         { who: VEX, text: "Audition's simple: bring me a sedan, any sedan, to the docks yard. Don't scratch it. I'm sentimental." },
       ],
@@ -107,10 +197,11 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm2-tuna',
       title: 'TUNA RUN',
-      phone: 'phone-arts',
+      arc: 'night',
+      phone: NIGHT_PHONE,
       reward: 700,
       intro: [
-        { who: VEX, text: 'My mechanic, Lil\' Tuna, is stranded in the arts quarter. Again.' },
+        { who: VEX, text: 'My mechanic, Lil\' Tuna, is stranded in Neon Mile. Again.' },
         { who: TUNA, text: "It's not my fault the bus driver hates me! I only fixed his horn a LITTLE." },
         { who: VEX, text: 'Pick him up and bring him to the safehouse. Quickly. He talks when he gets bored.' },
       ],
@@ -139,7 +230,8 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm3-saints',
       title: "SAINTS' PAINT",
-      phone: 'phone-suburbs',
+      arc: 'night',
+      phone: NIGHT_PHONE,
       reward: 1200,
       intro: [
         { who: VEX, text: 'The Chrome Saints parked their pride and joy on my turf. Purple sports car. Ugly as sin.' },
@@ -182,7 +274,8 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm4-parcels',
       title: 'SPECIAL DELIVERY',
-      phone: 'phone-docks',
+      arc: 'night',
+      phone: NIGHT_PHONE,
       reward: 900,
       intro: [
         { who: TUNA, text: "Okay. Okay okay okay. So. I may have dropped three of Vex's parcels out of a moving van." },
@@ -200,10 +293,11 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm5-vans',
       title: 'SPARE PARTS',
-      phone: 'phone-oldtown',
+      arc: 'night',
+      phone: NIGHT_PHONE,
       reward: 1500,
       intro: [
-        { who: VEX, text: 'The Saints are running stolen parts out of three vans parked in the old town.' },
+        { who: VEX, text: 'The Saints are running stolen parts out of three vans parked in Cobble Row.' },
         { who: VEX, text: "I want those vans turned into modern art. The burning kind. Tuna 'found' you a shotgun." },
       ],
       outro: [
@@ -227,11 +321,12 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm6-midnight',
       title: 'MIDNIGHT EXPRESS',
-      phone: 'phone-arts',
+      arc: 'night',
+      phone: NIGHT_PHONE,
       reward: 2000,
       hour: 23.5,
       intro: [
-        { who: VEX, text: "Pike's put a price on Tuna's head. He's hiding in the arts quarter." },
+        { who: VEX, text: "Pike's put a price on Tuna's head. He's hiding in Neon Mile." },
         { who: VEX, text: 'Get him to the docks before the Saints do. And drive like the cops are already behind you.' },
         { who: VEX, text: 'Because they will be.' },
       ],
@@ -268,10 +363,11 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm7-collector',
       title: 'COLLECTION DAY',
-      phone: 'phone-suburbs',
+      arc: 'night',
+      phone: NIGHT_PHONE,
       reward: 2000,
       intro: [
-        { who: VEX, text: "Pike's money man, the Collector, does his rounds in the suburbs today." },
+        { who: VEX, text: "Pike's money man, the Collector, does his rounds in Maple Flats today." },
         { who: VEX, text: "Put him on the pavement. He's packing, so bring something louder than manners. Here's a pistol." },
       ],
       outro: [{ who: VEX, text: 'His ledger says Pike owes everyone in this city. Including us, now.' }],
@@ -281,7 +377,7 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
           x: collector.x,
           z: collector.z,
           r: 28,
-          text: 'FIND THE COLLECTOR IN THE SUBURBS',
+          text: 'FIND THE COLLECTOR IN MAPLE FLATS',
           start: [
             { do: 'give', weapon: 'pistol' },
             // Pike's money man dresses like his boss, in white.
@@ -295,7 +391,8 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm8-lastcall',
       title: 'LAST CALL',
-      phone: 'phone-docks',
+      arc: 'night',
+      phone: NIGHT_PHONE,
       reward: 5000,
       intro: [
         { who: PIKE, text: "Enough. Walk away from Vex and I'll let you live. Refuse, and every cop in the city gets your plate." },
@@ -351,12 +448,13 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
         },
       ],
     },
-    // ── Chapter 2: THE LEDGER ──
+    // ── NIGHT SHIFT, chapter 2: THE LEDGER ──
     {
       id: 'm9-fineprint',
       title: 'FINE PRINT',
+      arc: 'night',
       chapter: 2,
-      phone: 'phone-oldtown',
+      phone: NIGHT_PHONE,
       reward: 1500,
       intro: [
         { who: TUNA, text: "Cracked the Collector's ledger. Every month Pike paid two grand to someone called 'C'. For 'parking'." },
@@ -404,8 +502,9 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm10-fallen',
       title: 'FALLEN SAINT',
+      arc: 'night',
       chapter: 2,
-      phone: 'phone-arts',
+      phone: NIGHT_PHONE,
       reward: 1500,
       intro: [
         { who: PIKE, text: "Don't hang up. Please. I've never said please before. It tastes like pennies." },
@@ -442,8 +541,9 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm11-towaway',
       title: 'TOW-AWAY ZONE',
+      arc: 'night',
       chapter: 2,
-      phone: 'phone-docks',
+      phone: NIGHT_PHONE,
       reward: 2000,
       intro: [
         { who: VEX, text: "Clamp's made all of Neon Mile a tow-away zone. His trucks are hauling off every car on the street." },
@@ -472,8 +572,9 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm12-papertrail',
       title: 'PAPER TRAIL',
+      arc: 'night',
       chapter: 2,
-      phone: 'phone-suburbs',
+      phone: NIGHT_PHONE,
       reward: 2500,
       hour: 22,
       intro: [
@@ -505,8 +606,9 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
     {
       id: 'm13-noparking',
       title: 'NO PARKING',
+      arc: 'night',
       chapter: 2,
-      phone: 'phone-oldtown',
+      phone: NIGHT_PHONE,
       reward: 5000,
       hour: 23.75,
       intro: [
@@ -530,7 +632,7 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
             { do: 'spawnCar', tag: 'limo', archetype: 'limo', paint: '#cbb994', ...limo },
             // A grey suit and a coat; his wardens in hi-vis.
             { do: 'spawnPed', tag: 'clamp', ...clamp, shirt: '#7d838c', armed: true, hostile: true, body: 'ped_coat' },
-            ...wardens.map((p, i) => ({ do: 'spawnPed' as const, tag: `warden${i + 1}`, ...p, shirt: '#d4e23c', hostile: true, body: 'ped_stocky' as const })),
+            ...wardens.map((p, i) => ({ do: 'spawnPed' as const, tag: `warden${i + 1}`, ...p, shirt: HI_VIS, hostile: true, body: 'ped_stocky' as const })),
           ],
           fail: [{ wrecked: 'limo', reason: "CLAMP'S LIMO IS WRECKED" }],
         },

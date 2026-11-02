@@ -351,19 +351,19 @@ export class TestMenu implements Panel {
     this.button(s, 'RESET SAVE', () => t.resetSave(), { className: 'small', confirm: true, sub: 'EVERYTHING · RELOADS' });
   }
 
-  /** The story jobs by chapter: pick one to make it the next job. */
+  /** The story jobs by arc and chapter: pick one to make it its arc's next job. */
   private fillJobs(): void {
     const pane = this.jobList;
     for (const el of [...pane.querySelectorAll<HTMLElement>('.test-btn')]) this.nav.remove(el);
     pane.textContent = '';
     const back = this.section(pane, 'JUMP TO JOB');
     this.button(back, '‹ BACK', () => this.show('save'), { className: 'small' });
-    let chapter = 0;
+    let group = '';
     let grid = back;
     for (const j of this.tools.jobs) {
-      if (j.chapter !== chapter) {
-        chapter = j.chapter;
-        grid = this.section(pane, chapter === 1 ? 'CHAPTER 1 · CHROME SAINTS' : `CHAPTER ${chapter} · THE LEDGER`, 'test-grid3');
+      if (j.group !== group) {
+        group = j.group;
+        grid = this.section(pane, group, 'test-grid3');
       }
       const sub = j.next ? 'NEXT' : j.passed ? 'PASSED' : '';
       this.button(grid, j.title, () => this.tools.jumpTo(j.id), { className: `small${j.next ? ' on' : ''}`, confirm: true, sub });

@@ -1,13 +1,18 @@
 /**
  * Payphone missions on the screen. Four payphones stand on pavements round
- * the city; the one with a job waiting rings (a pulsing light, the bell when
- * you're near, 'M' on the radar with an arrow). Step up to it (or stop
- * beside it) to answer: the call plays as a card, then the job runs on the
- * mission engine (systems/missions.ts) with its objective on the activity
- * card, its targets on the radar and marked in the street. Pass it for the
- * pay and the next call; fail it and the phone rings again. Once the story
- * is done the phones ring with its jobs again, in order, as REPEAT JOBs (for
- * part of the pay, no completion).
+ * the city; one with a job waiting rings (a pulsing light, the bell when
+ * you're near, 'M' on the radar with an arrow, a moon for the Night Shift).
+ * Each arc rings for its own next job: the main story by day and in the
+ * evening from the city's phones, the Night Shift after dark from the
+ * docks-yard phone, so both can ring at once but never the same phone.
+ * Step up to one (or stop beside it) to answer: the call plays as a card,
+ * then the job runs on the mission engine (systems/missions.ts) with its
+ * objective on the activity card, its targets on the radar and marked in
+ * the street. Pass it for the pay and the arc's next call; fail it and the
+ * phone rings again. Once an arc is done its phone rings with its jobs
+ * again, in order, as REPEAT JOBs (for part of the pay, no completion).
+ * Score awards feed a mayhem step; a job's scenes go through storyScenes
+ * (sceneStarter.ts) and stop being featured when it ends, however it ends.
  *
  * People a job needs are only put on the street when you're near their spot
  * (the crowd recycles anyone far from the player), and again if they get
@@ -17,7 +22,23 @@ import { driverDoorPosition, speed, type VehicleArchetype } from '../../entities
 import type { GlowSprites } from '../../render/glowSprites';
 import { MARK, beacon, gate, groundRing, nearView, type ProgressProps } from '../../render/progressLook';
 import { provoke, resumeWalking, spawnPed } from '../../systems/crowd';
-import { endsChapter, MissionRun, replayJob, replayReward, type MissionAction, type MissionDef, type MissionSignal, type MissionStep, type MissionView } from '../../systems/missions';
+import {
+  arcOf,
+  arcRings,
+  endsChapter,
+  inArea,
+  MissionRun,
+  MissionScenes,
+  nextInArc,
+  replayReward,
+  type MissionAction,
+  type MissionArc,
+  type MissionDef,
+  type MissionSignal,
+  type MissionStep,
+  type MissionView,
+  type SceneHost,
+} from '../../systems/missions';
 import { buildMissions } from '../../systems/missionsData';
 import type { DialogueCard } from '../../ui/progressScreens';
 import type { BlipOptions } from '../../ui/radar';
@@ -48,6 +69,22 @@ const MATCH_IDS = ['m-match0', 'm-match1', 'm-match2'];
 const MATCH_RANGE = 140;
 /** Hostile targets turn on you this close, m. */
 const HOSTILE_RANGE = 18;
+/** The ringing phone's radar icon, by arc (the Night Shift's is a moon). */
+const RING_ICON: Readonly<Record<MissionArc, string>> = { main: 'M', night: '☾' };
+/** The call card's kicker, by arc. */
+const CALL_HEAD: Readonly<Record<MissionArc, string>> = { main: 'INCOMING CALL', night: '☾ NIGHT SHIFT' };
+
+/** One arc's phone: its next job (worked out again when one is passed) and its radar blip. */
+interface ArcPhone {
+  arc: MissionArc;
+  /** Its jobs, in order. */
+  jobs: MissionDef[];
+  /** The next job (undefined: stale), and whether it's a repeat. */
+  next: MissionDef | null | undefined;
+  replay: boolean;
+  /** The radar blip up for it ('' for none). */
+  blip: string;
+}
 
 interface MissionCar {
   tag: string;
@@ -101,16 +138,16 @@ export class MissionMode implements Mode {
   private wpZ = NaN;
   /** Payphones by id. */
   private readonly phoneById: Map<string, Spot>;
-  /** The next job, worked out again when one is passed (undefined: stale). */
-  private nextJob: MissionDef | null | undefined = undefined;
-  /** It's a REPEAT JOB (the story is done). */
-  private nextIsReplay = false;
+  /** The main story's phone, then the Night Shift's. */
+  private readonly arcs: ArcPhone[];
   /** The job running (or being called about) is a repeat. */
   private replaying = false;
   private ringIn = 0;
   private armed = true;
   private near: Spot | null = null;
-  private ringBlip = '';
+  /** The scenes the job running asked for, and the city's starter for them (main.ts: useScenes). */
+  private readonly scenes = new MissionScenes();
+  private sceneHost: SceneHost | null = null;
   /** The clock before a job pinned it (MIDNIGHT EXPRESS): its speed, and the hour a failed job puts back. */
   private savedClock: { speed: number; hour: number } | null = null;
   /** Waiting for the intro card to be dismissed. */
@@ -125,6 +162,7 @@ export class MissionMode implements Mode {
     this.missions = buildMissions(docks, SAFEHOUSE);
     this.phones = placePayphones();
     this.phoneById = new Map(this.phones.map((p) => [p.id, p]));
+    this.arcs = (['main', 'night'] as const).map((arc) => ({ arc, jobs: this.missions.filter((m) => arcOf(m) === arc), next: undefined, replay: false, blip: '' }));
     const self = this;
     this.view = {
       x: 0,
@@ -160,59 +198,99 @@ export class MissionMode implements Mode {
       const want = this.wantedArchetype();
       if (want && e.archetype !== want) ctx.notice(`NOT A ${CAR_NAMES[want]}`, 'lost');
     });
+    // Chaos for a mayhem step (its area is checked against where the player is).
+    bus.on('award', (e) => {
+      if (this.run && ctx.live) this.run.award(e.award.points, this.view);
+    });
     bus.on('playerDied', () => this.run && this.signal(this.run.fail('WASTED')));
     bus.on('busted', () => this.run && this.signal(this.run.fail('BUSTED')));
   }
 
-  /** The next job: the story's, or a repeat once it's done. Cached: it's asked every step and frame. */
-  get next(): MissionDef | null {
-    if (this.nextJob === undefined) {
+  /** `arc`'s next job: its story's, or a repeat once it's done. Cached: it's asked every step and frame. */
+  nextOf(arc: MissionArc): MissionDef | null {
+    return this.nextIn(this.arcOf(arc));
+  }
+
+  private nextIn(a: ArcPhone): MissionDef | null {
+    if (a.next === undefined) {
       const save = this.ctx.progress.data;
-      const story = this.missions.find((m) => !save.missions.includes(m.id)) ?? null;
-      this.nextIsReplay = story === null;
-      this.nextJob = story ?? replayJob(this.missions, save.missions, save.stats.jobsReplayed);
+      const n = nextInArc(a.jobs, a.arc, save.missions, save.stats.jobsReplayed);
+      a.next = n?.job ?? null;
+      a.replay = n?.replay ?? false;
     }
-    return this.nextJob;
+    return a.next;
   }
 
-  /** The save's missions changed under it (the TEST menu): work the next job out again. */
+  private arcOf(arc: MissionArc): ArcPhone {
+    return arc === 'main' ? this.arcs[0] : this.arcs[1];
+  }
+
+  /** `arc`'s jobs, in order. */
+  jobsIn(arc: MissionArc): readonly MissionDef[] {
+    return this.arcOf(arc).jobs;
+  }
+
+  /** The save's missions changed under it (the TEST menu): work the next jobs out again. */
   refresh(): void {
-    this.nextJob = undefined;
+    for (const a of this.arcs) a.next = undefined;
   }
 
-  get passed(): number {
-    return this.missions.filter((m) => this.ctx.progress.data.missions.includes(m.id)).length;
+  /** How many of `arc`'s jobs the save has passed. */
+  passedIn(arc: MissionArc): number {
+    const done = this.ctx.progress.data.missions;
+    return this.arcOf(arc).jobs.filter((m) => done.includes(m.id)).length;
   }
 
-  /** The payphone ringing with the next job, if one is (for the first-run pointer). */
+  /** The city's scene starter for the jobs' 'scene' actions (main.ts, once the TEST tools have one). */
+  useScenes(host: SceneHost): void {
+    this.sceneHost = host;
+  }
+
+  /** A payphone ringing with a job, the main story's first (for the first-run pointer). */
   get ringing(): Spot | null {
-    return this.ringingPhone();
+    return this.ringingPhone(this.arcs[0]) ?? this.ringingPhone(this.arcs[1]);
   }
 
-  private ringingPhone(): Spot | null {
+  /** The phone `a` rings, if it's ringing now (free roam, nothing on, its hours). */
+  private ringingPhone(a: ArcPhone): Spot | null {
     const ctx = this.ctx;
     if (!ctx.freeRoam || this.run || this.calling || ctx.busy) return null;
-    const m = this.next;
+    if (!arcRings(a.arc, ctx.deps.look.time.hour)) return null;
+    const m = this.nextIn(a);
     return m ? (this.phoneById.get(m.phone) ?? null) : null;
   }
 
   step(dt: number): void {
     const ctx = this.ctx;
-    const phone = this.ringingPhone();
-    this.syncRingBlip(phone);
+    // The nearest ringing phone is the one to answer.
+    const at = ctx.deps.player.position;
+    let phone: Spot | null = null;
+    let arc: ArcPhone | null = null;
+    let d = Infinity;
+    for (const a of this.arcs) {
+      const p = this.ringingPhone(a);
+      this.syncRingBlip(a, p);
+      if (!p) continue;
+      const pd = len2(at.x - p.x, at.z - p.z);
+      if (pd < d) {
+        d = pd;
+        phone = p;
+        arc = a;
+      }
+    }
     const run = this.run;
     if (run) {
       this.updateView();
       this.tendPeds(dt);
+      const started = this.scenes.step(dt, at.x, at.z, this.sceneHost);
+      if (started) ctx.deps.audio.ui('click');
       const s = run.update(dt, this.view);
       if (s) this.signal(s);
       this.updateBlips();
       return;
     }
     this.near = null;
-    if (!phone || !ctx.live) return;
-    const at = ctx.deps.player.position;
-    const d = len2(at.x - phone.x, at.z - phone.z);
+    if (!phone || !arc || !ctx.live) return;
     if (d < PROMPT_RANGE) this.near = phone;
     if (d < RING_RANGE && (this.ringIn -= dt) <= 0) {
       this.ringIn = RING_EVERY;
@@ -223,21 +301,33 @@ export class MissionMode implements Mode {
     const close = car ? d < ANSWER_CAR && speed(car.sim) < 3 : d < ANSWER_FOOT;
     if (close && this.armed) {
       this.armed = false;
-      this.answer(this.next!);
+      this.answer(this.nextIn(arc)!, arc.replay);
     }
   }
 
+  /**
+   * Start a job straight away, without a call (a `direct` job: the cold
+   * open). False if something else is on.
+   */
+  beginNow(m: MissionDef): boolean {
+    const ctx = this.ctx;
+    if (this.run || this.calling || ctx.busy || !this.missions.includes(m)) return false;
+    this.replaying = false;
+    this.begin(m);
+    return true;
+  }
+
   /** The intro call, then the job. */
-  private answer(m: MissionDef): void {
+  private answer(m: MissionDef, replay: boolean): void {
     const ctx = this.ctx;
     this.calling = true;
-    this.replaying = this.nextIsReplay;
+    this.replaying = replay;
     ctx.busy = 'mission';
     ctx.deps.audio.ui('confirm');
     // Nothing left over (a frenzy's PASSED) showing round the card.
     ctx.ui.clearBanner();
     ctx.openModal(this.card);
-    const head = this.replaying ? 'REPEAT JOB' : 'INCOMING CALL';
+    const head = this.replaying ? 'REPEAT JOB' : CALL_HEAD[arcOf(m)];
     this.card.show(head, m.title, m.intro, `PAYS $${fmt(this.reward(m))}`, "LET'S GO", ctx.focusRing, () => {
       ctx.closeModal(this.card);
       this.calling = false;
@@ -279,13 +369,14 @@ export class MissionMode implements Mode {
       case 'passed': {
         this.act(s.prev.done);
         const m = run.def;
+        const arc = this.arcOf(arcOf(m));
         const replay = this.replaying;
         this.finish(true);
         // A repeat counts toward the rotation, not completion.
         if (replay) ctx.progress.data.stats.jobsReplayed++;
         else ctx.progress.complete('missions', m.id);
         ctx.progress.markDirty();
-        this.nextJob = undefined;
+        this.refresh();
         const paid = ctx.pay(this.reward(m, replay), 'mission', replay ? 'REPEAT JOB' : 'MISSION');
         // Whoever's on foot at the finish (you, Vex, Tuna) cheers.
         const at = ctx.deps.player.position;
@@ -293,12 +384,13 @@ export class MissionMode implements Mode {
         // The debrief card says MISSION PASSED and the pay (no banner under it).
         ctx.deps.audio.missionCue('passed', this.missions.indexOf(m));
         ctx.progress.flush();
-        // Just passed the last story job: what rings next is a repeat.
-        const last = !replay && this.next !== null && this.nextIsReplay;
+        // Just passed the arc's last job: what it rings with next is a repeat.
+        const last = !replay && this.nextIn(arc) !== null && arc.replay;
         // A step's objective line can still be up (a quick last step): not behind the debrief.
         ctx.ui.clearBanner();
         ctx.openModal(this.card);
-        const head = replay ? 'JOB DONE' : last ? 'STORY COMPLETE' : endsChapter(this.missions, m) ? `CHAPTER ${m.chapter ?? 1} COMPLETE` : 'MISSION PASSED';
+        const done = arc.arc === 'night' ? 'NIGHT SHIFT COMPLETE' : 'STORY COMPLETE';
+        const head = replay ? 'JOB DONE' : last ? done : endsChapter(arc.jobs, m) ? `CHAPTER ${m.chapter ?? 1} COMPLETE` : 'MISSION PASSED';
         this.card.show(head, m.title, m.outro, `+$${fmt(paid)}`, 'CONTINUE', ctx.focusRing, () => ctx.closeModal(this.card));
         return;
       }
@@ -321,6 +413,8 @@ export class MissionMode implements Mode {
   private finish(passed = false): void {
     const ctx = this.ctx;
     this.run = null;
+    // Its scenes play on, but nothing is featured for it any more.
+    this.scenes.end(this.sceneHost);
     this.calling = false;
     this.replaying = false;
     if (ctx.busy === 'mission') ctx.busy = null;
@@ -415,6 +509,9 @@ export class MissionMode implements Mode {
           ctx.deps.population.addPed(agent, story ? undefined : { shirt: m?.shirt ?? '#e5e5e5' }, m?.body);
           break;
         }
+        case 'scene':
+          this.scenes.request(a);
+          break;
       }
     }
   }
@@ -521,6 +618,41 @@ export class MissionMode implements Mode {
           else if (c) this.drop(c.blipId);
         }
         break;
+      case 'knockOutAll': {
+        // Each still standing; the route to the first not in the street yet.
+        let routed = false;
+        for (const tag of s.tags) {
+          const m = this.peds.get(tag);
+          if (!m) continue;
+          if (m.down) {
+            this.drop(m.blipId);
+            continue;
+          }
+          const x = m.ped ? m.ped.agent.s.x : m.x;
+          const z = m.ped ? m.ped.agent.s.z : m.z;
+          this.point(m.blipId, x, z, 'enemy', '');
+          if (!m.ped && !routed) {
+            this.waypoint(x, z);
+            routed = true;
+          }
+        }
+        if (!routed) this.noWaypoint();
+        break;
+      }
+      case 'mayhem': {
+        // Outside its area: the radar points there.
+        const a = s.near;
+        if (!a) break;
+        const at = this.ctx.deps.player.position;
+        if (inArea(a, at.x, at.z, this.view)) {
+          this.drop('m-goal');
+          this.noWaypoint();
+        } else {
+          this.point('m-goal', a.x, a.z, 'objective', '');
+          this.waypoint(a.x, a.z);
+        }
+        break;
+      }
       case 'collect':
         for (let i = 0; i < s.points.length; i++) {
           if (run.collected[i]) this.drop(COLLECT_IDS[i]);
@@ -623,12 +755,12 @@ export class MissionMode implements Mode {
     this.ctx.deps.radar.clearWaypoint();
   }
 
-  private syncRingBlip(phone: Spot | null): void {
+  private syncRingBlip(a: ArcPhone, phone: Spot | null): void {
     const id = phone?.id ?? '';
-    if (id === this.ringBlip) return;
-    if (this.ringBlip) this.ctx.unblip(this.ringBlip);
-    this.ringBlip = id;
-    if (phone) this.ctx.blip(phone.id, { x: phone.x, z: phone.z, kind: 'friend', icon: 'M', size: 6, pulse: true, edgeArrow: true });
+    if (id === a.blip) return;
+    if (a.blip) this.ctx.unblip(a.blip);
+    a.blip = id;
+    if (phone) this.ctx.blip(phone.id, { x: phone.x, z: phone.z, kind: 'friend', icon: RING_ICON[a.arc], size: 6, pulse: true, edgeArrow: true });
   }
 
   hud(): boolean {
@@ -642,9 +774,10 @@ export class MissionMode implements Mode {
     // The step's text, with a count for the steps that have one; rebuilt when either changes.
     let n = 0;
     if (s.kind === 'collect') for (const got of run.collected) n += got ? 1 : 0;
-    else if (s.kind === 'destroy') n = run.destroyed;
+    else if (s.kind === 'destroy' || s.kind === 'knockOutAll') n = run.destroyed;
     else if (s.kind === 'race') n = run.next;
-    if (this.goal.stale(run.index * 1000 + n)) this.goal.text = this.goalText(s, n);
+    else if (s.kind === 'mayhem') n = Math.min(s.points, Math.floor(run.mayhem));
+    if (this.goal.stale(run.index * 1e7 + n)) this.goal.text = this.goalText(s, n);
     ui.goal(this.goal.text);
     return true;
   }
@@ -653,6 +786,8 @@ export class MissionMode implements Mode {
     if (s.kind === 'collect') return `${s.text} · ${n}/${s.points.length}`;
     if (s.kind === 'destroy') return `${s.text} · ${n}/${s.tags.length}`;
     if (s.kind === 'race') return `${s.text} · ${n}/${s.nodes.length}`;
+    if (s.kind === 'knockOutAll') return `${s.text} · ${n}/${s.tags.length}`;
+    if (s.kind === 'mayhem') return `${s.text} · ${fmt(n)} / ${fmt(s.points)}`;
     return s.text;
   }
 
@@ -662,11 +797,12 @@ export class MissionMode implements Mode {
   }
 
   glow(g: GlowSprites, props: ProgressProps, view: Rect, t: number): void {
-    const ringing = this.ringingPhone();
+    const main = this.ringingPhone(this.arcs[0]);
+    const night = this.ringingPhone(this.arcs[1]);
     if (this.ctx.freeRoam) {
       for (const p of this.phones) {
         if (!nearView(p.x, p.z, view)) continue;
-        const on = p === ringing;
+        const on = p === main || p === night;
         // The booth: the payphone model stands beside the spot (world props); until it's in, a dark kiosk.
         if (!props.modelled) props.box(p.x, 1.05, p.z, 0.75, 2.1, 0.55, 0, 0.08, 0.32, 0.3);
         if (on) {
@@ -737,6 +873,15 @@ export class MissionMode implements Mode {
         beacon(g, ped.agent.s.x, ped.agent.s.z, 0.8, 5, col, 0.5);
         break;
       }
+      case 'knockOutAll':
+        for (const tag of s.tags) {
+          const m = this.peds.get(tag);
+          const ped = m?.ped;
+          if (!ped || m.down || !nearView(ped.agent.s.x, ped.agent.s.z, view)) continue;
+          groundRing(g, ped.agent.s.x, ped.agent.s.z, 2.4, MARK.target, pulse, t);
+          beacon(g, ped.agent.s.x, ped.agent.s.z, 0.8, 5, MARK.target, 0.5);
+        }
+        break;
       default:
         break;
     }
@@ -750,7 +895,7 @@ export class MissionMode implements Mode {
       if (this.ctx.busy === 'mission') this.ctx.busy = null;
     }
     this.armed = true;
-    this.syncRingBlip(null);
+    for (const a of this.arcs) this.syncRingBlip(a, null);
   }
 
   /** Debug labels: the job's people (story characters by name) and cars by their tags. */

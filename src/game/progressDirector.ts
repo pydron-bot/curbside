@@ -534,7 +534,7 @@ export class ProgressDirector implements ModeCtx {
     const st = s.stats;
     const n = (v: number) => fmt(Math.round(v));
     const done = completion(s, {
-      missions: this.missions.missions.length,
+      missions: this.missions.jobsIn('main').map((m) => m.id),
       frenzies: FRENZIES.length,
       packages: PACKAGE_COUNT,
       races: RACES.map((r) => r.id),
@@ -548,7 +548,11 @@ export class ProgressDirector implements ModeCtx {
         {
           title: 'STORY & ACTIVITIES',
           rows: [
-            { label: 'Payphone jobs', value: `${this.missions.passed}/${this.missions.missions.length}`, bar: this.missions.passed / this.missions.missions.length },
+            ...(['main', 'night'] as const).map((arc) => {
+              const passed = this.missions.passedIn(arc);
+              const of = this.missions.jobsIn(arc).length;
+              return { label: arc === 'main' ? 'Main story: Keep It Loud' : 'Night Shift', value: `${passed}/${of}`, bar: of > 0 ? passed / of : 0 };
+            }),
             ...(st.jobsReplayed > 0 ? [{ label: 'Repeat jobs', value: n(st.jobsReplayed) }] : []),
             ...GANGS.map((g) => {
               const r = this.gangs.respect(g.id);

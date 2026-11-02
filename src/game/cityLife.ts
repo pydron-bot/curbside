@@ -227,8 +227,9 @@ export class CityLife {
   private scanTimer = 0;
   private tidyTimer = 0;
   /**
-   * The kind the title's show is directing (game/attractHighlights.ts):
-   * nothing holds it off, and its people gather as in play (lively).
+   * The kind the title's show is directing (game/attractHighlights.ts), or
+   * a story job's scene (sceneStarter.ts storyScenes, cleared when the job
+   * ends): nothing holds it off, and its people gather as in play (lively).
    */
   featured: string | null = null;
 
@@ -373,9 +374,11 @@ export class CityLife {
     w.stars = this.d.stars();
     w.tutorial = this.d.tutorial();
     if (kind === this.featured) {
-      // Directed behind the title: no holds (a first run's tutorial included).
+      // Directed (the title's show, a story job's scene): no holds (a first run's tutorial included).
       w.playing = true;
       w.activity = w.tutorial = false;
+      // Nor being wanted, but a chase's own rules for the player's stars stand.
+      if (kind !== 'chase') w.stars = 0;
     }
     return this.clock.due(kind, this.now, running, w);
   }

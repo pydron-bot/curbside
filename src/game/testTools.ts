@@ -15,6 +15,7 @@ import type { EventBus } from '../core/events';
 import { onSettingsChange, settings, updateSettings } from '../core/settings';
 import { VEHICLE_SPECS, createVehicleState, type VehicleArchetype } from '../entities/vehicle';
 import type { WeaponKind } from '../systems/weapons';
+import { arcOf, arcRings, type MissionDef } from '../systems/missions';
 import { WEAPONS, WEAPON_ORDER } from '../systems/weapons';
 import type { StaticGrid } from '../world/collision';
 import type { City } from '../world/city';
@@ -328,12 +329,12 @@ export class TestTools {
     return '+$10,000';
   }
 
-  /** The story jobs, in order, with their chapter (the picker). */
-  get jobs(): ReadonlyArray<{ id: string; title: string; chapter: number; passed: boolean; next: boolean }> {
+  /** The story jobs, in order, with the arc and chapter they're in (the picker's sections). */
+  get jobs(): ReadonlyArray<{ id: string; title: string; group: string; passed: boolean; next: boolean }> {
     const m = this.d.progress.missions;
     const done = this.d.progress.progress.data.missions;
-    const next = m.next?.id;
-    return m.missions.map((j) => ({ id: j.id, title: j.title, chapter: j.chapter ?? 1, passed: done.includes(j.id), next: j.id === next }));
+    const next = [m.nextOf('main')?.id, m.nextOf('night')?.id];
+    return m.missions.map((j) => ({ id: j.id, title: j.title, group: jobGroup(j), passed: done.includes(j.id), next: next.includes(j.id) }));
   }
 
   unlockMissions(): string {
@@ -345,16 +346,19 @@ export class TestTools {
     return n ? `${n} JOBS PASSED · REPEATS RING` : 'ALL JOBS WERE PASSED';
   }
 
-  /** Make a job the next story job, and go to its payphone. */
+  /** Make a job its arc's next, and go to its payphone (after dark for a Night Shift job, so it rings). */
   jumpTo(id: string): string {
     const pd = this.d.progress;
     if (pd.busy) return 'FINISH THE ACTIVITY FIRST';
     const m = pd.missions;
     const job = m.missions.find((j) => j.id === id);
-    if (!job || !jumpToMission(pd.progress.data, m.missions.map((j) => j.id), id)) return 'NO SUCH JOB';
+    const arc = job ? arcOf(job) : 'main';
+    if (!job || !jumpToMission(pd.progress.data, m.jobsIn(arc).map((j) => j.id), id)) return 'NO SUCH JOB';
     this.cheat();
     m.refresh();
     this.saved();
+    const time = this.d.time;
+    if (!arcRings(arc, time.hour)) time.set(arc === 'night' ? 21 : 12);
     const phone = this.phones.get(job.phone);
     // A few steps from the phone, so it rings as you walk up.
     if (phone && !this.d.player.driving) this.teleport(phone.x + 5, phone.z);
@@ -420,4 +424,10 @@ export class TestTools {
     if (life.d.tutorial()) return 'TUTORIAL';
     return '';
   }
+}
+
+/** The TEST menu's section for a job: the main story, or the Night Shift's chapter. */
+export function jobGroup(j: MissionDef): string {
+  if (arcOf(j) === 'main') return 'KEEP IT LOUD';
+  return (j.chapter ?? 1) === 1 ? 'NIGHT SHIFT 1 · CHROME SAINTS' : `NIGHT SHIFT ${j.chapter} · THE LEDGER`;
 }

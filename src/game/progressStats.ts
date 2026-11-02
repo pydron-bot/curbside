@@ -1,11 +1,12 @@
 /**
  * How far through the game a save is: one completion figure over the story,
  * the activities and the collectibles, for the PROGRESS page. Pure,
- * unit-tested.
+ * unit-tested. The story's share is the main story's (KEEP IT LOUD); the
+ * Night Shift side story is shown on its own and isn't weighted.
  */
 import type { Medal, SaveData } from './progressSave';
 
-/** Each part's share of 100%. */
+/** Each part's share of 100% (missions: the main story's jobs). */
 export const COMPLETION_WEIGHTS = {
   missions: 0.3,
   frenzies: 0.15,
@@ -22,7 +23,8 @@ export const TAXI_GOAL = 10;
 export const MEDAL_WORTH: Readonly<Record<Medal, number>> = { bronze: 1 / 3, silver: 2 / 3, gold: 1 };
 
 export interface CompletionTotals {
-  missions: number;
+  /** The main story's job ids (a save's other ids, the Night Shift's, don't count). */
+  missions: readonly string[];
   frenzies: number;
   packages: number;
   /** Race ids. */
@@ -39,7 +41,7 @@ export function completionParts(s: SaveData, t: CompletionTotals): Record<keyof 
     return m ? MEDAL_WORTH[m] : 0;
   };
   return {
-    missions: frac(s.missions.length, t.missions),
+    missions: frac(passedOf(s, t.missions), t.missions.length),
     frenzies: frac(s.frenzies.length, t.frenzies),
     packages: frac(s.packages.length, t.packages),
     races: t.races.length ? t.races.reduce((sum, id) => sum + medal(id), 0) / t.races.length : 0,
@@ -55,4 +57,11 @@ export function completion(s: SaveData, t: CompletionTotals): number {
   let sum = 0;
   for (const k of Object.keys(COMPLETION_WEIGHTS) as Array<keyof typeof COMPLETION_WEIGHTS>) sum += COMPLETION_WEIGHTS[k] * parts[k];
   return Math.min(1, sum);
+}
+
+/** How many of `ids` (an arc's jobs) the save has passed. */
+export function passedOf(s: SaveData, ids: readonly string[]): number {
+  let n = 0;
+  for (const id of ids) if (s.missions.includes(id)) n++;
+  return n;
 }
