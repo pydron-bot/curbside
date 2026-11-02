@@ -178,7 +178,7 @@ class ObservePalette implements Panel {
     this.nav = new MenuNav(root);
     card.innerHTML = `
       <header class="sheet-head"><h2>START SOMETHING</h2></header>
-      <div class="sheet-body observe-grid"></div>`;
+      <div class="sheet-body observe-grid" data-scroll></div>`;
     const close = document.createElement('button');
     close.type = 'button';
     close.tabIndex = -1;
