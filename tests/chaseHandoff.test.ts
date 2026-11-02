@@ -34,6 +34,12 @@ import { Wanted } from '../src/systems/wanted';
 import { generateCity, type Rect } from '../src/world/city';
 import { StaticGrid } from '../src/world/collision';
 import { random } from './helpers';
+import { SAFEHOUSE } from '../src/game/modes/places';
+import { CHASE_WAIT, CRASH_BY, onOpeningRoad, openingPlan, pickOpeningStop } from '../src/game/opening';
+import type { StagedGetaway } from '../src/game/scenes/chases';
+import { dressCity } from '../src/world/dressing';
+import { generatePickups } from '../src/world/pickups';
+import { placeKickers, placeRamps } from '../src/world/ramps';
 
 const DT = 1 / 60;
 
@@ -183,7 +189,7 @@ function world(seed: number, x = 9.5, z = 9.5) {
     // No scene starts on its own: the test starts the chase.
     activity: () => true,
     stars: () => heat.wanted.level,
-    tutorial: () => false,
+    opening: () => false,
     keep: () => false,
     avoid: [],
     busStops: [],
@@ -448,5 +454,82 @@ describe('chase handoff: in the city', () => {
     expect(c.crime).toBe(false);
     expect(w.life.chases.rammed(cop)).toBe(false);
     expect(c.crime).toBe(true);
+  });
+});
+
+describe('the cold open: a staged chase (V2-07)', () => {
+  const big = placeRamps(1337);
+  const stops = dressCity(city, generatePickups(1337), [...big, ...placeKickers(1337, big)]).street.busStops;
+  const plan = openingPlan(pickOpeningStop(stops, SAFEHOUSE.x, SAFEHOUSE.z)!);
+  const staged = (): StagedGetaway => ({
+    x: plan.getaway.x,
+    z: plan.getaway.z,
+    heading: plan.getaway.heading,
+    crashX: plan.crash.x,
+    crashZ: plan.crash.z,
+    wait: CHASE_WAIT,
+    by: CRASH_BY,
+  });
+  /** Traffic off the getaway's road, as the opening does. */
+  const clear = (w: World) => {
+    for (let i = w.vehicles.length - 1; i >= 0; i--) {
+      const v = w.vehicles[i];
+      if (!v.police && !v.ambient && !v.scene && onOpeningRoad(plan, v.sim.x, v.sim.z)) w.population.retireVehicle(v);
+    }
+  };
+
+  it.each([3, 21, 77])('seed %i: waits, comes, piles in at the kerb by the shelter within 10 s, its driver runs; in is TAKE THE HEAT', (seed) => {
+    const w = world(seed, plan.stand.x, plan.stand.z);
+    clear(w);
+    const car = w.life.chases.stage(staged())!;
+    expect(car).not.toBeNull();
+    const c = w.life.chases.chases[0];
+    const cars = c.units.map((u) => u.v!).filter(Boolean);
+    expect(cars.length).toBeGreaterThan(0);
+    for (const v of cars) expect(v.mesh.siren).toBe(true);
+    // Waiting off screen, sirens going.
+    w.run(CHASE_WAIT - 0.2);
+    expect(Math.hypot(car.sim.x - plan.getaway.x, car.sim.z - plan.getaway.z)).toBeLessThan(1);
+    expect(w.life.chases.staged(car)).toBe('coming');
+    const crashed = w.run(CRASH_BY + 0.5, () => w.life.chases.staged(car) === 'dumped');
+    expect(crashed).toBe(true);
+    // Within 10 s of the start, at the crash point (or near it), stopped, smoking, nobody in it.
+    expect(w.life.now).toBeLessThan(10);
+    expect(Math.hypot(car.sim.x - plan.crash.x, car.sim.z - plan.crash.z)).toBeLessThan(6);
+    expect(car.ai).toBeNull();
+    expect(car.damage.health).toBeLessThan(car.damage.maxHealth * 0.6);
+    expect(car.damage.burning).toBe(false);
+    expect(w.log.some((e) => e.type === 'crash')).toBe(true);
+    expect(w.life.owned).not.toContain(car);
+    w.run(1.5);
+    expect(Math.hypot(car.sim.vx, car.sim.vz)).toBeLessThan(1);
+    expect(w.life.chases.staged(car)).toBe('dumped');
+    // The player walks up and gets in: TAKE THE HEAT, their cops the player's.
+    w.player.ped.x = car.sim.x + Math.cos(car.sim.heading) * 1.6;
+    w.player.ped.z = car.sim.z - Math.sin(car.sim.heading) * 1.6;
+    expect(w.player.enter(car)).toBe(true);
+    w.step();
+    expect(w.life.chases.joined.takeHeat).toBe(1);
+    expect(w.heat.wanted.level).toBeGreaterThanOrEqual(TOOK_GETAWAY_STARS);
+    expect(w.awards).toContain('takeTheHeat');
+    expect(cars.filter((v) => w.heat.police.unitOf(v)).length).toBeGreaterThan(0);
+    w.run(1);
+    expect(w.life.chases.running).toBe(0);
+    expect(w.orphans([car, ...cars])).toEqual([]);
+  });
+
+  it('nobody comes for it: the police give up and leave the car where it is; off, no chase is staged', () => {
+    const w = world(5, plan.stand.x, plan.stand.z);
+    clear(w);
+    const car = w.life.chases.stage(staged())!;
+    w.run(CHASE_WAIT + CRASH_BY + 1, () => w.life.chases.staged(car) === 'dumped');
+    w.run(50, () => w.life.chases.running === 0);
+    expect(w.life.chases.running).toBe(0);
+    expect(car.mesh.root.visible).toBe(true);
+    expect(car.ai).toBeNull();
+    expect(w.orphans([car])).toEqual([]);
+    w.life.chases.enabled = false;
+    expect(w.life.chases.stage(staged())).toBeNull();
+    expect(w.life.chases.begin('car')).toBe(false);
   });
 });

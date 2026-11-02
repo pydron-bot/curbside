@@ -14,7 +14,7 @@
  * the clock (look.time.update), so "on screen" and night/day are as played.
  * The dev server must be up (npm run dev); URL overrides the address.
  */
-import { args, launch, pct } from './lib.mjs';
+import { VETERAN_SAVE, args, launch, pct } from './lib.mjs';
 
 const URL = process.env.URL ?? 'http://localhost:5173/curbside/';
 const opt = args({ roam: 1200, pursuit: 300, stars: 2, seed: 1, view: '852x393' });
@@ -23,7 +23,7 @@ const [W, H] = String(opt.view).split('x').map(Number);
 const browser = await launch();
 const page = await browser.newPage({ viewport: { width: W, height: H } });
 page.on('pageerror', (e) => console.error('pageerror:', e.message));
-await page.addInitScript((seed) => {
+await page.addInitScript(({ seed, save }) => {
   let s = seed;
   Math.random = () => {
     s = (s + 0x6d2b79f5) | 0;
@@ -35,7 +35,9 @@ await page.addInitScript((seed) => {
   Date.now = () => t0;
   window.requestAnimationFrame = () => 0;
   localStorage.setItem('curbside.settings', JSON.stringify({ godMode: true }));
-}, opt.seed);
+  // Past the cold open (it holds the loud scenes off while it plays).
+  localStorage.setItem('curbside.save', JSON.stringify(save));
+}, { seed: opt.seed, save: VETERAN_SAVE });
 await page.goto(URL);
 await page.waitForFunction(() => window.__ub, null, { timeout: 90000 });
 await page.waitForTimeout(1500);
@@ -43,8 +45,6 @@ await page.waitForTimeout(1500);
 await page.evaluate(() => {
   const u = window.__ub;
   u.startGame();
-  // Past the first-run tutorial (its pointers hold the loud scenes off).
-  u.progress.progress.data.tutorial = 3;
   const B = 64;
   const MAX = 8;
   const wrap = (a) => Math.atan2(Math.sin(a), Math.cos(a));

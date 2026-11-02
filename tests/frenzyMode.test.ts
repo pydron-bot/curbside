@@ -18,6 +18,7 @@ function setup() {
     progress: new Progress(defaultSave(), null),
     ui: { banner: (text: string, kind: string, sub?: string) => banners.push([text, kind, sub]) },
     freeRoam: true,
+    sideModes: true,
     // As in ProgressDirector: already false when playerDied / busted fire.
     get live() {
       return player.alive && !player.arrested;

@@ -454,6 +454,7 @@ describe('the count-in', () => {
       progress: new Progress(defaultSave(), null),
       ui: { banner() {} },
       freeRoam: true,
+      sideModes: true,
       get live() {
         return p.alive && !p.arrested;
       },

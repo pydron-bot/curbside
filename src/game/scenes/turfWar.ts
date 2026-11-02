@@ -11,7 +11,7 @@
  * you, while the other side stands with you for the rest of the skirmish
  * (they keep fighting the side you hit). Knocking a VIPER down costs
  * respect as ever (game/modes/gangMode.ts hears the same pedDown). Loud:
- * held off by the title, an activity, wanted stars and the tutorial.
+ * held off by the title, an activity, wanted stars and the cold open.
  */
 import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
 import { provoke, scare } from '../../systems/crowd';

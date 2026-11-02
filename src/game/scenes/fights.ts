@@ -10,7 +10,7 @@
  * and the other raising a fist, or one knocked out cold, who stays down
  * for the ambulance (scenes/medics.ts). Passers-by stop and watch in a
  * ring (a Gathering crowd) until it's over. At most two at once (BUSY:
- * held off by a timed race and the tutorial; fewer while you're wanted).
+ * held off by a timed race and the cold open; fewer while you're wanted).
  */
 import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
 import { scare } from '../../systems/crowd';

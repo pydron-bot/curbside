@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SIDE_MODES_AFTER, SIDE_MODES_UNLOCK, openingDue, sideModesOpen } from '../src/game/opening';
 import { SAVE_KEY, SAVE_VERSION, defaultSave, loadSave, migrateSave, pruneSave, storeSave, type SaveStorage } from '../src/game/progressSave';
 
 /** An in-memory Storage; `broken` makes every call throw (blocked storage). */
@@ -68,6 +69,35 @@ describe('save: defaults and migration', () => {
     const s = migrateSave({ v: 1, cred: { total: 300, picked: 1, perks: { tough: 1, made_up: 4 } } });
     expect(s.cred).toEqual({ total: 300, picked: 1, perks: { tough: 1 } });
     expect(migrateSave(JSON.parse(JSON.stringify(s))).cred).toEqual(s.cred);
+  });
+
+  it('the cold open: a fresh save has it; a save from before it with real play keeps its old start and its side modes', () => {
+    const fresh = defaultSave();
+    expect(fresh.opening).toBe(false);
+    expect(openingDue(fresh)).toBe(true);
+    expect(sideModesOpen(fresh)).toBe(false);
+    // Hardly played (under 2 minutes): treated as new.
+    const brief = migrateSave({ v: 1, cash: 10, stats: { playTime: 30 } });
+    expect(openingDue(brief)).toBe(true);
+    expect(sideModesOpen(brief)).toBe(false);
+    // A veteran's save from 0.14 (no `opening` yet): progress kept, no cold open forced on it, Chaos Run and the rest still there.
+    const old = { v: 1, cash: 4200, missions: ['m1-audition', 's2-noise'], unlocks: ['scanner'], tutorial: 3, stats: { playTime: 3600 } };
+    const vet = migrateSave(JSON.parse(JSON.stringify(old)));
+    expect(vet.cash).toBe(4200);
+    expect(vet.missions).toEqual(['m1-audition', 's2-noise']);
+    expect(vet.opening).toBe(true);
+    expect(openingDue(vet)).toBe(false);
+    expect(vet.unlocks).toEqual(['scanner', SIDE_MODES_UNLOCK]);
+    expect(sideModesOpen({ ...vet, missions: [] })).toBe(true);
+    // Stored and loaded again: unchanged (the unlock isn't added twice).
+    expect(migrateSave(JSON.parse(JSON.stringify(vet)))).toEqual(vet);
+    // A save that has the field keeps it, whatever its play time; junk falls back.
+    expect(migrateSave({ opening: false, stats: { playTime: 9000 } }).opening).toBe(false);
+    expect(migrateSave({ opening: true }).opening).toBe(true);
+    expect(migrateSave({ opening: 'yes' }).opening).toBe(false);
+    // Passing story job 2 opens the side modes for anyone.
+    expect(sideModesOpen({ missions: [SIDE_MODES_AFTER], unlocks: [] })).toBe(true);
+    expect(sideModesOpen({ missions: ['s1-wrongstop'], unlocks: [] })).toBe(false);
   });
 
   it('a fresh player gets the first-run pointers; a save from before them with real play skips them', () => {

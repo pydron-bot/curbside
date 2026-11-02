@@ -64,7 +64,7 @@ export class ExportMode implements Mode {
     this.listNo = ctx.progress.data.exports.lists;
     ctx.deps.bus.on('enterVehicle', () => {
       // Not mid-activity: the bay won't take it then (nor in a Chaos Run).
-      if (!ctx.freeRoam || ctx.busy) return;
+      if (!ctx.sideModes || ctx.busy) return;
       const v = ctx.deps.player.driving;
       const o = v ? this.orderFor(v) : null;
       if (o) ctx.notice(`EXPORT: ${o.label}`, 'progress');
@@ -86,13 +86,13 @@ export class ExportMode implements Mode {
     const ctx = this.ctx;
     if (this.sold && (this.soldIn -= dt) <= 0) this.crane();
     const car = ctx.deps.player.driving;
-    this.wanted = ctx.freeRoam && car && !car.damage.wrecked ? this.orderFor(car) : null;
+    this.wanted = ctx.sideModes && car && !car.damage.wrecked ? this.orderFor(car) : null;
     this.syncBlip();
     this.refused = '';
     const inBay = car !== null && inShop(this.docks, car.sim.x, car.sim.z, 1);
     if (!inBay) this.parked = null;
     else if (ctx.busy) this.parked = car;
-    if (!car || !ctx.freeRoam || !ctx.live || !inBay) {
+    if (!car || !ctx.sideModes || !ctx.live || !inBay) {
       this.held = 0;
       return;
     }
@@ -149,7 +149,7 @@ export class ExportMode implements Mode {
 
   prompt(): string | null {
     const ctx = this.ctx;
-    if (!ctx.freeRoam || ctx.busy === 'mission') return null;
+    if (!ctx.sideModes || ctx.busy === 'mission') return null;
     const at = ctx.deps.player.position;
     if (!this.refused && len2(at.x - this.docks.x, at.z - this.docks.z) > PROMPT_RANGE) return null;
     // Rebuilt only when what it says changes.
@@ -168,7 +168,7 @@ export class ExportMode implements Mode {
   }
 
   glow(g: GlowSprites, _props: ProgressProps, view: Rect, t: number): void {
-    if (!this.ctx.freeRoam) return;
+    if (!this.ctx.sideModes) return;
     const s = this.docks;
     if (!nearView(s.x, s.z, view, 12)) return;
     const c = MARK.docks;
@@ -205,7 +205,7 @@ export class ExportMode implements Mode {
 
   /** '$' at the docks in free roam; pulsing with an arrow while you drive a wanted car. */
   private syncBlip(): void {
-    const want = !this.ctx.freeRoam ? '' : this.wanted ? 'hot' : 'on';
+    const want = !this.ctx.sideModes ? '' : this.wanted ? 'hot' : 'on';
     if (want === this.blip) return;
     this.blip = want;
     if (!want) {

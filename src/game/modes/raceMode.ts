@@ -93,7 +93,7 @@ export class RaceMode implements Mode {
       return;
     }
     this.near = null;
-    if (!ctx.freeRoam || !ctx.live) return;
+    if (!ctx.sideModes || !ctx.live) return;
     const car = p.driving;
     const at = p.position;
     for (const def of RACES) {
@@ -233,7 +233,7 @@ export class RaceMode implements Mode {
       return;
     }
     // Start lines only while nothing else is on (they can't start meanwhile).
-    if (!this.ctx.freeRoam || this.ctx.busy) return;
+    if (!this.ctx.sideModes || this.ctx.busy) return;
     for (const def of RACES) {
       const x = nodeX(def.nodes[0]);
       const z = nodeZ(def.nodes[0]);
@@ -258,7 +258,7 @@ export class RaceMode implements Mode {
   }
 
   private syncBlips(): void {
-    const want = this.ctx.freeRoam && !this.run;
+    const want = this.ctx.sideModes && !this.run;
     if (want === this.blipsOn) return;
     if (!want) return this.hideBlips();
     this.blipsOn = true;

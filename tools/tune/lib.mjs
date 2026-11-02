@@ -40,12 +40,15 @@ export async function launch() {
   return chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 }
 
+/** A save that has had the cold open, side modes open (an init script sets it in a fresh profile). */
+export const VETERAN_SAVE = { v: 1, opening: true, unlocks: ['sideModes'] };
+
 /** A page on the game with a seedable Math.random (`window.__seed(n)`) and the hooks ready. */
 export async function openGame() {
   const browser = await launch();
   const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
   page.on('pageerror', (e) => console.error('pageerror:', e.message));
-  await page.addInitScript(() => {
+  await page.addInitScript((VETERAN_SAVE) => {
     // mulberry32, reseedable between runs.
     let s = 1;
     Math.random = () => {
@@ -60,7 +63,9 @@ export async function openGame() {
     Date.now = () => t0;
     // No real frames: only fastForward moves the game, so nothing runs between a harness's steps.
     window.requestAnimationFrame = () => 0;
-  });
+    // A save past the cold open with the side modes open: PLAY starts at the spawn corner, as the harnesses expect.
+    if (!localStorage.getItem('curbside.save')) localStorage.setItem('curbside.save', JSON.stringify(VETERAN_SAVE));
+  }, VETERAN_SAVE);
   await page.goto(URL);
   await page.waitForFunction(() => window.__ub, null, { timeout: 60000 });
   await page.waitForTimeout(1500);

@@ -90,7 +90,7 @@ export class FrenzyMode implements Mode {
       return;
     }
     this.near = null;
-    if (!ctx.freeRoam || !ctx.live) return;
+    if (!ctx.sideModes || !ctx.live) return;
     const p = ctx.deps.player;
     const at = p.position;
     const car = p.driving;
@@ -162,7 +162,7 @@ export class FrenzyMode implements Mode {
   }
 
   glow(g: GlowSprites, props: ProgressProps, view: Rect, t: number): void {
-    if (!this.ctx.freeRoam) return;
+    if (!this.ctx.sideModes) return;
     for (let i = 0; i < this.tokens.length; i++) {
       const tok = this.tokens[i];
       const { x, z } = tok.spot;
@@ -190,7 +190,7 @@ export class FrenzyMode implements Mode {
 
   /** Radar: '!' per token in free roam (gold once beaten). */
   private syncBlips(): void {
-    const want = this.ctx.freeRoam;
+    const want = this.ctx.sideModes;
     if (want === this.blipsOn) return;
     if (!want) {
       this.hideBlips();

@@ -12,7 +12,7 @@
  * Faked light and particles only; the fires hurt nobody (a molotov's
  * still does: systems/projectiles.ts). Held off behind the title, in a
  * timed race or a mission that asks (fires burn out by themselves) and in
- * the tutorial; MAX_TRUCKS at once. Stars don't slow it: your fires get
+ * the cold open; MAX_TRUCKS at once. Stars don't slow it: your fires get
  * their trucks.
  */
 import type { VehicleState } from '../../entities/vehicle';

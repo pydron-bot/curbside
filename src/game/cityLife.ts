@@ -10,7 +10,7 @@
  * buskers, onlookers).
  *
  * Every scene is bounded: a cap on how many run at once, a cooldown
- * between starts, holds (title, a timed race, the tutorial), a slower clock
+ * between starts, holds (title, a timed race, the cold open), a slower clock
  * and a per-tier cap on the busy ones while the player is wanted, and a
  * range from the player (systems/cityScenes.ts SceneClock); vehicles they
  * bring in arrive off-screen on a lane like the police do (while wanted,
@@ -135,8 +135,8 @@ export interface CityLifeDeps {
   activity(): boolean;
   /** The player's wanted stars. */
   stars(): number;
-  /** The first run's tutorial pointers are still up. */
-  tutorial(): boolean;
+  /** The cold open is on (its staged chase has the street). */
+  opening(): boolean;
   /** Cars other systems need left where they are (an activity's): no scene may take them. */
   keep(v: Vehicle): boolean;
   /** Places parked cars keep clear of (landmarks, bays' mouths, ramps, the spawn corner, the bus shelters' bays). */
@@ -236,6 +236,7 @@ export class CityLife {
   /** Heat's witnesses hook (scenes/witnesses.ts). */
   readonly witnesses: Witnesses;
   readonly chases: Chases;
+  readonly buses: Buses;
   readonly races: StreetRaces;
   readonly accidents: Accidents;
   readonly doubleParking: DoubleParking;
@@ -256,7 +257,7 @@ export class CityLife {
   private readonly viewRect: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
   private readonly spot: RoadSpot = { ix: 0, iz: 0, dir: 0, along: 0, x: 0, z: 0, heading: 0 };
   private readonly parkAvoid: readonly Avoid[];
-  private readonly world: SceneWorld = { playing: false, activity: false, stars: 0, tutorial: false };
+  private readonly world: SceneWorld = { playing: false, activity: false, stars: 0, opening: false };
   private scanTimer = 0;
   private tidyTimer = 0;
   private meterTimer = 0;
@@ -291,7 +292,7 @@ export class CityLife {
     this.streetMood = this.add(new StreetMood(this));
     this.dogs = this.add(new StrayDogs(this));
     this.turfWar = this.add(new TurfWar(this));
-    this.add(new Buses(this));
+    this.buses = this.add(new Buses(this));
     const fights = this.add(new Fights(this));
     this.add(new IceCream(this, fights));
     this.add(new Vendors(this, fights));
@@ -455,11 +456,11 @@ export class CityLife {
     w.playing = this.d.playing();
     w.activity = this.d.activity();
     w.stars = w.playing ? this.d.stars() : 0;
-    w.tutorial = this.d.tutorial();
+    w.opening = this.d.opening();
     if (kind === this.featured) {
-      // Directed (the title's show, a story job's scene): no holds (a first run's tutorial included), nor stars.
+      // Directed (the title's show, a story job's scene): no holds (the cold open's included), nor stars.
       w.playing = true;
-      w.activity = w.tutorial = false;
+      w.activity = w.opening = false;
       w.stars = 0;
     }
     const now = this.now;

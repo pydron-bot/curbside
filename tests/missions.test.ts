@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SAFEHOUSE, placeDocks, placePayphones } from '../src/game/modes/places';
+import { GETAWAY_TAG } from '../src/game/opening';
 import { SEDAN, createVehicleState, stepVehicle } from '../src/entities/vehicle';
 import { collideVehicleStatic } from '../src/systems/physics';
 import { driveAi, driverFor } from '../src/systems/traffic';
@@ -371,7 +372,7 @@ describe('the story', () => {
   const night = missions.filter((m) => arcOf(m) === 'night');
 
   it('the main story (s-ids) and the Night Shift (m1-m13, ids unchanged), each job from a payphone, paying, with something to say', () => {
-    expect(main.map((m) => m.id)).toEqual(['s2-noise', 's3-quiet']);
+    expect(main.map((m) => m.id)).toEqual(['s1-wrongstop', 's2-noise', 's3-quiet']);
     expect(night.map((m) => m.id)).toEqual([
       'm1-audition',
       'm2-tuna',
@@ -391,9 +392,10 @@ describe('the story', () => {
     const chapter = (n: number) => night.filter((m) => (m.chapter ?? 1) === n).length;
     expect([chapter(1), chapter(2)]).toEqual([8, 5]);
     for (const m of missions) {
-      expect(phones.has(m.phone), m.id).toBe(true);
+      // The cold open's job has no call: no phone, no intro.
+      expect(m.direct ? m.phone === '' && m.intro.length === 0 : phones.has(m.phone), m.id).toBe(true);
       expect(m.reward, m.id).toBeGreaterThan(0);
-      expect(m.intro.length, m.id).toBeGreaterThan(0);
+      if (!m.direct) expect(m.intro.length, m.id).toBeGreaterThan(0);
       expect(m.outro.length, m.id).toBeGreaterThan(0);
       expect(m.steps.length, m.id).toBeGreaterThan(0);
       for (const s of m.steps) expect(s.text.length, m.id).toBeGreaterThan(0);
@@ -485,10 +487,10 @@ describe('the story', () => {
     if (drop.kind === 'deliver') expect(districtAt(drop.x, drop.z)).toBe('arts');
   });
 
-  it('no main-story job fails on stars: none of its steps sets a wanted level or asks to lose one', () => {
+  it('no main-story job fails on stars: none sets a wanted level, and only the cold open asks to lose the heat it brought', () => {
     for (const m of main)
       for (const s of m.steps) {
-        expect(s.kind, m.id).not.toBe('loseHeat');
+        if (m.id !== 's1-wrongstop') expect(s.kind, m.id).not.toBe('loseHeat');
         expect((s.start ?? []).some((a) => a.do === 'wanted'), m.id).toBe(false);
       }
   });
@@ -496,7 +498,8 @@ describe('the story', () => {
   it('the Night Shift rings from the docks-yard phone only, the main story never from it; two main jobs in a row never share a phone', () => {
     for (const m of night) expect(m.phone, m.id).toBe(NIGHT_PHONE);
     for (const m of main) expect(m.phone, m.id).not.toBe(NIGHT_PHONE);
-    for (let i = 1; i < main.length; i++) expect(main[i].phone).not.toBe(main[i - 1].phone);
+    const rung = main.filter((m) => !m.direct);
+    for (let i = 1; i < rung.length; i++) expect(rung[i].phone).not.toBe(rung[i - 1].phone);
   });
 
   it('everything spawns clear of buildings; every tag used is spawned; races stay on the map', () => {
@@ -507,7 +510,9 @@ describe('the story', () => {
           if (a.do === 'spawnCar') expect(blocked(a.x, a.z, 2.5), `${m.id} ${a.tag}`).toBe(false);
           if (a.do === 'spawnPed') expect(blocked(a.x, a.z, 0.5), `${m.id} ${a.tag}`).toBe(false);
         }
-        if ('tag' in s && s.tag) expect([...cars, ...peds], `${m.id} ${s.kind}`).toContain(s.tag);
+        // The cold open's job is lent its getaway (modes/openingMode.ts) rather than spawning one.
+        const lent = m.direct ? [GETAWAY_TAG] : [];
+        if ('tag' in s && s.tag) expect([...cars, ...peds, ...lent], `${m.id} ${s.kind}`).toContain(s.tag);
         if (s.kind === 'destroy') for (const t of s.tags) expect(cars).toContain(t);
         if (s.kind === 'knockOutAll') for (const t of s.tags) expect(peds).toContain(t);
         for (const f of s.fail ?? []) if (f.down) expect(peds, m.id).toContain(f.down);
@@ -549,11 +554,14 @@ describe('the two arcs on the phones', () => {
     expect(both).toBeGreaterThan(0);
   });
 
-  it("each arc's next job is its first not passed; ids this build hasn't got (s1) are simply skipped", () => {
-    expect(nextInArc(missions, 'main', [], 0)).toEqual({ job: missions.find((m) => m.id === 's2-noise'), replay: false });
+  it("each arc's next job is its first not passed; ids this build hasn't got are simply skipped", () => {
+    // The main story's first is the cold open's (direct): nothing rings for it until it has run.
+    expect(nextInArc(missions, 'main', [], 0)).toBeNull();
+    expect(nextInArc(missions, 'main', [], 0, true)).toEqual({ job: missions.find((m) => m.id === 's2-noise'), replay: false });
+    expect(nextInArc(missions, 'main', ['s1-wrongstop'], 0)?.job.id).toBe('s2-noise');
     expect(nextInArc(missions, 'night', [], 0)?.job.id).toBe('m1-audition');
-    // A save from a build with s1 (or anything else) still goes on to s3.
     expect(nextInArc(missions, 'main', ['s1-wrongstop', 's2-noise'], 0)?.job.id).toBe('s3-quiet');
+    expect(nextInArc(missions, 'main', ['s2-noise', 'gone-job'], 0, true)?.job.id).toBe('s3-quiet');
     expect(nextInArc(missions, 'night', ['m1-audition', 's2-noise'], 0)?.job.id).toBe('m2-tuna');
   });
 
@@ -570,9 +578,17 @@ describe('the two arcs on the phones', () => {
     const open: MissionDef = { ...def([{ kind: 'survive', seconds: 1, text: 'S' }]), id: 's1', direct: true };
     const jobs = [open, ...missions];
     expect(nextInArc(jobs, 'main', [], 0)).toBeNull();
-    expect(nextInArc(jobs, 'main', ['s1'], 0)?.job.id).toBe('s2-noise');
+    expect(nextInArc(jobs, 'main', ['s1', 's1-wrongstop'], 0)?.job.id).toBe('s2-noise');
     const all = ['s1', ...ids('main')];
     for (let r = 0; r < 4; r++) expect(nextInArc(jobs, 'main', all, r)?.job.id).not.toBe('s1');
+    // Once the glue has had its go (the opening ran), one not passed no longer holds the arc up, and isn't a repeat either.
+    expect(nextInArc(jobs, 'main', [], 0, true)?.job.id).toBe('s2-noise');
+    const rest = ids('main').filter((id) => id !== 's1-wrongstop');
+    for (let r = 0; r < 4; r++) {
+      const n = nextInArc(jobs, 'main', rest, r, true);
+      expect(n?.replay).toBe(true);
+      expect(n?.job.direct).toBeUndefined();
+    }
   });
 
   it("an old save's Graveyard Shift progress carries over as the Night Shift's; the main story starts fresh", () => {
@@ -583,12 +599,15 @@ describe('the two arcs on the phones', () => {
     expect(passedOf(save, ids('night'))).toBe(9);
     expect(passedOf(save, ids('main'))).toBe(0);
     expect(nextInArc(missions, 'night', save.missions, 0)?.job.id).toBe('m10-fallen');
-    expect(nextInArc(missions, 'main', save.missions, 0)?.job.id).toBe('s2-noise');
+    // A save with no play to speak of gets the cold open first; then the main story rings from s2.
+    expect(save.opening).toBe(false);
+    expect(nextInArc(missions, 'main', save.missions, 0, save.opening)).toBeNull();
+    expect(nextInArc(missions, 'main', save.missions, 0, true)?.job.id).toBe('s2-noise');
     // The 30% story share is the main story's.
     const totals = { missions: ids('main'), frenzies: 1, packages: 1, races: [], exportOrders: 1 };
     expect(completionParts(save, totals).missions).toBe(0);
     save.missions.push('s2-noise');
-    expect(completion(save, totals)).toBeCloseTo(COMPLETION_WEIGHTS.missions / 2, 6);
+    expect(completion(save, totals)).toBeCloseTo(COMPLETION_WEIGHTS.missions / ids('main').length, 6);
   });
 });
 

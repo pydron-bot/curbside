@@ -30,7 +30,7 @@ describe('a featured scene', () => {
     playing: () => true,
     activity: () => world.activity,
     stars: () => world.stars,
-    tutorial: () => false,
+    opening: () => false,
     keep: () => false,
     avoid: [],
     busStops: [],
@@ -41,7 +41,7 @@ describe('a featured scene', () => {
     focus: () => ({ x: 0, z: 0, vx: 0, vz: 0 }),
   } as unknown as CityLifeDeps);
   // A kind held by everything (as the loud scenes were).
-  life.clock.define('loud', { every: [1, 1], cap: 1, first: 0, hold: ['title', 'activity', 'wanted', 'tutorial'] });
+  life.clock.define('loud', { every: [1, 1], cap: 1, first: 0, hold: ['title', 'activity', 'wanted', 'opening'] });
 
   it("each scene a job can start features a kind the city's clock has (else nothing would be lifted)", () => {
     const kinds = life.clock.kinds;
@@ -104,6 +104,8 @@ describe('mission mode: featured scenes and mayhem', () => {
       },
     } as unknown as SceneStarter;
     const progress = new Progress(defaultSave(), null);
+    // Past the cold open: its job no longer holds the main story's phones.
+    progress.data.opening = true;
     const shown: string[] = [];
     const ctx = {
       deps: {
@@ -120,6 +122,7 @@ describe('mission mode: featured scenes and mayhem', () => {
       progress,
       ui: anything(),
       freeRoam: true,
+      sideModes: true,
       get live() {
         return player.alive && !player.arrested;
       },
@@ -130,6 +133,7 @@ describe('mission mode: featured scenes and mayhem', () => {
       blip() {},
       unblip() {},
       unpin() {},
+      pin() {},
       openModal() {},
       closeModal() {},
     };
