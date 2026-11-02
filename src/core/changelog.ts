@@ -15,6 +15,18 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.16.0',
+    date: '2026-11-02',
+    title: 'Race crasher',
+    notes: [
+      'Gatecrash a street race: pull onto its route going its way and you are in. Win and the leader\'s car is yours (RACE CRASHER).',
+      'Drive off in the ice cream van while people are queueing and the queue comes after you on foot (VAN NICKED).',
+      'Your best moment: the best stamp of each life is photographed as it lands and shown on WASTED and BUSTED with its name, place and time. SHARE sends the picture.',
+      'A cleaner start for new players: the title shows PLAY and SETTINGS, and OBSERVE, CHARACTER and HOW TO PLAY appear after the opening. PROGRESS lists what is still to come and when it opens.',
+      'Fixed thin black lines that flickered across the road at the end of headlight beams.',
+    ],
+  },
+  {
     version: '0.15.0',
     date: '2026-11-02',
     title: 'Wrong stop',

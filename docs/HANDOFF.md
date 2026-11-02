@@ -75,19 +75,25 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 V2-04 stamps, V2-05 story scene/mayhem steps, V2-08 Night Shift, s2/s3 of
 KEEP IT LOUD, V2-13 six new incidents); 0.13.1 fixed black slabs on
 desktop High (bloom NaN).
-**Wave 2 is merged on `claude/v2` as 0.15.0 "Wrong stop"** (not yet on
-`main` unless the changelog's top entry is live): V2-07 live cold open +
+**Wave 2 shipped as 0.15.0 "Wrong stop"** (live): V2-07 live cold open +
 s1 WRONG STOP (tutorial pointers removed; side modes hidden until s2),
 V2-06 s4–s6 (chapter 1 complete), V2-09 Borrowed Blues (hose, chime,
 winch, Vex's tow contracts, the `keeps()` guard), V2-18 observe mode,
 V2-11 scanner pings (off while observing), V2-10 Your Mess, Their Problem
-(adopted crashes, the shots chain, DOMINO ×N). Each stream's branch
-(`claude/v2-open`, `-ch1`, `-blues`, `-observe`, `-scanner`, `-mess`) is
-pushed. Integration fixes: the scanner's on-foot smoke check leaves the
-cold open's getaway first; long stamp names wrap at 852×393 under the
+(adopted crashes, the shots chain, DOMINO ×N). **0.16.0 "Race crasher"**
+followed: V2-12 RACE CRASHER and VAN NICKED (the chime queue now chases a
+van driven off rather than dispersing), V2-17 prune for newcomers (fresh
+title PLAY + SETTINGS; OBSERVE after the cold open or with Test tools;
+PROGRESS → STILL TO COME; the 1.0.0 bump waits for the device pass, the
+owner's call), V2-16 best-moment picture on WASTED/BUSTED (built outright
+on the owner's say-so), and the headlight-beam black lines (NaN from
+`pow` of a negative base at the cone's far edge; rain splashes had the
+same pattern). Every stream branch (`claude/v2-*`) is pushed.
+Integration fixes: the scanner's on-foot smoke check leaves the cold
+open's getaway first; long stamp names wrap at 852×393 under the
 activity card (they covered NOS in a Chaos Run, failing CI since 0.14.0:
 `pages.yml` runs only the unit tests, so a red smoke doesn't stop a
-deploy).
+deploy); the CI smoke job's limit is 30 minutes (wave 2 took it past 20).
 **Wave 2 device checklist (iPhone, V2-14):** cold open (STEAL THIS CAR
 shows over the bus before the crash; bus nose vs crash point; chase cars
 stop 22 m short); s4 fairness (the truck rarely stops at lights) and the
@@ -97,9 +103,17 @@ at 852×340, jet density at 60 fps, stars from hosing a queue; towing to
 the yard without clipping kerbs; observe pinch/twist, crowd at widest
 zoom, strip legibility at 852×340; scanner 11 px text, thumb covering it,
 squelch level, chattiness; the Settings sheet's sixth row at 852×340;
-adopted crash pacing and DOMINO pay from the gunfire chain.
-**Next:** V2-12 RACE CRASHER and VAN NICKED (the one wave 2 item left),
-then the iPhone device pass (V2-14) and V2-17 / 1.0.0. Run at most three
+adopted crash pacing and DOMINO pay from the gunfire chain; RACE CRASHER
+joining by touch and win balance from slow cars; VAN NICKED chasers
+reading as angry and whether chasing spoils the chime lure; the
+best-moment copy's cost in the hit-stop (Diagnostics `moment` lines),
+reaching SHARE within WASTED's 3 s, the share sheet, its fit with real
+safe areas at 852×340; the fresh title and STILL TO COME at 852×340; no
+black lines at the end of headlight beams at night.
+**Next:** the iPhone device pass (V2-14) on 0.16.0, then 1.0.0. Ideas offered
+to the owner for wave 3 (none chosen yet): weapons AIR HORN, STINGER, FIRE
+EXTINGUISHER, TASER, STICKY CHARGE; city life QUIET PLEASE march,
+roadworks, bin day, learner driver, delivery rush, school run. Run at most three
 streams at once (4 cores; SwiftShader smoke tests are CPU-bound). Give
 each stream its own smoke port and scratch dir: `smoke.mjs` starts
 `vite preview` with output ignored, so a taken port silently tests
