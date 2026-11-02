@@ -1308,3 +1308,19 @@ export function distantSiren(v: Voice): void {
   g.gain.linearRampToValueAtTime(0.35, t + len * 0.45);
   g.gain.linearRampToValueAtTime(0, t + len);
 }
+
+/** TAKE THE HEAT: a patrol car's short whoop, up and back down, as the chase swings onto you. */
+export function sirenWhoop(v: Voice): void {
+  const t = v.t;
+  const o = v.osc('sawtooth', 620, t, t + 0.75);
+  o.frequency.setValueAtTime(620, t);
+  o.frequency.exponentialRampToValueAtTime(1500, t + 0.32);
+  o.frequency.exponentialRampToValueAtTime(700, t + 0.7);
+  const bp = v.filter('bandpass', 1300, 1.2);
+  const g = v.gain();
+  v.chain(o, bp, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.5, t + 0.05);
+  g.gain.setValueAtTime(0.5, t + 0.55);
+  g.gain.linearRampToValueAtTime(0, t + 0.72);
+}

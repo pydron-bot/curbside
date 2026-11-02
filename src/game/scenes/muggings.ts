@@ -5,10 +5,12 @@
  * victim shouts and points after them (waving, facing the thief). The look
  * rings the mugger in red. Chase them down and knock them over and they
  * drop the bag; walk over it to hand it back (`bagReturned`): the victim
- * cheers and the player gets a small cash reward (deps.reward; cash, not
- * CRED, kept modest: docs/CRED.md). Knocking the mugger down isn't called
- * in by anyone who saw it (Witnesses asks `isMugger`). Ignore them and they
- * get away; a dropped bag nobody picks up is gone after a while.
+ * cheers and the player is a HAVE-A-GO HERO (deps.award) with a small cash
+ * reward (deps.reward; cash, not CRED, kept modest: docs/CRED.md).
+ * Knocking the mugger down isn't an assault (PedAgent.suspect while they
+ * run) nor called in by anyone who saw it (Witnesses asks `isMugger`).
+ * Ignore them and they get away; a dropped bag nobody picks up is gone
+ * after a while.
  */
 import { LOUD } from '../../systems/cityScenes';
 import { BLOCKS_PER_SIDE } from '../../world/city';
@@ -233,6 +235,7 @@ export class Muggings implements Scene {
     const va = m.victim.agent;
     m.phase = 'run';
     m.timer = 0;
+    ma.suspect = true;
     life.borrow(m.victim);
     m.mugger.model.punch(1);
     hurtPed(va, 5, ma.s.x, ma.s.z);
@@ -278,7 +281,9 @@ export class Muggings implements Scene {
       if (len2(p.ped.x - b.x, p.ped.z - b.z) > PICK_UP) continue;
       b.until = 0;
       life.emit('bagReturned', b.x, b.z);
-      life.d.reward?.(BAG_REWARD, 'BAG RETURNED');
+      life.emit('haveAGo', b.x, b.z);
+      life.d.award?.('haveAGo');
+      life.d.reward?.(BAG_REWARD, 'HAVE-A-GO HERO');
       const o = b.owner;
       if (o && life.present(o) && o.agent.mode !== 'down' && life.distance(o.agent.s.x, o.agent.s.z) < 60) o.model.cheer(2);
       b.owner = null;
@@ -289,6 +294,7 @@ export class Muggings implements Scene {
   private end(m: Mugging): void {
     const life = this.life;
     const c = m.mugger;
+    c.agent.suspect = false;
     if (life.present(c) && c.agent.scene && c.agent.mode !== 'down' && !life.inView(c.agent.s.x, c.agent.s.z, 4)) life.removePed(c);
     else handBack(life, c);
     handBack(life, m.victim);

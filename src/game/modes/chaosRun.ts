@@ -71,7 +71,18 @@ export const CHAOS_CATEGORIES: ReadonlyArray<{ id: ChaosCategory; label: string 
 ];
 
 export function categoryOf(kind: ScoreKind): ChaosCategory {
-  return kind === 'copRam' || kind === 'copWreck' || kind === 'evaded' ? 'cops' : kind;
+  switch (kind) {
+    case 'copRam':
+    case 'copWreck':
+    case 'evaded':
+    // A city police chase joined (the city runs through a Chaos Run too).
+    case 'takeTheHeat':
+    case 'citizensArrest':
+    case 'haveAGo':
+      return 'cops';
+    default:
+      return kind;
+  }
 }
 
 export type ChaosEnd = 'time' | 'wasted' | 'busted';

@@ -145,6 +145,10 @@ export interface CityLifeDeps {
   callIn?(crime: Crime): void;
   /** Hand a scene's officer to the police (the player turned on them): normal heat rules from there. */
   enlist?(officer: CrowdPed): void;
+  /** Hand a scene's police car (with `aboard` officers) to the player's pursuit (heat.adopt); false if the force is full. */
+  adopt?(v: Vehicle, aboard: number): boolean;
+  /** Score the player's part in a scene (a chase joined, a bag handed back). */
+  award?(kind: 'takeTheHeat' | 'citizensArrest' | 'haveAGo'): void;
   /** The sim's level of detail: off screen, stray dogs think less often (without it, every step). */
   lod?: SimLod;
 }

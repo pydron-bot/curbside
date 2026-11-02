@@ -53,6 +53,7 @@ import { VehicleModels } from './render/vehicleModels';
 import { charVehicle, restoreVehicleLook } from './render/vehicleLooks';
 import { fullRatePed, knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
 import { LOD_FAR, LOD_NEAR, SimLod, newSimClock } from './systems/simLod';
+import { holdsFire } from './systems/police';
 import { WEAPONS, WEAPON_ORDER, type WeaponKind } from './systems/weapons';
 import { PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
@@ -401,6 +402,7 @@ const heat = new Heat({
   bustFine: () => progress.bustShare(),
   signals,
   witnesses: (crime, x, z) => cityLife.witnesses.report(crime, x, z),
+  rammedSceneCop: (v) => cityLife.chases.rammed(v),
 });
 addHeatLook(look, heat, {
   scene,
@@ -466,6 +468,8 @@ const cityLife = new CityLife({
   reward: (cash, label) => progress.pay(cash, 'street', label),
   callIn: (crime) => heat.called(crime),
   enlist: (officer) => heat.police.strays.push(officer),
+  adopt: (v, aboard) => heat.adopt(v, aboard),
+  award: (kind) => award(score.award(kind)),
 });
 maintainCity = (seed) => cityLife.maintain(seed);
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
@@ -816,7 +820,7 @@ function simulate(dt: number) {
       else combat.npcPunch(c);
     } else if (event?.kind === 'shoot') {
       if (own) cityLife.shoot(c, event.dirX, event.dirZ);
-      else {
+      else if (!holdsFire(c.agent.role, heat.wanted.level)) {
         c.model.shoot();
         npcShoot(c.agent.s.x, c.agent.s.z, event.dirX, event.dirZ);
       }
@@ -1056,7 +1060,7 @@ function throwRider(v: Vehicle, impact: number, byPlayer = false) {
   knockDown(agent, fromX, fromZ, push, 2.5);
   population.addPed(agent);
   // Rammed off by the player: a hit-and-run like any other.
-  events.emit({ type: 'pedDown', x: door.x, z: door.z, cause: 'vehicle', byPlayer });
+  events.emit({ type: 'pedDown', x: door.x, z: door.z, cause: 'vehicle', byPlayer, suspect: cityLife.chases.isGetaway(v) });
   if (byPlayer && player.driving) {
     award(score.award('hitAndRun'));
     provoke(agent, player.driving.sim.x, player.driving.sim.z);
@@ -1084,7 +1088,7 @@ function carLanded(v: Vehicle, impact: number, isPlayer: boolean) {
  */
 function pedHitByCar(c: CrowdPed, playerCar: Vehicle | null) {
   const s = c.agent.s;
-  events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'vehicle', byPlayer: playerCar !== null, cop: c.agent.role === 'cop', gang: c.agent.gang });
+  events.emit({ type: 'pedDown', x: s.x, z: s.z, cause: 'vehicle', byPlayer: playerCar !== null, cop: c.agent.role === 'cop', gang: c.agent.gang, suspect: c.agent.suspect });
   if (playerCar) {
     award(score.award('hitAndRun'));
     provoke(c.agent, playerCar.sim.x, playerCar.sim.z);

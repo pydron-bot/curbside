@@ -1,9 +1,9 @@
 /**
- * Police chases that have nothing to do with the player. Now and then
- * (never while the player is wanted, nor during a mission, race or Chaos
- * Run) a getaway comes through: a car or a scooter driven flat out in a
- * panic, running the lights, with one or two police cars on its tail,
- * lights and sirens going (traffic pulls over),
+ * Police chases that have nothing to do with the player, until they join
+ * in. Now and then (when its clock's holds allow) a getaway comes
+ * through: a car or a scooter driven flat out in a panic, running the
+ * lights, with one or two police cars on its tail, lights and sirens
+ * going (traffic pulls over),
  * ramming, PITting and boxing it in like they would the player
  * (systems/pursuit.ts); or someone on foot running down the street from
  * officers, a car sometimes following. A street race can end in one
@@ -18,12 +18,31 @@
  * far off, or too long: escaped. One at a time.
  *
  * None of it is the player's heat: the officers never go for the player
- * (every one has the suspect as its target, or stands). Attack them or
- * their cars and it's the usual crime (they're officers and police cars
- * like any other); then the chase breaks off and the officers on foot are
- * handed to the police (CityLifeDeps.enlist) under normal heat rules.
+ * (every one has the suspect as its target, or stands), and a chase runs
+ * on while the player is wanted for something else. Joining in
+ * (systems/chaseHandoff.ts decides, first thing every step):
+ * - TAKE THE HEAT: get in the getaway and the chase cars near you are your
+ *   pursuit now (CityLifeDeps.adopt, within the level's unit cap), at 2
+ *   stars at least (`tookGetaway`); the rest go back to traffic.
+ * - Attack its police (ram, shoot, floor an officer, take a car) and once
+ *   it costs a star they come after you instead, or, from far off, the
+ *   chase breaks off; either way officers on foot go to the police
+ *   (CityLifeDeps.enlist) under normal heat rules.
+ * - CITIZEN'S ARREST: ram or box the getaway so it stops by a patrol and the
+ *   suspect gives up: cash, no heat (one bump on a chase car right after
+ *   touching the getaway is forgiven).
+ * - HAVE-A-GO HERO: flooring a fleeing suspect isn't an assault
+ *   (PedAgent.suspect).
  */
 import { speed, type VehicleArchetype, type VehicleControls } from '../../entities/vehicle';
+import {
+  CITIZENS_ARREST_REWARD,
+  HANDOFF_RANGE,
+  chaseHandoff,
+  citizensArrest,
+  forgivenBump,
+  type HandoffSituation,
+} from '../../systems/chaseHandoff';
 import { LOUD } from '../../systems/cityScenes';
 import { hurtPed, knockDown, resumeWalking, scare } from '../../systems/crowd';
 import { COP_OUTFIT } from '../../systems/police';
@@ -91,6 +110,8 @@ interface Unit {
   aboard: number;
   /** Officers out on foot. */
   officers: CrowdPed[];
+  /** Its one forgiven bump (chaseHandoff.ts forgivenBump) is used. */
+  forgiven: boolean;
 }
 
 export interface Chase {
@@ -114,6 +135,11 @@ export interface Chase {
   surrendered: boolean;
   /** A police car called to take away a suspect cuffed on foot. */
   pickup: ServiceRun | null;
+  /** The player attacked its police (rammed, shot, floored, took a car). */
+  crime: boolean;
+  /** HAVE-A-GO HERO / CITIZEN'S ARREST already paid for this one. */
+  floored: boolean;
+  helped: boolean;
   readonly target: PursuitTarget;
 }
 
@@ -121,12 +147,28 @@ export class Chases implements Scene {
   readonly chases: Chase[] = [];
   /** How each chase ended (tests, __ub): counts by outcome. */
   readonly ended: Record<ChaseEnd, number> = { arrested: 0, down: 0, escaped: 0 };
+  /** How the player joined in (tests, __ub): counts. */
+  readonly joined = { takeHeat: 0, turnedOn: 0, breakOff: 0, citizensArrest: 0, haveAGo: 0 };
   private scan = 0;
+  private readonly situation: HandoffSituation = { stars: 0, playerInGetaway: false, playerNear: false, crimeOnThisChase: false };
   private readonly door = { x: 0, z: 0 };
   private readonly axis = { x: 0, z: 0 };
 
   constructor(private readonly life: SceneCtx) {
     life.clock.define('chase', { every: [100, 200], cap: 1, first: 75, range: 160, hold: LOUD });
+    // The player's attacks on a chase's police, as the simulation reports them.
+    const bus = life.d.bus;
+    bus.on('bulletHit', (e) => {
+      if (e.byPlayer && e.police && e.target === 'vehicle') this.attacked(e.x, e.z, 3.5);
+    });
+    bus.on('explosion', (e) => {
+      if (e.byPlayer && e.police) this.attacked(e.x, e.z, 4);
+    });
+    bus.on('pedDown', (e) => {
+      if (!e.byPlayer || e.isPlayer) return;
+      if (e.cop) this.attacked(e.x, e.z, 1.5);
+      else if (e.suspect) this.suspectFloored(e.x, e.z);
+    });
   }
 
   get running(): number {
@@ -204,12 +246,11 @@ export class Chases implements Scene {
 
   /**
    * The police turn up for `v` (a street racer, say): it becomes the
-   * getaway, a unit comes after it. False if a chase is on already or the
-   * player is wanted.
+   * getaway, a unit comes after it. False if a chase is on already.
    */
   pursue(v: Vehicle): boolean {
     const life = this.life;
-    if (this.chases.length > 0 || life.d.stars() > 0 || !v.ai || life.lost(v)) return false;
+    if (this.chases.length > 0 || !v.ai || life.lost(v)) return false;
     const chase = this.blank('car');
     this.getawayFrom(chase, v);
     // One car behind it, else one from off-screen.
@@ -282,6 +323,11 @@ export class Chases implements Scene {
     return true;
   }
 
+  /** Is `v` a getaway the police are still after (its rider thrown off is a suspect, not a victim)? */
+  isGetaway(v: Vehicle): boolean {
+    return v.scene === this.getaway;
+  }
+
   private chaseOf(v: Vehicle): Chase | null {
     for (const c of this.chases) if (c.car === v) return c;
     return null;
@@ -329,8 +375,9 @@ export class Chases implements Scene {
       const chase = this.blank('foot');
       chase.suspect = p;
       life.borrow(p);
+      p.agent.suspect = true;
       const n = rand() < 0.5 ? 2 : 1;
-      const unit: Unit = { v: null, pursuit: null, aboard: 0, officers: [] };
+      const unit: Unit = { v: null, pursuit: null, aboard: 0, officers: [], forgiven: false };
       for (let i = 0; i < n; i++) {
         const ox = a.s.x + ux * (9 + i * 2) + uz * (i ? 1.5 : 0);
         const oz = a.s.z + uz * (9 + i * 2) - ux * (i ? 1.5 : 0);
@@ -367,6 +414,9 @@ export class Chases implements Scene {
       aimIn: 0,
       surrendered: false,
       pickup: null,
+      crime: false,
+      floored: false,
+      helped: false,
       target: { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: true, seen: true, known: true },
     };
   }
@@ -407,7 +457,7 @@ export class Chases implements Scene {
     v.mesh.siren = true;
     v.scene = this.police;
     const pursuit = createPursuit(v.ai!, COP_AGGRESSION, COP_CRUISE, COP_TOP, true);
-    c.units.push({ v, pursuit, aboard: 2, officers: [] });
+    c.units.push({ v, pursuit, aboard: 2, officers: [], forgiven: false });
   }
 
   private officer(x: number, z: number): CrowdPed {
@@ -434,14 +484,32 @@ export class Chases implements Scene {
 
   private stepChase(c: Chase, dt: number): void {
     const life = this.life;
-    // The player turned on them (or is wanted for anything else): the chase breaks off, normal heat rules.
-    if (life.d.stars() > 0 && c.phase !== 'withdraw') {
-      this.breakOff(c);
-      return;
-    }
     if (c.phase === 'withdraw') {
       this.stepWithdraw(c, dt);
       return;
+    }
+    // Has the player joined in? (Stars for anything else change nothing.)
+    const sit = this.situation;
+    const car = c.car;
+    sit.stars = life.d.stars();
+    sit.playerInGetaway = c.phase === 'drive' && car !== null && car === life.d.player.driving && car.scene === this.getaway;
+    sit.crimeOnThisChase = c.crime;
+    sit.playerNear = c.crime && this.playerNear(c);
+    switch (chaseHandoff(sit)) {
+      case 'takeHeat':
+        this.takeHeat(c);
+        return;
+      case 'turnedOn':
+        this.joined.turnedOn++;
+        this.handOver(c);
+        this.finish(c, 'escaped');
+        return;
+      case 'breakOff':
+        this.joined.breakOff++;
+        this.breakOff(c);
+        return;
+      case 'continue':
+        break;
     }
     const at = c.phase === 'drive' ? c.car?.sim : c.suspect?.agent.s;
     if (!at || (c.phase !== 'cuffed' && escaped(c.age, life.distance(at.x, at.z), life.inView(at.x, at.z, 4), SCENE_DROP))) {
@@ -461,6 +529,8 @@ export class Chases implements Scene {
     for (const u of c.units) {
       const v = u.v;
       if (v && (life.lost(v) || v.scene !== this.police)) {
+        // Taken by the player: that's an attack on this chase.
+        if (v === life.d.player.driving) c.crime = true;
         if (v.scene === this.police) v.scene = null;
         if (v.emergency) v.emergency = false;
         u.v = null;
@@ -500,6 +570,8 @@ export class Chases implements Scene {
     if (!crashed && !smashed && !boxedIn(c.still, this.copCarGap(c, car.sim.x, car.sim.z))) return;
     // Out of the car: thrown off a bike, pulled out of a wreck, or stepping out boxed in.
     const s = car.sim;
+    // Stopped by the player, by a patrol car: theirs is the arrest.
+    const helped = citizensArrest(life.now, car.damage.lastPlayerHit, this.copCarGap(c, s.x, s.z));
     car.scene = null;
     car.towable = true;
     let suspect = car.tipped ? this.adoptNear(s.x, s.z) : null;
@@ -510,6 +582,8 @@ export class Chases implements Scene {
     }
     car.ai = null;
     c.suspect = suspect;
+    suspect.agent.suspect = true;
+    if (helped) this.citizensArrest(c, s.x, s.z);
     const cop = this.nearestCop(c, s.x, s.z);
     if (smashed) {
       // Taken out by the crash: down and out, for the ambulance.
@@ -517,7 +591,8 @@ export class Chases implements Scene {
       this.takenDown(c);
       return;
     }
-    if (!crashed && !c.armed && life.d.rand() < SURRENDER_SHARE) {
+    // Pinned by the player and a patrol, even an armed one gives up.
+    if (helped || (!crashed && !c.armed && life.d.rand() < SURRENDER_SHARE)) {
       // Gives up by the car: kneeling, hands on head.
       c.phase = 'foot';
       c.timer = 0;
@@ -658,6 +733,8 @@ export class Chases implements Scene {
     const life = this.life;
     const s = c.suspect!;
     c.surrendered = true;
+    // Kneeling, hands on head: no longer fair game.
+    s.agent.suspect = false;
     life.unfight(s);
     if (s.agent.mode !== 'down') {
       s.agent.mode = 'arrest';
@@ -683,6 +760,7 @@ export class Chases implements Scene {
 
   private cuff(c: Chase, s: CrowdPed): void {
     const life = this.life;
+    s.agent.suspect = false;
     life.unfight(s);
     s.agent.temper = 'calm';
     s.agent.injured = false;
@@ -767,6 +845,7 @@ export class Chases implements Scene {
     const s = c.suspect;
     if (s) {
       life.emit('suspectDown', s.agent.s.x, s.agent.s.z);
+      s.agent.suspect = false;
       s.model.arrested = false;
       s.agent.street = true;
       // Back to the street (medics.ts finds them there).
@@ -786,6 +865,7 @@ export class Chases implements Scene {
       // Got away: back into traffic (still in a hurry for a while).
       this.release(c.car);
     }
+    if (c.suspect) c.suspect.agent.suspect = false;
     if (c.suspect && life.present(c.suspect) && c.suspect.agent.scene) {
       c.suspect.model.arrested = false;
       if (c.suspect.agent.mode !== 'down') life.giveBack(c.suspect);
@@ -853,8 +933,124 @@ export class Chases implements Scene {
     if (!busy) c.phase = 'over';
   }
 
-  /** The player is wanted mid-chase (they turned on it): it breaks off; the officers are the police's now. */
+  /** The player turned on it from far off: it breaks off; the officers on foot are the police's now. */
   private breakOff(c: Chase): void {
+    this.enlistOfficers(c);
+    this.finish(c, 'escaped');
+  }
+
+  /**
+   * TAKE THE HEAT: the player's in the getaway. The radio has it at once (2
+   * stars at least, first, so the force's unit cap is the new level's), the
+   * chase cars near them are their pursuit now, and the chase is over.
+   */
+  private takeHeat(c: Chase): void {
+    const life = this.life;
+    const at = c.car!.sim;
+    life.d.callIn?.('tookGetaway');
+    this.handOver(c);
+    this.joined.takeHeat++;
+    life.d.award?.('takeTheHeat');
+    life.emit('takeTheHeat', at.x, at.z);
+    this.finish(c, 'escaped');
+  }
+
+  /**
+   * The chase's police turn on the player: officers on foot to the police,
+   * cars within HANDOFF_RANGE into their pursuit (as many as the level
+   * allows). The rest are released by finish(), lights off: no siren is left
+   * without a scene or a unit.
+   */
+  private handOver(c: Chase): void {
+    const life = this.life;
+    this.enlistOfficers(c);
+    const adopt = life.d.adopt;
+    if (!adopt) return;
+    for (const u of c.units) {
+      const v = u.v;
+      if (!v || life.lost(v) || life.distance(v.sim.x, v.sim.z) > HANDOFF_RANGE) continue;
+      if (!adopt(v, u.aboard)) continue;
+      // The police own it now: off the director's list (it would retire it once far off).
+      const i = life.owned.indexOf(v);
+      if (i >= 0) life.owned.splice(i, 1);
+      u.v = null;
+      u.pursuit = null;
+      u.aboard = 0;
+    }
+  }
+
+  /** Is the player within HANDOFF_RANGE of this chase's cars or officers? */
+  private playerNear(c: Chase): boolean {
+    const life = this.life;
+    for (const u of c.units) {
+      if (u.v && life.distance(u.v.sim.x, u.v.sim.z) < HANDOFF_RANGE) return true;
+      for (const o of u.officers) if (life.distance(o.agent.s.x, o.agent.s.z) < HANDOFF_RANGE) return true;
+    }
+    return false;
+  }
+
+  /** The player attacked something police at (x, z): if it's a chase's car or officer (within `r`), that chase knows. */
+  private attacked(x: number, z: number, r: number): void {
+    for (const c of this.chases) {
+      if (c.phase === 'withdraw' || c.phase === 'over') continue;
+      for (const u of c.units) {
+        if (u.v && len2(u.v.sim.x - x, u.v.sim.z - z) < r) c.crime = true;
+        for (const o of u.officers) if (len2(o.agent.s.x - x, o.agent.s.z - z) < r) c.crime = true;
+      }
+    }
+  }
+
+  /** HAVE-A-GO HERO: the player floored a fleeing suspect at (x, z) (once a chase). */
+  private suspectFloored(x: number, z: number): void {
+    const life = this.life;
+    for (const c of this.chases) {
+      if (c.floored) continue;
+      // The suspect, or a rider just thrown off the getaway bike (not theirs yet).
+      const s = c.suspect;
+      const near = s ? len2(s.agent.s.x - x, s.agent.s.z - z) < 1.5 : c.car !== null && len2(c.car.sim.x - x, c.car.sim.z - z) < 4;
+      if (!near) continue;
+      c.floored = true;
+      this.joined.haveAGo++;
+      life.d.award?.('haveAGo');
+      life.emit('haveAGo', x, z);
+    }
+  }
+
+  /** CITIZEN'S ARREST: the player stopped the getaway by a patrol car. Cash, and no heat for it. */
+  private citizensArrest(c: Chase, x: number, z: number): void {
+    if (c.helped) return;
+    const life = this.life;
+    c.helped = true;
+    this.joined.citizensArrest++;
+    life.d.award?.('citizensArrest');
+    life.d.reward?.(CITIZENS_ARREST_REWARD, "CITIZEN'S ARREST");
+    life.emit('citizensArrest', x, z);
+  }
+
+  /**
+   * Heat's hook (HeatDeps.rammedSceneCop): the player rammed `v`. True if
+   * it's a chase car's one forgiven bump (just after they touched the
+   * getaway: boxing it in); otherwise, if it's a chase's, that chase knows.
+   */
+  rammed(v: Vehicle): boolean {
+    const now = this.life.now;
+    for (const c of this.chases) {
+      if (c.phase === 'withdraw' || c.phase === 'over') continue;
+      for (const u of c.units) {
+        if (u.v !== v) continue;
+        if (c.car && forgivenBump(now, c.car.damage.lastPlayerHit, u.forgiven)) {
+          u.forgiven = true;
+          return true;
+        }
+        c.crime = true;
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /** Officers on foot to the police (CityLifeDeps.enlist), or off the street without the hook. */
+  private enlistOfficers(c: Chase): void {
     const life = this.life;
     const enlist = life.d.enlist;
     for (const u of c.units) {
@@ -871,7 +1067,6 @@ export class Chases implements Scene {
       }
       u.officers.length = 0;
     }
-    this.finish(c, 'escaped');
   }
 
   /** A car this scene drove, back to ordinary traffic (lights off). */
@@ -889,6 +1084,7 @@ export class Chases implements Scene {
       if (u.v) this.release(u.v);
       u.v = null;
     }
+    if (c.suspect) c.suspect.agent.suspect = false;
     if (c.suspect && life.present(c.suspect)) {
       if (now) life.removePed(c.suspect);
       else life.giveBack(c.suspect);
