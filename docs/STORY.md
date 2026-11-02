@@ -322,6 +322,25 @@ Night Shift: **NIGHT SHIFT COMPLETE.**
 > **LIL' TUNA:** NO PARKING! I've had a wheel clamp ready since Tuesday. I've named it Gerald.
 > **VEX:** The Mayor got the files, Clamp's a lollipop man now, and the city needs a new tow crew. Guess who.
 
+### Vex's tow contracts (the towing side job)
+
+Not a job on the phone list: towing is a side job (V2-09, the README's
+*Borrowed Blues*). Steal any tow truck and the action button winches; haul
+a wreck to the docks yard and the yard pays by its condition. After dark,
+on duty in a tow truck with nothing on the hook, Vex now and then rings
+(`☾ TOW CONTRACT`, at most once every 150 s) with a crashed car left at a
+kerb nearby: on the radar, $250 on top if it reaches the yard in four
+minutes. The lines live in `src/game/modes/serviceMode.ts` (`VEX_CALLS`,
+in turn):
+
+> **VEX:** That's one of my trucks you're in. Keep it. I've a job, and the job's a wreck.
+> **VEX:** Someone left a car in the road. The council pays me to move it. I pay you.
+> **VEX:** Hook it and get it to the yard before the council's man does. It's on your radar.
+
+> **VEX:** Night shift, kid. Another one for the yard. Council money, so nobody asks.
+> **VEX:** It's had a bump. Don't give it another. Or do: scrap pays too, just less.
+> **VEX:** It's on your radar. Hook it, haul it, don't stop for chips.
+
 ## How it plays out in the game
 
 - Each arc runs in the order above. Its next job is the first one the save

@@ -49,6 +49,7 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Punch / fire (hold for SMG) | left click, Space / J | FIRE button; push the aim stick past half-way; tap the right half | RT or X |
 | Throw a grenade / molotov | aim with the mouse (it lands at the cursor), click | drag the aim stick (further = further, full push = full range) and let go; or FIRE | right stick, RT / X |
 | Drive-by (pistol / SMG) | left click / J in a car | car FIRE button (inboard of the pedals) | X |
+| A stolen service vehicle's tool: hose (fire truck, hold; aim with the mouse), chime (ice cream van), winch (tow truck) | left click / J (instead of the drive-by) | the car FIRE button becomes HOSE / CHIME / WINCH; drag it to aim the hose | X (right stick aims the hose) |
 | Switch weapon (also in a car) | wheel, right click, Q / Tab (Shift+Tab back) | ⇄ | RB / LB |
 | Enter / exit car | E / F / Enter | door button (pulses next to a car) | Y |
 | Steer | A/D, ←/→ | **Point** (default): stick = where to go, push further = more gas; **Classic**: stick left/right | left stick |
@@ -291,7 +292,8 @@ share sheet mocked.
   with cash, lifetime stats, bests and medals; chains bank into cash (lose
   the chain if WASTED or BUSTED, plus a hospital bill or fine); a CHAOS RUN
   2:00 mode with medals and a results card; frenzies, hidden packages,
-  checkpoint races, hot-car exports, taxi fares and payphone missions (the
+  checkpoint races, hot-car exports, taxi fares, fire and tow duty in a
+  stolen service vehicle (V2-09) and payphone missions (the
   main story, KEEP IT LOUD, and the thirteen-job Night Shift side story)
   in free roam; a safehouse shop; PROGRESS in the pause menu.
 - **Feel** (`src/entities/vehicle.ts`, `src/game/combat.ts`,
@@ -885,7 +887,8 @@ people in).
   (lights on), two firefighters (`ped_stocky`, tan coat, yellow helmet)
   step down, walk to either side of the fire and hose it: 7 s for a full
   fire with one hose, half that with two (hosed down, it never flares
-  back); then back in and off as traffic. 2 trucks at most; none behind
+  back); then back in and off as traffic (take the truck while they're
+  out and they hose on by hand: *Borrowed Blues*). 2 trucks at most; none behind
   the title, in a timed race or quiet mission, or the tutorial (fires there burn out by
   themselves). The look (`render/emergencyLook.ts` fireLook): bigger
   flame particles than a burning car's, smoke from 3 m downwind (it's
@@ -921,6 +924,84 @@ people in).
   20 s, or when the car's driven off (getting in clears `parked`), towed,
   wrecked or recycled; set off again, it starts over. 4 at once; not
   behind the title.
+
+**Borrowed Blues** (V2-09; `scenes/serviceTools.ts`, rules pure and
+tested in `systems/serviceTools.ts`, `tests/serviceTools.test.ts`). Steal
+a service vehicle and its tool works, on one action slot (the fire
+button's: left click / J, the pad's X, the touch car FIRE button showing
+the tool's icon and name; no drive-by from these three). `main.ts` hands
+the press, the hold and the aim to `cityLife.tools.control()` each frame
+and caps the player's throttle through `tools.limit()`; the pay is
+*Progression*, *Borrowed Blues duty*.
+
+- **Hose (fire truck):** held, the roof monitor (0.45 × the body's reach
+  ahead, 2.7 m up) sprays a cone 16 m long, ±13° (`hoseHit`), cut short by
+  the first building in its way (`clipJet`). It points where you aim (the
+  mouse cursor, the right stick, or a drag on the touch HOSE button, read
+  like the twin-stick aim pad), else at a burning fire within 60° of the
+  nose, else straight on (`hoseHeading`). Everyone in it is knocked flat
+  and back along the jet (6 m/s at the nozzle, half at the far end, down
+  2.2 s, each at most once in 1.4 s: `pedDown`, cause `water`, the
+  player's: assault, as a punch); a moving bike's rider is thrown off;
+  cars are shoved along it (9 m/s²); a car that has caught (burning down
+  to its blast) is doused, its health lifted just over the fire line
+  (`douse`); a fire it reaches goes out at three crew hoses' pace (a full
+  fire in ~2.3 s; `FireBoard.hose`, `street` `fireOut`). The jet is
+  Effects' soft pool (64 drops a second at 17 m/s, streaks along their
+  flight) with steam where it lands on a fire and a splash off the road
+  (`render/emergencyLook.ts` `toolsLook`). **Stranded crews:** take a fire
+  truck from a fire while its crew is out and the two firefighters stay
+  on the pavement, wave after it and hose on by hand at a crew's pace, so
+  the borrowed monitor beats them to it if you're quick; out (or burnt
+  out), they walk off as passers-by.
+- **Chime (ice cream van):** a press plays the jingle (and again every
+  6 s, for 30 s; press again to stop it). Parked (under 0.8 m/s) while it
+  plays, the van anchors a queue at its hatch (a `Gathering` queue, up to
+  9, recruited from calm passers-by within 45 m, `roomFor` permitting)
+  that's never served: it waits there, a lure, while you get out and do
+  what you like. Drive the van 6 m off and they're let go, as they are 15
+  s after the chime stops (`Chime`).
+- **Winch (tow truck):** a press, stopped (under 3 m/s), hooks the car
+  whose nearer end is closest to the hook (0.6 m behind the truck's tail)
+  within 4.5 m (`hookDistance`): a wreck whose fire is out, a crash or
+  dumped getaway left `towable`, or an abandoned car; never a parked one,
+  one someone's driving or a scene's using, a police car, a bike, anything
+  burning or longer than a pickup, or one already delivered (`hookable`).
+  It's winched on over 1.6 s (the truck held to a crawl) and trails on the
+  hook as the city's tows do (`towPose` as a trailer: it follows the
+  truck's own path through a turn, < 1 m inside it on a 9 m radius, so it
+  doesn't swing out over the kerb; `towedPose`), carried with no speed of
+  its own; the truck is held to 15 m/s with no nitro (`capThrottle`). A
+  press away from the yard drops it where it is; stopped in the docks
+  yard, it's delivered (`tool` `deliver` with its condition). Get out and
+  the car stays hooked to the parked truck; get into another vehicle and
+  it's dropped. An amber beacon turns on the cab while a car's on.
+- **The guard:** the player's borrowed vehicle (the one they're in, or
+  left standing as their last) and the car on its hook are never taken by
+  the city: `CityLife.keeps(v)` (`d.keep` plus `tools.guards(v)`) is what
+  `ServiceRun.call`'s claim, the ice cream van and bus scenes' adoption,
+  the tow trucks' pick, the double-parking and accident picks ask, a city
+  tow truck on its way drops a car the player hooks first, and population
+  upkeep keeps the hooked car. Ambulance, bus and police duty wait for a
+  later version.
+
+```ts
+life.tools.control(pressed, held, aimHeading | null)   // main.ts, every frame (the fire slot in one of the three)
+life.tools.limit(controls)                              // the player's controls, each step: the tow cap
+life.tools.truck · .tool · .hooked · .delivered · .yard · .hosing · .chime · .queue · .guards(v)
+life.keeps(v)                                            // no scene may take it (an activity's, or the guard's)
+// Events: { type: 'tool', tool: 'hose' | 'chime' | 'winch', what, x, z, condition?, wrecked? } with what:
+//   hoseOn · spray (the pump, every 1.1 s) · hoseOff · fireOut · chime · queue · release · hook · unhook · deliver · noHook.
+```
+
+**Budget:** no mesh, program or batch: the jet and steam are the soft
+pool's particles, the beacon and the yard's ring the glow batch, the
+queue people already on the street. iPhone profile (852×393, `medium`),
+the ice cream van and a busker forced beside the spawn, a borrowed fire
+truck turned on the five people in reach and hosing for 60 frames: 49
+draw calls before the truck, 60 with it in view (its model and shadow
+pass), 58.8 on average (61 at most) while it hosed and knocked four of
+them flat.
 
 **Traffic scenes** (`claude/city-traffic`; rules pure and tested in
 `systems/trafficScenes.ts`). Chases, races and accidents are `BUSY` (held
@@ -1481,6 +1562,30 @@ are `src/game/modes/*Mode.ts`.
   away on a pavement (radar route, a beacon), time 15 s + 1 s per 11 m;
   fare $50 + $0.6/m × (1 + time to spare); every fifth fare in a row +$500.
   They bail at 2★ or if the cab loses a quarter of its health.
+- **Borrowed Blues duty** (V2-09; `modes/serviceMode.ts`, rules in
+  `systems/serviceTools.ts`; the tools themselves are *City life*,
+  *Borrowed Blues*): in a stolen fire truck, ice cream van or tow truck
+  (free roam, nothing else on) you're on duty: the activity card names the
+  vehicle and how to work its tool on the device in use (`HOLD J OR CLICK
+  TO HOSE`, `HOLD HOSE · DRAG IT TO AIM`, `CHIME ON · QUEUE 4`, `TO THE
+  DOCKS YARD 230 M · $120`), and the feed says so as you get in. **Fire
+  duty:** each fire your hose puts out pays $40 (`FIRE OUT`), every third
+  in a row +$120 and a banner. **The tow side job:** a car on the hook
+  routes the radar to the docks yard (`Y`, the export garage's lot; a ring
+  and beacon there); stopped with it inside 16 m of the yard's middle for
+  a second (or WINCH pressed there) it's delivered: $150 CLEAN (health
+  ≥ 70%), $120 DENTED (≥ 40%), $90 BATTERED, $60 SCRAP (a burnt-out
+  shell), every third in a row +$150. The car's left in the yard (retired
+  once unseen) and never pays twice. Getting out loses either streak, as
+  a cab's does. **Vex's tow contract:** after dark (sunset to sunrise, as
+  the Night Shift), 8 s on duty in a tow truck with nothing hooked and
+  going under 4 m/s, at most once every 150 s, Vex rings (the call card,
+  `☾ TOW CONTRACT`, two calls in turn, lines in `serviceMode.ts` and
+  `docs/STORY.md`): a crashed sedan, compact or pickup (30–50% health,
+  `towable`, pinned) is left askew at a kerb 110–260 m off, on the radar
+  (☾, an arrow) and ringed in the street; get it to the yard within 240 s
+  for $250 on top of the yard's price, or CONTRACT LOST (too slow, or the
+  wreck gone or driven off).
 - **Payphone missions** (`systems/missions.ts`, `missionsData.ts`,
   `modes/missionMode.ts`): a data-driven engine with steps goto, enter (a
   tagged car or an archetype), deliver, pickup, destroy, knockOut,
