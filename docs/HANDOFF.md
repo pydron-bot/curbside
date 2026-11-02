@@ -113,9 +113,9 @@ black lines at the end of headlight beams at night.
 **Next:** the iPhone device pass (V2-14) on 0.16.0, then 1.0.0. Wave 3
 candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B five new
 weapons the owner picked (AIR HORN, STINGER, SMOKE GRENADE that confuses
-pursuing cops, TASER, STICKY CHARGE). City life ideas offered (QUIET
-PLEASE march, roadworks, bin day, learner driver, delivery rush, school
-run) await the owner's picks. Run at most three
+pursuing cops, TASER, STICKY CHARGE). W3-C four new street scenes
+the owner picked (QUIET PLEASE march, roadworks, bin day with a tipper
+for Borrowed Blues, delivery rush). Run at most three
 streams at once (4 cores; SwiftShader smoke tests are CPU-bound). Give
 each stream its own smoke port and scratch dir: `smoke.mjs` starts
 `vite preview` with output ignored, so a taken port silently tests

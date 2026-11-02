@@ -523,8 +523,34 @@ smoke grenade. Not scheduled yet.
   set it off when you choose; a new stamp (PARTING GIFT). Explosion
   sequence, debris, stamps. A story-job reward.
 
-City life ideas offered the same day (QUIET PLEASE march, roadworks, bin
-day, learner driver, delivery rush, school run) await the owner's picks.
+### W3-C · Four new street scenes (owner picked, 2026-11-02)
+
+Chosen from six offered (the learner driver and the school run were left
+out). Not scheduled yet. Each starts from `SceneStarter`, appears in the
+TEST and OBSERVE palettes and gets a scanner line.
+
+- **QUIET PLEASE march**: a pro-Mayor rally with placards walks down the
+  middle of a road behind a slow police escort (a rolling roadblock); the
+  traders' noisy counter-protest waits at the far corner. Join the chant
+  and your heat cools a little; drive through it for a big stamp; lean on
+  the horn and the traders cheer. *Keep It Loud* in the street, and a hook
+  for chapter 2. Daytime, Glass Heights and Old Town. Builds on
+  `Gathering`, the conga's walking crowd, the funeral's escorted convoy.
+- **Roadworks**: a crew digs up one lane behind temporary lights or a
+  STOP/GO board; the queue stacks and someone jumps it into oncoming
+  traffic. Nick the digger, plough the cones (already knockable). Builds
+  on `laneBlock.ts`, the double-parked truck's queue, accidents.
+- **Bin day**: a slow refuse lorry stops every few doors while the crew
+  wheel bins; traffic stacks behind and someone overtakes into a head-on.
+  Steal the lorry for a fourth Borrowed Blues tool: the tipper dumps
+  rubbish across the road and cars skid on it. Early morning, residential.
+  Builds on `ServiceRun`, the V2-09 tool slot, skid and handling.
+- **Delivery rush**: at dinner time moped riders with food boxes zip
+  between the takeaways and the houses, cutting pavements and running
+  reds; a police bike sometimes gives chase. Knock one off and the food
+  goes everywhere (a stamp); steal a moped and take the delivery for a tip
+  (taxi-style pay). Builds on the scooter models and rider ejection, the
+  police bike, `modes/taxi.ts` pay, the kebab shop.
 
 ## Schedule
 
