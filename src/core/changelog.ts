@@ -15,6 +15,14 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.12.1',
+    date: '2026-11-02',
+    title: 'Lighter smoke',
+    notes: [
+      'Big explosions and fires keep their frame rate better on phones: thick smoke is drawn at half resolution, with the same look.',
+    ],
+  },
+  {
     version: '0.12.0',
     date: '2026-11-02',
     title: 'Smoother city, livelier title',
