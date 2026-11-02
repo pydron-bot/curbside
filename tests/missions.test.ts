@@ -1,14 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { SAFEHOUSE, placeDocks, placePayphones } from '../src/game/modes/places';
 import { GETAWAY_TAG } from '../src/game/opening';
-import { SEDAN, createVehicleState, stepVehicle } from '../src/entities/vehicle';
+import { SEDAN, VEHICLE_BODIES, VEHICLE_SPECS, createVehicleState, stepVehicle } from '../src/entities/vehicle';
+import { routeToward } from '../src/systems/pursuit';
+import { towPose } from '../src/systems/emergency';
+import { len2 } from '../src/core/len';
 import { collideVehicleStatic } from '../src/systems/physics';
 import { driveAi, driverFor } from '../src/systems/traffic';
 import { StaticGrid } from '../src/world/collision';
 import { random } from './helpers';
 import { readFileSync } from 'node:fs';
 import {
+  CATCH_HOLD,
+  CATCH_RANGE,
   COLLECT_RADIUS,
+  SCRATCH_LINE,
+  hookLetGo,
+  routeLeg,
   LOST_RANGE,
   MissionRun,
   MissionScenes,
@@ -38,7 +46,7 @@ import { generateCity } from '../src/world/city';
 import { MAX_NODE } from '../src/world/roads';
 import { districtAt, type District } from '../src/world/districts';
 
-type Car = { x: number; z: number; wrecked: boolean };
+type Car = { x: number; z: number; wrecked: boolean; health?: number };
 type Ped = { x: number; z: number; down: boolean };
 
 /** A world the test moves around by hand. */
@@ -216,6 +224,62 @@ describe('mission engine: failing', () => {
   });
 });
 
+describe('mission engine: unscratched, the hook, a route', () => {
+  it("a 'damaged' fail goes as soon as the car's health is under the line (a scratch), not before", () => {
+    const run = new MissionRun(def([{ kind: 'enter', tag: 'van', text: 'E', fail: [{ damaged: 'van', reason: 'SCRATCHED' }] }]));
+    const v = world();
+    v.cars.set('van', { x: 0, z: 0, wrecked: false, health: 1 });
+    run.begin();
+    tick(run, v, 0.5);
+    v.cars.get('van')!.health = SCRATCH_LINE + 0.01;
+    tick(run, v, 0.5);
+    expect(run.state).toBe('running');
+    v.cars.get('van')!.health = SCRATCH_LINE - 0.01;
+    expect(tick(run, v)).toEqual([{ kind: 'failed', reason: 'SCRATCHED' }]);
+    // Its own line, and a car the world doesn't report health for counts as full.
+    const strict = new MissionRun(def([{ kind: 'survive', seconds: 9, text: 'S', fail: [{ damaged: 'van', below: 0.99, reason: 'X' }] }]));
+    v.cars.set('van', { x: 0, z: 0, wrecked: false });
+    strict.begin();
+    tick(strict, v, 1);
+    expect(strict.state).toBe('running');
+    v.cars.get('van')!.health = 0.98;
+    tick(strict, v);
+    expect(strict.state).toBe('failed');
+  });
+
+  it('the hook holds while the truck drives; caught standing for a moment, carjacked, wrecked or the car taken, it lets go', () => {
+    const hook = { held: 0 };
+    const look = { driven: true, taken: false, speed: 10, distance: 5 };
+    expect(hookLetGo(hook, 1, look)).toBe(false);
+    // Stopped, but the player's not near: nothing.
+    look.speed = 0;
+    look.distance = CATCH_RANGE + 1;
+    expect(hookLetGo(hook, 5, look)).toBe(false);
+    // Caught at a light: a moment, then the crew gives it up; moving off starts the count again.
+    look.distance = 8;
+    expect(hookLetGo(hook, CATCH_HOLD / 2, look)).toBe(false);
+    look.speed = 6;
+    expect(hookLetGo(hook, CATCH_HOLD / 2, look)).toBe(false);
+    look.speed = 0;
+    expect(hookLetGo(hook, CATCH_HOLD * 0.6, look)).toBe(false);
+    expect(hookLetGo(hook, CATCH_HOLD * 0.6, look)).toBe(true);
+    // No driver (wrecked, carjacked, bailed) or the player in the car: at once, wherever.
+    const far = { driven: false, taken: false, speed: 12, distance: 300 };
+    expect(hookLetGo({ held: 0 }, 1 / 60, far)).toBe(true);
+    expect(hookLetGo({ held: 0 }, 1 / 60, { ...far, driven: true, taken: true })).toBe(true);
+  });
+
+  it('a route moves on as its car heads into each crossing, round and round', () => {
+    const route = [[1, 0], [1, 2], [0, 2]] as const;
+    expect(routeLeg(route, 0, 0, 0)).toBe(0);
+    expect(routeLeg(route, 0, 1, 0)).toBe(1);
+    expect(routeLeg(route, 1, 1, 0)).toBe(1);
+    expect(routeLeg(route, 1, 1, 2)).toBe(2);
+    expect(routeLeg(route, 2, 0, 2)).toBe(0);
+    expect(routeLeg([], 3, 0, 0)).toBe(0);
+  });
+});
+
 describe('mission engine: mayhem and crowds', () => {
   it('a mayhem step counts score awards in its area and passes on the next update', () => {
     const run = new MissionRun(def([{ kind: 'mayhem', points: 1000, near: { x: 0, z: 0, r: 50 }, text: 'M' }]));
@@ -372,7 +436,7 @@ describe('the story', () => {
   const night = missions.filter((m) => arcOf(m) === 'night');
 
   it('the main story (s-ids) and the Night Shift (m1-m13, ids unchanged), each job from a payphone, paying, with something to say', () => {
-    expect(main.map((m) => m.id)).toEqual(['s1-wrongstop', 's2-noise', 's3-quiet']);
+    expect(main.map((m) => m.id)).toEqual(['s1-wrongstop', 's2-noise', 's3-quiet', 's4-problems', 's5-ribbon', 's6-quietest']);
     expect(night.map((m) => m.id)).toEqual([
       'm1-audition',
       'm2-tuna',
@@ -487,6 +551,82 @@ describe('the story', () => {
     if (drop.kind === 'deliver') expect(districtAt(drop.x, drop.z)).toBe('arts');
   });
 
+  it("NINETY-NINE PROBLEMS: Doreen's van on the Shift's hook on Neon Mile, Doreen in Cobble Row, no scratch allowed", () => {
+    const job = main.find((m) => m.id === 's4-problems')!;
+    const [take, home] = job.steps;
+    const spawns = take.start ?? [];
+    const truck = spawns.find((a) => a.do === 'spawnCar' && a.tag === 'shifttow');
+    const van = spawns.find((a) => a.do === 'spawnCar' && a.tag === 'doreenvan');
+    if (truck?.do !== 'spawnCar' || van?.do !== 'spawnCar') throw new Error('no truck or van');
+    // The Graveyard Shift's blue tow truck (Vex's), driven; Doreen's ice cream van.
+    expect(truck).toMatchObject({ archetype: 'tow_truck', paint: '#3c5a8c', drive: true });
+    expect(van).toMatchObject({ archetype: 'ice_cream_van' });
+    for (const a of [truck, van]) expect(districtAt(a.x, a.z), a.tag).toBe('arts');
+    // On the hook: where the city's tows carry a car (towPose), facing the same way.
+    const pose = towPose(truck, VEHICLE_BODIES.tow_truck.reach, VEHICLE_BODIES.ice_cream_van.reach, van, { x: 0, z: 0, heading: 0 });
+    expect(len2(pose.x - van.x, pose.z - van.z)).toBeLessThan(0.2);
+    expect(van.heading).toBeCloseTo(truck.heading, 6);
+    // The tow action comes after both spawns (it needs them).
+    expect(spawns.findIndex((a) => a.do === 'tow')).toBe(spawns.length - 1);
+    expect(spawns.at(-1)).toEqual({ do: 'tow', tag: 'doreenvan', truck: 'shifttow' });
+    expect(take).toMatchObject({ kind: 'enter', tag: 'doreenvan' });
+    expect(home).toMatchObject({ kind: 'deliver', tag: 'doreenvan' });
+    if (home.kind !== 'deliver') throw new Error('not a deliver');
+    expect(districtAt(home.x, home.z)).toBe('oldtown');
+    const doreen = home.start?.find((a) => a.do === 'spawnPed');
+    expect(doreen?.do === 'spawnPed' && districtAt(doreen.x, doreen.z)).toBe('oldtown');
+    // Unscratched from the first step to the last.
+    for (const s of job.steps) expect(s.fail?.some((f) => f.damaged === 'doreenvan'), s.text).toBe(true);
+    // No towing for the player: the van is taken back, not hooked.
+    expect(job.steps.some((s) => s.kind === 'enter' && s.archetype === 'tow_truck')).toBe(false);
+  });
+
+  it("RIBBON CUTTING: the Mayor's limo waits at her ribbon in Glass Heights, then drives off to be wrecked", () => {
+    const job = main.find((m) => m.id === 's5-ribbon')!;
+    expect(job.steps).toHaveLength(1);
+    const [wreck] = job.steps;
+    expect(wreck).toMatchObject({ kind: 'destroy', tags: ['lulllimo'] });
+    const limo = wreck.start?.find((a) => a.do === 'spawnCar');
+    expect(limo).toMatchObject({ archetype: 'limo', drive: true });
+    if (limo?.do !== 'spawnCar') throw new Error('no limo');
+    expect(limo.wait).toBeGreaterThan(0);
+    expect(districtAt(limo.x, limo.z)).toBe('downtown');
+    expect(wreck.start?.some((a) => a.do === 'give')).toBe(true);
+    expect(wreck.fail ?? []).toEqual([]);
+  });
+
+  it("QUIETEST CITY: 5,000 round the judges' coach on its Glass Heights tour, a race, a fire and a turf flare-up on its route", () => {
+    const job = main.find((m) => m.id === 's6-quietest')!;
+    expect(job.steps).toHaveLength(1);
+    const [show] = job.steps;
+    if (show.kind !== 'mayhem' || !show.near) throw new Error('not a mayhem step round something');
+    expect(show).toMatchObject({ points: 5000, near: { tag: 'coach' } });
+    expect(show.near.district).toBeUndefined();
+    const coach = show.start?.find((a) => a.do === 'spawnCar');
+    if (coach?.do !== 'spawnCar' || !coach.route) throw new Error('no touring coach');
+    expect(coach).toMatchObject({ tag: 'coach', archetype: 'bus', drive: true });
+    // It leaves Glass Heights; the area starts round it.
+    expect(districtAt(coach.x, coach.z)).toBe('downtown');
+    expect([show.near.x, show.near.z]).toEqual([coach.x, coach.z]);
+    const route = coach.route;
+    for (const [ix, iz] of route) expect(Math.max(Math.abs(ix), Math.abs(iz))).toBeLessThan(MAX_NODE);
+    // A race, a fire and a turf flare-up, in that order, each at a crossing on the tour.
+    const scenes = (show.start ?? []).filter((a) => a.do === 'scene');
+    expect(scenes.map((a) => a.do === 'scene' && a.scene)).toEqual(['race', 'fire', 'turf']);
+    const at = scenes.map((a) => route.findIndex(([ix, iz]) => ix * 64 === a.x && iz * 64 === a.z));
+    for (const i of at) expect(i).toBeGreaterThanOrEqual(0);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    const [race, fire, turf] = scenes;
+    expect(districtAt(race.x, race.z)).toBe('oldtown');
+    expect(districtAt(fire.x, fire.z)).toBe('arts');
+    // The VIPERS' Neon Mile, a block from Glass Heights (the GLASS BOYS): a border to square up across.
+    expect(districtAt(turf.x, turf.z)).toBe('arts');
+    expect([-64, 64].some((d) => districtAt(turf.x + d, turf.z) === 'downtown' || districtAt(turf.x, turf.z + d) === 'downtown')).toBe(true);
+    // The judges tour at night (nine o'clock), and it's the story's last job.
+    expect(job.hour).toBe(21);
+    expect(main.at(-1)).toBe(job);
+  });
+
   it('no main-story job fails on stars: none sets a wanted level, and only the cold open asks to lose the heat it brought', () => {
     for (const m of main)
       for (const s of m.steps) {
@@ -518,6 +658,9 @@ describe('the story', () => {
         for (const f of s.fail ?? []) if (f.down) expect(peds, m.id).toContain(f.down);
         if (s.kind === 'collect') for (const [x, z] of s.points) expect(blocked(x, z, 0.5)).toBe(false);
         if (s.kind === 'race') for (const [ix, iz] of s.nodes) expect(Math.max(Math.abs(ix), Math.abs(iz))).toBeLessThanOrEqual(MAX_NODE);
+        for (const a of s.start ?? []) if (a.do === 'tow') expect(cars, m.id).toEqual(expect.arrayContaining([a.tag, a.truck]));
+        for (const f of s.fail ?? []) for (const t of [f.wrecked, f.lost, f.damaged]) if (t) expect([...cars, ...(m.direct ? [GETAWAY_TAG] : [])], m.id).toContain(t);
+        if (s.kind === 'mayhem' && s.near?.tag) expect([...cars, ...peds], m.id).toContain(s.near.tag);
       }
     }
   });
@@ -609,6 +752,25 @@ describe('the two arcs on the phones', () => {
     save.missions.push('s2-noise');
     expect(completion(save, totals)).toBeCloseTo(COMPLETION_WEIGHTS.missions / ids('main').length, 6);
   });
+
+  it('a save from before jobs 4-6 (s1-s3 and all of m1-m13 passed) keeps every job and rings NINETY-NINE PROBLEMS next', () => {
+    const before = ['s1-wrongstop', 's2-noise', 's3-quiet', ...ids('night')];
+    const store = { data: { [SAVE_KEY]: JSON.stringify({ v: 1, cash: 30000, opening: true, missions: before, stats: { jobsReplayed: 4 } }) } as Record<string, string> };
+    const save = loadSave({ getItem: (k) => store.data[k] ?? null, setItem: (k, v) => (store.data[k] = v) });
+    pruneSave(save, { missions: missions.map((m) => m.id) });
+    expect(save.missions).toEqual(before);
+    expect(passedOf(save, ids('night'))).toBe(13);
+    expect(passedOf(save, ids('main'))).toBe(3);
+    // The Night Shift was done: it rings repeats; the main story carries on from job 4.
+    expect(nextInArc(missions, 'main', save.missions, save.stats.jobsReplayed, save.opening)).toMatchObject({ replay: false, job: { id: 's4-problems' } });
+    expect(nextInArc(missions, 'night', save.missions, save.stats.jobsReplayed, save.opening)?.replay).toBe(true);
+    // Completion: half the main story is half the story's 30%; the thirteen Night Shift jobs add nothing to it.
+    const totals = { missions: ids('main'), frenzies: 1, packages: 1, races: [], exportOrders: 1 };
+    expect(completion(save, totals)).toBeCloseTo(COMPLETION_WEIGHTS.missions / 2, 6);
+    save.missions.push('s4-problems', 's5-ribbon', 's6-quietest');
+    expect(completionParts(save, totals).missions).toBe(1);
+    expect(nextInArc(missions, 'main', save.missions, 0, true)).toMatchObject({ replay: true, job: { id: 's2-noise' } });
+  });
 });
 
 describe('repeat jobs', () => {
@@ -665,5 +827,94 @@ describe('driven mission cars', () => {
       expect(legs, `${a.tag} at ${a.x.toFixed(0)},${a.z.toFixed(0)}`).toBeGreaterThanOrEqual(2);
       expect(Math.max(Math.abs(ai.ix), Math.abs(ai.iz))).toBeLessThanOrEqual(MAX_NODE);
     }
+  });
+});
+
+describe('KEEP IT LOUD, jobs 4-6, played through the engine', () => {
+  const city = generateCity(1337);
+  const grid = new StaticGrid(city.obstacles);
+  const missions = buildMissions(placeDocks(city), SAFEHOUSE);
+  const job = (id: string) => missions.find((m) => m.id === id)!;
+
+  /** Run a job's steps against a world the test drives, at 5 stars throughout: nothing fails on stars. */
+  function play(m: MissionDef, at: (i: number, v: ReturnType<typeof world>, run: MissionRun) => void): MissionRun {
+    const run = new MissionRun(m);
+    const v = world();
+    v.stars = 5;
+    run.begin();
+    for (let guard = 0; guard < 20 && run.state === 'running'; guard++) {
+      at(run.index, v, run);
+      tick(run, v, 2);
+      expect(run.state, `${m.id} step ${run.index}`).not.toBe('failed');
+    }
+    expect(run.state, m.id).toBe('passed');
+    return run;
+  }
+
+  it('NINETY-NINE PROBLEMS: get in the van, bring it to Doreen without a scratch (a dent fails it)', () => {
+    const m = job('s4-problems');
+    const home = m.steps[1];
+    if (home.kind !== 'deliver') throw new Error('not a deliver');
+    play(m, (i, v) => {
+      if (i === 1) Object.assign(v, { x: home.x, z: home.z, speed: 0 });
+      v.cars.set('doreenvan', { x: v.x, z: v.z, wrecked: false, health: 0.95 });
+      v.inCar = true;
+      v.carTag = 'doreenvan';
+      v.carArchetype = 'ice_cream_van';
+    });
+    const dented = new MissionRun(m);
+    const v = world();
+    v.cars.set('doreenvan', { x: 0, z: 0, wrecked: false, health: 0.6 });
+    dented.begin();
+    expect(tick(dented, v)).toEqual([{ kind: 'failed', reason: "YOU SCRATCHED DOREEN'S VAN" }]);
+  });
+
+  it("RIBBON CUTTING: the Mayor's limo wrecked", () => {
+    play(job('s5-ribbon'), (_, v) => v.cars.set('lulllimo', { x: 0, z: 0, wrecked: true }));
+  });
+
+  it("QUIETEST CITY: points count round the coach wherever it's got to, not away from it", () => {
+    const m = job('s6-quietest');
+    play(m, (_, v, run) => {
+      // The coach a long way from where it started; the player beside it.
+      v.cars.set('coach', { x: 300, z: -300, wrecked: false });
+      Object.assign(v, { x: 360, z: -300 });
+      run.award(4000, v);
+      // Away from it, nothing counts.
+      Object.assign(v, { x: 0, z: 0 });
+      run.award(9000, v);
+      expect(run.mayhem).toBe(4000);
+      Object.assign(v, { x: 300, z: -250 });
+      run.award(1000, v);
+    });
+  });
+
+  it("the judges' coach, steered for its next crossing, tours the route in order and passes each scene's crossing", () => {
+    const show = job('s6-quietest').steps[0];
+    const spawn = show.start?.find((a) => a.do === 'spawnCar');
+    if (spawn?.do !== 'spawnCar' || !spawn.route) throw new Error('no coach');
+    const route = spawn.route;
+    const rand = random(7);
+    const car = { ...createVehicleState(spawn.x, spawn.z, spawn.heading), body: VEHICLE_BODIES.bus };
+    const ai = driverFor(car, rand);
+    ai.cruise = spawn.cruise ?? ai.cruise;
+    const DT = 1 / 60;
+    let leg = 0;
+    const seen: string[] = [];
+    let last = '';
+    for (let t = 0; t < 60 * 420 && seen.length < route.length + 2; t++) {
+      if (ai.phase === 'approach') {
+        leg = routeLeg(route, leg, ai.ix, ai.iz);
+        ai.next = routeToward(ai.ix, ai.iz, ai.dir, route[leg][0] * 64, route[leg][1] * 64);
+      }
+      stepVehicle(car, driveAi(ai, car, [], rand, DT), VEHICLE_SPECS.bus, DT);
+      collideVehicleStatic(car, grid);
+      const key = `${ai.ix},${ai.iz}`;
+      if (key !== last && route.some(([ix, iz]) => `${ix},${iz}` === key)) seen.push(key);
+      last = key;
+    }
+    // Every crossing of the tour, in order, and round again.
+    const want = [...route, ...route].map(([ix, iz]) => `${ix},${iz}`);
+    expect(seen.slice(0, route.length + 2)).toEqual(want.slice(0, route.length + 2));
   });
 });
