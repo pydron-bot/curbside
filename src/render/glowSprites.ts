@@ -162,7 +162,9 @@ function material(): ShaderMaterial {
           a *= a;
         } else if (vShape < 1.5) {
           // Beam: v runs 0 (lamps) .. 1 (far end); spreads and fades with distance.
-          float v = vUv.y;
+          // Clamped: interpolation lands a hair past 1 along the far edge, and
+          // pow() of the negative base is NaN on real GPUs — a black line across the road.
+          float v = clamp(vUv.y, 0.0, 1.0);
           float half_ = 0.22 + 0.78 * v;
           float x = abs(p.x) / half_;
           float side = 1.0 - smoothstep(0.55, 1.0, x);

@@ -2418,7 +2418,10 @@ the first time it comes into view.
   sanitised (`sanitizeBloomInput` in `render/post.ts`): NaN texels become 0
   and the rest are capped at `BLOOM_INPUT_MAX` (64), because the blur would
   otherwise spread one NaN or overflowed pixel into big black blocks (seen
-  on desktop Chrome, 0.13.0).
+  on desktop Chrome, 0.13.0). One source was the headlight cone in
+  `glowSprites.ts`: its v interpolates a hair past 1 along the quad's far
+  edge, and `pow(1 - v)` was NaN there, a 1 px black line across the road
+  12.7 m ahead of a car even after the sanitising; v is clamped now.
 
 
 ### People
