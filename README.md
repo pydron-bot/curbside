@@ -442,6 +442,72 @@ headless Chromium (V8) on 2026-10-31 a sim step allocated ~12 KB (from
 mostly V8 number boxing, which JSC on the iPhone doesn't do (it NaN-boxes
 doubles).
 
+**Simulation level of detail** (`systems/simLod.ts`, pure, tested). The
+street's ambient agents think every step only where the player could see or
+reach them: on screen (the visible ground plus 10 m, wider than the draw
+cull) or within 25 m. Off screen within 80 m they tick at 15 Hz, further at
+5 Hz, each on its own round-robin bucket (a clock per agent, `newSimClock`)
+so the work spreads evenly over the steps, and a tick integrates all the
+time owed since the last one, so they cover the same ground; back at the
+full rate the debt is paid at once, 10 m before anyone can see it.
+`SimLod.begin(x, z, view)` once a step, `tier(x, z)`, `due(clock, tier, dt,
+pinned)` → the dt to integrate (0: skip this step), `settle(clock)` to
+think now between ticks.
+
+- **Traffic** (`main.ts driveCar`): a calm driver off screen runs `driveAi`
+  (the obstacle scans) on its tick and `holdAi` between, which keeps the last
+  decision but still steers for the lane every step and brakes within the
+  room it had (the stop line, the car ahead), so it stops where it would
+  have; reaching a waypoint makes it think at once. Within 25 m of a
+  junction, or crossing one, a far driver thinks at 15 Hz, not 5
+  (`nearJunction`: lights and cross traffic). Physics, ramps and every
+  collision stay every step for every vehicle.
+- **Walkers** (`stepCrowdPed` with the owed dt): street people and a scene's
+  people; their car and wall collisions, and the pavement's side-steps
+  (`scenes/pavement.ts`), run on their ticks too. Posing already skips
+  whoever is off screen (`PeoplePose`).
+- **Stray dogs** (`scenes/strayDogs.ts`, `DogPack.stepDog`): the runners and
+  cars are gathered only on a step some dog ticks.
+- **Always every step**: the player's car, police units and officers, road
+  ragers and panicking drivers (`fullRateDriver`: mood, `urgent`, pulling over
+  for a siren, held up by the player), any car a scene is driving (chases,
+  races, call-outs, the bus), anyone fighting, shooting, reeling or on fire,
+  people other systems own (gangs, story characters, fares: `fullRatePed`), a
+  dog on a chase, and anything within 25 m. The scene director, heat, combat
+  and pigeons (per frame, ~0.02 ms) are left as they were.
+
+The schedule is deterministic (a step counter and the order agents were
+made in), so seeded harness runs still repeat, though not with the old
+numbers (agents now draw on the shared random stream in another order).
+`__ub.simLod.enabled = false` runs everything every step, for A/B checks;
+`__ub.simProfile` (`core/sectionTimes.ts`) times the sim by system:
+`start()`, then `summary()` (mean, p95, max JS ms per frame) or `last(i)`.
+Measured 2026-11-01 on the iPhone profile (852×393, 'medium') in headless
+Chromium, rendering stubbed, scenes forced (`fight`, `iceCream`,
+`chaseCar`, `race`, `ambulance`, `dogs` and ten more), LOD on and off in
+alternate blocks of 150 frames (so both sample the same city), median of
+three runs, JS ms per frame, mean (top 1% of frames dropped) / p95, and the
+whole sim step's median:
+
+| | downtown, day | Neon Mile, 23:00 | Neon Mile, 3★ |
+|---|---|---|---|
+| traffic AI | 0.110 / 0.21 → 0.090 / 0.18 | 0.134 / 0.18 → 0.099 / 0.16 | 0.138 / 0.25 → 0.099 / 0.16 |
+| crowd step | 0.062 / 0.12 → 0.037 / 0.08 | 0.070 / 0.12 → 0.040 / 0.08 | 0.096 / 0.14 → 0.051 / 0.10 |
+| crowd collisions | 0.060 / 0.12 → 0.028 / 0.06 | 0.074 / 0.14 → 0.030 / 0.06 | 0.091 / 0.14 → 0.044 / 0.09 |
+| whole sim step (p50) | 0.515 → 0.445 | 0.470 → 0.395 | 0.575 → 0.450 |
+
+Off screen about three quarters of the crowd and over half the moving
+traffic tick slow. Vehicle physics, collisions, posing, scenes, heat and
+pigeons are unchanged within noise. Behaviour, LOD off / on: nothing on
+screen moved more than a stride a frame either way (45 s chasing round at
+up to 32 m/s, and the title's cruise); ambient traffic over 16 seeds ×
+300 s: 482 / 484 AI crashes (71 / 68 more than 80 m off), 114 / 132
+people knocked down, mean speed 5.14 / 5.27 m/s, stopped 40% / 39% of the
+time; scenes forced every 40 s for 240 s (six seeds): ice creams served
+122 / 135, chases ended by arrests and take-downs as before; the people a
+bus stop, a busker and the carts gathered while 70 m off screen stand on
+the same spots either way.
+
 API for other systems:
 
 ```ts
@@ -1292,6 +1358,11 @@ verdict on difficulty; real play (the Diagnostics report's play log) is.
 Playwright isn't a game dependency: run with
 `npx -y -p playwright@1.63.0 node tools/tune/<harness>.mjs …` (or set
 `PLAYWRIGHT` to a directory with it installed), with `npm run dev` up.
+`SIM_LOD=off` runs every agent every step (*Simulation level of detail*):
+since it came in the runs draw randomness in another order, so the figures
+below shift within the bots' noise. 2026-11-01, 20 each, LOD on / off:
+5-star chases, car lost 19 / 20, busted 1 / 0, median end 26 / 24 s; Chaos Run
+medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
 
 - **`chaos.mjs [runs=20] [--bot rammer|weaver|drifter|all] [--seed 1]`**:
   Chaos Runs; score percentiles, medals, how runs ended, points by category.

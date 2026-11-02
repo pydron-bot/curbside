@@ -7,6 +7,7 @@ import { BUILD_ID } from './core/build';
 import { PlayLog, browserStorage } from './game/playLog';
 import { Input } from './core/input';
 import { FixedStep } from './core/loop';
+import { SectionTimes } from './core/sectionTimes';
 import { UpdateGate } from './core/updateGate';
 import { PLAYER_ON_FOOT, copyPedState, stepPedestrian } from './entities/pedestrian';
 import {
@@ -50,7 +51,8 @@ import { createRenderer, precompile } from './render/post';
 import { getQuality, setQualityTier } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
 import { charVehicle, restoreVehicleLook } from './render/vehicleLooks';
-import { knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
+import { fullRatePed, knockDown, provoke, resumeWalking, scare, spawnPed, stepCrowdPed, type Target } from './systems/crowd';
+import { LOD_FAR, LOD_NEAR, SimLod, newSimClock } from './systems/simLod';
 import { WEAPONS, WEAPON_ORDER, type WeaponKind } from './systems/weapons';
 import { PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
@@ -78,7 +80,7 @@ import {
   type CarContact,
 } from './systems/physics';
 import { Score, rammed, smashCredit, type Award } from './systems/score';
-import { vehicleObstacles, type Obstacle } from './systems/traffic';
+import { fullRateDriver, holdAi, nearJunction, vehicleObstacles, type Obstacle } from './systems/traffic';
 import type { PauseReason } from './ui/pauseOverlay';
 import { loadBest } from './ui/scoreHud';
 import { mountTouchControls } from './ui/touchControls';
@@ -165,6 +167,13 @@ app.append(renderer.domElement);
 const resolution = new DynamicResolution(renderer);
 const frameStats = new FrameStats();
 const frameSummary = emptySummary();
+/** JS ms per frame by system, for harnesses (__ub.simProfile; off unless started). */
+const prof = new SectionTimes([
+  'sim', 'obstacles', 'drive', 'physics', 'crowd', 'collide', 'carPairs', 'pedCollide',
+  'scenes', 'heat', 'combat', 'maintain', 'people', 'pigeons', 'frame',
+]);
+const [P_SIM, P_OBSTACLES, P_DRIVE, P_PHYSICS, P_CROWD, P_COLLIDE, P_CARPAIRS, P_PEDCOLLIDE] = [0, 1, 2, 3, 4, 5, 6, 7];
+const [P_SCENES, P_HEAT, P_COMBAT, P_MAINTAIN, P_PEOPLE, P_PIGEONS, P_FRAME] = [8, 9, 10, 11, 12, 13, 14];
 
 // --- Scene ---
 const scene = new Scene();
@@ -209,6 +218,9 @@ signals.setRoadworks(dressing.street.roadworks);
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
+/** Off screen, the street's drivers, walkers and dogs think less often (systems/simLod.ts). */
+const simLod = new SimLod();
+const lodView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 
 function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation): Vehicle {
   const sim = createVehicleState(0, 0, 0);
@@ -225,6 +237,7 @@ function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation):
     damage: createDamage(VEHICLE_HEALTH[archetype]),
     wreckAge: 0,
     charred: false,
+    lod: newSimClock(),
   };
 }
 
@@ -424,6 +437,7 @@ const cityLife = new CityLife({
   now: () => simTime,
   view: (out) => rig.visibleGround(out),
   playing: () => !attract.active,
+  lod: simLod,
   // Any activity (a mission, a race, a frenzy, a fare) or a Chaos Run holds the loud scenes off.
   activity: () => progress.busy !== null || progress.chaos.active,
   stars: () => heat.wanted.level,
@@ -725,7 +739,11 @@ function simulate(dt: number) {
   // NO_CONTROLS is shared: only the frame's own read gets the boost flag.
   if (playerControls !== NO_CONTROLS) playerControls.boost = boosting;
 
+  prof.begin(P_SIM);
+  const focus = attract.active ? attract : player.position;
+  simLod.begin(focus.x, focus.z, rig.visibleGround(lodView));
   // What AI drivers need to avoid this step.
+  prof.begin(P_OBSTACLES);
   obstacles.length = 0;
   // Cars as their middle, long vehicles as a point per body circle (so queues stop at a bus's tail).
   for (let i = 0; i < vehicles.length; i++) {
@@ -737,6 +755,7 @@ function simulate(dt: number) {
     const c = population.crowd[i];
     addObstacle(c.agent.s.x, c.agent.s.z, 0.4);
   }
+  prof.end(P_OBSTACLES);
 
   for (let i = 0; i < vehicles.length; i++) {
     const v = vehicles[i];
@@ -746,8 +765,14 @@ function simulate(dt: number) {
     else if (v.tipped) slideOnSide(v.sim, dt);
     else if (v === driving) controls = playerControls;
     // Traffic, police and road ragers, or a city scene's driver. (A car's own entry sits at distance 0, which clearDistance ignores.)
-    else if (v.ai || v.pursuit) controls = (v.scene ? v.scene.drive(v, obstacles, dt) : null) ?? heat.drive(v, obstacles, dt);
+    else if (v.ai || v.pursuit) {
+      prof.begin(P_DRIVE);
+      controls = driveCar(v, dt);
+      prof.end(P_DRIVE);
+    }
+    prof.begin(P_PHYSICS);
     const landed = stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt);
+    prof.end(P_PHYSICS);
     if (landed > 0) carLanded(v, landed, v === driving);
     if (rideRamps(v.sim, ramps) === 'launch') carJumped(v, v === driving);
   }
@@ -771,12 +796,17 @@ function simulate(dt: number) {
   const target = playerTarget();
   // Only once the furniture is drawn (props.glb in): nothing invisible to knock.
   if (look.props.loaded) knockables.step(vehicleStates, dt, knockProp);
+  prof.begin(P_CROWD);
   for (let i = 0; i < population.crowd.length; i++) {
     const c = population.crowd[i];
     copyPedState(c.prev, c.agent.s);
+    // Off screen, on their own tick with all the time since the last (their collisions below wait for it too).
+    const s = c.agent.s;
+    const pedDt = c.lod ? simLod.due(c.lod, simLod.tier(s.x, s.z), dt, fullRatePed(c.agent)) : dt;
+    if (pedDt === 0) continue;
     // Someone a city scene set on someone else (a scuffle, a suspect and the officers) fights them, not the player.
     const own = cityLife.targetFor(c);
-    const event = stepCrowdPed(c.agent, vehicleStates, rand, dt, own ?? target);
+    const event = stepCrowdPed(c.agent, vehicleStates, rand, pedDt, own ?? target);
     if (event?.kind === 'struck') pedHitByCar(c, driving !== null && event.car === driving.sim ? driving : null);
     else if (event?.kind === 'punch') {
       if (own) cityLife.punch(c);
@@ -789,8 +819,10 @@ function simulate(dt: number) {
       }
     }
   }
+  prof.end(P_CROWD);
 
   // --- Collisions ---
+  prof.begin(P_COLLIDE);
   for (let i = 0; i < vehicles.length; i++) {
     const v = vehicles[i];
     let impact = collideVehicleStatic(v.sim, collision, contact, v.prev);
@@ -805,6 +837,7 @@ function simulate(dt: number) {
     }
     if (isBike(v.archetype) && bikeThrows(impact)) throwRider(v, impact);
   }
+  prof.begin(P_CARPAIRS);
   for (let i = 0; i < vehicles.length; i++) {
     for (let j = i + 1; j < vehicles.length; j++) {
       const a = vehicles[i];
@@ -844,6 +877,8 @@ function simulate(dt: number) {
       }
     }
   }
+  prof.end(P_CARPAIRS);
+  prof.end(P_COLLIDE);
 
   // --- Stunt scoring ---
   simTime += dt;
@@ -892,9 +927,15 @@ function simulate(dt: number) {
       events.emit({ type: 'pickup', kind: pk.kind, x: pk.x, z: pk.z });
     }
   }
+  prof.begin(P_HEAT);
   heat.step(dt);
+  prof.end(P_HEAT);
+  prof.begin(P_COMBAT);
   combat.step(dt);
+  prof.end(P_COMBAT);
+  prof.begin(P_SCENES);
   cityLife.step(dt);
+  prof.end(P_SCENES);
   // Cash, the Chaos Run clock and the free-roam activities.
   progress.step(dt);
   // Back on your feet: after dying a fresh run; after a bust, released at the station.
@@ -921,8 +962,11 @@ function simulate(dt: number) {
     collidePedStatic(player.ped, rampGrid);
     if (look.props.loaded) knockables.collidePed(player.ped);
   }
+  prof.begin(P_COLLIDE);
+  prof.begin(P_PEDCOLLIDE);
   for (let i = 0; i < population.crowd.length; i++) {
     const c = population.crowd[i];
+    if (c.lod && c.lod.dt === 0) continue;
     if (c.agent.mode !== 'down') {
       for (let j = 0; j < vehicleStates.length; j++) {
         const s = vehicleStates[j];
@@ -933,7 +977,35 @@ function simulate(dt: number) {
     collidePedStatic(c.agent.s, rampGrid);
     if (look.props.loaded) knockables.collidePed(c.agent.s);
   }
+  prof.end(P_PEDCOLLIDE);
+  prof.end(P_COLLIDE);
   syncWeapon();
+  prof.end(P_SIM);
+}
+
+/**
+ * A driven car's controls this step. Calm traffic off screen thinks on its
+ * tick (systems/simLod.ts) and holds its last decision between (steering
+ * and braking every step); a scene's or a chase's car, the police, and
+ * anyone reacting to the player think every step.
+ */
+function driveCar(v: Vehicle, dt: number): VehicleControls {
+  const ai = v.ai;
+  const clock = v.lod;
+  let step = dt;
+  if (clock) {
+    const pinned = ai === null || v.scene != null || v.pursuit != null || v.police === true || fullRateDriver(ai);
+    let tier = simLod.tier(v.sim.x, v.sim.z);
+    // Lights and cross traffic don't wait for a 5 Hz tick.
+    if (tier === LOD_FAR && !pinned && nearJunction(ai, v.sim)) tier = LOD_NEAR;
+    step = simLod.due(clock, tier, dt, pinned);
+    if (step === 0) {
+      const held = holdAi(ai!, v.sim);
+      if (held) return held;
+      step = simLod.settle(clock);
+    }
+  }
+  return (v.scene ? v.scene.drive(v, obstacles, step) : null) ?? heat.drive(v, obstacles, step);
 }
 
 /** A car knocked street furniture flying: it's gone from its spot, a copy tumbles away, and the hit is heard. */
@@ -1125,7 +1197,9 @@ function frame(now: number) {
 
   if ((maintainTimer -= frameSeconds) <= 0) {
     maintainTimer = 0.25;
+    prof.begin(P_MAINTAIN);
     maintainPopulation();
+    prof.end(P_MAINTAIN);
   }
 
   // Hit-stop slows the sim on big moments; the camera keeps real time.
@@ -1148,7 +1222,9 @@ function frame(now: number) {
     for (const w of v.mesh.frontWheels) w.rotation.y = v === player.driving ? -steer * 0.5 : 0;
   }
   // People: placed, holding what they hold, playing the clip for what they're doing (hit-stop freezes them too).
+  prof.begin(P_PEOPLE);
   people.update(frameSeconds * fx.hitStop.scale * slow, alpha, aimHeadingNow);
+  prof.end(P_PEOPLE);
   const ped = player.ped;
   const prev = player.prev;
   const px = lerp(prev.x, ped.x, alpha);
@@ -1156,7 +1232,9 @@ function frame(now: number) {
 
   // Body motion, tyre marks, damaged-car smoke and fire, weather, particles.
   const focus = attract.active ? attract : player.position;
+  prof.begin(P_PIGEONS);
   pigeons.update(frameSeconds * fx.hitStop.scale * slow, focus.x, focus.z, rig, vehicles, population.crowd, attract.active ? null : player);
+  prof.end(P_PIGEONS);
   fx.update(frameSeconds, controls, focus.x, focus.z, !attract.active);
   cityMood.set(look.time.hour, fx.weather.rain);
   // Rubble on the sim's clock: frozen by pause, cards and hit-stop like the world.
@@ -1197,6 +1275,8 @@ function frame(now: number) {
   labels.update(frameSeconds, viewW, viewH, playing);
   resolution.sample(elapsed);
   frameStats.sample(elapsed * 1000, performance.now() - t0);
+  prof.add(P_FRAME, performance.now() - t0);
+  prof.endFrame();
   diagnostics.frame(elapsed * 1000);
 }
 
@@ -1651,6 +1731,10 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   get simTime() {
     return simTime;
   },
+  /** JS ms per frame by system: start(), then summary() (mean, p95, max per section). */
+  simProfile: prof,
+  /** The sim's level of detail (systems/simLod.ts): enabled = false runs everything every step. */
+  simLod,
   /** One whole frame (sim, effects, render) `ms` after the last: for harnesses that stub requestAnimationFrame. */
   stepFrame(ms = 1000 / 60) {
     frame(last + ms);
