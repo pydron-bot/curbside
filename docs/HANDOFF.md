@@ -4,6 +4,86 @@ Notes for whoever picks this up next (a person or a fresh Claude session).
 The *how it works* lives in `README.md` (one section per system, with APIs);
 this file is the *where things stand* and *what's left*.
 
+## State at 2026-11-02 (read this first)
+
+**Live:** v0.12.1 at https://deeek.org/curbside/ (main b9218d1). Versions and
+notes are in `src/core/changelog.ts` (every release bumps it and
+`package.json`; a test checks they match).
+
+**Shipped 2026-11-01/02:**
+- 0.9.1 CRED pacing (banked chains no longer count three times toward CRED)
+  and god mode.
+- 0.10.0 The living city (base, street props, atmosphere, people, emergency,
+  traffic; README *City life*).
+- 0.11.0 Version numbers and history, the TEST menu and save tools (Settings
+  → Test tools), labels (Shift+L), REPORT BUG, the per-sample performance log
+  of what's on screen, and smoke budgets for heavy mayhem.
+- 0.12.0 Title framing (subject right of the menu) and title highlights,
+  per-model prop draws (vertex pulling, 3–9× fewer triangles), lamp short
+  lists, and sim level of detail.
+- 0.12.1 Half-resolution smoke and dust on medium and low.
+
+**Open work:**
+1. **Shadow cache** (performance idea 3): branch `claude/perf-shadows`, 3
+   commits, NOT merged.
+   - It was built on the old prop batching. Its "shadow twins" in
+     `propBatch.ts` conflict with 0.12.0's vertex-pulling `propBatch.ts`.
+     Rebase it onto main, drop the twins (props already run only their own
+     vertices) and draw the families into the static map.
+   - Fix its redraw spikes: a redraw frame costs 20–30 calls and up to 580k
+     triangles, and at dusk and dawn they happen 3–7 times a second because
+     the sun moves. Spread a redraw over frames, or raise the sun threshold.
+2. **Not verified on a real iPhone yet:**
+   - vertex-pulling props (texelFetch, gl_VertexID): check street furniture
+     day and night, and that the spray booth roof still cuts away;
+   - half-resolution smoke (an XR render target flag, three r186 internals);
+   - the title highlights.
+3. **Next ideas, not started:** glows at low resolution (about 1.4 screens
+   sustained in mayhem); let parked or resting cars skip static collision
+   (about 0.1 ms per frame); smaller downloads (compress GLBs and textures).
+4. **Small known gaps:**
+   - Some new street events have no sound (busker music, mugging shout,
+     etc.).
+   - Ambient police cars aren't on the radar.
+   - The scooter stands in for a motorcycle.
+   - Rival gangs have colours only (no respect or hangouts).
+   - Box stand-ins wait for Blender models (`docs/BLENDER_TODO.md` §8.8 and
+     §10).
+
+**How the user works (keep doing this):**
+- Ask before every deploy (a push to main deploys). Show results: numbers,
+  screenshots via SendUserFile.
+- The user is playtesting on an iPhone 15 Pro with the testing guide below,
+  and sends REPORT BUG files and diagnostics. Triage them in batches.
+- Usage quota is tight: about 40% of the weekly limit was used by
+  2026-11-02, with the weekly reset on Saturday at 20:00. Each subagent costs
+  roughly 300–450k tokens. Prefer one agent at a time with a tight scope,
+  and do small fixes inline. A finishing agent with a narrow brief cost about
+  120k tokens.
+- Parallel agents work best in separate git worktrees, each branched from a
+  shared base, merged one at a time with a combined in-game check. Tell them
+  which shared files (main.ts, cityLife.ts, events.ts, settings.ts,
+  pauseOverlay.ts) to keep their edits additive in.
+- When the machine is loaded, the smoke test's PWA reload and REPORT BUG
+  click time out. That isn't a code failure: CI on a clean runner passes,
+  and so does a rerun on a quiet machine.
+- Rewriting history (amend or force-push) was blocked by the permission
+  checker. Add new commits instead.
+
+**Testing guide given to the user (summary):**
+- Short themed sessions: a quick check every build; scene passes via TEST →
+  Scenes (starts, reads, plays out, cleans up, sound); interference ("what
+  if I…"); the mayhem stress recipe (god mode, midnight and rain, Neon Mile,
+  force scenes, rockets, Full perf overlay, REPORT BUG at the stutter); a
+  30-minute soak; real play with test tools off (CRED pacing); controls.
+- Notes in each report: what I did → expected → happened, severity
+  (crash/broken/wrong/ugly/tuning), and how often it happens.
+
+**Worktrees in /home/user (all merged except `curbside-perf-shadows`; safe
+to remove):** the `curbside-*` folders. `curbside-main` is on main; the
+`/home/user/curbside` checkout is on `claude/living-city` (old). Stale dev
+servers may still hold ports 5617 and 5618.
+
 ## Where it is
 
 - **Live:** https://deeek.org/curbside/ — GitHub Pages, deployed by
