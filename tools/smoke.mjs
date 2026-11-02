@@ -255,6 +255,8 @@ async function scannerCheck(page, label) {
         };
         if (u.paused) u.setPaused(false);
         if (inCar && !u.player.driving) u.testTools.spawn('sedan');
+        // The cold open's checks leave the player in the getaway.
+        if (!inCar && u.player.driving) u.player.exit();
         u.testTools.wanted(3);
         u.stamp('neighbourhoodWatch');
         await frames(3);
