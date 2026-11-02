@@ -22,7 +22,9 @@ export type ScoreKind =
   // The city's incidents (game/scenes/): the cash van done over, a film set wrecked, a funeral cut up.
   | 'cashGrab'
   | 'wrapped'
-  | 'noRespect';
+  | 'noRespect'
+  // A chain the player set off in the city (systems/mess.ts): DOMINO ×N, all bonus.
+  | 'domino';
 
 export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   nearMiss: 100,
@@ -43,6 +45,8 @@ export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   cashGrab: 300,
   wrapped: 400,
   noRespect: 250,
+  // All bonus: see systems/mess.ts dominoBonus().
+  domino: 0,
 };
 
 export const LABELS: Record<ScoreKind, string> = {
@@ -63,6 +67,7 @@ export const LABELS: Record<ScoreKind, string> = {
   cashGrab: 'CASH GRAB',
   wrapped: "THAT'S A WRAP",
   noRespect: 'NO RESPECT',
+  domino: 'DOMINO',
 };
 
 /** Shaking off a chase of this many stars or more earns the EVADED bonus. */

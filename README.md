@@ -922,7 +922,8 @@ people in).
   turns throughout (towLook). Both are retired once far and unseen (or
   40 s towing unseen). Take the truck, knock its driver out or get into
   the towed car and the tow's off: the car stays, an ordinary abandoned
-  car. One at a time.
+  car. One at a time (a crash's own follow-on tow, V2-10, may come while
+  another's out: two at most).
 - **Car alarms** (`scenes/alarms.ts`, `AlarmBoard`): a crash against a
   parked car (any car's: the contact point on its body, ±0.6 m), a bullet
   into one, or a blast within 14 m sets its alarm off: the four
@@ -1088,7 +1089,8 @@ of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
   out goes to the ambulance. The cars stay in the lane, abandoned and
   **flagged for a tow**: `Vehicle.towable` (set on crashed cars and dumped
   getaways, cleared when recycled; `accidents.towables(out)` lists the ones
-  still standing, `ai` null, not the player's).
+  still standing, `ai` null, not the player's). Your own crashes become
+  accidents too: *Your mess, their problem*, below.
 - **Double-parked trucks** (`scenes/doubleParking.ts`, every 45–100 s,
   held by the title and activities): a delivery van (parcel brown or
   white) or a garbage truck in traffic pulls in 26–44 m before the next
@@ -1113,6 +1115,91 @@ life.chases.joined · .rammed(v) · .isGetaway(v)               // how the playe
 life.races.begin() · life.accidents.begin() · .towables(out) · life.doubleParking.begin(force?, job?)
 // Street events: chase, suspectRuns, arrest, suspectDown, takeTheHeat, citizensArrest, haveAGo, race, raceWon, accident, fight, doublePark.
 ```
+
+**Your mess, their problem** (V2-10; rules pure and tested in
+`systems/mess.ts`, `tests/mess.test.ts`; `scenes/accidents.ts`,
+`scenes/shotsFired.ts`, `scenes/patrol.ts`). The city takes over what the
+player starts and carries it on without them.
+
+- **Your crash, adopted:** hit an ordinary calm driver at 9 m/s or more
+  (`ADOPT_IMPACT`; heat's `adoptCrash` hook, asked before that driver's
+  panic / rage / bail roll) and their car stops where it is, hazards on.
+  1.2 s later the driver gets out and has it out with you: over to your
+  window (or face to face on foot), jabbing a finger, while you're within
+  30 m of the crash; gone, they glare after you from their door. A patrol
+  comes (lights on), the officer walks over and takes a statement, gets
+  back in and leaves; then a tow truck comes for their car (through
+  SceneStarter, below: the city's own tows leave it till then,
+  `accidents.waiting(v)`, and it may be the second tow out). A patrol not
+  there in 25 s is stood down and the tow asked for anyway. Traffic
+  queues and goes round (LaneBlock); `street` `accident` gives the
+  scanner its RTC line and ping. **Adopt rules** (`adoptVerdict`): one at
+  a time; spaced by the `mess` clock (20–40 s; `BUSY` with `WANTED_PACE`:
+  never behind the title, in the cold open or a quiet activity); an
+  ordinary car only (calm traffic: not police, a bike, a service vehicle,
+  a scene's or an activity's, anything `CityLife.keeps`, longer than the
+  hook takes, burning, or the player's own or last car); and **not on a
+  busy street**: 6 or more other cars within 30 m (a jam would gridlock),
+  or another site within 60 m (a city crash left standing, a double-parked
+  truck). Otherwise the usual reactions. **The player's car is never
+  held, flagged `towable` or towed**; a second hit on the adopted car is
+  the same crash. The scene's over when the tow has the car, the player
+  takes it, it burns, it's 190 m off, or after 150 s.
+- **Shots fired:** the player's gunfire with no stars on (`LOUD`: not
+  while wanted, the real police are coming anyway; one chain at a time,
+  90–150 s apart) sets off the alarm of a parked car within 25 m of the
+  shots; once the volley stops (2 s quiet, or 6 s in) a passer-by walking
+  within 40 m who heard it calls it in (`Witnesses.heard`: the phone pose,
+  no crime on the call, the gunfire's heat landed already, and it goes
+  through wherever the player's gone), `street` `shotsFired` (a scanner
+  line: SHOTS FIRED IN …), and a patrol comes, the officer walks to the
+  spot, has a slow look round for 6 s and they leave. Nobody to make the
+  call: it ends there.
+- **The patrol and your heat** (`Patrol`, `patrolArrives`): the patrol at
+  your mess is the scene's, not a `PoliceForce` unit, so it never sees,
+  chases or busts you; a player already gone gets nothing. Only if you're
+  wanted **and** still within 30 m when it pulls up does it join your
+  pursuit (`CityLifeDeps.adopt` → `heat.adopt`, within the force's unit
+  cap; it's a unit from then on, under the usual rules: the bust meter
+  still needs you stopped beside an officer). The crash itself is no crime
+  (ramming civilians never was); running the arguing driver down is
+  assault as ever.
+- **DOMINO** (`Cause`, `CityLife.chain`): every scene one thing sets off
+  carries a cause, its chain's `root` (`'player'` or `'city'`) and `depth`
+  (the root 1, each link one more, capped at `DOMINO_CAP` 4). Each link
+  emits `domino {root, depth, what, x, z}`; main pays the player's from
+  depth 2 (`dominoAward`: score kind `domino`, all bonus, 100 / 200 / 400
+  at ×2 / ×3 / ×4, the feed label `DOMINO ×N`; none while WASTED or
+  BUSTED, Chaos Run counts it as smash). Your crash: crash ×1, patrol ×2,
+  tow ×3. Your shots: shots ×1, alarm ×2, call ×3, patrol ×4. The city's
+  own accidents chain the same way (accident, patrol), rooted in the city:
+  they never pay. **Through SceneStarter:** `start(id, x, z, heading,
+  ignore, cause)` / `follow(id, x, z, cause)` start a scene as the next
+  link of `cause` (`starter.caused` is it), using only what's there: the
+  tow takes a towable car within 30 m of the point, the alarm a parked car
+  within 25 m, a fire won't start; `CityLifeDeps.follow` is how scenes ask
+  (main wires it to the TEST menu's starter).
+
+```ts
+life.accidents.adopt(v, impact) → boolean · .mine · .verdict · .waiting(v)   // heat's adoptCrash; 'adopt' | 'soft' | 'held' | 'one' | 'car' | 'busy'
+life.shotsFired.shot(x, z) · .call · .counts { started, called, arrived }     // the bus's player 'shot' calls shot()
+life.chain(by: Cause | null, what, x, z, root = 'city') → Cause               // emits `domino`
+starter.follow(id, x, z, cause) → Cause | null                                // CityLifeDeps.follow; starter.start(…, cause)
+Patrol.call(life, x, z) · .step(dt) → 'coming' | 'onSite' | 'joined' | 'gone' · .out() · .leave() · .end()
+// Events: { type: 'domino', root, depth, what, x, z }; street 'shotsFired'. Score kind 'domino'. HeatDeps.adoptCrash?(v, impact).
+```
+
+A headless check, `tools/tune/mess.mjs` (*Tuning harnesses*): 2026-11-02,
+8 seeds, the built game: 6 crashes adopted (2 seeds found no calm car on
+a straight to aim at), the driver out at 1 s and at the player's window
+for 33–55 s of each, the patrol on site in 5 (8–17 s; one stood down),
+the tow called in all 6 (14–25 s), DOMINO ×2 and ×3 paid; 3 of 3 shots
+chains ran alarm, call and patrol (DOMINO ×2, ×3, ×4) with no star.
+**Budget:** no mesh, batch or program; the patrol car and tow truck are
+traffic models (a police car and the tow truck, each a call and a shadow
+pass if not already in view), the driver and officer wear crowd bodies,
+the hazards are the glow batch. Nothing allocated per step (records and
+the chain's cause only when a link happens).
 
 **Incidents** (V2-13; rules pure and tested in `systems/incidents.ts`,
 `tests/incidents.test.ts`). Six more things that happen whether you're
@@ -1307,8 +1394,8 @@ ROW. TWO CARS, TWO TEMPERS.") with a radar ping on the incident:
 - **Topics:** each street event worth a call (`STREET_TOPICS`: chase,
   race, accident, scuffle, mugging, turf war, fire, the cash van and its
   spilled cash, chucking-out time, the funeral, a burst hydrant, the
-  conga, the film shoot; as chatter a double-parked lorry, a car alarm, a
-  busker, the ice cream van; and the closing lines: an arrest, a suspect
+  conga, the film shoot, shots fired (V2-10); as chatter a double-parked
+  lorry, a car alarm, a busker, the ice cream van; and the closing lines: an arrest, a suspect
   down, a citizen's arrest, a bag handed back) has a priority (1 chatter,
   2 an incident, 3 a spilled cash van, 4 the player's own), a cooldown
   (45–240 s) and one or two lines, `{place}` the district
@@ -1887,6 +1974,15 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   kind seconds in view, started, seen, ended unseen. ~1 min a run. The
   numbers, before and after the city stopped holding off for stars, are in
   HANDOFF (*V2 in-view numbers*).
+- **`mess.mjs [runs=8] [--shots 4] [--seed 1]`**: *Your mess, their
+  problem* (City life). Each run: a fresh game, 20 s of traffic, a muscle
+  car put 14 m behind a calm driver 40–90 m off and driven into its back;
+  the adopted crash followed for 70 s (driver out, patrol on site, tow
+  called, DOMINO awards, seconds the driver stood within 8 m of the player:
+  `fastForward` doesn't move the camera, so the view isn't asked). Then
+  `--shots` runs of the gunfire chain beside a parked car (a player `shot`
+  on the bus, as combat sends it): its links, awards and stars. A few
+  seconds a run. Numbers under *City life*.
 - **`music.mjs <out-dir> [station-id …]`**: renders stations offline
   (`audioLib.mjs`: the game's own audio modules on an OfflineAudioContext
   in the page, ticked like the 25 ms timer) to MP3 (WAV without ffmpeg) for

@@ -50,6 +50,8 @@ export interface Report {
   /** Callers still on the line. */
   calling: number;
   through: boolean;
+  /** Heard, not seen (shots fired: scenes/shotsFired.ts): no crime, and the call goes through wherever the player's gone. */
+  heard?: boolean;
 }
 
 export interface Phone {
@@ -90,7 +92,7 @@ export class Witnesses implements Scene {
     // Another crime here while the last is still being called in: it goes on the same call.
     for (const p of this.phones) {
       const r = p.report;
-      if (!r || r.through || r.calling === 0 || len2(r.x - x, r.z - z) > SAME_CALL) continue;
+      if (!r || r.heard || r.through || r.calling === 0 || len2(r.x - x, r.z - z) > SAME_CALL) continue;
       if (r.crimes.length < CALL_CRIMES) r.crimes.push(crime);
       this.react(x, z, null);
       return true;
@@ -110,7 +112,7 @@ export class Witnesses implements Scene {
       const ok = life.present(c) && a.scene === true && a.mode !== 'down' && a.mode !== 'flee' && a.mode !== 'fight' && a.mode !== 'shoot';
       const r = p.report;
       if (p.role === 'call' && r && p.call.phase === 'calling') {
-        const phase = stepCall(p.call, dt, ok && !r.through, life.distance(a.s.x, a.s.z));
+        const phase = stepCall(p.call, dt, ok && !r.through, r.heard ? 0 : life.distance(a.s.x, a.s.z));
         if (phase === 'through' && !r.through) this.through(r, c);
         if (phase !== 'calling') {
           r.calling--;
@@ -147,6 +149,19 @@ export class Witnesses implements Scene {
     const report: Report = { x: at.x, z: at.z, crimes: [], calling: 0, through: false };
     this.react(at.x, at.z, report, true);
     return this.phones.length > 0;
+  }
+
+  /**
+   * Shots fired at (x, z) (scenes/shotsFired.ts): someone walking within
+   * `range` m who heard them, whichever way they face, calls it in. No crime
+   * on the call (the gunfire's heat landed already); the caller's report to
+   * watch (`through`, `calling`), or null with nobody to make the call.
+   */
+  heard(x: number, z: number, range: number): Report | null {
+    if (!this.life.d.playing()) return null;
+    const report: Report = { x, z, crimes: [], calling: 0, through: false, heard: true };
+    this.react(x, z, report, range);
+    return report.calling > 0 ? report : null;
   }
 
   /**
@@ -201,8 +216,12 @@ export class Witnesses implements Scene {
     return n;
   }
 
-  /** Whoever saw (x, z) reacts: callers on `report` (if any), filmers, runners. `all`: never mind which way they face. */
-  private react(x: number, z: number, report: Report | null, all = false): void {
+  /**
+   * Whoever saw (x, z) reacts: callers on `report` (if any), filmers, runners.
+   * `all`: never mind which way they face (a range: also only those still
+   * walking, within it: they heard it, and the ones running are busy).
+   */
+  private react(x: number, z: number, report: Report | null, all: boolean | number = false): void {
     const life = this.life;
     const rand = life.d.rand;
     const seen = this.seen;
@@ -212,8 +231,8 @@ export class Witnesses implements Scene {
     for (const c of life.d.population.crowd) {
       const a = c.agent;
       if (!a.street || a.scene || a.role !== 'civilian' || a.mode === 'down' || a.injured || a.burning > 0) continue;
-      if (a.mode !== 'walk' && a.mode !== 'flee') continue;
-      if (all ? len2(a.s.x - x, a.s.z - z) > 26 : !sees(a.s.x, a.s.z, a.s.heading, x, z)) continue;
+      if (a.mode !== 'walk' && (a.mode !== 'flee' || typeof all === 'number')) continue;
+      if (all !== false ? len2(a.s.x - x, a.s.z - z) > (all === true ? 26 : all) : !sees(a.s.x, a.s.z, a.s.heading, x, z)) continue;
       // Keep the nearest few, nearest first (insertion into a short list).
       const d = len2(a.s.x - x, a.s.z - z);
       let k = seen.length;

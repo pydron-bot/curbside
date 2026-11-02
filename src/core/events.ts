@@ -9,6 +9,7 @@ import type { BlastKind } from '../systems/damage';
 import type { ScannerPriority, ScannerTopic } from '../systems/scanner';
 import type { Award } from '../systems/score';
 import type { ToolKind } from '../systems/serviceTools';
+import type { DominoRoot } from '../systems/mess';
 import type { StampId } from '../systems/stamps';
 import type { WantedReason } from '../systems/wanted';
 import type { WeaponKind } from '../systems/weapons';
@@ -197,6 +198,15 @@ export type GameEvent =
    * the subtitle stays up.
    */
   | { type: 'scanner'; kind: ScannerTopic; text: string; priority: ScannerPriority; x: number; z: number; hold: number }
+  /**
+   * A link in a chain one thing set off in the city (systems/mess.ts): an
+   * adopted crash, its patrol and tow; shots, an alarm, the call, the patrol.
+   * `root`: who started it; `depth`: links from the root (the root itself
+   * 1, capped at DOMINO_CAP); `what`: the link (the scene's clock kind, or
+   * 'crash' / 'shots' / 'call' / 'patrol'). Pays DOMINO ×depth from 2 when
+   * the root is the player.
+   */
+  | { type: 'domino'; root: DominoRoot; depth: number; what: string; x: number; z: number }
   /** The game was paused or resumed (menu, app switch, lost graphics context). */
   | { type: 'pause'; paused: boolean }
   /**
@@ -287,7 +297,9 @@ export type StreetWhat =
   | 'hydrant'
   | 'conga'
   | 'action'
-  | 'pyro';
+  | 'pyro'
+  // Your mess (V2-10): a passer-by's call about the player's gunfire got through; a patrol's on its way.
+  | 'shotsFired';
 
 /**
  * What a borrowed service vehicle's tool did: the hose on, still going (the

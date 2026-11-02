@@ -90,6 +90,9 @@ import { Funerals } from './scenes/funeral';
 import { Hydrants } from './scenes/hydrants';
 import { Congas } from './scenes/conga';
 import { FilmShoots } from './scenes/filmShoot';
+import { ShotsFired } from './scenes/shotsFired';
+import { follows, rootCause, type Cause, type DominoRoot } from '../systems/mess';
+import type { SceneId } from './sceneStarter';
 import { len2 } from '../core/len';
 import type { LabelSink } from './debugLabels';
 import type { SimLod } from '../systems/simLod';
@@ -184,6 +187,12 @@ export interface CityLifeDeps {
   throwRider?(v: Vehicle): void;
   /** Knock over the standing hydrant nearest (x, z) within `range` m (as a car would): where it stood, or null. */
   knockHydrant?(x: number, z: number, range: number): { x: number; z: number } | null;
+  /**
+   * Start `id` round (x, z) as the next link of `cause`'s chain, using only
+   * what's there (SceneStarter.follow: a crash's tow, the alarm by the
+   * shots): the link, or null if it didn't start.
+   */
+  follow?(id: SceneId, x: number, z: number, cause: Cause): Cause | null;
 }
 
 /** The score kinds an incident pays out. */
@@ -247,6 +256,8 @@ export class CityLife {
   readonly races: StreetRaces;
   readonly accidents: Accidents;
   readonly doubleParking: DoubleParking;
+  /** The player's gunfire called in: an alarm, a witness, a patrol (V2-10). */
+  readonly shotsFired: ShotsFired;
   /** The player's borrowed service vehicle's tool: hose, chime, winch (V2-09). */
   readonly tools: ServiceTools;
   readonly scenes: Scene[] = [];
@@ -321,6 +332,7 @@ export class CityLife {
     this.add(new Hydrants(this));
     this.add(new Congas(this, fights));
     this.add(new FilmShoots(this));
+    this.shotsFired = this.add(new ShotsFired(this));
     this.add(new Pavement(this), 'pavement');
     this.tools = this.add(new ServiceTools(this), 'tools');
     const kinds: string[] = [];
@@ -505,6 +517,17 @@ export class CityLife {
   }
 
   // --- For the scenes -----------------------------------------------------------
+
+  /**
+   * A link in a chain of scenes (systems/mess.ts): the first (`by` null,
+   * rooted in `root`) or the one after `by`. Emits `domino`; the player's
+   * links from the second on pay DOMINO ×depth (main.ts listens).
+   */
+  chain(by: Cause | null, what: string, x: number, z: number, root: DominoRoot = 'city'): Cause {
+    const c = by ? follows(by) : rootCause(root);
+    this.d.bus.emit({ type: 'domino', root: c.root, depth: c.depth, what, x, z });
+    return c;
+  }
 
   emit(what: StreetWhat, x: number, z: number): void {
     this.d.bus.emit({ type: 'street', what, x, z });

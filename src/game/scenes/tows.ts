@@ -122,9 +122,13 @@ export class Tows implements Scene, SceneDriver {
     this.tows.length = 0;
   }
 
-  /** Debug (TEST menu): a tow truck for `car` (else the best pick) now, whatever holds it off. */
-  force(car: Vehicle | null = this.pick()): boolean {
-    if (!car || this.tows.length >= MAX_TOWS || this.towing(car)) return false;
+  /**
+   * Debug (TEST menu): a tow truck for `car` (else the best pick) now,
+   * whatever holds it off; `cap` tows at most (a crash's own follow-on tow
+   * may be the second: SceneStarter).
+   */
+  force(car: Vehicle | null = this.pick(), cap = MAX_TOWS): boolean {
+    if (!car || this.tows.length >= cap || this.towing(car)) return false;
     const run = ServiceRun.call(this.life, TOW_TRUCK, car.sim.x, car.sim.z);
     if (!run) return false;
     this.tows.push({ run, truck: run.v, car, stage: 'drive', timer: 0, rear: false, spot: { x: 0, z: 0, heading: 0 }, from: { x: 0, z: 0, heading: 0 }, left: { m: 99 } });
@@ -187,6 +191,8 @@ export class Tows implements Scene, SceneDriver {
     for (const v of life.d.vehicles) {
       if (v === p.driving || v.ai || v.police || v.ambient || v.scene || v.exported || v.tipped || !v.mesh.root.visible) continue;
       if (isBike(v.archetype) || (v.sim.body?.reach ?? 2.4) > MAX_REACH || life.keeps(v) || this.towing(v)) continue;
+      // The player's mess (V2-10) waits for its statement: then it asks for its own tow.
+      if (life.accidents.waiting(v)) continue;
       // The car the player just left stays put for them, unless it's a wreck.
       if (v === p.lastDriven && !v.damage.wrecked) continue;
       // A crash left in the lane (scenes/accidents.ts, a dumped getaway car) goes first, like a wreck.
