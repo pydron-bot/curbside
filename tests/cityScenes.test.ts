@@ -19,7 +19,7 @@ import {
   type ServiceState,
 } from '../src/systems/cityScenes';
 
-const PLAYING: SceneWorld = { playing: true, activity: false, stars: 0, tutorial: false };
+const PLAYING: SceneWorld = { playing: true, activity: false, stars: 0, opening: false };
 
 describe('SceneClock', () => {
   function clock(rand = () => 0.5) {
@@ -70,7 +70,7 @@ describe('SceneClock', () => {
     expect(() => clock().due('nope', 0, 0, PLAYING)).toThrow(/never defined/);
   });
 
-  it('holds: the title, an activity, wanted stars, the tutorial', () => {
+  it('holds: the title, an activity, wanted stars, the cold open', () => {
     const c = new SceneClock(() => 0);
     c.define('loud', { every: [0, 0], cap: 1, first: 0, hold: LOUD });
     c.define('quiet', { every: [0, 0], cap: 1, first: 0, hold: IN_PLAY });
@@ -79,7 +79,7 @@ describe('SceneClock', () => {
       { ...PLAYING, playing: false },
       { ...PLAYING, activity: true },
       { ...PLAYING, stars: 2 },
-      { ...PLAYING, tutorial: true },
+      { ...PLAYING, opening: true },
     ];
     for (const w of worlds) {
       expect(c.due('loud', 1, 0, w)).toBe(false);
@@ -171,12 +171,12 @@ describe('nearest', () => {
 describe('the city does not stop (V2-02): busy holds, the wanted pace, the caps', () => {
   const W = (o: Partial<SceneWorld> = {}): SceneWorld => ({ ...PLAYING, ...o });
 
-  it('BUSY scenes run through wanted stars, but not behind the title, in a timed race or the tutorial', () => {
+  it('BUSY scenes run through wanted stars, but not behind the title, in a timed race or the cold open', () => {
     const spec = { every: [0, 0] as const, cap: 1, hold: BUSY, pace: WANTED_PACE };
     for (let stars = 0; stars <= 5; stars++) expect(held(spec, W({ stars }))).toBe(false);
     expect(held(spec, W({ playing: false }))).toBe(true);
     expect(held(spec, W({ activity: true }))).toBe(true);
-    expect(held(spec, W({ tutorial: true }))).toBe(true);
+    expect(held(spec, W({ opening: true }))).toBe(true);
     // LOUD is still everything, stars included.
     expect(held({ every: [0, 0], cap: 1, hold: LOUD }, W({ stars: 1 }))).toBe(true);
   });

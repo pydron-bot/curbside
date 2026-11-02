@@ -40,7 +40,7 @@
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { args, launch, playwright } from './lib.mjs';
+import { VETERAN_SAVE, args, launch, playwright } from './lib.mjs';
 
 const URL = process.env.URL ?? 'http://localhost:5173/';
 const opt = args({ tier: 'all', time: 'both', seconds: 36, seed: 7, 'no-city-fires': false, shot: '', shots: '', scenario: 'mayhem', fx: 'auto', 'fx-scale': 0, dpr: 3, step: 50 });
@@ -64,7 +64,7 @@ for (const tier of TIERS) {
     const page = await ctx.newPage();
     page.on('pageerror', (e) => console.error('pageerror:', e.message));
     await page.addInitScript(
-      ({ tier, seed }) => {
+      ({ tier, seed, save }) => {
         let s = seed;
         Math.random = () => {
           s = (s + 0x6d2b79f5) | 0;
@@ -77,8 +77,9 @@ for (const tier of TIERS) {
         // Frames only when the harness steps them (__ub.stepFrame).
         window.requestAnimationFrame = () => 0;
         localStorage.setItem('curbside.settings', JSON.stringify({ quality: tier, godMode: true, destruction: 'auto', perfOverlay: 'full' }));
+        localStorage.setItem('curbside.save', JSON.stringify(save));
       },
-      { tier, seed: opt.seed },
+      { tier, seed: opt.seed, save: VETERAN_SAVE },
     );
     await page.goto(URL);
     await page.waitForFunction(() => window.__ub, null, { timeout: 90000 });
@@ -219,7 +220,6 @@ for (const tier of TIERS) {
         const first = Math.round(500 / stepMs);
         const SCENES = ['race', 'chaseCar', 'accident', 'fight', 'tow', 'turf', 'fire'];
         let nextScene = 0;
-        if (pursuit) u.progress.progress.data.tutorial = 3;
         for (let k = 0; k < steps; k++) {
           const t = (k * stepMs) / 1000;
           if (pursuit) {

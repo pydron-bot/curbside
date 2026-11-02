@@ -340,11 +340,11 @@ export class TestMenu implements Panel {
     this.button(c, 'MAX PERKS', () => t.maxPerks(), { className: 'small', confirm: true });
     this.button(c, 'RESET CRED', () => t.resetCred(), { className: 'small', confirm: true });
     this.button(c, '+$10,000', () => t.cash(), { className: 'small' });
-    const m = this.section(pane, 'STORY & TUTORIAL', 'test-grid4');
+    const m = this.section(pane, 'STORY & OPENING', 'test-grid4');
     this.button(m, 'UNLOCK ALL JOBS', () => t.unlockMissions(), { className: 'small', confirm: true });
     this.button(m, 'JUMP TO JOB…', () => this.show('jobs'), { className: 'small' });
-    this.button(m, 'TUTORIAL DONE', () => t.tutorial(true), { className: 'small' });
-    this.button(m, 'RESET TUTORIAL', () => t.tutorial(false), { className: 'small', confirm: true });
+    this.button(m, 'OPENING DONE', () => t.opening(true), { className: 'small' });
+    this.button(m, 'RESET OPENING', () => t.opening(false), { className: 'small', confirm: true, sub: 'NEXT PLAY' });
     const s = this.section(pane, 'SAVE', 'test-grid4');
     this.button(s, 'EXPORT', () => this.exportSave(), { className: 'small', sub: 'SHARE OR COPY' });
     this.button(s, 'IMPORT…', () => this.show('import'), { className: 'small' });

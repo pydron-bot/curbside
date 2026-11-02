@@ -145,19 +145,22 @@ export class Buses implements Scene {
   }
 
   /**
-   * Debug (__ub): the shelter nearest the player gets three riders and a
-   * bus 40 m back on its lane, pulling in. False if there's none near.
+   * The TEST menu, the title's show and the cold open: the shelter nearest
+   * the player (or `at`) gets three riders and a bus `back` m back on its
+   * lane, pulling in. False if there's none near.
    */
-  force(): boolean {
+  force(at?: BusStop, back = 40): boolean {
     const life = this.life;
-    let best: BusStop | null = null;
-    for (const s of life.stops) if (!best || life.distance(s.x, s.z) < life.distance(best.x, best.z)) best = s;
+    let best: BusStop | null = at ?? null;
+    if (!best) for (const s of life.stops) if (!best || life.distance(s.x, s.z) < life.distance(best.x, best.z)) best = s;
     if (!best || life.distance(best.x, best.z) > STOP_RANGE) return false;
     const w = this.waitingAt(best) ?? this.openStop(best);
+    // Marked looked at: tendStops won't open a second gathering on it.
+    this.looked.add(best);
     for (let i = 0; i < 3; i++) this.seedRider(w);
     const fx = Math.sin(best.stopHeading);
     const fz = Math.cos(best.stopHeading);
-    const v = life.placeCar('bus', trafficPaint('bus', life.d.rand), best.stopX - fx * 40, best.stopZ - fz * 40, best.stopHeading);
+    const v = life.placeCar('bus', trafficPaint('bus', life.d.rand), best.stopX - fx * back, best.stopZ - fz * back, best.stopHeading);
     const r = this.track(v);
     r.phase = 'pull';
     r.stop = best;

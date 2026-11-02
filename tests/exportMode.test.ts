@@ -29,6 +29,7 @@ function setup(busy: string | null = null) {
     progress,
     ui: { banner() {} },
     freeRoam: true,
+    sideModes: true,
     live: true,
     busy,
     pay: (amount: number) => progress.earn(amount, 'export'),

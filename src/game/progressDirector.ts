@@ -15,7 +15,6 @@ import type { ColorRepresentation, Scene } from 'three';
 import { createVehicleState, type VehicleArchetype } from '../entities/vehicle';
 import type { GlowSprites } from '../render/glowSprites';
 import { MARK, ProgressProps, beacon, chevrons, groundRing, nearView } from '../render/progressLook';
-import { getDevice } from '../render/quality';
 import { worldUniforms } from '../render/shaderLib';
 import type { Panel } from '../ui/menu';
 import { ProgressHud } from '../ui/progressHud';
@@ -54,7 +53,8 @@ import { Progress, bustFine, hospitalBill } from './progress';
 import { ChainBank, chainLive } from './progressBank';
 import { pruneSave } from './progressSave';
 import { TAXI_GOAL, completion } from './progressStats';
-import { TUTORIAL_DONE, advanceTutorial, pointerWaits, tutorialText, type TutorialEvent } from './tutorial';
+import { sideModesOpen } from './opening';
+import { OpeningMode } from './modes/openingMode';
 import { len2 } from '../core/len';
 
 /** Stand on the safehouse door this long to open the shop, s. */
@@ -86,6 +86,8 @@ export class ProgressDirector implements ModeCtx {
   /** Borrowed Blues: duty pay for the hose and the tow side job, Vex's tow contracts. */
   readonly service: ServiceMode;
   readonly missions: MissionMode;
+  /** The live cold open (V2-07). */
+  readonly opening: OpeningMode;
   readonly gangs: GangMode;
   readonly area: AreaMode;
   /** CRED, LEVEL UP and the perks' effects. */
@@ -106,10 +108,8 @@ export class ProgressDirector implements ModeCtx {
   private nearShop = false;
   private sprayShown: unknown = null;
   private homeBlip = false;
-  /** The first-run pointer has the radar routing to the ringing phone. */
-  private tutorialRoute = false;
-  /** On a phone, the first-run pointer is waiting for the car to stop (tutorial.ts pointerWaits). */
-  private pointerWaiting = false;
+  /** The side modes were open last step (a story job opening them says so). */
+  private sideOpen: boolean;
 
   constructor(d: DirectorDeps) {
     this.deps = d;
@@ -143,15 +143,17 @@ export class ProgressDirector implements ModeCtx {
     this.missions = new MissionMode(this, this.exports.docks, this.dialogue);
     this.service = new ServiceMode(this, d.tools ?? null, this.dialogue);
     pruneSave(this.progress.data, { missions: this.missions.missions.map((m) => m.id) });
+    this.opening = new OpeningMode(this, this.missions);
+    this.sideOpen = sideModesOpen(this.progress.data);
     this.gangs = new GangMode(this);
     this.area = new AreaMode(this, new AreaCard(document.body), this.gangs);
     // Perks are off while a score or a time is being set.
     this.cred = new CredKeeper(this, () => this.chaos.active || this.races.running);
     // Card owners first: a running mode claims the activity card before a passive one.
-    this.modes = [this.chaos, this.frenzies, this.races, this.missions, this.taxi, this.service, this.exports, this.packages, this.gangs, this.area];
+    // The opening before the missions: it starts its job, and sees the player get in before the job does.
+    this.modes = [this.chaos, this.frenzies, this.races, this.opening, this.missions, this.taxi, this.service, this.exports, this.packages, this.gangs, this.area];
 
-    // --- Title and pause ---
-    d.frontDoor.title.addMode(this.chaosTitleMode());
+    // --- Title, pause and settings ---
     this.titleCash = document.createElement('div');
     this.titleCash.className = 'title-cash';
     this.titleCash.innerHTML = 'CASH <b></b>';
@@ -160,6 +162,8 @@ export class ProgressDirector implements ModeCtx {
     d.frontDoor.pause.addButton('PROGRESS', 'chevron', () => this.openStats());
     this.shopButton = d.frontDoor.pause.addButton('SHOP', 'plusSquare', () => this.openShop());
     this.shopButton.hidden = true;
+    // In play it throws the run away: the link asks twice.
+    d.frontDoor.settings.addLink('STORY', 'REPLAY OPENING', () => this.replayOpening(), () => !d.frontDoor.inTitle);
 
     // --- Banking, bills, perks ---
     d.bus.on('award', (e) => {
@@ -194,6 +198,10 @@ export class ProgressDirector implements ModeCtx {
 
   get freeRoam(): boolean {
     return this.deps.playing() && !this.chaos.active;
+  }
+
+  get sideModes(): boolean {
+    return this.freeRoam && sideModesOpen(this.progress.data);
   }
 
   get focusRing(): boolean {
@@ -231,7 +239,10 @@ export class ProgressDirector implements ModeCtx {
     const s = this.progress.stats;
     s.bestChain = Math.max(s.bestChain, cash);
     this.notice(links > 1 ? `BANKED $${fmt(cash)}` : `+$${fmt(cash)}`, 'cash');
-    if (this.freeRoam) this.tutor('banked');
+  }
+
+  pin(v: Vehicle): void {
+    if (!this.pinned.includes(v)) this.pinned.push(v);
   }
 
   unpin(v: Vehicle): void {
@@ -296,7 +307,11 @@ export class ProgressDirector implements ModeCtx {
     // Bank the chain once the combo runs out.
     if (this.bank.open && !chainLive(this.deps.score)) this.bankChain();
     this.stepShop(dt);
-    this.stepTutorial();
+    const open = sideModesOpen(this.progress.data);
+    if (open !== this.sideOpen) {
+      this.sideOpen = open;
+      if (open) this.notice('SIDE JOBS OPEN · CHAOS RUN ON THE TITLE', 'progress');
+    }
     // Free roam's best as it's beaten (the Chaos Run records its own at the end).
     const total = this.deps.score.total;
     if (!this.chaos.active && !this.deps.player.tainted && total > this.progress.best('free')) this.progress.recordBest('free', total);
@@ -315,10 +330,6 @@ export class ProgressDirector implements ModeCtx {
     if (!this.blocksInput) {
       if (this.nearShop && this.freeRoam && !this.busy) prompt = 'SAFEHOUSE SHOP · STEP ON THE DOOR';
       for (let i = 0; i < this.modes.length && prompt === null; i++) prompt = this.modes[i].prompt();
-      // Nothing nearer to hand: the first run's next pointer (on a phone, not over a moving car).
-      const car = this.deps.player.driving;
-      this.pointerWaiting = getDevice().handheld && pointerWaits(this.pointerWaiting, car ? len2(car.sim.vx, car.sim.vz) : null);
-      if (prompt === null && this.freeRoam && !this.busy && this.live && !this.pointerWaiting) prompt = tutorialText(this.progress.data.tutorial, this.deps.input.lastDevice);
     }
     ui.prompt(prompt);
     this.sprayNotice();
@@ -371,40 +382,10 @@ export class ProgressDirector implements ModeCtx {
     this.holdControls = false;
     this.pinned.length = 0;
     this.deps.radar.clearWaypoint();
-    this.tutorialRoute = false;
     this.ui.activity(null);
     this.ui.prompt(null);
     this.ui.clearBanner();
     this.progress.flush();
-  }
-
-  /**
-   * First-run pointers: step on when the player does the thing (in free roam:
-   * the Chaos Run's car doesn't count as stealing one), and route the radar
-   * to the ringing phone for the last one.
-   */
-  private stepTutorial(): void {
-    const step = this.progress.data.tutorial;
-    if (step >= TUTORIAL_DONE) return;
-    if (this.busy === 'mission') this.tutor('mission');
-    else if (this.freeRoam && this.live && this.deps.player.driving) this.tutor('enterVehicle');
-    const phone = this.progress.data.tutorial === 2 && this.freeRoam && !this.busy && this.live ? this.missions.ringing : null;
-    // Only ever set: an activity starting takes the route over, and clears it when it ends.
-    if (phone && !this.tutorialRoute) this.deps.radar.setWaypoint(phone.x, phone.z);
-    this.tutorialRoute = phone !== null;
-  }
-
-  private tutor(event: TutorialEvent): void {
-    const d = this.progress.data;
-    const next = advanceTutorial(d.tutorial, event);
-    if (next === d.tutorial) return;
-    d.tutorial = next;
-    this.progress.markDirty();
-    // Answered: the call takes over (and sets its own route).
-    if (next === TUTORIAL_DONE && this.tutorialRoute) {
-      this.tutorialRoute = false;
-      this.deps.radar.clearWaypoint();
-    }
   }
 
   /**
@@ -611,10 +592,19 @@ export class ProgressDirector implements ModeCtx {
     return m;
   }
 
-  /** The title shows the career: cash, and the Chaos Run's best and medal. */
+  /** Settings → REPLAY OPENING: a fresh run straight into the cold open. */
+  private replayOpening(): void {
+    const fd = this.deps.frontDoor;
+    this.opening.forget();
+    fd.settings.back();
+    fd.play();
+  }
+
+  /** The title shows the career: cash, and the Chaos Run's best and medal (once the side modes are open). */
   private refreshTitle(): void {
     const title = this.deps.frontDoor.title;
-    title.addMode(this.chaosTitleMode());
+    if (sideModesOpen(this.progress.data)) title.addMode(this.chaosTitleMode());
+    else title.removeMode(this.chaos.titleMode.id);
     const cash = this.progress.cash;
     this.titleCash.hidden = cash <= 0;
     this.titleCash.querySelector('b')!.textContent = `$${fmt(cash)}`;

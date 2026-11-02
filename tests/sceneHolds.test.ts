@@ -27,7 +27,7 @@ function specs(): SceneClock {
 }
 
 const BUSY_KINDS = ['chase', 'race', 'accident', 'fight', 'mugging', 'turf', 'tow'];
-const PLAYING: SceneWorld = { playing: true, activity: false, stars: 0, tutorial: false };
+const PLAYING: SceneWorld = { playing: true, activity: false, stars: 0, opening: false };
 
 describe('scene holds per kind (V2-02)', () => {
   const clock = specs();
@@ -45,11 +45,11 @@ describe('scene holds per kind (V2-02)', () => {
     }
   });
 
-  it('busy kinds still wait out the title, the tutorial and a timed race or quiet mission; not Chaos Run, a fare or a frenzy', () => {
+  it('busy kinds still wait out the title, the cold open and a timed race or quiet mission; not Chaos Run, a fare or a frenzy', () => {
     for (const kind of [...BUSY_KINDS, 'fire']) {
       const spec = clock.spec(kind);
       expect(held(spec, { ...PLAYING, playing: false }), kind).toBe(true);
-      expect(held(spec, { ...PLAYING, tutorial: true }), kind).toBe(true);
+      expect(held(spec, { ...PLAYING, opening: true }), kind).toBe(true);
       for (const [busy, quiet, holds] of [
         ['race', false, true],
         ['mission', true, true],

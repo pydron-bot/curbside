@@ -48,7 +48,7 @@ export class TaxiMode implements Mode {
     const p = ctx.deps.player;
     const car = p.driving;
     const i = this.input;
-    i.onDuty = ctx.live && ctx.freeRoam && !!car && car.archetype === 'taxi' && !car.damage.wrecked && (ctx.busy === null || ctx.busy === 'taxi');
+    i.onDuty = ctx.live && ctx.sideModes && !!car && car.archetype === 'taxi' && !car.damage.wrecked && (ctx.busy === null || ctx.busy === 'taxi');
     if (car && i.onDuty) {
       this.cab = car;
       i.x = car.sim.x;

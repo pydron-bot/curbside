@@ -1,7 +1,7 @@
 /**
  * The rules behind the city's ambient scenes (game/cityLife.ts runs them):
  * when each kind may start (cooldowns, caps, distance from the player, what
- * holds it off: the title screen, a timed race, the first-run tutorial; and
+ * holds it off: the title screen, a timed race, the cold open; and
  * how much slower the loud ones come while the player is wanted), the
  * phases of a service vehicle's call-out, and a queue served one at a
  * time. Pure logic, no three.js, tested in tests/cityScenes.test.ts.
@@ -19,8 +19,8 @@ export type SceneHold =
   | 'activity'
   /** The player has wanted stars. */
   | 'wanted'
-  /** The first run's tutorial pointers are still up. */
-  | 'tutorial';
+  /** The cold open is on (game/modes/openingMode.ts): nothing gets in the way of its chase. */
+  | 'opening';
 
 export interface SceneSpec {
   /** Seconds between starts, picked at random in [min, max] after each one. */
@@ -51,18 +51,18 @@ export interface SceneWorld {
   playing: boolean;
   activity: boolean;
   stars: number;
-  tutorial: boolean;
+  opening: boolean;
 }
 
 /** Holds for anything that must stop for everything, stars included (no city scene does since V2: see BUSY). */
-export const LOUD: readonly SceneHold[] = ['title', 'activity', 'wanted', 'tutorial'];
+export const LOUD: readonly SceneHold[] = ['title', 'activity', 'wanted', 'opening'];
 /**
  * Holds for the busy scenes (chases, races, accidents, fights, muggings,
  * turf, tows): the title, a timed race or a mission that asks, the
- * tutorial. Not stars: with BUSY specs give `pace: WANTED_PACE`, so the
+ * cold open. Not stars: with BUSY specs give `pace: WANTED_PACE`, so the
  * city keeps going through a pursuit, a bit thinner.
  */
-export const BUSY: readonly SceneHold[] = ['title', 'activity', 'tutorial'];
+export const BUSY: readonly SceneHold[] = ['title', 'activity', 'opening'];
 /** A busy scene's clock pace by wanted stars: fewer the hotter you are, never none. */
 export const WANTED_PACE: readonly number[] = [1, 0.75, 0.6, 0.5, 0.4, 0.35];
 /** Holds for a scene that only makes sense with someone playing (it waits on the player being near). */
@@ -105,7 +105,7 @@ export function held(spec: SceneSpec, world: SceneWorld): boolean {
     if (h === 'title' && !world.playing) return true;
     if (h === 'activity' && world.activity) return true;
     if (h === 'wanted' && world.stars > 0) return true;
-    if (h === 'tutorial' && world.tutorial) return true;
+    if (h === 'opening' && world.opening) return true;
   }
   return false;
 }

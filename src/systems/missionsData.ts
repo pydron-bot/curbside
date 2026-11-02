@@ -8,14 +8,16 @@
  * their progress) rings only after dark from the docks-yard phone: VEX's
  * tow crew, chapter 1 the war with DEACON PIKE's Chrome Saints, chapter 2
  * THE LEDGER and COMMISSIONER CLAMP. Each job pays and unlocks the next in
- * its arc. The script and the cast are in docs/STORY.md. Positions come from
- * the road grid (kerbs) and the pavement paths, so everything spawns clear
- * of buildings; the docks and the safehouse are passed in.
+ * its arc; s1, WRONG STOP, is the cold open's and rings no phone. The
+ * script and the cast are in docs/STORY.md. Positions come from the road
+ * grid (kerbs) and the pavement paths, so everything spawns clear of
+ * buildings; the docks and the safehouse are passed in.
  */
 import { pavement } from '../game/modes/places';
 import { BLOCK_SIZE, ROAD_WIDTH, SIDEWALK } from '../world/city';
 import { DIR_VEC, dirHeading, type Dir } from '../world/roads';
 import { NIGHT_PHONE, type MissionDef } from './missions';
+import { GETAWAY_TAG, OPENING_JOB } from '../game/opening';
 
 type Point = { x: number; z: number };
 
@@ -95,15 +97,42 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
   const spareLionel = [{ down: 'lionel', reason: 'NOT LIONEL! HE WAS ON YOUR SIDE' }];
 
   return [
-    // ── KEEP IT LOUD (the main story; s1, the cold open, comes with the opening) ──
+    // ── KEEP IT LOUD (the main story) ──
+    {
+      // The cold open (game/modes/openingMode.ts starts it at PLAY, lending it the crashed getaway): no call, no phone.
+      id: OPENING_JOB,
+      title: 'WRONG STOP',
+      arc: 'main',
+      phone: '',
+      direct: true,
+      reward: 300,
+      intro: [],
+      outro: [
+        { who: DOREEN, text: "You're the alarm fitter. Lost your job tonight, I heard. I lost my chimes." },
+        { who: DOREEN, text: "Lull's banned anything louder than a sigh. Fancy keeping this city loud? It pays." },
+        { who: DOREEN, text: 'Badly. But in ice cream.' },
+      ],
+      steps: [
+        {
+          kind: 'enter',
+          tag: GETAWAY_TAG,
+          text: 'GET IN · LOSE THE HEAT',
+          fail: [{ wrecked: GETAWAY_TAG, reason: 'THE GETAWAY IS WRECKED' }],
+        },
+        // The stars come with the car (TAKE THE HEAT): the one main job that asks you to lose them.
+        { kind: 'loseHeat', text: 'LOSE THE HEAT' },
+      ],
+    },
     {
       id: 's2-noise',
       title: 'MAKE SOME NOISE',
       arc: 'main',
       phone: 'phone-oldtown',
       reward: 1000,
+      // Doreen introduced herself after the cold open; Lull's notice is the backstory beat.
       intro: [
-        { who: DOREEN, text: "Doreen, from the ice cream van. You're the alarm fitter Lull sacked. I lost my chimes the same night." },
+        { who: LULL, text: 'Mayor Lull. From midnight, car alarms are illegal. So are chimes. And buskers. And joy.' },
+        { who: LULL, text: 'Alarm fitters, please hand in your alarms. Quietly.' },
         { who: DOREEN, text: 'Twenty years you wired Cobble Row. Every alarm on that street is yours. Remind them.' },
       ],
       outro: [

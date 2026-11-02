@@ -33,8 +33,13 @@
  *   touching the getaway is forgiven).
  * - HAVE-A-GO HERO: flooring a fleeing suspect isn't an assault
  *   (PedAgent.suspect).
+ *
+ * The cold open stages one (stage()): its getaway waits off screen, sirens
+ * going, then comes down a lane and piles into a kerb by the player, and
+ * its driver runs: the car sits there, door open, the police pulling up
+ * behind it, until someone gets in (TAKE THE HEAT, as above).
  */
-import { speed, type VehicleArchetype, type VehicleControls } from '../../entities/vehicle';
+import { forwardSpeed, speed, wrapAngle, type VehicleArchetype, type VehicleControls } from '../../entities/vehicle';
 import {
   CITIZENS_ARREST_REWARD,
   HANDOFF_RANGE,
@@ -45,6 +50,7 @@ import {
 } from '../../systems/chaseHandoff';
 import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
 import { hurtPed, knockDown, resumeWalking, scare } from '../../systems/crowd';
+import { applyDamage } from '../../systems/damage';
 import { COP_OUTFIT } from '../../systems/police';
 import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from '../../systems/pursuit';
 import { driveAi, type Obstacle } from '../../systems/traffic';
@@ -100,6 +106,21 @@ const WALK_GIVE_UP = 16;
 const POLICE_PAINT = '#f2f2f2';
 /** Common models (the sports car is the street racers'), so a chase adds few draw calls. */
 const GETAWAY_CARS: readonly VehicleArchetype[] = ['sports', 'sedan', 'compact', 'sports'];
+/** The staged getaway (the cold open): a plain sedan, flat out at this, m/s. */
+const STAGED_CAR: VehicleArchetype = 'sedan';
+const STAGED_SPEED = 21;
+/** Its units start this far behind it, and keep to this so they don't ram it before the kerb does, m, m/s. */
+const STAGED_UNITS = [30, 44] as const;
+const STAGED_COP_TOP = 20;
+/** It keeps to its lane until this close, then cuts across to the crash point, m. */
+const STAGED_SWERVE = 24;
+/** Steering looks this far ahead along the lane, m. */
+const STAGED_LOOK = 12;
+/** The kerb takes this much of its health (smoking, not burning: damage.ts SMOKE_AT / FIRE_AT). */
+const STAGED_DAMAGE = 0.5;
+/** Dumped, the police pull up this far short of it, m; and give up on it after this, s. */
+const PULL_UP = 22;
+const DUMPED_WAIT = 45;
 /** A police car called to take away someone arrested on foot. */
 const PICKUP: ServiceSpec = { archetype: 'police', paint: POLICE_PAINT, claimRange: 0, emergency: false, cruise: 15, top: 22, arrive: 15, timeout: 60, aheadShare: 0.3 };
 
@@ -140,7 +161,26 @@ export interface Chase {
   /** HAVE-A-GO HERO / CITIZEN'S ARREST already paid for this one. */
   floored: boolean;
   helped: boolean;
+  /** The cold open's (stage()): where it crashes. */
+  stage: StagedGetaway | null;
+  /** Its driver has bailed: the getaway sits at the kerb for whoever gets in. */
+  dumped: boolean;
   readonly target: PursuitTarget;
+}
+
+/** A getaway staged for the cold open (game/modes/openingMode.ts). */
+export interface StagedGetaway {
+  /** Where it starts (on a lane, off screen) and which way. */
+  x: number;
+  z: number;
+  heading: number;
+  /** Where it piles into the kerb. */
+  crashX: number;
+  crashZ: number;
+  /** It (and its units) wait this long, sirens going, before it comes, s. */
+  wait: number;
+  /** Once off, it crashes within this, wherever it's got to, s. */
+  by: number;
 }
 
 export class Chases implements Scene {
@@ -149,7 +189,10 @@ export class Chases implements Scene {
   readonly ended: Record<ChaseEnd, number> = { arrested: 0, down: 0, escaped: 0 };
   /** How the player joined in (tests, __ub): counts. */
   readonly joined = { takeHeat: 0, turnedOn: 0, breakOff: 0, citizensArrest: 0, haveAGo: 0 };
+  /** False: no chase starts at all, staged ones included (the smoke test's fallback). */
+  enabled = true;
   private scan = 0;
+  private readonly stagedControls: VehicleControls = { throttle: 0, steer: 0, handbrake: false };
   private readonly situation: HandoffSituation = { stars: 0, playerInGetaway: false, playerNear: false, crimeOnThisChase: false };
   private readonly door = { x: 0, z: 0 };
   private readonly axis = { x: 0, z: 0 };
@@ -203,7 +246,7 @@ export class Chases implements Scene {
   describe(out: LabelSink): void {
     for (const c of this.chases) {
       const what = c.kind === 'bike' ? 'bike' : 'car';
-      if (c.car && c.phase === 'drive') out.car(c.car, `CHASE: SUSPECT (${what})`, 'police');
+      if (c.car && c.phase === 'drive') out.car(c.car, c.dumped ? 'CHASE: GETAWAY (dumped)' : `CHASE: SUSPECT (${what})`, 'police');
       if (c.suspect) {
         const how = c.phase === 'cuffed' ? 'cuffed' : c.surrendered ? 'gave up' : c.suspect.agent.mode === 'down' ? 'down' : 'on foot';
         out.ped(c.suspect, `CHASE: SUSPECT (${how})`, 'police');
@@ -233,7 +276,7 @@ export class Chases implements Scene {
   /** Start one now (of `kind` if given: tests, __ub). False if there was nowhere to put it (or one's on). */
   begin(kind?: ChaseKind): boolean {
     const life = this.life;
-    if (this.chases.length > 0) return false;
+    if (this.chases.length > 0 || !this.enabled) return false;
     const k = kind ?? pickChaseKind(life.d.rand());
     const chase = k === 'foot' ? this.footChase() : this.carChase(k);
     if (!chase) {
@@ -253,7 +296,7 @@ export class Chases implements Scene {
    */
   pursue(v: Vehicle): boolean {
     const life = this.life;
-    if (this.chases.length > 0 || !v.ai || life.lost(v)) return false;
+    if (this.chases.length > 0 || !this.enabled || !v.ai || life.lost(v)) return false;
     const chase = this.blank('car');
     this.getawayFrom(chase, v);
     // One car behind it, else one from off-screen.
@@ -267,6 +310,38 @@ export class Chases implements Scene {
     return true;
   }
 
+  /**
+   * The cold open's chase: a getaway at `s`, a unit or two behind it, all
+   * waiting off screen for `s.wait`, then it comes and crashes at the kerb.
+   * Its car, or null if one's on, chases are off or no unit fits.
+   */
+  stage(s: StagedGetaway): Vehicle | null {
+    const life = this.life;
+    if (this.chases.length > 0 || !this.enabled) return null;
+    const car = life.placeCar(STAGED_CAR, trafficPaint(STAGED_CAR, life.d.rand), s.x, s.z, s.heading);
+    const chase = this.blank('car');
+    chase.armed = false;
+    chase.stage = s;
+    this.getawayFrom(chase, car);
+    for (const back of STAGED_UNITS) this.unitBehind(chase, back, STAGED_COP_TOP);
+    if (chase.units.length === 0) {
+      this.release(car);
+      life.retire(car);
+      return null;
+    }
+    this.chases.push(chase);
+    life.clock.start('chase', life.now);
+    life.emit('chase', s.x, s.z);
+    return car;
+  }
+
+  /** The staged getaway `v`: 'coming', 'dumped' at the kerb, or null once it's no chase's any more. */
+  staged(v: Vehicle): 'coming' | 'dumped' | null {
+    const c = this.chaseOf(v);
+    if (!c || !c.stage || c.phase !== 'drive') return null;
+    return c.dumped ? 'dumped' : 'coming';
+  }
+
   // --- Driving --------------------------------------------------------------------
 
   /** The getaway: flat out in a panic, honking, through the lights. */
@@ -275,6 +350,7 @@ export class Chases implements Scene {
       const c = this.chaseOf(v);
       if (!c || !v.ai) return null;
       if (c.phase !== 'drive') return holdStill(v.sim);
+      if (c.stage) return this.stagedDrive(c, v);
       const life = this.life;
       v.ai.mood = 'panic';
       v.ai.moodTimer = 10;
@@ -294,6 +370,8 @@ export class Chases implements Scene {
         for (const u of c.units) {
           if (u.v !== v) continue;
           if (!u.pursuit || u.officers.length > 0 || u.aboard === 0 || !this.aim(c, v)) return holdStill(v.sim);
+          // The cold open's: wait with the getaway, then pull up behind it once it's dumped.
+          if (c.stage && (c.age < c.stage.wait || (c.dumped && len2(c.target.x - v.sim.x, c.target.z - v.sim.z) < PULL_UP))) return holdStill(v.sim);
           return drivePursuit(u.pursuit, v.sim, c.target, obstacles, this.life.d.rand, dt);
         }
       }
@@ -324,6 +402,29 @@ export class Chases implements Scene {
     t.known = true;
     t.seen = len2(t.x - from.sim.x, t.z - from.sim.z) < COP_SIGHT;
     return true;
+  }
+
+  /** The staged getaway: waits, then down its lane flat out, and across into the crash point. */
+  private stagedDrive(c: Chase, v: Vehicle): VehicleControls {
+    const s = c.stage!;
+    const car = v.sim;
+    if (c.age < s.wait || c.dumped) return holdStill(car);
+    const fx = Math.sin(s.heading);
+    const fz = Math.cos(s.heading);
+    const along = (s.crashX - car.x) * fx + (s.crashZ - car.z) * fz;
+    let ax = s.crashX;
+    let az = s.crashZ;
+    if (along > STAGED_SWERVE) {
+      const at = (car.x - s.x) * fx + (car.z - s.z) * fz + STAGED_LOOK;
+      ax = s.x + fx * at;
+      az = s.z + fz * at;
+    }
+    const diff = wrapAngle(Math.atan2(ax - car.x, az - car.z) - car.heading);
+    const out = this.stagedControls;
+    out.steer = Math.max(-1, Math.min(1, -diff * 2.2));
+    out.throttle = forwardSpeed(car) < STAGED_SPEED ? 1 : 0.1;
+    out.handbrake = false;
+    return out;
   }
 
   /** Is `v` a getaway the police are still after (its rider thrown off is a suspect, not a victim)? */
@@ -420,6 +521,8 @@ export class Chases implements Scene {
       crime: false,
       floored: false,
       helped: false,
+      stage: null,
+      dumped: false,
       target: { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: true, seen: true, known: true },
     };
   }
@@ -432,7 +535,7 @@ export class Chases implements Scene {
   }
 
   /** A unit put down `back` m behind the getaway on its lane, rolling; false if that's on screen or taken. */
-  private unitBehind(c: Chase, back: number): boolean {
+  private unitBehind(c: Chase, back: number, top = COP_TOP): boolean {
     const life = this.life;
     const s = c.car!.sim;
     const fx = Math.sin(s.heading);
@@ -441,9 +544,11 @@ export class Chases implements Scene {
     const z = s.z - fz * back;
     if (life.crowded(x, z, 4) || life.inView(x, z, 6)) return false;
     const v = life.placeCar('police', POLICE_PAINT, x, z, s.heading);
-    v.sim.vx = fx * 15;
-    v.sim.vz = fz * 15;
-    this.addUnit(c, v);
+    if (!c.stage) {
+      v.sim.vx = fx * 15;
+      v.sim.vz = fz * 15;
+    }
+    this.addUnit(c, v, top);
     return true;
   }
 
@@ -455,11 +560,11 @@ export class Chases implements Scene {
     return true;
   }
 
-  private addUnit(c: Chase, v: Vehicle): void {
+  private addUnit(c: Chase, v: Vehicle, top = COP_TOP): void {
     v.emergency = true;
     v.mesh.siren = true;
     v.scene = this.police;
-    const pursuit = createPursuit(v.ai!, COP_AGGRESSION, COP_CRUISE, COP_TOP, true);
+    const pursuit = createPursuit(v.ai!, COP_AGGRESSION, Math.min(COP_CRUISE, top), top, true);
     c.units.push({ v, pursuit, aboard: 2, officers: [], forgiven: false });
   }
 
@@ -567,6 +672,10 @@ export class Chases implements Scene {
       this.finish(c, 'escaped');
       return;
     }
+    if (c.stage) {
+      this.stepStaged(c, c.stage);
+      return;
+    }
     c.still = speed(car.sim) < 1.5 ? c.still + dt : 0;
     const crashed = car.ai === null || car.tipped === true || car.damage.burning || car.damage.wrecked;
     const smashed = car.damage.wrecked || car.damage.health < car.damage.maxHealth * TAKEN_OUT_HEALTH;
@@ -601,6 +710,51 @@ export class Chases implements Scene {
       c.timer = 0;
       this.surrender(c);
     } else this.bolt(c, cop?.x ?? s.x - s.vx, cop?.z ?? s.z - s.vz);
+    life.emit('suspectRuns', s.x, s.z);
+  }
+
+  /**
+   * The staged getaway: crashes at the kerb (on reaching it, on hitting
+   * something on the way, or at its deadline); then waits, dumped, for
+   * someone to take it, until the police give up on it.
+   */
+  private stepStaged(c: Chase, s: StagedGetaway): void {
+    const car = c.car!;
+    if (c.dumped) {
+      if (!car.mesh.root.visible || car.damage.wrecked || c.age > s.wait + s.by + DUMPED_WAIT) this.finish(c, 'escaped');
+      return;
+    }
+    if (c.age < s.wait) return;
+    const going = c.age - s.wait;
+    const along = (s.crashX - car.sim.x) * Math.sin(s.heading) + (s.crashZ - car.sim.z) * Math.cos(s.heading);
+    const hit = going > 1 && speed(car.sim) < 5;
+    if (along < 1.5 || hit || going >= s.by || car.damage.wrecked || car.damage.burning || car.tipped) this.dump(c);
+  }
+
+  /** Into the kerb: it stops dead, steaming, and its driver is out of the door and away. */
+  private dump(c: Chase): void {
+    const life = this.life;
+    const car = c.car!;
+    const s = car.sim;
+    const impact = Math.max(10, speed(s));
+    // Dead stop with a twist: nobody's at the wheel to brake after this.
+    s.vx = 0;
+    s.vz = 0;
+    s.yawRate = Math.sign(s.yawRate || 1) * 1.5;
+    applyDamage(car.damage, car.damage.maxHealth * STAGED_DAMAGE);
+    life.d.bus.emit({ type: 'crash', x: s.x, z: s.z, impact, against: 'static', involvesPlayer: false });
+    car.ai = null;
+    c.dumped = true;
+    // An abandoned car now: off the director's list (whoever takes it keeps it).
+    const i = life.owned.indexOf(car);
+    if (i >= 0) life.owned.splice(i, 1);
+    car.ambient = false;
+    const door = life.doorOf(s);
+    const runner = life.addPed(door.x, door.z, s.heading);
+    runner.agent.street = true;
+    life.giveBack(runner);
+    const cop = this.nearestCop(c, s.x, s.z);
+    scare(runner.agent, cop?.x ?? s.x - Math.sin(s.heading) * 10, cop?.z ?? s.z - Math.cos(s.heading) * 10, 6);
     life.emit('suspectRuns', s.x, s.z);
   }
 

@@ -194,9 +194,12 @@ export class FrontDoor {
   /**
    * Leave the title for a fresh run: PLAY, or a mode from title.addMode()
    * (its onSelect runs once the run has started, to set itself up on top).
-   * The one way into play, so the title and its menu stack always close.
+   * The one way into play, so the title (or the pause card) and its menu
+   * stack always close.
    */
   play(mode?: TitleMode): void {
+    // From the pause menu too (Settings → REPLAY OPENING): the card goes first.
+    if (this.hooks.isPaused()) this.hooks.setPaused(false);
     this.title.close();
     this.stack.length = 0;
     this.hooks.startGame();

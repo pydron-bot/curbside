@@ -29,7 +29,7 @@ import { SAFEHOUSE, placePayphones } from './modes/places';
 import { MAX_ARMOUR, type Player } from './player';
 import type { Population, Vehicle } from './population';
 import type { ProgressDirector } from './progressDirector';
-import { addCredLevel, exportSave, importSave, jumpToMission, maxPerks, replaceSave, resetCred, resetSave, setTutorial, unlockAllMissions } from './saveTools';
+import { addCredLevel, exportSave, importSave, jumpToMission, maxPerks, replaceSave, resetCred, resetSave, setOpening, unlockAllMissions } from './saveTools';
 import { levelFor } from './cred';
 import { SceneStarter, SCENES, type SceneId } from './sceneStarter';
 import { districtCentre, snapOnFoot, snapToLane, type Spot } from './testSpots';
@@ -365,11 +365,11 @@ export class TestTools {
     return `NEXT JOB · ${job.title}`;
   }
 
-  tutorial(done: boolean): string {
+  opening(done: boolean): string {
     this.cheat();
-    setTutorial(this.d.progress.progress.data, done);
+    setOpening(this.d.progress.progress.data, done);
     this.saved();
-    return done ? 'TUTORIAL DONE' : 'TUTORIAL RESET';
+    return done ? 'OPENING DONE' : 'OPENING NEXT PLAY';
   }
 
   /** The save as text (written first, so it's what storage holds). */
@@ -420,7 +420,7 @@ export class TestTools {
   private holds(): string {
     const life = this.d.cityLife;
     if (life.d.activity()) return 'ACTIVITY';
-    if (life.d.tutorial()) return 'TUTORIAL';
+    if (life.d.opening()) return 'OPENING';
     return '';
   }
 }

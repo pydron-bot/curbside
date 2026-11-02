@@ -11,11 +11,10 @@ import {
   replaceSave,
   resetCred,
   resetSave,
-  setTutorial,
+  setOpening,
   unlockAllMissions,
 } from '../src/game/saveTools';
 import { CAR_R, districtCentre, nearestLine, onRoad, snapOnFoot, snapToLane, spawnBeside, walkable, type Free } from '../src/game/testSpots';
-import { TUTORIAL_DONE } from '../src/game/tutorial';
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, generateCity } from '../src/world/city';
 import { districtAt } from '../src/world/districts';
 import { LANE_OFFSET } from '../src/world/roads';
@@ -162,12 +161,13 @@ describe('save tools', () => {
     expect(jumpToMission(s, ids, 'nope')).toBe(false);
   });
 
-  it('tutorial: done or back to the start', () => {
+  it('the cold open: had, or due on the next PLAY', () => {
     const s = defaultSave();
-    setTutorial(s, true);
-    expect(s.tutorial).toBe(TUTORIAL_DONE);
-    setTutorial(s, false);
-    expect(s.tutorial).toBe(0);
+    expect(s.opening).toBe(false);
+    setOpening(s, true);
+    expect(s.opening).toBe(true);
+    setOpening(s, false);
+    expect(s.opening).toBe(false);
   });
 
   it('reset and replace keep the live record (Progress holds it) but swap everything in it', () => {

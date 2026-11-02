@@ -31,6 +31,7 @@ function setup(stars: number) {
     progress: new Progress(defaultSave(), null),
     ui: { banner() {} },
     freeRoam: true,
+    sideModes: true,
     live: true,
     busy: null as string | null,
     holdControls: false,

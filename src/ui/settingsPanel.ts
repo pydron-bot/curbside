@@ -19,6 +19,8 @@ type Row =
 const STEP = 0.05;
 /** Sideways movement (px) that turns a press on a slider into a drag. */
 const DRAG_SLOP = 6;
+/** A link that asks first waits this long for the second tap, ms. */
+const CONFIRM_MS = 3000;
 /** The volume preview click plays at most this often while dragging, ms. */
 const PREVIEW_EVERY = 90;
 
@@ -39,6 +41,8 @@ export class SettingsPanel implements Panel {
   private readonly refreshers: Array<(s: Settings) => void> = [];
   private lastPreview = 0;
   private onClose: () => void = () => {};
+  private readonly head: HTMLElement;
+  private readonly history: HTMLElement;
 
   constructor(
     parent: HTMLElement,
@@ -63,7 +67,7 @@ export class SettingsPanel implements Panel {
         <footer class="build-id">v${VERSION} · Build ${BUILD_ID}</footer>
       </div>`;
     const [sound, testing, controls, display] = card.querySelectorAll('section');
-    const head = card.querySelector('.sheet-head')!;
+    const head = card.querySelector<HTMLElement>('.sheet-head')!;
     const close = document.createElement('button');
     close.type = 'button';
     close.tabIndex = -1;
@@ -78,6 +82,8 @@ export class SettingsPanel implements Panel {
     history.innerHTML = '<small>VERSION HISTORY</small><b></b>';
     history.querySelector('b')!.textContent = `v${VERSION} ›`;
     head.append(history, close);
+    this.head = head;
+    this.history = history;
 
     const soundRows: Row[] = [
       { kind: 'slider', key: 'masterVolume', label: 'Master' },
@@ -146,6 +152,46 @@ export class SettingsPanel implements Panel {
 
   get isOpen(): boolean {
     return !this.root.hidden;
+  }
+
+  /**
+   * A link in the header beside VERSION HISTORY (it costs the sheet no row):
+   * `kicker` small over `label`. With `confirm` answering true, the first
+   * activation only asks (TAP AGAIN) and a second within a few seconds acts.
+   */
+  addLink(kicker: string, label: string, onActivate: () => void, confirm?: () => boolean): HTMLButtonElement {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.tabIndex = -1;
+    b.className = 'sheet-link';
+    b.innerHTML = '<small></small><b></b>';
+    const small = b.querySelector('small')!;
+    const big = b.querySelector('b')!;
+    small.textContent = kicker;
+    big.textContent = `${label} ›`;
+    this.head.insertBefore(b, this.history);
+    let armedUntil = 0;
+    const settle = () => {
+      armedUntil = 0;
+      small.textContent = kicker;
+    };
+    this.nav.add({
+      el: b,
+      activate: () => {
+        const now = performance.now();
+        if (confirm?.() && now > armedUntil) {
+          armedUntil = now + CONFIRM_MS;
+          small.textContent = 'TAP AGAIN';
+          this.audio.ui('click');
+          setTimeout(() => now + CONFIRM_MS === armedUntil && settle(), CONFIRM_MS);
+          return;
+        }
+        settle();
+        this.audio.ui('confirm');
+        onActivate();
+      },
+    });
+    return b;
   }
 
   open(onClose: () => void, showFocus: boolean): void {

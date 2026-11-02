@@ -98,6 +98,8 @@ export interface ModeCtx {
   readonly ui: ProgressHud;
   /** Free-roam activities are on: in play, not in a special mode (Chaos Run). */
   readonly freeRoam: boolean;
+  /** Free roam with the side modes open (frenzies, races, exports, taxi: game/opening.ts sideModesOpen). */
+  readonly sideModes: boolean;
   /** Alive, free and in play. */
   readonly live: boolean;
   /** The exclusive activity running ('frenzy', 'race', 'mission', 'taxi'), or null. */
@@ -113,6 +115,8 @@ export interface ModeCtx {
   /** A parked car for an activity, kept from recycling until unpin(). */
   spawnCar(archetype: VehicleArchetype, paint: ColorRepresentation, x: number, z: number, heading: number): Vehicle;
   unpin(v: Vehicle): void;
+  /** Keep a car already on the street from recycling until unpin(). */
+  pin(v: Vehicle): void;
   /** Put the player in `v` (getting out of any other car first). */
   board(v: Vehicle): void;
   /** Freeze the game and route navigation to `panel` until closeModal(). */

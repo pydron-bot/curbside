@@ -684,6 +684,11 @@ kbd.pad.b {
   cursor: pointer;
 }
 
+/* A second header link (REPLAY OPENING) sits just left of VERSION HISTORY. */
+.sheet-link + .sheet-link {
+  margin-left: 8px;
+}
+
 .sheet-link small {
   font: 800 9px/1 var(--hud-font);
   letter-spacing: 0.2em;

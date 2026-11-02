@@ -119,7 +119,7 @@ import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audi
 import { StreetLife } from './game/streetLife';
 import { CityLife } from './game/cityLife';
 import { activityHolds } from './systems/cityScenes';
-import { TUTORIAL_DONE } from './game/tutorial';
+import { openingStage } from './game/modes/openingMode';
 import { CityLifeLook } from './render/cityLifeLook';
 import { incidentsLook } from './render/incidentsLook';
 import { CityMood } from './game/cityMood';
@@ -459,7 +459,7 @@ const cityLife = new CityLife({
   activity: () => activityHolds(progress.busy, progress.missions.quiet),
   tier: () => getQuality().name,
   stars: () => heat.wanted.level,
-  tutorial: () => progress.progress.data.tutorial < TUTORIAL_DONE,
+  opening: () => progress.opening.holding,
   keep: (v) => activityCars.includes(v),
   avoid: [
     ...dressing.landmarks.props.map((p) => ({ x: p.x, z: p.z, r: 11 })),
@@ -1636,6 +1636,12 @@ DefaultLoadingManager.onProgress = (url) => {
 };
 addDiagnosticsButton(diagnostics, frontDoor, () => input.lastDevice !== 'touch');
 
+/** The player was put somewhere new (TEST teleports, the cold open): like a release from custody, the camera there, the streets filled round it. */
+function playerMoved() {
+  rig.snapTo(player.position.x, player.position.z);
+  maintainPopulation(true, false);
+}
+
 // TEST in the pause menu (Settings → Test tools): cheats, spawns, teleports, scenes and save tools for playtesting.
 const testTools = new TestTools({
   bus: events,
@@ -1652,17 +1658,15 @@ const testTools = new TestTools({
   rand,
   explode,
   repair: (v) => resetVehicle(v, false),
-  // Like a release from custody: the camera there, the streets filled round it.
-  moved: () => {
-    rig.snapTo(player.position.x, player.position.z);
-    maintainPopulation(true, false);
-  },
+  moved: playerMoved,
   reload: () => location.reload(),
 });
 // The title's highlights: now and then the camera leaves traffic for a scene (started like the TEST menu's).
 const highlights = new AttractHighlights({ life: cityLife, starter: testTools.starter, rand, ready: () => frontDoor.inTitle, hour: () => look.time.hour });
 // A story job's scenes (its 'scene' action) start the same way, featured while it runs.
 progress.missions.useScenes(storyScenes(cityLife, testTools.starter));
+// The cold open (PLAY on a fresh save): a bus shelter, a getaway crashing at the kerb (game/modes/openingMode.ts).
+progress.opening.useStage(openingStage(cityLife, population, dressing.street.busStops, playerMoved));
 const titleCam = new TitleCamera({
   attract,
   highlights,

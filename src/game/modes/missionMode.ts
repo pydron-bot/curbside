@@ -220,7 +220,8 @@ export class MissionMode implements Mode {
   private nextIn(a: ArcPhone): MissionDef | null {
     if (a.next === undefined) {
       const save = this.ctx.progress.data;
-      const n = nextInArc(a.jobs, a.arc, save.missions, save.stats.jobsReplayed);
+      // Once the cold open has run, its job no longer holds the main story up (passed or not).
+      const n = nextInArc(a.jobs, a.arc, save.missions, save.stats.jobsReplayed, save.opening);
       a.next = n?.job ?? null;
       a.replay = n?.replay ?? false;
     }
@@ -250,11 +251,6 @@ export class MissionMode implements Mode {
   /** The city's scene starter for the jobs' 'scene' actions (main.ts, once the TEST tools have one). */
   useScenes(host: SceneHost): void {
     this.sceneHost = host;
-  }
-
-  /** A payphone ringing with a job, the main story's first (for the first-run pointer). */
-  get ringing(): Spot | null {
-    return this.ringingPhone(this.arcs[0]) ?? this.ringingPhone(this.arcs[1]);
   }
 
   /** The phone `a` rings, if it's ringing now (free roam, nothing on, its hours). */
@@ -313,14 +309,20 @@ export class MissionMode implements Mode {
 
   /**
    * Start a job straight away, without a call (a `direct` job: the cold
-   * open). False if something else is on.
+   * open), with `lend` (a car already on the street) as its tagged car.
+   * One already passed runs as a repeat. False if something else is on.
    */
-  beginNow(m: MissionDef): boolean {
+  beginNow(m: MissionDef, lend?: { tag: string; v: Vehicle }): boolean {
     const ctx = this.ctx;
     if (this.run || this.calling || ctx.busy || !this.missions.includes(m)) return false;
-    this.replaying = false;
-    this.begin(m);
+    this.replaying = ctx.progress.data.missions.includes(m.id);
+    this.begin(m, lend);
     return true;
+  }
+
+  /** The job running, if any. */
+  get running(): MissionDef | null {
+    return this.run?.def ?? null;
   }
 
   /** The intro call, then the job. */
@@ -341,11 +343,18 @@ export class MissionMode implements Mode {
     });
   }
 
-  private begin(m: MissionDef): void {
+  private begin(m: MissionDef, lend?: { tag: string; v: Vehicle }): void {
     const ctx = this.ctx;
     this.run = new MissionRun(m);
     this.goal.reset();
     ctx.busy = 'mission';
+    if (lend) {
+      // Kept like a car the job spawned (pinned, blipped, unpinned when it ends).
+      const car: MissionCar = { tag: lend.tag, blipId: `m-${lend.tag}`, v: lend.v, view: { x: lend.v.sim.x, z: lend.v.sim.z, wrecked: false } };
+      this.cars.set(lend.tag, car);
+      this.carList.push(car);
+      ctx.pin(lend.v);
+    }
     if (m.hour !== undefined) {
       const time = ctx.deps.look.time;
       this.savedClock = { speed: time.speed, hour: time.hour };

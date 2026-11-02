@@ -10,6 +10,7 @@
  */
 
 import { defaultCred, sanitiseCred, type CredSave } from './cred';
+import { SIDE_MODES_UNLOCK } from './opening';
 
 export const SAVE_KEY = 'curbside.save';
 export const SAVE_VERSION = 1;
@@ -64,8 +65,10 @@ export interface SaveData {
   missions: string[];
   /** Purchases and perks ('scanner', 'armour', ...). */
   unlocks: string[];
-  /** First-run pointers: the step reached (game/tutorial.ts; 3 = done). */
+  /** The old first-run pointers' step (3 = done). Unused since the cold open replaced them; kept for older builds. */
   tutorial: number;
+  /** The cold open has run (game/opening.ts): PLAY starts at the spawn corner from now on. */
+  opening: boolean;
   /** Each gang's respect for the player, -100..100 by gang id (game/gangs.ts); missing is 0. */
   respect: Record<string, number>;
   /** CRED earned, levels cashed in and perk ranks (game/cred.ts). */
@@ -107,14 +110,15 @@ export function defaultSave(): SaveData {
     missions: [],
     unlocks: [],
     tutorial: 0,
+    opening: false,
     respect: {},
     cred: defaultCred(),
   };
 }
 
-/** The tutorial's last step (game/tutorial.ts's TUTORIAL_DONE). */
+/** The old first-run pointers' last step. */
 const TUTORIAL_STEPS = 3;
-/** A save from before the tutorial with this much play (s) has no need of it. */
+/** A save from before the pointers (or the cold open) with this much play (s) is a veteran's: no need of either. */
 const TUTORIAL_SKIP_PLAYED = 120;
 
 type Obj = Record<string, unknown>;
@@ -167,6 +171,12 @@ export function migrateSave(raw: unknown, legacyBest = 0): SaveData {
     save.unlocks = strings(raw.unlocks);
     const veteran = save.stats.playTime >= TUTORIAL_SKIP_PLAYED;
     save.tutorial = Math.min(TUTORIAL_STEPS, num(raw.tutorial, veteran ? TUTORIAL_STEPS : 0));
+    if (typeof raw.opening === 'boolean') save.opening = raw.opening;
+    else if (veteran) {
+      // From before the cold open: a veteran keeps PLAY as it was, and the side modes they had.
+      save.opening = true;
+      if (!save.unlocks.includes(SIDE_MODES_UNLOCK)) save.unlocks.push(SIDE_MODES_UNLOCK);
+    }
     save.cred = sanitiseCred(raw.cred);
     if (isObj(raw.respect)) {
       save.respect = {};

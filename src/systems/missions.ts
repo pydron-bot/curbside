@@ -136,7 +136,7 @@ export interface MissionDef {
   quiet?: boolean;
   /** The main story if left out. */
   arc?: MissionArc;
-  /** Starts without a payphone (the glue begins it itself, as the cold open does): never rings. */
+  /** Starts without a payphone (the glue begins it itself, as the cold open does): never rings, and has no call (`phone` ''). */
   direct?: boolean;
   steps: MissionStep[];
 }
@@ -425,10 +425,18 @@ export function arcRings(arc: MissionArc, hour: number): boolean {
  * this build hasn't got is simply skipped), or once all are passed a REPEAT
  * JOB (replayJob over the jobs that ring). Null when there's nothing to ring
  * for: a `direct` job is next (the glue starts that), or the arc has none.
+ * `skipDirect`: the glue has had its go at the direct jobs (the cold open
+ * has run), so one not passed no longer holds the arc up.
  */
-export function nextInArc(missions: readonly MissionDef[], arc: MissionArc, passed: readonly string[], replays: number): { job: MissionDef; replay: boolean } | null {
+export function nextInArc(
+  missions: readonly MissionDef[],
+  arc: MissionArc,
+  passed: readonly string[],
+  replays: number,
+  skipDirect = false,
+): { job: MissionDef; replay: boolean } | null {
   const jobs = missions.filter((m) => arcOf(m) === arc);
-  const story = jobs.find((m) => !passed.includes(m.id));
+  const story = jobs.find((m) => !passed.includes(m.id) && !(skipDirect && m.direct));
   if (story) return story.direct ? null : { job: story, replay: false };
   const job = replayJob(
     jobs.filter((m) => !m.direct),

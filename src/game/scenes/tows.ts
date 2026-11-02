@@ -12,7 +12,7 @@
  * tow's off: the car stays where it is, an ordinary abandoned car. Never
  * towed: cars an activity needs, police cars, scene cars, bikes and the big
  * models, anything still burning, and the car the player just left unless
- * it's a wreck. BUSY: held off by a timed race and the tutorial, fewer
+ * it's a wreck. BUSY: held off by a timed race and the cold open, fewer
  * while you're wanted (your pursuit's wrecks get towed too).
  */
 import { isBike, type VehicleControls } from '../../entities/vehicle';

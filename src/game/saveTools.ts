@@ -1,6 +1,6 @@
 /**
  * The TEST menu's save tools (game/testTools.ts): CRED, missions, the
- * tutorial, a full reset, and export / import of the save as text. They work
+ * cold open, a full reset, and export / import of the save as text. They work
  * on the live SaveData in place (Progress owns it and writes it), so the
  * game sees the change at once; import goes through the save's own
  * sanitising (migrateSave, pruneSave), so a pasted save is as safe as one
@@ -8,7 +8,6 @@
  */
 import { PERK_IDS, PERK_RANKS, levelCost, levelFor, defaultCred, type CredSave } from './cred';
 import { defaultSave, migrateSave, pruneSave, type KnownIds, type SaveData } from './progressSave';
-import { TUTORIAL_DONE } from './tutorial';
 
 /** Every CRED it takes to reach `level`. */
 export function credForLevel(level: number): number {
@@ -62,9 +61,9 @@ export function jumpToMission(save: SaveData, ids: readonly string[], id: string
   return true;
 }
 
-/** The first-run pointers: all done, or back to the first. */
-export function setTutorial(save: SaveData, done: boolean): void {
-  save.tutorial = done ? TUTORIAL_DONE : 0;
+/** The cold open: had (PLAY starts at the spawn corner), or not (the next PLAY has it). */
+export function setOpening(save: SaveData, done: boolean): void {
+  save.opening = done;
 }
 
 /** Put `source`'s fields into `target` (Progress's live record), dropping any `target` has that `source` hasn't. */
