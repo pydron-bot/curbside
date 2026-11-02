@@ -289,6 +289,8 @@ export class Accidents implements Scene {
    */
   adopt(v: Vehicle, impact: number): boolean {
     const life = this.life;
+    // The same crash again (the cars still touching next step), or another bump on it: it's ours already.
+    if (this.messOf(v)) return true;
     const ordinary = this.ordinary(v);
     const s = v.sim;
     this.verdict = adoptVerdict({

@@ -288,6 +288,10 @@ describe('your crash becomes their problem', () => {
     expect(theirs.pursuit ?? null).toBeNull();
     expect(w.log.some((e) => e.type === 'street' && e.what === 'accident')).toBe(true);
     expect(w.dominoes()[0]).toMatchObject({ root: 'player', depth: 1, what: 'crash' });
+    // Still touching next step (heat hears the crash again): it's the scene's, no reaction rolled.
+    for (let i = 0; i < 20; i++) w.heat.playerCrash(theirs, 12);
+    expect(theirs.ai!.mood).toBe('calm');
+    expect(w.dominoes().length).toBe(1);
     expect(w.awards).toEqual([]);
 
     w.run(2);

@@ -500,7 +500,9 @@ const cityLife = new CityLife({
 });
 maintainCity = (seed) => cityLife.maintain(seed);
 // A chain the player set off in the city pays DOMINO ×N (systems/mess.ts).
-events.on('domino', (e) => award(dominoAward(score, e)));
+events.on('domino', (e) => {
+  if (player.alive && !player.arrested) award(dominoAward(score, e));
+});
 towHooked = () => cityLife.tools.hooked;
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
 look.addGlowSource((g, view) => cityLook.draw(g, view));
