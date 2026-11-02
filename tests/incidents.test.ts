@@ -316,3 +316,35 @@ describe('film shoot', () => {
     expect(Math.abs(a.x - b.x)).toBeCloseTo(SET_HALF[0] * 2);
   });
 });
+
+describe('wired up', () => {
+  const ids = ['cashRun', 'kebab', 'funeral', 'hydrant', 'conga', 'filmShoot'] as const;
+
+  it('each incident has a TEST menu button and a title highlight with a caption in caps', async () => {
+    const { SCENES } = await import('../src/game/sceneStarter');
+    const { HIGHLIGHTS } = await import('../src/game/attractHighlights');
+    for (const id of ids) {
+      expect(SCENES.some(([k]) => k === id)).toBe(true);
+      const h = HIGHLIGHTS[id];
+      expect(h.start).toBe(id);
+      expect(h.caption).toBe(h.caption.toUpperCase());
+    }
+    // The night's show only at night; the day's by day.
+    expect(inHours(2, HIGHLIGHTS.kebab.hours!)).toBe(true);
+    expect(inHours(14, HIGHLIGHTS.kebab.hours!)).toBe(false);
+    expect(inHours(23, HIGHLIGHTS.conga.hours!)).toBe(true);
+    expect(inHours(12, HIGHLIGHTS.cashRun.hours!)).toBe(true);
+    expect(inHours(23, HIGHLIGHTS.funeral.hours!)).toBe(false);
+  });
+
+  it('the awards score, and count as smashing things up in a Chaos Run', async () => {
+    const { BASE_POINTS, LABELS, Score } = await import('../src/systems/score');
+    const { categoryOf } = await import('../src/game/modes/chaosRun');
+    for (const k of ['cashGrab', 'wrapped', 'noRespect'] as const) {
+      expect(BASE_POINTS[k]).toBeGreaterThan(0);
+      expect(LABELS[k]).toBe(LABELS[k].toUpperCase());
+      expect(categoryOf(k)).toBe('smash');
+      expect(new Score().award(k).points).toBe(BASE_POINTS[k]);
+    }
+  });
+});

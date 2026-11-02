@@ -1623,7 +1623,7 @@ const testTools = new TestTools({
   reload: () => location.reload(),
 });
 // The title's highlights: now and then the camera leaves traffic for a scene (started like the TEST menu's).
-const highlights = new AttractHighlights({ life: cityLife, starter: testTools.starter, rand, ready: () => frontDoor.inTitle });
+const highlights = new AttractHighlights({ life: cityLife, starter: testTools.starter, rand, ready: () => frontDoor.inTitle, hour: () => look.time.hour });
 const titleCam = new TitleCamera({
   attract,
   highlights,

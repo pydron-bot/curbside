@@ -38,6 +38,12 @@ export type SceneId =
   | 'turf'
   | 'dogs'
   | 'dogChase'
+  | 'cashRun'
+  | 'kebab'
+  | 'funeral'
+  | 'hydrant'
+  | 'conga'
+  | 'filmShoot'
   | 'rain';
 
 /** The TEST menu's scene buttons, in order. */
@@ -61,6 +67,12 @@ export const SCENES: ReadonlyArray<readonly [SceneId, string]> = [
   ['turf', 'TURF WAR'],
   ['dogs', 'STRAY DOG'],
   ['dogChase', 'DOGS CHASE A RUNNER'],
+  ['cashRun', 'CASH-IN-TRANSIT VAN'],
+  ['kebab', 'KEBAB CHUCKING-OUT'],
+  ['funeral', 'FUNERAL PROCESSION'],
+  ['hydrant', 'BURST HYDRANT'],
+  ['conga', 'CONGA LINE'],
+  ['filmShoot', 'FILM SHOOT'],
   ['rain', 'RAIN CROWD'],
 ];
 
@@ -72,6 +84,13 @@ const PEOPLE_KIND: Partial<Record<SceneId, string>> = {
   busker: 'buskers',
   fight: 'fights',
   mugging: 'muggings',
+  // The incidents (V2): each scene's `kind` is its id.
+  cashRun: 'cashRun',
+  kebab: 'kebab',
+  funeral: 'funeral',
+  hydrant: 'hydrant',
+  conga: 'conga',
+  filmShoot: 'filmShoot',
 };
 
 /** The fire's car goes up this far off: clear of the 9 m blast, and on a phone often still on screen, m. */
@@ -143,7 +162,7 @@ export class SceneStarter {
     }
   }
 
-  /** The scene behind a people id (bus, iceCream, vendors, busker, fight, mugging). */
+  /** The scene behind a people id (bus, iceCream, vendors, busker, fight, mugging, and the incidents). */
   people(id: SceneId): (Scene & { force?(): boolean }) | null {
     const kind = PEOPLE_KIND[id];
     if (!kind) return null;
