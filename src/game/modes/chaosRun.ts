@@ -84,6 +84,8 @@ export function categoryOf(kind: ScoreKind): ChaosCategory {
     case 'cashGrab':
     case 'wrapped':
     case 'noRespect':
+    // A chain set off (systems/mess.ts): the smash that started it.
+    case 'domino':
       return 'smash';
     default:
       return kind;

@@ -695,6 +695,8 @@ export class GameAudio {
         return this.onStamp();
       case 'tool':
         return this.onTool(e);
+      case 'domino':
+        return; // heard through what each link does (the siren, the winch); the DOMINO award plays its sting
       case 'scanner': {
         // A burble a syllable per few letters, capped: the subtitle carries the words.
         const syllables = Math.min(9, Math.max(4, Math.round(e.text.length / 7)));
