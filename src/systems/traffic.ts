@@ -67,6 +67,9 @@ export interface AiDriver {
   moodTimer: number;
   /** Seconds left pulled over for a siren. */
   yielding: number;
+  /** Seconds left braking (stalled once stopped) after an air horn in the face, steering `swerve` meanwhile. */
+  startled: number;
+  swerve: number;
   /** Seconds held up by the player (on foot or in a car) in its lane. */
   blockedByPlayer: number;
   hornCooldown: number;
@@ -234,6 +237,8 @@ export function createDriver(ix: number, iz: number, dir: Dir, rand: () => numbe
     mood: 'calm',
     moodTimer: 0,
     yielding: 0,
+    startled: 0,
+    swerve: 0,
     blockedByPlayer: 0,
     hornCooldown: 0,
     honk: 0,
@@ -284,6 +289,11 @@ export function driveAi(
   ai.yielding = Math.max(0, ai.yielding - dt);
   // Rage is timed by whoever is running the chase; panic wears off here.
   if (ai.mood === 'panic' && (ai.moodTimer -= dt) <= 0) ai.mood = 'calm';
+  if (ai.startled > 0) {
+    // Air-horned: stamp on the brake (swerving if they jerked the wheel), sit stalled, then a honk back.
+    if ((ai.startled -= dt) <= 0) honk(ai, 0.5, 2);
+    return speedTo(0, forwardSpeed(car), ai.swerve);
+  }
   const panic = ai.mood === 'panic';
   if (ai.phase === 'approach' && offRoute(ai, car)) rerouteAi(ai, car, rand);
   let target = currentWaypoint(ai);
@@ -540,7 +550,7 @@ function trackProgress(ai: AiDriver, dist: number, wantSpeed: number, dt: number
  * police), pulling over for a siren, or held up by the player.
  */
 export function fullRateDriver(ai: AiDriver): boolean {
-  return ai.mood !== 'calm' || ai.urgent || ai.yielding > 0 || ai.blockedByPlayer > 0;
+  return ai.mood !== 'calm' || ai.urgent || ai.yielding > 0 || ai.blockedByPlayer > 0 || ai.startled > 0;
 }
 
 /** Within this of the junction it's heading into, a driver off screen thinks at least at 15 Hz, m (systems/simLod.ts). */
@@ -750,6 +760,17 @@ export function scareDriver(ai: AiDriver, seconds: number): void {
   if (ai.mood === 'rage') return;
   ai.mood = 'panic';
   ai.moodTimer = Math.max(ai.moodTimer, seconds);
+}
+
+/**
+ * An air horn in a driver's face: brake hard for `seconds` (stalled once
+ * stopped), steering `swerve` (-1..1) as they do. Not one chasing the
+ * player (rage), and not a longer startle cut short.
+ */
+export function startleDriver(ai: AiDriver, seconds: number, swerve: number): void {
+  if (ai.mood === 'rage') return;
+  ai.startled = Math.max(ai.startled, seconds);
+  ai.swerve = swerve;
 }
 
 /**

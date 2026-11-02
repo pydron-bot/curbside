@@ -44,19 +44,25 @@ export const HOSE_CAR_SHOVE = 9;
 export const HOSE_AUTO_AIM = 1.05;
 
 /**
- * How far along the jet from (ox, oz) going (dx, dz) (a unit vector) a
- * thing at (px, pz) of radius `r` is hit: its distance along the jet, or
- * -1 when it's outside the cone (behind, past `range`, or wide of it).
+ * How far along a cone from (ox, oz) going (dx, dz) (a unit vector),
+ * `halfAngle` rad either side, a thing at (px, pz) of radius `r` is hit:
+ * its distance along the cone, or -1 when it's outside (behind, past
+ * `range`, or wide of it). The hose's jet and the air horn's blast.
  */
-export function hoseHit(ox: number, oz: number, dx: number, dz: number, px: number, pz: number, r: number, range: number): number {
+export function coneHit(ox: number, oz: number, dx: number, dz: number, px: number, pz: number, r: number, range: number, halfAngle: number): number {
   const rx = px - ox;
   const rz = pz - oz;
   const along = rx * dx + rz * dz;
   if (along < -r || along > range + r) return -1;
   const across = Math.abs(rx * dz - rz * dx);
   // The cone's half-width where it is, plus the thing's own size.
-  if (across > Math.max(0, along) * Math.tan(HOSE_HALF_ANGLE) + 0.35 + r) return -1;
+  if (across > Math.max(0, along) * Math.tan(halfAngle) + 0.35 + r) return -1;
   return Math.max(0, along);
+}
+
+/** coneHit for the hose's jet (HOSE_HALF_ANGLE). */
+export function hoseHit(ox: number, oz: number, dx: number, dz: number, px: number, pz: number, r: number, range: number): number {
+  return coneHit(ox, oz, dx, dz, px, pz, r, range, HOSE_HALF_ANGLE);
 }
 
 /** Knock-back at `along` m down the jet: full at the nozzle, half at the far end. */

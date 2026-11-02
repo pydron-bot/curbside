@@ -14,6 +14,8 @@ export type Crime =
   | 'carjack'
   /** One shot fired (capped per window, see GUNFIRE_CAP). */
   | 'gunfire'
+  /** An air horn blast: a public-order nuisance, not an assault (capped per window, see NUISANCE_CAP). */
+  | 'nuisance'
   /** An explosion the player caused. */
   | 'explosion'
   /** Rammed a police car. */
@@ -38,6 +40,7 @@ export const CRIME_HEAT: Record<Crime, number> = {
   assault: 0.3,
   carjack: 0.35,
   gunfire: 0.05,
+  nuisance: 0.1,
   explosion: 0.6,
   ramCop: 0.6,
   shootCop: 0.15,
@@ -57,6 +60,8 @@ export const WITNESS_RANGE = 60;
 /** Gunfire adds at most GUNFIRE_CAP heat per GUNFIRE_WINDOW seconds (an SMG burst isn't 4 stars). */
 export const GUNFIRE_CAP = 0.5;
 export const GUNFIRE_WINDOW = 5;
+/** Air horn blasts: at most this much per window (a whole canister in a minute stays short of a star). */
+export const NUISANCE_CAP = 0.2;
 /** Bullets into police cars: at most this much per window. */
 export const SHOOT_COP_CAP = 0.6;
 /** Officers knocked down: at most this much per window (a blast flooring a squad is one star, not three). */
@@ -100,6 +105,7 @@ export class Wanted {
   /** Seconds left of RESPONSE_GRACE. */
   private grace = 0;
   private readonly gunfire = new Allowance(GUNFIRE_CAP);
+  private readonly nuisance = new Allowance(NUISANCE_CAP);
   private readonly shootCop = new Allowance(SHOOT_COP_CAP);
   private readonly copDown = new Allowance(COP_DOWN_CAP);
 
@@ -145,6 +151,7 @@ export class Wanted {
     } else {
       let amount = CRIME_HEAT[crime];
       if (crime === 'gunfire') amount = this.gunfire.take(amount, this.time);
+      else if (crime === 'nuisance') amount = this.nuisance.take(amount, this.time);
       else if (crime === 'shootCop') amount = this.shootCop.take(amount, this.time);
       else if (crime === 'copDown') amount = this.copDown.take(amount, this.time);
       const cap = AGAINST_POLICE.has(crime) ? MAX_HEAT : CIVILIAN_CAP;
@@ -199,6 +206,7 @@ export class Wanted {
     this.grace = 0;
     this.lastCrime = -Infinity;
     this.gunfire.reset();
+    this.nuisance.reset();
     this.shootCop.reset();
     this.copDown.reset();
     if (prev > 0) this.bus.emit({ type: 'wanted', level: 0, prev, reason });
