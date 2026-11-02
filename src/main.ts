@@ -355,6 +355,8 @@ function maintainPopulation(seed = false, parked = seed) {
   keepVehicles[1] = player.lastDriven;
   keepVehicles.length = 2;
   for (const v of activityCars) keepVehicles.push(v);
+  // A held run's cars (Observe from the pause menu) wait where they are.
+  if (observe?.holdsRun) for (const v of observe.heldCars) keepVehicles.push(v);
   population.maintain({
     x: at.x,
     z: at.z,
@@ -460,7 +462,7 @@ const cityLife = new CityLife({
   tier: () => getQuality().name,
   stars: () => heat.wanted.level,
   tutorial: () => progress.progress.data.tutorial < TUTORIAL_DONE,
-  keep: (v) => activityCars.includes(v),
+  keep: (v) => activityCars.includes(v) || (observe?.held(v) ?? false),
   avoid: [
     ...dressing.landmarks.props.map((p) => ({ x: p.x, z: p.z, r: 11 })),
     ...ramps.map((r) => ({ x: r.x, z: r.z, r: 9 })),
@@ -902,8 +904,8 @@ function simulate(dt: number) {
       applyDamage(b.damage, hitB);
       // A hard hit throws a bike's rider off (whichever of the two is a bike);
       // it's the player's doing only if the player's car did the ramming.
-      if (isBike(a.archetype) && bikeThrows(impact)) throwRider(a, impact, b === driving && rammed(contact.closingB, contact.closingA));
-      if (isBike(b.archetype) && bikeThrows(impact)) throwRider(b, impact, a === driving && rammed(contact.closingA, contact.closingB));
+      if (isBike(a.archetype) && bikeThrows(impact) && !(hold && observe!.held(a))) throwRider(a, impact, b === driving && rammed(contact.closingB, contact.closingA));
+      if (isBike(b.archetype) && bikeThrows(impact) && !(hold && observe!.held(b))) throwRider(b, impact, a === driving && rammed(contact.closingA, contact.closingB));
       const involvesPlayer = driving !== null && (a === driving || b === driving);
       if (involvesPlayer && hitA + hitB > 0) {
         markPlayerHit(a.damage, simTime);

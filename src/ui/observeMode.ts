@@ -46,7 +46,7 @@ import { SCENES, SCENE_KINDS, type SceneId, type SceneStarter } from '../game/sc
 import { LEAD_CAR, LEAD_FOOT, type CameraRig, type LeadSettings } from '../render/cameraRig';
 import type { WeatherCycle } from '../render/fxWeather';
 import type { PedState } from '../entities/pedestrian';
-import type { VehicleState } from '../entities/vehicle';
+import { copyVehicleState, type VehicleState } from '../entities/vehicle';
 import type { DamageState } from '../systems/damage';
 import type { QualityTierName } from '../render/quality';
 import type { PoliceForce } from '../systems/police';
@@ -263,7 +263,8 @@ export class ObserveMode implements Panel {
   private noteTimer = 0;
   // What a held run goes back to.
   private holding = false;
-  private readonly heldCars: Vehicle[] = [];
+  /** The held run's cars (kept from Population's recycling and the scenes while observing). */
+  readonly heldCars: Vehicle[] = [];
   /** Each held car as it was (a blast or a shove while observing is undone on the way out), and the player on foot. */
   private readonly heldState = new Map<Vehicle, { sim: VehicleState; damage: DamageState }>();
   private savedPed: PedState | null = null;
@@ -396,7 +397,12 @@ export class ObserveMode implements Panel {
     // Road ragers after the player.
     for (const v of d.vehicles) if (v.pursuit && !held.includes(v)) held.push(v);
     this.heldState.clear();
-    for (const v of held) this.heldState.set(v, { sim: { ...v.sim }, damage: { ...v.damage } });
+    for (const v of held) {
+      this.heldState.set(v, { sim: { ...v.sim }, damage: { ...v.damage } });
+      // Parked while held (a frozen car still "moving" would knock over whoever walks into it); its speed is back on the way out.
+      v.sim.vx = v.sim.vz = v.sim.vy = v.sim.yawRate = 0;
+      copyVehicleState(v.prev, v.sim);
+    }
     this.savedPed = { ...p.ped };
     this.savedFocusX = d.rig.focusX;
     this.savedFocusZ = d.rig.focusZ;

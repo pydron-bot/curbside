@@ -232,7 +232,7 @@ describe('observe spawn shield', () => {
 });
 
 describe('observe: the city lives with nobody playing', () => {
-  const world = { observing: false, tutorial: true, activity: true };
+  const world = { observing: false, activity: true };
   const life = new CityLife({
     bus: new EventBus(),
     vehicles: [],
@@ -248,7 +248,9 @@ describe('observe: the city lives with nobody playing', () => {
     observing: () => world.observing,
     activity: () => world.activity,
     stars: () => 4,
-    tutorial: () => world.tutorial,
+    // A first run's hold (named `opening` from the cold open on): on, and lifted by observing all the same.
+    tutorial: () => true,
+    opening: () => true,
     keep: () => false,
     avoid: [],
     busStops: [],
@@ -258,10 +260,10 @@ describe('observe: the city lives with nobody playing', () => {
     collect: () => false,
     focus: () => ({ x: 0, z: 0, vx: 0, vz: 0 }),
   } as unknown as CityLifeDeps);
-  // Held by the title, the tutorial and a timed race, as the busy scenes are.
-  life.clock.define('busy', { every: [1, 1], cap: 1, first: 0, hold: ['title', 'activity', 'tutorial'] });
+  // Held by the title and a timed race, as the busy scenes are (and the first run's hold, whose name changes with the cold open).
+  life.clock.define('busy', { every: [1, 1], cap: 1, first: 0, hold: ['title', 'activity'] });
 
-  it('lifts the title, tutorial and activity holds while observing, and people gather', () => {
+  it('lifts the title and activity holds while observing, and people gather', () => {
     world.observing = false;
     expect(life.live).toBe(false);
     expect(life.lively('busker')).toBe(false);
@@ -269,7 +271,7 @@ describe('observe: the city lives with nobody playing', () => {
     world.observing = true;
     expect(life.live).toBe(true);
     expect(life.lively('busker')).toBe(true);
-    // A fresh save's tutorial and a held run's race don't hold the watched city.
+    // A held run's race doesn't hold the watched city.
     expect(life.due('busy', 0)).toBe(true);
     // Nothing waits on the player: still not playing.
     expect(life.d.playing()).toBe(false);
