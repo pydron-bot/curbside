@@ -110,7 +110,12 @@ best-moment copy's cost in the hit-stop (Diagnostics `moment` lines),
 reaching SHARE within WASTED's 3 s, the share sheet, its fit with real
 safe areas at 852×340; the fresh title and STILL TO COME at 852×340; no
 black lines at the end of headlight beams at night.
-**Next:** the iPhone device pass (V2-14) on 0.16.0, then 1.0.0. Wave 3
+**0.17.0 "Air horn"**: the first W3-B weapon (the hose's cone is now a
+shared `coneHit`; a `nuisance` crime that never reaches a star; no held
+model yet, see BLENDER_TODO §11) and the observe palette scrolling on
+touch (its list lacked `data-scroll`; `tests/sheetScroll.test.ts` now
+checks every sheet list).
+**Next:** the iPhone device pass (V2-14) on 0.17.0, then 1.0.0. Wave 3
 candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B five new
 weapons the owner picked (AIR HORN, STINGER, SMOKE GRENADE that confuses
 pursuing cops, TASER, STICKY CHARGE). W3-C four new street scenes

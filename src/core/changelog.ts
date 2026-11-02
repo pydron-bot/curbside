@@ -15,6 +15,15 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.17.0',
+    date: '2026-11-02',
+    title: 'Air horn',
+    notes: [
+      'New weapon, the AIR HORN: a deafening blast that makes people cover their ears and scatter, startles drivers into braking and swerving, and sets off car alarms (DOMINO pays). It is a nuisance, not assault: a whole canister never earns a star. Look for pink-ringed crates in the street.',
+      'Observe mode\'s START SOMETHING list now scrolls on phones, so every scene can be reached.',
+    ],
+  },
+  {
     version: '0.16.0',
     date: '2026-11-02',
     title: 'Race crasher',
