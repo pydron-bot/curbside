@@ -71,6 +71,13 @@ export const ICONS = {
       '<path d="M4.5 8V5.8h3V8" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
       '<path d="M2.5 13h7M17 9v6" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
   ),
+  /** A taser: a stubby pistol body, the cartridge on its nose, and the spark. */
+  taser: svg(
+    '<path d="M2.5 8h11.5v4.2H9.8l-.9 1.2.9 5.6H5.6l-.5-5.4L2.5 12.2z" fill="currentColor"/>' +
+      '<rect x="14" y="7.2" width="3.6" height="5.8" rx="1" fill="currentColor" opacity=".75"/>' +
+      '<path d="M19 6.5l2.6 2-1.8.8 2 2.6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>' +
+      '<path d="M2.5 10h11.5" stroke="rgb(0 0 0 / .4)" stroke-width="1.1"/>',
+  ),
   /** Body armour: a vest. */
   armour: svg(
     '<path d="M8 3h2.2c.4 1.4 1 2 1.8 2s1.4-.6 1.8-2H16l3.5 2.4-1.6 4.4V20a1 1 0 0 1-1 1H7.1a1 1 0 0 1-1-1V9.8L4.5 5.4z" fill="currentColor"/>' +

@@ -38,6 +38,16 @@ const TRACER_STREAK = 7;
 /** Where bullets fly, m above the ground. */
 const GUN_Y = 1.2;
 const MAX_TRACERS = 64;
+/** Taser shots whose wires can show at once (two strands each). */
+const MAX_WIRES = 4;
+/** The darts take this long to reach the end of the wire, s. */
+const WIRE_FLY = 0.06;
+/** Where the wires leave the taser and where the darts sit (someone's middle), m above the ground. */
+const WIRE_Y0 = 1.15;
+const WIRE_Y1 = 0.95;
+/** Half the strands' spread at the taser and at the darts, m. */
+const WIRE_SPREAD0 = 0.03;
+const WIRE_SPREAD1 = 0.14;
 /** Over the fill budget, big particles age up to this much faster again. */
 const BUDGET_FADE = 3;
 /** A chain's held smoke (phone tiers) lives this share of its life: it peaks before the budget can see it. */
@@ -94,6 +104,14 @@ export class Effects {
   private readonly tKind = new Uint8Array(MAX_TRACERS);
   private readonly tAlive = new Uint8Array(MAX_TRACERS);
   private tracerNext = 0;
+  // Taser wires: struct-of-arrays.
+  private readonly wx0 = new Float32Array(MAX_WIRES);
+  private readonly wz0 = new Float32Array(MAX_WIRES);
+  private readonly wx1 = new Float32Array(MAX_WIRES);
+  private readonly wz1 = new Float32Array(MAX_WIRES);
+  private readonly wAge = new Float32Array(MAX_WIRES);
+  private readonly wLife = new Float32Array(MAX_WIRES);
+  private wireNext = 0;
   // Fake lights.
   private readonly lx = new Float32Array(MAX_LIGHTS);
   private readonly ly = new Float32Array(MAX_LIGHTS);
@@ -121,7 +139,7 @@ export class Effects {
     this.soft = new ParticlePool(softCapacity);
     // Fire that burns out rolls on as smoke.
     this.hot.onDeath = (pool, i) => this.fireToSmoke(pool, i);
-    this.hotOut = new InstanceBuffer(hotCapacity + MAX_TRACERS);
+    this.hotOut = new InstanceBuffer(hotCapacity + MAX_TRACERS + MAX_WIRES * 2);
     this.softOut = new InstanceBuffer(softCapacity);
     this.atlas = createFxAtlas();
     // Fire, sparks and flashes are their own light: full brightness day and night.
@@ -388,6 +406,23 @@ export class Effects {
     // Born a little way out of the barrel so the first frame already shows a streak.
     this.tHead[i] = Math.min(len, 2.5);
     this.tKind[i] = kindIndex(kind);
+  }
+
+  /**
+   * A taser's two wires from the taser at (x1, z1) to the darts at (x2,
+   * z2): they shoot out, crackle (flickering blue-white) for `life` s and
+   * are gone. Streaks in the hot batch, like tracers: no draw call or light.
+   */
+  wire(x1: number, z1: number, x2: number, z2: number, life: number): void {
+    if (len2(x2 - x1, z2 - z1) < 0.2) return;
+    const i = this.wireNext;
+    this.wireNext = (i + 1) % MAX_WIRES;
+    this.wx0[i] = x1;
+    this.wz0[i] = z1;
+    this.wx1[i] = x2;
+    this.wz1[i] = z2;
+    this.wAge[i] = 0;
+    this.wLife[i] = life;
   }
 
   // --- New primitives -------------------------------------------------------
@@ -672,6 +707,7 @@ export class Effects {
     this.soft.clear();
     this.debris.clear();
     this.tAlive.fill(0);
+    this.wLife.fill(0);
     for (let i = 0; i < MAX_LIGHTS; i++) this.lAge[i] = this.lLife[i];
     if (marks) this.decals.clear();
   }
@@ -739,6 +775,7 @@ export class Effects {
     this.hotOut.reset();
     this.hot.write(this.hotOut, eyeHeight);
     this.writeTracers(dt);
+    this.writeWires(dt);
     this.softOut.reset();
     this.soft.write(this.softOut, eyeHeight);
     upload(this.hotMesh, this.hotOut);
@@ -783,6 +820,52 @@ export class Effects {
         FRAME.streak,
         1,
       );
+    }
+  }
+
+  /** Age the taser wires and append each live one's two strands to the hot instances. */
+  private writeWires(dt: number): void {
+    for (let i = 0; i < MAX_WIRES; i++) {
+      const life = this.wLife[i];
+      if (life <= 0) continue;
+      const age = (this.wAge[i] += dt);
+      if (age >= life) {
+        this.wLife[i] = 0;
+        continue;
+      }
+      const x0 = this.wx0[i];
+      const z0 = this.wz0[i];
+      const len = len2(this.wx1[i] - x0, this.wz1[i] - z0);
+      const dx = (this.wx1[i] - x0) / len;
+      const dz = (this.wz1[i] - z0) / len;
+      // Out to the darts, then the current crackles down them (and fades at the end).
+      const reach = len * Math.min(1, age / WIRE_FLY);
+      const fade = Math.min(1, (life - age) / 0.15);
+      const y1 = WIRE_Y0 + (WIRE_Y1 - WIRE_Y0) * (reach / len);
+      for (let side = -1; side <= 1; side += 2) {
+        const o0 = side * WIRE_SPREAD0;
+        const o1 = side * (WIRE_SPREAD0 + (WIRE_SPREAD1 - WIRE_SPREAD0) * (reach / len));
+        // Each strand from its own start to its own dart, across the shot (-dz, dx).
+        const ax = dx * reach - dz * (o1 - o0);
+        const az = dz * reach + dx * (o1 - o0);
+        const k = 1.4 + Math.random() * 1.6;
+        this.hotOut.push(
+          x0 - dz * o0 + ax / 2,
+          (WIRE_Y0 + y1) / 2,
+          z0 + dx * o0 + az / 2,
+          0.035,
+          ax,
+          y1 - WIRE_Y0,
+          az,
+          0,
+          k * 0.75,
+          k * 0.85,
+          k * 1.25,
+          (0.45 + Math.random() * 0.5) * fade,
+          FRAME.streak,
+          1,
+        );
+      }
     }
   }
 

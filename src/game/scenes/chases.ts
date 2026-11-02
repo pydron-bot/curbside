@@ -32,7 +32,9 @@
  *   suspect gives up: cash, no heat (one bump on a chase car right after
  *   touching the getaway is forgiven).
  * - HAVE-A-GO HERO: flooring a fleeing suspect isn't an assault
- *   (PedAgent.suspect).
+ *   (PedAgent.suspect). Tased (systems/taser.ts), a suspect on foot gives
+ *   up where they fell, armed or not, and kneels once up; when the
+ *   officers cuff them it's the player's CITIZEN'S ARREST too.
  *
  * The cold open stages one (stage()): its getaway waits off screen, sirens
  * going, then comes down a lane and piles into a kerb by the player, and
@@ -46,6 +48,7 @@ import {
   chaseHandoff,
   citizensArrest,
   forgivenBump,
+  tasedArrest,
   type HandoffSituation,
 } from '../../systems/chaseHandoff';
 import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
@@ -161,6 +164,8 @@ export interface Chase {
   /** HAVE-A-GO HERO / CITIZEN'S ARREST already paid for this one. */
   floored: boolean;
   helped: boolean;
+  /** When the player's taser put the suspect down (sim time; -Infinity: never): they've given up to them. */
+  tasedAt: number;
   /** The cold open's (stage()): where it crashes. */
   stage: StagedGetaway | null;
   /** Its driver has bailed: the getaway sits at the kerb for whoever gets in. */
@@ -213,7 +218,7 @@ export class Chases implements Scene {
     bus.on('pedDown', (e) => {
       if (!e.byPlayer || e.isPlayer) return;
       if (e.cop) this.attacked(e.x, e.z, 1.5);
-      else if (e.suspect) this.suspectFloored(e.x, e.z);
+      else if (e.suspect) this.suspectFloored(e.x, e.z, e.cause === 'taser');
     });
   }
 
@@ -521,6 +526,7 @@ export class Chases implements Scene {
       crime: false,
       floored: false,
       helped: false,
+      tasedAt: -Infinity,
       stage: null,
       dumped: false,
       target: { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: true, seen: true, known: true },
@@ -833,6 +839,8 @@ export class Chases implements Scene {
       if (!v || u.aboard === 0) continue;
       if (speed(v.sim) < 1.5 && len2(v.sim.x - a.s.x, v.sim.z - a.s.z) < OUT_RANGE) this.deploy(u);
     }
+    // Tased: once back on their feet they kneel for the cuffs (surrendered, so they don't run).
+    if (c.tasedAt > -Infinity && a.mode !== 'down' && !s.model.arrested) this.surrender(c);
     const shooting = life.opponentOf(s) !== null && (a.mode === 'shoot' || a.mode === 'fight');
     // Running: down the street, away from the nearest officer, until out of breath.
     if (!c.surrendered && !shooting && a.mode !== 'down') {
@@ -917,6 +925,7 @@ export class Chases implements Scene {
 
   private cuff(c: Chase, s: CrowdPed): void {
     const life = this.life;
+    if (tasedArrest(life.now, c.tasedAt)) this.citizensArrest(c, s.agent.s.x, s.agent.s.z);
     s.agent.suspect = false;
     life.unfight(s);
     s.agent.temper = 'calm';
@@ -1157,15 +1166,20 @@ export class Chases implements Scene {
     }
   }
 
-  /** HAVE-A-GO HERO: the player floored a fleeing suspect at (x, z) (once a chase). */
-  private suspectFloored(x: number, z: number): void {
+  /**
+   * HAVE-A-GO HERO: the player floored a fleeing suspect at (x, z) (once a
+   * chase). `tased`: their taser did it, and a suspect on foot gives up to
+   * them (the cuffs are their CITIZEN'S ARREST).
+   */
+  private suspectFloored(x: number, z: number, tased: boolean): void {
     const life = this.life;
     for (const c of this.chases) {
-      if (c.floored) continue;
       // The suspect, or a rider just thrown off the getaway bike (not theirs yet).
       const s = c.suspect;
       const near = s ? len2(s.agent.s.x - x, s.agent.s.z - z) < 1.5 : c.car !== null && len2(c.car.sim.x - x, c.car.sim.z - z) < 4;
       if (!near) continue;
+      if (tased && s && c.phase === 'foot') this.tased(c, s);
+      if (c.floored) continue;
       c.floored = true;
       this.joined.haveAGo++;
       life.d.award?.('haveAGo');
@@ -1173,7 +1187,17 @@ export class Chases implements Scene {
     }
   }
 
-  /** CITIZEN'S ARREST: the player stopped the getaway by a patrol car. Cash, and no heat for it. */
+  /** The player's taser put the suspect on foot down: they give up, a shoot-out with the officers included. */
+  private tased(c: Chase, s: CrowdPed): void {
+    const life = this.life;
+    c.tasedAt = life.now;
+    c.surrendered = true;
+    life.unfight(s);
+    // The officers come to cuff them (stepFoot puts anyone left without a fight back on the arrest).
+    for (const u of c.units) for (const o of u.officers) life.unfight(o);
+  }
+
+  /** CITIZEN'S ARREST: the player stopped the getaway by a patrol car (or tased its suspect). Cash, and no heat for it. */
   private citizensArrest(c: Chase, x: number, z: number): void {
     if (c.helped) return;
     const life = this.life;

@@ -11,10 +11,11 @@
  * - breakOff: the same, from far off: the chase just breaks off.
  * - continue: anything else, the chase carries on.
  *
- * Plus the two have-a-go rules: a bump on a chase car right after touching
+ * Plus the have-a-go rules: a bump on a chase car right after touching
  * the getaway is forgiven (touch steering is imprecise), and a getaway the
- * player stopped beside a patrol is their CITIZEN'S ARREST. Pure (no
- * three.js).
+ * player stopped beside a patrol, or a suspect on foot their taser put down
+ * (systems/taser.ts) and the officers then cuffed, is their CITIZEN'S
+ * ARREST. Pure (no three.js).
  */
 
 export type Handoff = 'continue' | 'takeHeat' | 'turnedOn' | 'breakOff';
@@ -40,6 +41,8 @@ export const FORGIVE_SECONDS = 3;
 export const HELPED_SECONDS = 5;
 /** ...and it must stop within this of a chase patrol car, m. */
 export const ARREST_GAP = 12;
+/** A suspect the player tased gave up to them if the cuffs go on within this, s. */
+export const TASED_ARREST_SECONDS = 30;
 /** A citizen's arrest pays this, $. */
 export const CITIZENS_ARREST_REWARD = 150;
 
@@ -58,4 +61,9 @@ export function forgivenBump(now: number, touchedAt: number, alreadyForgiven: bo
 /** Did the player stop the getaway (touched at `touchedAt`) beside a patrol `copGap` m away? */
 export function citizensArrest(now: number, touchedAt: number, copGap: number): boolean {
   return now - touchedAt <= HELPED_SECONDS && copGap < ARREST_GAP;
+}
+
+/** Was a suspect cuffed at `now` the player's to claim? Their taser put them down at `tasedAt` (sim time). */
+export function tasedArrest(now: number, tasedAt: number): boolean {
+  return now - tasedAt <= TASED_ARREST_SECONDS;
 }
