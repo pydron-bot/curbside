@@ -353,7 +353,8 @@ function maintainPopulation(seed = false, parked = seed) {
   keepVehicles[1] = player.lastDriven;
   keepVehicles.length = 2;
   // The car on a borrowed tow truck's hook isn't upkeep's to recycle.
-  if (cityLife.tools.hooked) keepVehicles.push(cityLife.tools.hooked);
+  const hooked = towHooked();
+  if (hooked) keepVehicles.push(hooked);
   for (const v of activityCars) keepVehicles.push(v);
   population.maintain({
     x: at.x,
@@ -375,6 +376,8 @@ function maintainPopulation(seed = false, parked = seed) {
 const restoreProp = (k: KnockableItem) => look.props.restore(k.id);
 /** The city's parked cars are topped up with the rest (set once CityLife exists, below). */
 let maintainCity: (seed: boolean) => void = () => {};
+/** The car on a borrowed tow truck's hook (set once CityLife exists, below). */
+let towHooked: () => Vehicle | null = () => null;
 maintainPopulation(true);
 
 // --- Score ---
@@ -490,6 +493,7 @@ const cityLife = new CityLife({
   },
 });
 maintainCity = (seed) => cityLife.maintain(seed);
+towHooked = () => cityLife.tools.hooked;
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
 look.addGlowSource((g, view) => cityLook.draw(g, view));
 cityLook.add(atmosphereLook(cityLife));
