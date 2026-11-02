@@ -15,6 +15,20 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.14.0',
+    date: '2026-11-02',
+    title: "The city doesn't stop for you",
+    notes: [
+      "Being wanted no longer clears the streets: street races, fights, muggings, turf wars, accidents and police chases keep happening while the cops are after you, a little less often the more stars you have. Some turn up on the road ahead, so your chase runs straight through them.",
+      "Join in a police chase: steal the getaway car and its cops are yours (TAKE THE HEAT, 2 stars). Ram the getaway to a stop by a patrol for a CITIZEN'S ARREST and a reward with no heat. Flooring a fleeing suspect or a mugger is a HAVE-A-GO HERO, not an assault.",
+      'Big stamps name your best mayhem (BARBECUE SEASON, BANK HOLIDAY and more), and people nearby get their phones out to film it.',
+      'Six new things happen in the city: a cash-in-transit van on its rounds, kebab-shop chucking-out time, a funeral procession, burst hydrants, hen and stag congas, and a film shoot in Glass Heights. Each one can be joined in or wrecked.',
+      "A new main story begins, KEEP IT LOUD: Mayor Lull wants the quietest city in the country, and the street's traders want you to keep it loud. Jobs 2 and 3 are in; the opening and the rest come next.",
+      "The Graveyard Shift's thirteen jobs are now the Night Shift side story: they ring after dark from the docks phone. Progress is kept, but the PROGRESS page counts story completion from the new main story, so it starts at 0% again.",
+      'Chaos Run gets the living city too.',
+    ],
+  },
+  {
     version: '0.13.1',
     date: '2026-11-02',
     title: 'No more black screen on High',
