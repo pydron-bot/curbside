@@ -70,17 +70,42 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
-**V2 status (2026-11-02, end of session):** wave 1 is live as **0.14.0**
+**V2 status (2026-11-02, second session):** wave 1 is live as **0.14.0**
 (V2-01 in-view meter, V2-02 the city doesn't stop, V2-03 chase handoff,
 V2-04 stamps, V2-05 story scene/mayhem steps, V2-08 Night Shift, s2/s3 of
 KEEP IT LOUD, V2-13 six new incidents); 0.13.1 fixed black slabs on
-desktop High (bloom NaN). Integration branch `claude/v2` = `main`.
-**Next: wave 2**: V2-07 cold open + s1, V2-18 observe mode, V2-09 hose,
-chime and winch, s4–s6 (V2-06), V2-11 scanner, V2-10, V2-12; then the
-iPhone device pass (V2-14) and V2-17 / 1.0.0. Run at most two or three
-streams at once (the container has 4 cores and SwiftShader smoke tests are
-CPU-bound); agents run tsc, tests and a build, and the integrator runs the
-smoke test once after merging, then lets GitHub CI confirm before main.
+desktop High (bloom NaN).
+**Wave 2 is merged on `claude/v2` as 0.15.0 "Wrong stop"** (not yet on
+`main` unless the changelog's top entry is live): V2-07 live cold open +
+s1 WRONG STOP (tutorial pointers removed; side modes hidden until s2),
+V2-06 s4–s6 (chapter 1 complete), V2-09 Borrowed Blues (hose, chime,
+winch, Vex's tow contracts, the `keeps()` guard), V2-18 observe mode,
+V2-11 scanner pings (off while observing), V2-10 Your Mess, Their Problem
+(adopted crashes, the shots chain, DOMINO ×N). Each stream's branch
+(`claude/v2-open`, `-ch1`, `-blues`, `-observe`, `-scanner`, `-mess`) is
+pushed. Integration fixes: the scanner's on-foot smoke check leaves the
+cold open's getaway first; long stamp names wrap at 852×393 under the
+activity card (they covered NOS in a Chaos Run, failing CI since 0.14.0:
+`pages.yml` runs only the unit tests, so a red smoke doesn't stop a
+deploy).
+**Wave 2 device checklist (iPhone, V2-14):** cold open (STEAL THIS CAR
+shows over the bus before the crash; bus nose vs crash point; chase cars
+stop 22 m short); s4 fairness (the truck rarely stops at lights) and the
+90% scratch line; s6 pace (coach 8 m/s, 5,000 points; the story harness
+topped up short runs); s5 grenades on touch; hose drag-to-aim, HOSE label
+at 852×340, jet density at 60 fps, stars from hosing a queue; towing to
+the yard without clipping kerbs; observe pinch/twist, crowd at widest
+zoom, strip legibility at 852×340; scanner 11 px text, thumb covering it,
+squelch level, chattiness; the Settings sheet's sixth row at 852×340;
+adopted crash pacing and DOMINO pay from the gunfire chain.
+**Next:** V2-12 RACE CRASHER and VAN NICKED (the one wave 2 item left),
+then the iPhone device pass (V2-14) and V2-17 / 1.0.0. Run at most three
+streams at once (4 cores; SwiftShader smoke tests are CPU-bound). Give
+each stream its own smoke port and scratch dir: `smoke.mjs` starts
+`vite preview` with output ignored, so a taken port silently tests
+another stream's build. Agents run tsc, tests and a build (one smoke run
+at most, timing failures under load are noise); the integrator re-runs
+after merging and GitHub CI (uncontended) is the arbiter before main.
 Wave 3 candidate: W3-A, a bigger city.
 
 **V2 is planned in `docs/V2_PLAN.md` (2026-11-02).** The owner chose

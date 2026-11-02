@@ -23,6 +23,7 @@ export const CHANGELOG: readonly Release[] = [
       'KEEP IT LOUD chapter 1 is complete: take Doreen\'s van back off a tow truck without a scratch, wreck the Mayor\'s limo at a ribbon cutting, and cause chaos round the judges\' coach for the finale.',
       'Borrowed Blues: steal a fire truck and hose people flat or put out fires, an ice cream van and play the chime to pull a queue, or a tow truck and winch wrecks to the docks yard for cash. After dark Vex rings with tow contracts.',
       'OBSERVE, on the title and the pause menu: a free camera over the living city with no player and no HUD. Pan, zoom and rotate, follow any car or person, jump to the next incident, start any street scene, and change the time and the weather.',
+      "Your mess becomes the city's problem: crash into someone and they get out to argue, then a patrol takes a statement and a tow truck clears up. Gunfire sets off car alarms and someone calls it in. Each link in the chain you started pays a DOMINO bonus.",
       'A police scanner calls out what is happening round the city and marks it on the radar, and names your car and district when you are wanted. It can be turned off in Settings.',
       'On phones, long stamp names no longer cover the NOS button in a Chaos Run.',
     ],
