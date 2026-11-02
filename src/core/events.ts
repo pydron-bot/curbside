@@ -299,7 +299,11 @@ export type StreetWhat =
   | 'action'
   | 'pyro'
   // Your mess (V2-10): a passer-by's call about the player's gunfire got through; a patrol's on its way.
-  | 'shotsFired';
+  | 'shotsFired'
+  // Gatecrashing (V2-12): the player joined a street race, won it (RACE CRASHER), drove off in an ice cream van from its queue.
+  | 'raceJoin'
+  | 'raceCrasher'
+  | 'vanNicked';
 
 /**
  * What a borrowed service vehicle's tool did: the hose on, still going (the

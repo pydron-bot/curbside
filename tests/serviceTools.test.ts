@@ -414,7 +414,7 @@ describe('the hose on a borrowed fire truck', () => {
 });
 
 describe('the chime on a borrowed ice cream van', () => {
-  it('draws a queue to wherever it parks, and lets it go when the van leaves', () => {
+  it('draws a queue to wherever it parks, and it runs after the van when it leaves (V2-12)', () => {
     const w = world();
     const van = w.car('ice_cream_van', 9.5, 40, 0);
     w.player.enter(van);
@@ -430,11 +430,14 @@ describe('the chime on a borrowed ice cream van', () => {
     w.player.exit();
     w.run(2);
     expect(w.tools.queue.members.length).toBe(3);
-    // Back in and off: they're let go, walking on.
+    // Back in and off: out of the queue and after the van (VAN NICKED's own-queue chase: no pay).
     w.player.enter(van);
     w.run(0.2, () => (van.sim.z += 0.8));
     expect(w.tools.queue.members.length).toBe(0);
-    for (const c of people) expect(c.agent.scene).toBe(false);
+    const chasing = w.life.vanNicked.chasers.map((ch) => ch.c);
+    expect(chasing.length).toBe(people.length);
+    for (const c of people) expect(chasing.includes(c) && c.agent.scene).toBe(true);
+    expect(w.life.vanNicked.own).toBe(true);
     expect(w.log.some((e) => e.type === 'tool' && e.what === 'release')).toBe(true);
   });
 });

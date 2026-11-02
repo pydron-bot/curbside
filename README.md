@@ -831,7 +831,8 @@ people in).
   park or open plaza (anywhere else 25% of the time), every 30–60 s;
   `iceCream` plays the jingle; passers-by queue at the hatch on the
   pavement side (Gathering queue, 6, one served every 3.2 s: a cheer and
-  `iceCreamServed`); it shuts after 16–40 s and drives on.
+  `iceCreamServed`); it shuts after 16–40 s and drives on. Take it while
+  it's open and the queue comes after you: *VAN NICKED*, below.
 - **Food carts** (`dressing.street.vendors`): the five nearest within 90 m
   get a vendor at `vendorX/Z` (put there out of view) and a queue at the
   serving side, served every 4.5 s. How readily people join follows the
@@ -973,8 +974,9 @@ and caps the player's throttle through `tools.limit()`; the pay is
   plays, the van anchors a queue at its hatch (a `Gathering` queue, up to
   9, recruited from calm passers-by within 45 m, `roomFor` permitting)
   that's never served: it waits there, a lure, while you get out and do
-  what you like. Drive the van 6 m off and they're let go, as they are 15
-  s after the chime stops (`Chime`).
+  what you like. Drive the van 6 m off and they run after it (*VAN
+  NICKED*, below: unpaid, it's your queue); 15 s after the chime stops
+  they're let go, walking on (`Chime`).
 - **Winch (tow truck):** a press, stopped (under 3 m/s), hooks the car
   whose nearer end is closest to the hook (0.6 m behind the truck's tail)
   within 4.5 m (`hookDistance`): a wreck whose fire is out, a crash or
@@ -1016,6 +1018,56 @@ truck turned on the five people in reach and hosing for 60 frames: 49
 draw calls before the truck, 60 with it in view (its model and shadow
 pass), 58.8 on average (61 at most) while it hosed and knocked four of
 them flat.
+
+**VAN NICKED** (V2-12; rules pure and tested in `systems/vanNicked.ts`,
+`tests/crashers.test.ts`; `scenes/vanNicked.ts`). Drive off in an ice
+cream van while people are queueing at it and the queue comes after you
+on foot.
+
+- **Whose queue:** the city's van taken while it's open (`IceCream` hands
+  its queue to `life.vanNicked.take()` as the player gets in) pays
+  `vanNicked` (300) and its stamp with two or more queueing, once (a van
+  the player's left has no driver to open it again). The player's own
+  chime queue (*Borrowed Blues*) chases the same way when they drive off
+  from it, and pays nothing (it's your van, and the chime is free).
+- **Off after it:** they stand staring until the van's 5 m from where it
+  stood (`NICK_OFF`; 8 s of it not going and they walk on, unpaid), then
+  `street` `vanNicked` (a record scratch: the van's music dragged to a
+  stop; the scanner's QUEUE IN PURSUIT line) and they run at the player
+  (in the van or out of it, at an officer's 5 m/s, in a ring round them:
+  `surroundSpot`), waving their arms. Each gives up after 9–15 s of their
+  own, or once the player's 32 m ahead of them; a 1.6 s glare and they
+  walk on as passers-by. Caught up, they stand round you waving; nobody
+  throws a punch.
+- **Not heat:** held by the scene (`agent.scene`), they're no witness and
+  make no call; none of it touches the police. They aren't `suspect`
+  either: knocking one down (hosed, run over, punched) is an assault like
+  anyone else's, and they drop out of the chase (handed back to the
+  street, so the ambulance comes for the knocked out). The carjack itself
+  is a carjack as ever.
+- **Ice cream after all:** one who reaches the van parked with its chime
+  playing (`tools.chime.on` and anchored) joins the chime queue there.
+
+```ts
+life.vanNicked.take(van, gathering, own, moving) → n   // drain a queue into the chase (IceCream on the theft, ServiceTools on the chime's release)
+life.vanNicked.chasers · .van · .chasing · .own · .counts { city, own, paid, gaveUp, queued }
+```
+
+A headless check, `tools/tune/crashers.mjs` (*Tuning harnesses*):
+2026-11-02, the dev server, two runs of 12 races and 6 vans (the rendered
+frames make runs differ a little). Races (a sports car put beside the
+leader, a bot driving the route): all 24 joined, won 9 and 7 (in 10–16
+s), the rest beaten; the RACE CRASHER stamp on every win; every prize
+pulled up 10–20 m past the line (before the fix to finish it there,
+100–250 m back where it was when the player crossed), its driver out
+5–20 s after the win, and taken through the real enter button with no
+carjack. Vans (the van forced open beside the player, taken through the
+enter button and driven off at half throttle): 12 queues of 6, all chased
+from 1.25 s, VAN NICKED paid and stamped, the nearest chaser 1.4–2.7 m
+from the van, all given up in 5–12 s, and no star from any of it (one
+passer-by's call, about the carjack). **Budget:** nothing new drawn: the
+chasers are the queue (people already out), the markers and the prize's
+ring the glow batch.
 
 **Traffic scenes** (`claude/city-traffic`; rules pure and tested in
 `systems/trafficScenes.ts`). Chases, races and accidents are `BUSY` (held
@@ -1083,6 +1135,31 @@ of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
   `render/trafficLook.ts`). The first past the last junction wins (a long
   horn, `raceWon`); they slow into traffic. 30% of races draw the police:
   the back marker is handed to the chase scene (`chases.pursue(v)`).
+  **RACE CRASHER** (V2-12; rules pure and tested in
+  `systems/raceCrasher.ts`, `tests/crashers.test.ts`): pull onto a race's
+  line and you're in it: on the road into one of its junctions, its way
+  round (within 35°), at 10 m/s or more, a racer still in it within 30 m,
+  with at least two junctions to come and nobody home (`routeLeg`,
+  `joinsRace`; `street` `raceJoin`: a racer leans on the horn, and the
+  scanner's GATECRASHER line). No rubber-banding: the racers drive as they
+  always do, never slowing for you or catching up. Pass each junction in
+  turn from the one you joined toward (within 12 m of its middle,
+  `passes`); its next one is marked on the road (a magenta chevron the way
+  out and a ring, gold at the finish: `RaceLook`) and pulses on the radar
+  (`game/crasherBlips.ts`, pinned to the rim off it). Through the last one
+  first and you've won: the `raceCrasher` award (750) and stamp, `street`
+  `raceCrasher`. **The prize** is the leader's ride: the racer furthest
+  ahead of the rest when you cross (further down the route, then nearer
+  its next junction: `ahead`) races on to the line, pulls up past it
+  (10–20 m in the harness), and its driver gets out and walks off, the car
+  left with nobody in it, so you get in with no carjack. Ringed in gold
+  and a `★` on the radar; kept from every scene (`CityLife.keeps`) and
+  from Population's recycling for 90 s (`PRIZE_KEEP`) or until you take
+  it. Held up 2.5 s short of the line, or not over it 20 s after the win,
+  it pulls up where it is. Beaten to the line (or out of your car, or the
+  race over), you're out of it with nothing. One race at a time, as ever.
+  (A Chaos Run tallies RACE CRASHER under STUNTS, VAN NICKED under
+  CARJACK: `categoryOf`.)
 - **Accidents** (`scenes/accidents.ts`, every 80–160 s): a car finds the
   one 3–30 m ahead in its lane mid-block; that one brakes hard, this one
   doesn't. Both are left smoking (health 32–52%, below `SMOKE_AT`, above
@@ -1117,7 +1194,8 @@ of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
 life.chases.begin(kind?) · .pursue(v) · .chases · .ended   // 'car' | 'bike' | 'foot'; counts by outcome
 life.chases.joined · .rammed(v) · .isGetaway(v)               // how the player joined in; heat's ram hook; a getaway still chased
 life.races.begin() · life.accidents.begin() · .towables(out) · life.doubleParking.begin(force?, job?)
-// Street events: chase, suspectRuns, arrest, suspectDown, takeTheHeat, citizensArrest, haveAGo, race, raceWon, accident, fight, doublePark.
+life.races.crashing · .prize { v, finishing, handed } · .prized(v) · .crashed { joined, won, lost }   // RACE CRASHER; race.crasher { next, out, won }
+// Street events: chase, suspectRuns, arrest, suspectDown, takeTheHeat, citizensArrest, haveAGo, race, raceWon, raceJoin, raceCrasher, accident, fight, doublePark.
 ```
 
 **Your mess, their problem** (V2-10; rules pure and tested in
@@ -1400,7 +1478,9 @@ ROW. TWO CARS, TWO TEMPERS.") with a radar ping on the incident:
   spilled cash, chucking-out time, the funeral, a burst hydrant, the
   conga, the film shoot, shots fired (V2-10); as chatter a double-parked
   lorry, a car alarm, a busker, the ice cream van; and the closing lines: an arrest, a suspect
-  down, a citizen's arrest, a bag handed back) has a priority (1 chatter,
+  down, a citizen's arrest, a bag handed back; V2-12's gatecrashing: a
+  race joined and won (both 3, said over the race's ping; the win closes
+  it) and a van nicked (2)) has a priority (1 chatter,
   2 an incident, 3 a spilled cash van, 4 the player's own), a cooldown
   (45–240 s) and one or two lines, `{place}` the district
   (`DISTRICT_NAMES`). Nothing over 220 m off; at most 64 characters with
@@ -2008,6 +2088,20 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   `--shots` runs of the gunfire chain beside a parked car (a player `shot`
   on the bus, as combat sends it): its links, awards and stars. A few
   seconds a run. Numbers under *City life*.
+- **`crashers.mjs [runs=6] [--vans 6] [--seed 1]`**: *RACE CRASHER* and
+  *VAN NICKED* (City life). Races: a street race begun by the spawn (no
+  police), a sports car put in the oncoming lane beside its leader,
+  rolling, and a bot that drives the route junction to junction (13 m/s
+  into the turns, nitro on the straights): joined, won or beaten, how
+  long, the stamp (one rendered frame after the win), the prize pulled up
+  and how far past the line, then the player put at its door and the real
+  enter button pressed (`stepFrame` with `consumeAction`): in, and whether
+  that was a carjack. Vans: the ice cream van forced open beside the
+  player, its queue left 6 s to fill, taken through the enter button and
+  driven straight off at half throttle: the queue, the chase starting, the
+  award and stamp, the nearest a chaser got, when they'd all given up, and
+  the stars and witness calls. A few seconds a run. Numbers under *City
+  life*.
 - **`music.mjs <out-dir> [station-id …]`**: renders stations offline
   (`audioLib.mjs`: the game's own audio modules on an OfflineAudioContext
   in the page, ticked like the 25 ms timer) to MP3 (WAV without ffmpeg) for
@@ -2955,6 +3049,8 @@ the screen, and passers-by in view stop and film it. Rules and table in
 | ABSOLUTE SCENES | the combo reaching ×10 | 5 |
 | NOTHING TO SEE HERE | shaking off a chase of 3+ stars (the EVADED bonus) | 5 |
 | HAVE-A-GO HERO | the mugging bag handed back (V2-03, via `show`) | 5 |
+| RACE CRASHER | a street race joined and won (V2-12, its award) | 6 |
+| VAN NICKED | the city's ice cream van driven off from its queue (V2-12, its award) | 4 |
 | NEIGHBOURHOOD WATCH | three gang members knocked down within 5 s | 4 |
 | FREQUENT FLYER | a STUNT worth 3,500+ | 4 |
 | BOWLED OVER | four people knocked down by a car within 3 s | 3 |

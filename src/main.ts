@@ -121,6 +121,7 @@ import { TrafficSignals } from './world/signals';
 import { GameAudio, createAudioFrame, createCarSound, describeCar } from './audio/gameAudio';
 import { StreetLife } from './game/streetLife';
 import { CityLife } from './game/cityLife';
+import { CrasherBlips } from './game/crasherBlips';
 import { activityHolds } from './systems/cityScenes';
 import { openingStage } from './game/modes/openingMode';
 import { CityLifeLook } from './render/cityLifeLook';
@@ -1342,6 +1343,7 @@ function frame(now: number) {
   audio.update(frameSeconds, audioFrame);
 
   const at = player.position;
+  crasherBlips.update();
   radar.update(frameSeconds, at.x, at.z, player.driving ? player.driving.sim.heading : ped.heading, len2(at.vx, at.vz), player.driving);
   threats.update(rig.camera, population.crowd, at.x, at.z, viewW, viewH, playing && player.alive);
 
@@ -1438,6 +1440,8 @@ new StampHud(document.getElementById('hud')!, events);
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
 // Where the ambulances go.
 radar.setBlip('hospital', { x: cityLife.hospital.x, z: cityLife.hospital.z, kind: 'friend', icon: '+', size: 6 });
+// RACE CRASHER's next junction and prize on the radar (V2-12).
+const crasherBlips = new CrasherBlips(radar, cityLife.races);
 // The police scanner (game/scanner.ts): dispatcher lines along the bottom and radar pings on the incidents.
 const scannerHud = new ScannerHud(document.getElementById('hud')!, events);
 const scanner = new Scanner({

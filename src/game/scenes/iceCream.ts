@@ -8,7 +8,8 @@
  * Gathering queue). The one at the front is served every few seconds and
  * walks off pleased (a little cheer, `iceCreamServed`); the rest shuffle
  * up. Now and then someone pushes in and it kicks off (Fights.queueJump).
- * After a while it shuts and drives on.
+ * After a while it shuts and drives on. Taken by the player while it's
+ * open, its queue goes after them (scenes/vanNicked.ts: VAN NICKED).
  */
 import type { VehicleControls } from '../../entities/vehicle';
 import { IN_PLAY } from '../../systems/cityScenes';
@@ -24,6 +25,7 @@ import type { Fights } from './fights';
 import { Gathering } from './gathering';
 import { roomFor, streetBody } from './people';
 import { holdStill, pullIn, stopped } from './service';
+import type { VanNicked } from './vanNicked';
 
 /** Open this long, s (shuts early once nobody's left after OPEN_MIN). */
 const OPEN_FOR = 40;
@@ -75,6 +77,7 @@ export class IceCream implements Scene {
   constructor(
     private readonly life: SceneCtx,
     private readonly fights: Fights,
+    private readonly nicked: VanNicked,
   ) {
     life.clock.define('iceCream', { every: [90, 180], cap: 1, first: 45, range: SHOW_RANGE, hold: IN_PLAY });
     this.driver = { drive: (v, obstacles) => this.drive(v, obstacles) };
@@ -100,6 +103,8 @@ export class IceCream implements Scene {
     for (let i = this.vans.length - 1; i >= 0; i--) {
       const van = this.vans[i];
       if (life.lost(van.v) || van.v.scene !== this.driver) {
+        // The player's taken it from under the queue: they'll want a word once it goes.
+        if (van.v === life.d.player.driving && van.phase === 'open') this.nicked.take(van.v, van.queue, false, false);
         this.untrack(van);
         this.vans.splice(i, 1);
         continue;
