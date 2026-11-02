@@ -1,9 +1,10 @@
 /**
  * Quality tiers: the one place render code asks "how much can I draw?" —
- * pixel-ratio range, sun shadow map size, bloom, smoke resolution, particle budget, and how big
- * the crowd and traffic are. The tier comes from settings.quality ('auto'
- * picks by device: phones and tablets start at 'medium', desktops at 'high')
- * and DynamicResolution steps it down at runtime when frames run slow.
+ * pixel-ratio range, sun shadow map size, bloom, smoke resolution, particle
+ * budget, and how big the crowd and traffic are. The tier comes from
+ * settings.quality ('auto' picks by device: phones and tablets start at
+ * 'medium', desktops at 'high') and DynamicResolution steps it down at
+ * runtime when frames run slow.
  *
  * Subscribers to onQualityChange should react without recompiling shaders
  * (e.g. resize the shadow map or skip a pass rather than toggling
