@@ -222,7 +222,8 @@ share sheet mocked.
   city ambience, stingers tuned to the music, and an adaptive procedural
   soundtrack on seven radio stations. See *Audio* below.
 - **Look** (`src/render/look.ts` and friends): ACES tone mapping with a
-  light grade, a sun shadow map fitted to the view every frame, a 12-minute
+  light grade, a sun shadow map fitted to the view every frame (the static
+  city cached in a wider map, redrawn only now and then), a 12-minute
   day/night cycle (starts late afternoon → golden hour → night), analytic
   ground and building shaders (road markings, kerbs, paving, roofs by type,
   windows, shopfronts, five district palettes), rooftop props, street lamps
@@ -1651,7 +1652,8 @@ the first time it comes into view.
   including ~14 for bloom; 'low' (no shadow map) 22–27. Programs: 18 on
   phones, 27 on desktop, none compiled after start-up over a full day.
   About 160–250k triangles on the phone (most at night), ~245k on desktop,
-  most of it the instanced city in both passes. The destruction test (off
+  most of it the instanced city in both passes (measured before the
+  *Shadow cache* below took most of the shadow pass's). The destruction test (off
   by default, *Destruction test* below) adds one rubble batch, +1 call
   (+1 in the shadow pass with the desktop style, which `auto` uses on
   phones too) while chunks are on screen; its craters are drawn by the
@@ -1666,6 +1668,37 @@ the first time it comes into view.
   every frame, snapped to whole texels (no shimmer); map size comes from the
   tier (2048 / 1024 / off). Tone mapping is ACES plus a grade
   (`post.ts`, installed as `CustomToneMapping`: no extra pass).
+- **Shadow cache** (`sunShadow.ts`, geometry in `shadowWindow.ts`, pure and
+  tested). What never moves (the city mesh and the `lamps`, `street`,
+  `roofs`, `trees` and `landmarks` families) is drawn into a second, wider
+  depth map on the same texel grid (a quarter of the map more on each
+  side: 1536² on 'medium', 3072² on 'high', one-byte colour), and only
+  again when it stops serving: the view's window leaves the margin (it is
+  then re-centred ¾ of the margin ahead), the window changes size (it
+  grows at once and shrinks after 45 frames, so the zoom easing with speed
+  doesn't flap it), the sun has moved the shadow of a point 16 m up a texel
+  (the light keeps the cached direction until then), or the statics
+  changed (a prop knocked or restored, the models arriving, a lost
+  context, a tier change). Each frame three.js's shadow pass runs with
+  `renderer.clear` swapped for a depth blit of this frame's whole-texel
+  crop of the cache, the static casters hidden, so only cars, people,
+  `things`, rubble and a family's per-frame props (as their own twin) are
+  drawn; the lit shaders sample the one map as before, at the same size,
+  softness and bias (scaled to the cache's deeper range: the same metres).
+  The cache draws each family's static props a few models per call
+  (twins over runs of its models up to 400 triangles, sharing its
+  buffers), not the family mesh that runs every model's vertices per
+  instance. `look.shadowStats` counts the redraws by reason.
+  Measured in Chromium (iPhone 15 Pro profile, 'medium', a fixed seed, 2 s
+  at each of three places by day, dusk, dawn and night, parked and
+  driving): the shadow pass went from 13–23 calls and 105–210k triangles
+  every frame to 2–10 calls and 4–31k on average; a frame with only the
+  moving casters is ~4 calls and ~4k, one that redraws the cache 20–30
+  calls and 100–240k (to ~580k with dawn's long window). Redraws over
+  30 s: parked 1.6/s by day, 3.3/s at dusk and 7/s just after dawn (the
+  sun; none at night or with the clock stopped); driving at 19–23 m/s
+  2–3/s, mostly the zoom stepping the window's size, 0.1–0.4/s for
+  leaving the margin.
 - **Surfaces.** `shaderLib.ts` holds the shared uniforms (`uTime`,
   `uNight`, and `uWetness`, which the weather in `fxWeather.ts` drives)
   and GLSL (integer hash, noise, anti-aliased lines, and `ubStreetLight`,
@@ -1782,7 +1815,8 @@ and every new program is compiled behind the current frame.
 - **Families** (`render/propBatch.ts`, `render/worldProps.ts`): several
   models merged into one geometry; each instance says which model it is
   and the vertex shader drops every other model's vertices, so a family is
-  one draw call (and one in the shadow pass): `lamps`, `street` (traffic
+  one draw call (and one in the shadow pass; the static families' props
+  are in the shadow cache instead, *Look*): `lamps`, `street` (traffic
   lights, furniture, road works, carts and shelters), `roofs`, `trees`, `landmarks`, `things` (pickups,
   frenzy tokens, packages, roadblock barriers and cones, knocked-over
   props in flight) and `debris`. Static instances are bucketed in 32 m
