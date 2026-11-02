@@ -12,14 +12,15 @@
  * tow's off: the car stays where it is, an ordinary abandoned car. Never
  * towed: cars an activity needs, police cars, scene cars, bikes and the big
  * models, anything still burning, and the car the player just left unless
- * it's a wreck. Held off by everything (LOUD): it'd only get in the way.
+ * it's a wreck. BUSY: held off by a timed race and the tutorial, fewer
+ * while you're wanted (your pursuit's wrecks get towed too).
  */
 import { isBike, type VehicleControls } from '../../entities/vehicle';
 import { towPose, towPriority, winch, type Pose, type TowLook } from '../../systems/emergency';
-import { LOUD } from '../../systems/cityScenes';
+import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
 import type { Obstacle } from '../../systems/traffic';
 import type { SceneDriver, Vehicle } from '../population';
-import { SCENE_RANGE, type Scene, type SceneCtx } from '../cityLife';
+import { SCENE_RANGE, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { FireCrews } from './fireCrews';
 import { ServiceRun, holdStill, pullIn, stopped, type ServiceSpec } from './service';
 import type { LabelSink } from '../debugLabels';
@@ -83,11 +84,19 @@ export class Tows implements Scene, SceneDriver {
   }
 
   constructor(private readonly life: SceneCtx) {
-    life.clock.define('tow', { every: [45, 90], cap: MAX_TOWS, first: 25, range: TOW_RANGE, hold: LOUD });
+    life.clock.define('tow', { every: [45, 90], cap: MAX_TOWS, first: 25, range: TOW_RANGE, hold: BUSY, pace: WANTED_PACE });
   }
 
   get running(): number {
     return this.tows.length;
+  }
+
+  /** The first tow's truck (the in-view meter). */
+  subject(out: Subject): boolean {
+    const t = this.tows[0];
+    if (!t) return false;
+    const s = t.truck.sim;
+    return watch(out, s.x, s.z, s.vx, s.vz);
   }
 
   /** Is `v` a tow's (its truck, or the car on the hook)? */

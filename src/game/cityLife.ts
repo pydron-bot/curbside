@@ -10,10 +10,12 @@
  * buskers, onlookers).
  *
  * Every scene is bounded: a cap on how many run at once, a cooldown
- * between starts, holds (title, activity, wanted, tutorial) and a range
- * from the player (systems/cityScenes.ts SceneClock); vehicles they bring
- * in arrive off-screen on a lane like the police do and are retired once
- * far and out of view. Nothing new is drawn: the cars and people are the
+ * between starts, holds (title, a timed race, the tutorial), a slower clock
+ * and a per-tier cap on the busy ones while the player is wanted, and a
+ * range from the player (systems/cityScenes.ts SceneClock); vehicles they
+ * bring in arrive off-screen on a lane like the police do (while wanted,
+ * now and then on the road ahead: systems/routeAhead.ts) and are retired
+ * once far and out of view. Nothing new is drawn: the cars and people are the
  * usual batches (the ambulance, fire truck, tow truck, ice cream van, bus,
  * police car and bike are all in vehicles.glb). None of it touches the
  * player's heat or score.
@@ -35,7 +37,9 @@ import {
 } from '../entities/vehicle';
 import type { BodyKind } from './bodies';
 import type { Outfit } from '../render/characterModel';
-import { SceneClock, type SceneWorld } from '../systems/cityScenes';
+import { SceneClock, busyCap, type SceneWorld } from '../systems/cityScenes';
+import { RouteAhead, onRoute, routeAheadSpot, type RouteSpot } from '../systems/routeAhead';
+import type { QualityTierName } from '../render/quality';
 import { PUNCH_REACH, hurtPed, resumeWalking, spawnPed, type PedAgent, type Target } from '../systems/crowd';
 import { policeSpawnPoint } from '../systems/police';
 import { driverFor } from '../systems/traffic';
@@ -81,6 +85,7 @@ import { DoubleParking } from './scenes/doubleParking';
 import { len2 } from '../core/len';
 import type { LabelSink } from './debugLabels';
 import type { SimLod } from '../systems/simLod';
+import { InViewMeter } from '../systems/inViewMeter';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
 export const SCENE_RANGE = 150;
@@ -95,6 +100,12 @@ const PARK_SEED_TRIES = 80;
 const LOT_SHARE = 0.45;
 /** What's parked: ordinary cars, the odd van or pickup. */
 const PARK_MIX: readonly VehicleArchetype[] = ['sedan', 'sedan', 'compact', 'compact', 'taxi', 'pickup', 'van', 'sports', 'muscle', 'sedan'];
+/** The in-view meter samples this often, s (a few times a second is plenty for seconds in view). */
+const METER_EVERY = 0.25;
+/** The meter's line goes in the session log after every this much play, s. */
+const METER_LOG_EVERY = 120;
+/** Kinds that count as "an incident in view" (the loud ones and fires; not buses, buskers, vans, dogs). */
+const INCIDENTS: ReadonlySet<string> = new Set(['chase', 'race', 'accident', 'fight', 'mugging', 'turf', 'fire', 'tow']);
 /** NPC punches (people a scene set on each other), HP; one in this many knocks them over. */
 const NPC_PED_PUNCH = 16;
 const NPC_PED_KNOCK = 0.2;
@@ -113,7 +124,7 @@ export interface CityLifeDeps {
   view(out: Rect): Rect;
   /** In play (false behind the title: the city still lives, nothing waits on the player). */
   playing(): boolean;
-  /** A mission, race, frenzy, fare or Chaos Run is on. */
+  /** An activity that holds the busy scenes off is on (cityScenes activityHolds: a timed race, a mission that asks). */
   activity(): boolean;
   /** The player's wanted stars. */
   stars(): number;
@@ -147,6 +158,10 @@ export interface CityLifeDeps {
   enlist?(officer: CrowdPed): void;
   /** The sim's level of detail: off screen, stray dogs think less often (without it, every step). */
   lod?: SimLod;
+  /** The quality tier: while wanted, the busy scenes running at once are capped by it (busyCap; uncapped without). */
+  tier?(): QualityTierName;
+  /** A line in the session log (the in-view meter's, every METER_LOG_EVERY s of play). */
+  log?(kind: string, detail: string): void;
 }
 
 /** A scene's view of the director. */
@@ -226,6 +241,19 @@ export class CityLife {
   private readonly world: SceneWorld = { playing: false, activity: false, stars: 0, tutorial: false };
   private scanTimer = 0;
   private tidyTimer = 0;
+  private meterTimer = 0;
+  private meterLogAt = METER_LOG_EVERY;
+  /** How much of each kind the player sees (scenes with a subject), in play only. */
+  readonly inViewMeter: InViewMeter;
+  /** The scenes the meter watches (parallel to inViewMeter.kinds). */
+  private readonly metered: Scene[] = [];
+  private readonly meterOut: Subject = { x: 0, z: 0, vx: 0, vz: 0 };
+  /** The busy scenes (a kind with a wanted pace): counted against busyCap while wanted. */
+  private readonly busyScenes: Scene[] = [];
+  /** While wanted, a car-borne scene now and then goes on the road ahead (RouteAhead throttles it). */
+  readonly routeAhead = new RouteAhead();
+  /** due() let a car-borne scene go on the road ahead this step: its next spawnCar() looks for a spot there. */
+  private armed = false;
   /**
    * The kind the title's show is directing (game/attractHighlights.ts):
    * nothing holds it off, and its people gather as in play (lively).
@@ -258,6 +286,16 @@ export class CityLife {
     this.accidents = this.add(new Accidents(this));
     this.doubleParking = this.add(new DoubleParking(this));
     this.add(new Pavement(this), 'pavement');
+    const kinds: string[] = [];
+    for (let i = 0; i < this.scenes.length; i++) {
+      if (!this.scenes[i].subject) continue;
+      this.metered.push(this.scenes[i]);
+      kinds.push(this.sceneLabels[i]);
+    }
+    this.inViewMeter = new InViewMeter(
+      kinds,
+      kinds.map((k) => INCIDENTS.has(k)),
+    );
   }
 
   /**
@@ -268,8 +306,10 @@ export class CityLife {
   add<T extends Scene>(scene: T, label?: string): T {
     const kinds = this.clock.kinds;
     this.scenes.push(scene);
-    this.sceneLabels.push(label ?? (kinds.slice(this.labelled).join('/') || `scene${this.scenes.length}`));
+    const own = kinds.slice(this.labelled);
+    this.sceneLabels.push(label ?? (own.join('/') || `scene${this.scenes.length}`));
     this.labelled = kinds.length;
+    if (own.some((k) => this.clock.busy(k))) this.busyScenes.push(scene);
     return scene;
   }
 
@@ -293,7 +333,13 @@ export class CityLife {
   /** One sim step: every scene, armed people's dropped guns, the player picking them up. */
   step(dt: number): void {
     const now = this.now;
-    for (const s of this.scenes) s.step(dt);
+    // Wanted: the busy scenes' clocks run slower (never stop).
+    this.clock.tick(dt, this.d.playing() ? this.d.stars() : 0, this.featured);
+    for (const s of this.scenes) {
+      s.step(dt);
+      // The road ahead is only for the scene that asked this step.
+      this.armed = false;
+    }
     if ((this.scanTimer -= dt) <= 0) {
       this.scanTimer = 0.25;
       this.scanDrops(now);
@@ -301,6 +347,10 @@ export class CityLife {
     if ((this.tidyTimer -= dt) <= 0) {
       this.tidyTimer = 1;
       this.tidy();
+    }
+    if ((this.meterTimer -= dt) <= 0) {
+      this.meterTimer = METER_EVERY;
+      if (this.d.playing()) this.meter(METER_EVERY);
     }
     this.drops.step(now);
     const p = this.d.player;
@@ -358,6 +408,9 @@ export class CityLife {
     this.looks.clear();
     this.drops.clear();
     this.clock.reset(this.now);
+    this.routeAhead.reset();
+    this.armed = false;
+    this.inViewMeter.cut();
   }
 
   /** Debug labels: every scene describes what it holds. */
@@ -365,19 +418,38 @@ export class CityLife {
     for (const s of this.scenes) s.describe?.(out);
   }
 
-  /** May a `kind` start now, with `running` of them going (its clock, cap and holds)? */
+  /**
+   * May a `kind` start now, with `running` of them going (its clock, cap and
+   * holds; while wanted, the tier's cap on busy scenes)? A busy kind that
+   * arrives by car (spec `ahead`) may also arm a spot on the road ahead for
+   * this step's spawnCar() (it looks for the spot only if a car is wanted).
+   */
   due(kind: string, running: number): boolean {
     const w = this.world;
     w.playing = this.d.playing();
     w.activity = this.d.activity();
-    w.stars = this.d.stars();
+    w.stars = w.playing ? this.d.stars() : 0;
     w.tutorial = this.d.tutorial();
     if (kind === this.featured) {
-      // Directed behind the title: no holds (a first run's tutorial included).
+      // Directed (the title's show): no holds, a first run's tutorial and stars included.
       w.playing = true;
       w.activity = w.tutorial = false;
+      w.stars = 0;
     }
-    return this.clock.due(kind, this.now, running, w);
+    const now = this.now;
+    if (!this.clock.due(kind, now, running, w)) return false;
+    if (w.stars > 0 && this.clock.busy(kind)) {
+      if (this.busyRunning() >= busyCap(this.d.tier?.() ?? 'high', w.stars)) return false;
+      if (this.clock.spec(kind).ahead && this.routeAhead.ready(now, w.stars)) this.armed = true;
+    }
+    return true;
+  }
+
+  /** Busy scenes running now (all kinds). */
+  busyRunning(): number {
+    let n = 0;
+    for (let i = 0; i < this.busyScenes.length; i++) n += this.busyScenes[i].running;
+    return n;
   }
 
   /** Should `kind`'s people come and gather (queues, crowds)? In play, or the title's show is on it. */
@@ -402,6 +474,17 @@ export class CityLife {
     return len2(x - at.x, z - at.z);
   }
 
+  /**
+   * May a scene picking among spots that are there anyway (traffic, a turf
+   * border) take (x, z)? While the player is wanted and driving, only on
+   * their way (within 60° ahead), so the pursuit runs into it; else any.
+   */
+  onRoute(x: number, z: number): boolean {
+    if (!this.d.playing() || this.d.stars() <= 0) return true;
+    const at = this.d.focus();
+    return onRoute(at.x, at.z, at.vx, at.vz, x, z);
+  }
+
   /** Is (x, z) on screen (with a margin, m)? */
   inView(x: number, z: number, margin = 2): boolean {
     return inRect(x, z, this.view, margin);
@@ -409,12 +492,21 @@ export class CityLife {
 
   /**
    * A vehicle for a scene, arriving on a lane 75–140 m off (out of view),
-   * heading toward the player; `ambient` (the director retires it). Null
+   * heading toward the player (or on the road 60–150 m ahead, when due()
+   * armed a route-ahead spot); `ambient` (the director retires it). Null
    * when there's nowhere to put one.
    */
   spawnCar(archetype: VehicleArchetype, paint: string, aheadShare = 0.65): Vehicle | null {
     const at = this.d.focus();
-    const spot = policeSpawnPoint(at.x, at.z, at.vx, at.vz, this.view, this.d.rand, (x, z) => this.crowded(x, z, 12), aheadShare);
+    const crowded = (x: number, z: number) => this.crowded(x, z, 12);
+    let spot: RouteSpot | null = null;
+    if (this.armed) {
+      // On the road ahead of a wanted player (due() armed it): their pursuit runs into it.
+      this.armed = false;
+      spot = routeAheadSpot(at.x, at.z, at.vx, at.vz, this.view, this.d.rand, crowded);
+      if (spot) this.routeAhead.used(this.now);
+    }
+    spot ??= policeSpawnPoint(at.x, at.z, at.vx, at.vz, this.view, this.d.rand, crowded, aheadShare);
     if (!spot) return null;
     const v = this.d.population.takeVehicle(archetype, paint);
     v.police = false;
@@ -619,6 +711,25 @@ export class CityLife {
   }
 
   // --- Internals ----------------------------------------------------------------
+
+  /** One in-view sample: each metered scene's count and whether its subject is on screen. */
+  private meter(dt: number): void {
+    const view = this.view;
+    const out = this.meterOut;
+    const m = this.inViewMeter;
+    for (let i = 0; i < this.metered.length; i++) {
+      const s = this.metered[i];
+      const running = s.running;
+      m.sample(i, running, running > 0 && s.subject!(out) && inRect(out.x, out.z, view, 0), dt);
+    }
+    m.tick(dt);
+    // A harness clear()ed it: count the next line from there.
+    if (this.meterLogAt - m.played > METER_LOG_EVERY) this.meterLogAt = m.played + METER_LOG_EVERY;
+    if (m.played >= this.meterLogAt) {
+      this.meterLogAt = m.played + METER_LOG_EVERY;
+      this.d.log?.('inview', m.line());
+    }
+  }
 
   /** Armed people knocked out drop their gun (once each); a civilian who lost theirs fights with fists after. */
   private scanDrops(now: number): void {

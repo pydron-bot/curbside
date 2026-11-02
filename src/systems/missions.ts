@@ -86,6 +86,8 @@ export interface MissionDef {
   hour?: number;
   /** Story chapter (1 if left out); the last job of one says CHAPTER n COMPLETE. */
   chapter?: number;
+  /** Hold the city's busy scenes off for the whole job (a timed run); left out, the city carries on round it. */
+  quiet?: boolean;
   steps: MissionStep[];
 }
 

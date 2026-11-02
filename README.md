@@ -672,6 +672,30 @@ director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
 *scenes* built on it (`src/game/scenes/`); the rules are pure and tested
 (`systems/cityScenes.ts`, `world/streetSpots.ts`, `world/drops.ts`).
 
+**The city doesn't stop for you** (V2-02; `systems/cityScenes.ts`,
+`systems/routeAhead.ts`, tested). The busy scenes (chases, races,
+accidents, scuffles, muggings, turf wars, tows; `BUSY`) are held off only
+behind the title, in the first run's tutorial, and in an activity that
+asks for a quiet city: a timed race, or a mission flagged `quiet` (or on a
+checkpoint `race` step; `activityHolds`, `MissionMode.quiet`). Free roam,
+Chaos Run, taxi fares and frenzies all get the living city. Wanted stars
+no longer hold them: each busy kind's clock runs at `WANTED_PACE` of its
+pace (1 with no stars, then 0.75, 0.6, 0.5, 0.4, 0.35 at 1–5 stars:
+fewer, never none; `SceneClock.tick`), and while wanted at most
+`WANTED_SCENE_CAP` of them run at once (high 4, medium 3, low 2: scene
+cars on top of the police on a phone). Chases alone still wait for no stars
+(`CHASE_HOLD`): one started in a pursuit would break off on its next
+step, until the chase handoff (V2-03) takes it into the pursuit. Fires keep their full pace (your
+fires get their trucks); buskers still pack up for stars. **On the road
+ahead:** while wanted, a scene that arrives by car (a race; a chase once
+V2-03 lets one start while wanted: spec `ahead`) is put, at most once every 45 s, on a lane 60–150 m ahead
+of the player's way (within 45°), off-screen, coming toward them
+(`routeAheadSpot`, armed by `life.due()` for that step's `spawnCar()`),
+and accidents and turf wars pick only traffic and borders within 60° of
+the player's way (`life.onRoute`), so a pursuit runs into them. A
+featured scene (the title's show) ignores all of it. Measured with the
+in-view harness and a 5-star soak (HANDOFF, *V2 in-view numbers*).
+
 - **Knocked out stays down** (`scenes/medics.ts`): a passer-by (crowd
   upkeep's people and drivers thrown out of their cars: `PedAgent.street`)
   knocked out cold within 120 m is held down (`injured`: the down timer
@@ -742,7 +766,7 @@ director, `CityLife` (`src/game/cityLife.ts`), runs it and the ambient
   wheel round and glide down 14–26 m on, away from the scare, and peck
   about there until spooked again; the rest fly off as before.
 - **Gang turf flare-ups** (`systems/turfWar.ts` pure, `scenes/turfWar.ts`):
-  every 2–4 minutes (`LOUD`), where the VIPERS' turf meets a rival crew's
+  every 2–4 minutes (`BUSY`), where the VIPERS' turf meets a rival crew's
   across a road (`RIVALS`, colours only: COBBLE KINGS in the old town,
   DOCK RATS at the docks, GLASS BOYS downtown), 2–4 of each walk in from
   either end of the pavement, square up and fight with fists (in 30%, one
@@ -796,7 +820,7 @@ people in).
   70–110 s; up to 7 passers-by watch in an arc in front (Gathering crowd)
   for 12–28 s each, and now and then one tips: a coin glints in an arc
   into the hat (`peopleLook`).
-- **Scuffles** (at most two, LOUD holds): someone running (a ped fleeing,
+- **Scuffles** (at most two, `BUSY`): someone running (a ped fleeing,
   or the player sprinting) barges a walker (`barges`): the player knocks
   them into whoever's beside them and those two square up; a fleeing ped
   is gone after by the one they barged (any temper, or a calm one 40% of
@@ -808,7 +832,7 @@ people in).
   them till they're up). 30% end in a knockout (the loser starts low), the
   ambulance comes for them; otherwise the more hurt walks off and the
   other raises a fist. Up to 7 watch in a ring (Gathering crowd).
-- **Muggings** (every 90–180 s, LOUD holds): a passer-by on screen 10–40 m
+- **Muggings** (every 90–180 s, `BUSY`): a passer-by on screen 10–40 m
   off is rushed by someone close by, who snatches their bag (`mugging`)
   and sprints corner to corner round the blocks, crossing at the corners
   (`nextCorner`), ringed in red; the victim shouts and points (waving,
@@ -843,7 +867,7 @@ people in).
   step down, walk to either side of the fire and hose it: 7 s for a full
   fire with one hose, half that with two (hosed down, it never flares
   back); then back in and off as traffic. 2 trucks at most; none behind
-  the title, in an activity or the tutorial (fires there burn out by
+  the title, in a timed race or quiet mission, or the tutorial (fires there burn out by
   themselves). The look (`render/emergencyLook.ts` fireLook): bigger
   flame particles than a burning car's, smoke from 3 m downwind (it's
   drawn over the flames), embers, a flickering orange pool on the ground
@@ -852,8 +876,8 @@ people in).
   where they land. Nothing hurts anyone (a molotov's fire still does).
   Street events: `fire`, `fireTruck`, `hose` (the pump's hiss), `fireOut`.
 - **Tow trucks** (`scenes/tows.ts`; `towPose`, `towPriority`, `winch` in
-  `systems/emergency.ts`): every 45–90 s (none in an activity, while
-  wanted, in the tutorial or behind the title) a tow truck (`tow_truck`,
+  `systems/emergency.ts`): every 45–90 s (`BUSY`: none in a timed race,
+  the tutorial or behind the title; less often while wanted) a tow truck (`tow_truck`,
   `#e8b923`, claimed in traffic within 140 m or brought in) comes for a
   car within 110 m: a wreck whose fire is out (the player's included)
   (or a crash or dumped getaway car flagged `towable`) first, then an abandoned car, then, one pick in two, a parked one;
@@ -880,8 +904,10 @@ people in).
   behind the title.
 
 **Traffic scenes** (`claude/city-traffic`; rules pure and tested in
-`systems/trafficScenes.ts`). Chases, races and accidents are `LOUD` (held
-off by the title, an activity, wanted stars and the tutorial) and only one
+`systems/trafficScenes.ts`). Chases, races and accidents are `BUSY` (held
+off by the title, a timed race or quiet mission and the tutorial; races
+and accidents fewer while you're wanted, and then on your way; chases
+not while you're wanted, until V2-03) and only one
 of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
 
 - **Police chases** (`scenes/chases.ts`, every 100–200 s): a getaway car
@@ -970,8 +996,10 @@ life.clock.define('ice', { every: [70, 140], cap: 1, first: 30, range: 110, hold
 life.due('ice', running)          // its clock has run down, under its cap, nothing holding it off
 life.near('ice', x, z)            // within its range of the player (default SCENE_START_RANGE 150 m)
 life.clock.start('ice', life.now) // wind the clock (or .defer(kind, now, s): nowhere to put one yet)
-// Holds: 'title' (attract), 'activity' (mission, race, frenzy, fare, Chaos Run), 'wanted', 'tutorial'.
-// LOUD = all four (chases, races, brawls); IN_PLAY = ['title'].
+// Holds: 'title' (attract), 'activity' (a timed race, a `quiet` mission: activityHolds), 'wanted', 'tutorial'.
+// BUSY = title, activity, tutorial (+ pace: WANTED_PACE: slower while wanted, never held); LOUD = all four
+// (no city scene now); IN_PLAY = ['title']. spec.ahead: arrives by car, may go on the road ahead while wanted.
+// life.onRoute(x, z): for scenes picking among existing spots: only on a wanted player's way. life.busyRunning().
 // life.featured = kind: the title's highlight (game/attractHighlights.ts) lifts every hold for that kind alone;
 // life.lively(kind): d.playing() or featured (use it, not d.playing(), for people gathering to a scene).
 // subject?(out): Scene's optional hook for the highlights: where to look (x, z, vx, vz; cityLife watch()), false when over.
@@ -1021,9 +1049,24 @@ holdStill(sim) · stopped(sim) · pullIn(sim, x, z, heading, cruise, obstacles, 
 //      coins, mugger ring, bag and phone screens are render/peopleLook.ts.
 ```
 
+**How much of it is seen** (`systems/inViewMeter.ts`, pure, tested). The
+director samples every scene with a `subject()` 4 times a second in play
+(`CityLife.inViewMeter`): per kind, seconds with its subject on screen, how
+many started, how many were seen at all and how many ended unseen, and the
+quiet stretches with no incident (chase, race, accident, fight, mugging,
+turf, fire, tow) in view (longest, and how many ran 90 s or more). Typed
+arrays, so sampling allocates nothing. `__ub.inView()` returns a copy; the
+session log gets an `inview` line every 2 minutes of play ("played 600 s ·
+any 40 s · quiet max 95 s (1) · race 12/2/1/1 …": seconds/started/seen/
+unseen). `tools/tune/inview.mjs` drives the phone view through free roam
+and a pursuit with it (*Tuning harnesses*); the numbers are in HANDOFF
+(*V2 in-view numbers*).
+
 **Adding a scene.** Write `src/game/scenes/<name>.ts` with a class that
 implements `Scene`: in its constructor `life.clock.define(kind, spec)`
-(pick its holds: `LOUD` for anything that could get in the player's way);
+(pick its holds: `BUSY` with `pace: WANTED_PACE` for anything loud, so it
+thins out rather than stops while the player is wanted; `ahead: true` if it
+arrives by `spawnCar`);
 in `step`, when `life.due(kind, running)` and you have a spot
 (`life.near(kind, x, z)`, out of view if things appear there), start one
 and `life.clock.start(kind, life.now)` (or `defer` and try later); drive
@@ -1391,6 +1434,17 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   2 busted. `--perks` maxes every CRED perk; 2026-11-01 (12 chases each,
   seed 1): stock car lost at a median 33 s without, 45 s with; tough car
   2 of 12 down to 3 stars with them, none without; no escapes either way.
+- **`inview.mjs [--roam 1200] [--pursuit 300] [--stars 2] [--seed 1] [--view 852x393]`**:
+  how much of the living city a driving player sees (*City life*, the
+  in-view meter). A junction-to-junction bot drives the phone view through
+  `--roam` seconds of free roam (stars cleared as they come), then a
+  `--stars` pursuit (kept there, evading the police like `heat.mjs`), in
+  1/8 s `fastForward` chunks, moving the camera and the clock between them;
+  per segment: seconds with an incident in view, how often one came into
+  view after a quiet spell and the gaps (median, p90, longest), and per
+  kind seconds in view, started, seen, ended unseen. ~1 min a run. The
+  numbers, before and after the city stopped holding off for stars, are in
+  HANDOFF (*V2 in-view numbers*).
 - **`music.mjs <out-dir> [station-id …]`**: renders stations offline
   (`audioLib.mjs`: the game's own audio modules on an OfflineAudioContext
   in the page, ticked like the 25 ms timer) to MP3 (WAV without ffmpeg) for
@@ -1443,7 +1497,7 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   On foot: a parked car peaks at gain 0.2 against the car radio (−14 dB)
   2.5 m off, a shop 0.19 at 3.5 m, the boombox 0.6 at 4 m and still 0.05 at
   26 m; a switch is silent for about 0.5 s.
-- **`mayhem.mjs [--tier medium|low|high|all] [--time day|night|both] [--scenario mayhem|single|drive] [--no-city-fires] [--step 50] [--dpr 3] [--shot dir] [--shots 2,17] [--fx auto|off|on] [--fx-scale 0.25]`**:
+- **`mayhem.mjs [--tier medium|low|high|all] [--time day|night|both] [--scenario mayhem|single|drive|pursuit] [--no-city-fires] [--step 50] [--dpr 3] [--shot dir] [--shots 2,17] [--fx auto|off|on] [--fx-scale 0.25]`**:
   heavy mayhem on the iPhone profile (unlike the others it renders: real
   frames stepped by `__ub.stepFrame(ms)`, Rapier loaded, god mode and the
   destruction test on). Blows up four cars and three walls round the
@@ -1453,7 +1507,14 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   overdraw; SwiftShader can't time the GPU), glows and their fill, draw
   calls, fires and rubble. `--dpr 1` is faster and gives the same fill
   (a share of the screen). `drive` blows nothing up: a bot drives the
-  nearest car round, handbraking into turns (tyre smoke). Smoke work is
+  nearest car round, handbraking into turns (tyre smoke); `pursuit`
+  drives the same way at 5 stars (god mode, the car kept whole) with a
+  busy scene started round it every 5 s through the TEST menu's starter
+  (race, chase, accident, scuffle, tow, turf war, fire: past the holds and
+  the wanted cap, a worst case), reporting the busy scenes and police
+  units at their peak too. 2026-11-02, medium, 40 s, `--step 100 --dpr 1`:
+  draw calls peak 76 / average 60 by day, 68 / 61 at night (7 units, 2–3
+  busy scenes at once); `drive` alone 56 / 47. Smoke work is
   the soft particles' fill, or offscreen their fill × scale² × 1.25 plus
   the composite's tiles; `--fx off|on` forces the low-resolution smoke
   path off or on, `--fx-scale` tries another scale (dev server only), and

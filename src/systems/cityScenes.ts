@@ -1,12 +1,13 @@
 /**
  * The rules behind the city's ambient scenes (game/cityLife.ts runs them):
- * when each kind may start (cooldowns, caps, distance from the player, and
- * what holds it off: the title screen, a mission or other activity, the
- * player being wanted, the first-run tutorial), the phases of a service
- * vehicle's call-out, and a queue served one at a time. Pure logic, no
- * three.js, tested in tests/cityScenes.test.ts.
+ * when each kind may start (cooldowns, caps, distance from the player, what
+ * holds it off: the title screen, a timed race, the first-run tutorial; and
+ * how much slower the loud ones come while the player is wanted), the
+ * phases of a service vehicle's call-out, and a queue served one at a
+ * time. Pure logic, no three.js, tested in tests/cityScenes.test.ts.
  */
 import { len2 } from '../core/len';
+import type { QualityTierName } from '../render/quality';
 
 // --- Scheduling -------------------------------------------------------------
 
@@ -14,7 +15,7 @@ import { len2 } from '../core/len';
 export type SceneHold =
   /** Behind the title (the attract city): nobody's playing. */
   | 'title'
-  /** A mission, race, frenzy, taxi fare or Chaos Run is on. */
+  /** An activity that asks for a quiet city: a timed race, or a mission that says so (activityHolds). */
   | 'activity'
   /** The player has wanted stars. */
   | 'wanted'
@@ -32,6 +33,17 @@ export interface SceneSpec {
   range?: number;
   /** Held off while any of these is so (none: always allowed). */
   hold?: readonly SceneHold[];
+  /**
+   * The clock's pace by the player's wanted stars (index 0..5; unset: wanted
+   * doesn't slow it). A busy scene still comes while you're wanted, just
+   * less often (WANTED_PACE): never zero.
+   */
+  pace?: readonly number[];
+  /**
+   * Arrives by car (CityLife.spawnCar): while wanted, now and then its car
+   * is put on the road ahead of the player (systems/routeAhead.ts).
+   */
+  ahead?: boolean;
 }
 
 /** The state of play the holds are judged against. */
@@ -42,12 +54,50 @@ export interface SceneWorld {
   tutorial: boolean;
 }
 
-/** Holds for anything loud that could get in the way of play (chases, races, brawls): everything. */
+/** Holds for anything that must stop for everything, stars included (no city scene does since V2: see BUSY). */
 export const LOUD: readonly SceneHold[] = ['title', 'activity', 'wanted', 'tutorial'];
+/**
+ * Holds for the busy scenes (chases, races, accidents, fights, muggings,
+ * turf, tows): the title, a timed race or a mission that asks, the
+ * tutorial. Not stars: with BUSY specs give `pace: WANTED_PACE`, so the
+ * city keeps going through a pursuit, a bit thinner.
+ */
+export const BUSY: readonly SceneHold[] = ['title', 'activity', 'tutorial'];
+/** A busy scene's clock pace by wanted stars: fewer the hotter you are, never none. */
+export const WANTED_PACE: readonly number[] = [1, 0.75, 0.6, 0.5, 0.4, 0.35];
 /** Holds for a scene that only makes sense with someone playing (it waits on the player being near). */
 export const IN_PLAY: readonly SceneHold[] = ['title'];
 /** Default distance from the player a scene may start at, m. */
 export const SCENE_START_RANGE = 150;
+
+/** The pace of `spec`'s clock at `stars` (1: full pace). */
+export function paceFor(spec: SceneSpec, stars: number): number {
+  const p = spec.pace;
+  if (!p || p.length === 0) return 1;
+  return p[Math.max(0, Math.min(p.length - 1, Math.floor(stars)))];
+}
+
+/**
+ * Does the activity on (ProgressDirector.busy: 'race', 'mission', 'taxi',
+ * 'frenzy' or null) hold the busy scenes off? Only a timed race, or a
+ * mission that asks (`quiet`). Chaos Run, free roam, fares and frenzies
+ * let the city carry on.
+ */
+export function activityHolds(busy: string | null, missionQuiet: boolean): boolean {
+  return busy === 'race' || (busy === 'mission' && missionQuiet);
+}
+
+/**
+ * Most busy scenes running at once while the player is wanted, by quality
+ * tier: police on top of scene cars on a phone (each model not otherwise in
+ * view is a draw call and a shadow pass). Unlimited with no stars.
+ */
+export const WANTED_SCENE_CAP: Readonly<Record<QualityTierName, number>> = { high: 4, medium: 3, low: 2 };
+
+/** The busy-scene cap for `tier` at `stars` (Infinity: none). */
+export function busyCap(tier: QualityTierName, stars: number): number {
+  return stars > 0 ? WANTED_SCENE_CAP[tier] : Infinity;
+}
 
 /** Is `kind`'s scene held off in `world`? */
 export function held(spec: SceneSpec, world: SceneWorld): boolean {
@@ -67,39 +117,67 @@ export function held(spec: SceneSpec, world: SceneWorld): boolean {
  * defer() tries again shortly (nowhere to put one just now).
  */
 export class SceneClock {
-  private readonly specs = new Map<string, SceneSpec>();
-  private readonly next = new Map<string, number>();
+  /** Each kind's index into the parallel lists (a plain number list: setting a time boxes nothing). */
+  private readonly index = new Map<string, number>();
+  private readonly names: string[] = [];
+  private readonly specs: SceneSpec[] = [];
+  private readonly next: number[] = [];
   private now = 0;
 
   constructor(private readonly rand: () => number) {}
 
   /** Register a kind (each scene does, once). Its first start is `first` (or a full wait) from the last reset. */
   define(kind: string, spec: SceneSpec): void {
-    this.specs.set(kind, spec);
-    this.next.set(kind, this.now + (spec.first ?? this.wait(spec)));
+    let i = this.index.get(kind);
+    if (i === undefined) {
+      i = this.names.length;
+      this.index.set(kind, i);
+      this.names.push(kind);
+      this.specs.push(spec);
+      this.next.push(0);
+    }
+    this.specs[i] = spec;
+    this.next[i] = this.now + (spec.first ?? this.wait(spec));
   }
 
   /** Kinds defined so far, in order. */
   get kinds(): string[] {
-    return [...this.specs.keys()];
+    return this.names.slice();
   }
 
   spec(kind: string): SceneSpec {
-    const s = this.specs.get(kind);
-    if (!s) throw new Error(`scene kind '${kind}' was never defined`);
-    return s;
+    return this.specs[this.at(kind)];
   }
 
   /** Every clock from `now` (a fresh run): each kind's first start after its `first` (or a full wait). */
   reset(now: number): void {
     this.now = now;
-    for (const [k, s] of this.specs) this.next.set(k, now + (s.first ?? this.wait(s)));
+    for (let i = 0; i < this.specs.length; i++) this.next[i] = now + (this.specs[i].first ?? this.wait(this.specs[i]));
+  }
+
+  /**
+   * Time passes at `stars`: a paced kind's clock runs at its pace (its next
+   * start slides later by the rest of `dt`). `except`: a kind that keeps
+   * full pace (a featured scene).
+   */
+  tick(dt: number, stars: number, except: string | null = null): void {
+    if (stars <= 0) return;
+    for (let i = 0; i < this.specs.length; i++) {
+      const pace = paceFor(this.specs[i], stars);
+      if (pace < 1 && this.names[i] !== except) this.next[i] += dt * (1 - pace);
+    }
+  }
+
+  /** Is `kind` a busy one (slowed by stars, counted against busyCap)? */
+  busy(kind: string): boolean {
+    return this.specs[this.at(kind)].pace !== undefined;
   }
 
   /** May a `kind` start at `now` with `running` of them going, in `world`? */
   due(kind: string, now: number, running: number, world: SceneWorld): boolean {
-    const s = this.spec(kind);
-    return running < s.cap && now >= (this.next.get(kind) ?? 0) && !held(s, world);
+    const i = this.at(kind);
+    const s = this.specs[i];
+    return running < s.cap && now >= this.next[i] && !held(s, world);
   }
 
   /** Is a spot `distance` m from the player close enough for `kind` to start there? */
@@ -109,17 +187,24 @@ export class SceneClock {
 
   /** One started: the next no sooner than a fresh wait. */
   start(kind: string, now: number): void {
-    this.next.set(kind, now + this.wait(this.spec(kind)));
+    const i = this.at(kind);
+    this.next[i] = now + this.wait(this.specs[i]);
   }
 
   /** Couldn't start one now (no spot, no vehicle): look again in `seconds`. */
   defer(kind: string, now: number, seconds = 3): void {
-    this.next.set(kind, now + seconds);
+    this.next[this.at(kind)] = now + seconds;
   }
 
   /** Seconds until `kind` may start (tests, the debug hook). */
   left(kind: string, now: number): number {
-    return Math.max(0, (this.next.get(kind) ?? 0) - now);
+    return Math.max(0, this.next[this.at(kind)] - now);
+  }
+
+  private at(kind: string): number {
+    const i = this.index.get(kind);
+    if (i === undefined) throw new Error(`scene kind '${kind}' was never defined`);
+    return i;
   }
 
   private wait(s: SceneSpec): number {

@@ -8,7 +8,7 @@
  * yardstick; run it before and after a change with the same seed.
  *
  *   npx -y -p playwright@1.63.0 node tools/tune/mayhem.mjs [--tier medium|low|high|all] [--time day|night|both]
- *       [--seconds 36] [--seed 7] [--scenario mayhem|single|drive] [--no-city-fires] [--shot dir]
+ *       [--seconds 36] [--seed 7] [--scenario mayhem|single|drive|pursuit] [--no-city-fires] [--shot dir]
  *       [--shots 0.4,3,17] [--fx auto|off|on] [--fx-scale 0.25] [--step 50] [--dpr 3]
  *
  * Frames are stepped `--step` ms apart (coarser runs faster on a busy
@@ -19,7 +19,11 @@
  * The dev server must be up (npm run dev); URL overrides the address.
  * --scenario single blows up one car (normal play: the budgets must leave it be);
  * drive boards the nearest car and drives it round (a weaver bot that
- * handbrakes into turns: tyre smoke, skids), nothing blown up.
+ * handbrakes into turns: tyre smoke, skids), nothing blown up; pursuit
+ * drives the same way at 5 stars with the city's busy scenes started round
+ * it every 5 s (a race, a chase, an accident, a fight, a tow, a turf war,
+ * a fire: the TEST menu's starter, past the holds and the wanted cap, so a
+ * worst case), for the draw calls with police and scene cars at once.
  * --shot saves the last frame to that directory, or with --shots the frames
  * at those seconds (same seed, same moments: before/after comparisons).
  * Smoke work is the soft particles' fragment work in full-resolution screens:
@@ -80,7 +84,7 @@ for (const tier of TIERS) {
     await page.waitForFunction(() => window.__ub, null, { timeout: 90000 });
     await page.waitForTimeout(1500);
     const r = await page.evaluate(
-      async ({ time, seconds, stepMs, cityFires, wantShot, shotsAt, single, drive, fx, fxScale }) => {
+      async ({ time, seconds, stepMs, cityFires, wantShot, shotsAt, single, drive, pursuit, fx, fxScale }) => {
         const u = window.__ub;
         // Rapier loads behind the title in a real frame (stubbed here): load it now, then play.
         u.destruction.preload();
@@ -213,8 +217,17 @@ for (const tier of TIERS) {
         let smokeFillSum = 0;
         const steps = Math.round((seconds * 1000) / stepMs);
         const first = Math.round(500 / stepMs);
+        const SCENES = ['race', 'chaseCar', 'accident', 'fight', 'tow', 'turf', 'fire'];
+        let nextScene = 0;
+        if (pursuit) u.progress.progress.data.tutorial = 3;
         for (let k = 0; k < steps; k++) {
           const t = (k * stepMs) / 1000;
+          if (pursuit) {
+            if (k === first) u.heat.wanted.force(5);
+            else if (k > first && u.heat.wanted.level < 5 && !u.player.arrested) u.heat.wanted.force(5);
+            if (u.player.driving) u.player.driving.damage.health = u.player.driving.damage.maxHealth;
+            if (k >= first && k % Math.round(5000 / stepMs) === 0) u.testTools.scene(SCENES[nextScene++ % SCENES.length]);
+          }
           if (drive) {
             // nothing blown up
           } else if (single) {
@@ -285,6 +298,8 @@ for (const tier of TIERS) {
               people: `${c.peopleSeen}/${c.people}`,
               cars: `${c.carsSeen}/${c.cars}`,
               kinds: c.kinds,
+              busy: u.cityLife.busyRunning?.() ?? 0,
+              units: u.heat.police.units.length,
             });
           }
         }
@@ -317,7 +332,8 @@ for (const tier of TIERS) {
         wantShot: !!opt.shot && !SHOTS.length,
         shotsAt: opt.shot ? SHOTS : [],
         single: opt.scenario === 'single',
-        drive: opt.scenario === 'drive',
+        drive: opt.scenario === 'drive' || opt.scenario === 'pursuit',
+        pursuit: opt.scenario === 'pursuit',
         fx: opt.fx,
         fxScale: opt['fx-scale'],
       },
@@ -356,6 +372,8 @@ for (const tier of TIERS) {
       'render ms': r.renderMs,
       'fires pk': peak('fires'),
       'rubble pk': peak('rubbleDrawn'),
+      'busy pk': peak('busy'),
+      'units pk': peak('units'),
     };
     rows.push(row);
     console.log(JSON.stringify(row));

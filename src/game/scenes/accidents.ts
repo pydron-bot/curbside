@@ -15,7 +15,7 @@
  * while the player is near; the cars are recycled like any abandoned car
  * once far off and out of sight.
  */
-import { LOUD } from '../../systems/cityScenes';
+import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
 import { FIGHT_SHARE, crumple, laneGapAhead } from '../../systems/trafficScenes';
 import { driveAi, type Obstacle } from '../../systems/traffic';
 import { forwardSpeed, isBike, type VehicleControls } from '../../entities/vehicle';
@@ -88,7 +88,7 @@ export class Accidents implements Scene {
   private readonly wp = { x: 0, z: 0 };
 
   constructor(private readonly life: SceneCtx) {
-    life.clock.define('accident', { every: [80, 160], cap: 1, first: 45, range: RANGE[1], hold: LOUD });
+    life.clock.define('accident', { every: [80, 160], cap: 1, first: 45, range: RANGE[1], hold: BUSY, pace: WANTED_PACE });
   }
 
   /** Scenes still playing out (sites left in the road don't count). */
@@ -189,7 +189,7 @@ export class Accidents implements Scene {
     for (const a of vs) {
       if (!this.free(a) || forwardSpeed(a.sim) < 4) continue;
       const d = life.distance(a.sim.x, a.sim.z);
-      if (d < RANGE[0] || d > RANGE[1]) continue;
+      if (d < RANGE[0] || d > RANGE[1] || !life.onRoute(a.sim.x, a.sim.z)) continue;
       for (const b of vs) {
         if (b === a || !this.free(b) || forwardSpeed(b.sim) < 2) continue;
         const gap = laneGapAhead(a.sim, b.sim, PAIR_GAP[1]);

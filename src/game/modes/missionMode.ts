@@ -117,6 +117,12 @@ export class MissionMode implements Mode {
   private calling = false;
   private readonly view: MissionView;
 
+  /** Does the job on ask the city to hold its busy scenes off (a `quiet` job, or a checkpoint race step)? */
+  get quiet(): boolean {
+    const run = this.run;
+    return run !== null && (run.def.quiet === true || run.step?.kind === 'race');
+  }
+
   constructor(
     private readonly ctx: ModeCtx,
     docks: { x: number; z: number },

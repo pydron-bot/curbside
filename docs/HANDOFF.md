@@ -393,6 +393,77 @@ still get the offline shell.
 Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
 launch ramp landing at a corner checkpoint (is that a feature?).
 
+## V2 in-view numbers
+
+How much of the living city a driving player sees (V2-01): the meter
+(`systems/inViewMeter.ts`, `__ub.inView()`, an `inview` line in the session
+log every 2 minutes of play) and `tools/tune/inview.mjs`: a bot drives the
+iPhone landscape view (852×393) for 20 minutes of free roam (stars cleared),
+then 5 minutes of a 2-star pursuit kept at 2. "Incident" means a chase,
+race, accident, fight, mugging, turf war, fire or tow; seconds are the
+scene's subject on screen. Three seeds (1, 2, 3).
+
+**Baseline (before V2-02, everything loud held while wanted):**
+
+| | seed 1 | seed 2 | seed 3 |
+|---|---|---|---|
+| Free roam: an incident in view | 68 s (6%) | 50 s (4%) | 73 s (6%) |
+| Free roam: came into view after a quiet spell | 32× | 22× | 27× |
+| Free roam: gap median / p90 | 28 / 92 s | 19 / 91 s | 43 / 69 s |
+| Free roam: longest quiet (stretches ≥ 90 s) | 136 s (4) | 369 s (3) | 208 s (1) |
+| 2-star pursuit: an incident in view | 0 s | 0 s | 1 s (a fire) |
+| 2-star pursuit: loud scenes started | 0 | 0 | 0 |
+
+Free roam per kind, seed 1 (in view s / started / seen / ended unseen):
+tow 28/17/9/8, busker 19/15/5/10, accident 11/6/3/3, race 10/7/5/1,
+mugging 8/9/6/3, turf 7/4/1/3, chase 6/9/3/6, fight 0/2/0/2, fire 0/6/0/4.
+The ice cream van (56 started), the bus (29) and stray dogs (235) were
+never in view from a moving car. The pursuit is the gap V2-02 is for: the
+city stops dead the moment you have a star.
+
+**After V2-02 (busy scenes run while wanted at the wanted pace, chases and
+races sometimes on the road ahead, accidents and turf on your way):**
+
+| | seed 1 | seed 2 | seed 3 |
+|---|---|---|---|
+| Free roam: an incident in view | 81 s (7%) | 52 s (4%) | 73 s (6%) |
+| Free roam: came into view after a quiet spell | 28× | 22× | 27× |
+| Free roam: gap median / p90 | 11 / 143 s | 37 / 80 s | 43 / 69 s |
+| 2-star pursuit (5 min): an incident in view | 1 s | 15 s | 10 s |
+| 2-star pursuit: came into view / gap median | 1× / 178 s | 6× / 30 s | 5× / 37 s |
+| 2-star pursuit: put on the road ahead | 1 | 1 | 2 |
+| 2-star pursuit: busy scenes started | 7 | 9 | 8 |
+
+Seen in the pursuits: turf wars (2 of 3 started), muggings (2 of 3),
+accidents (2 of 4), tows (3 of 8), a race (1 of 2). Over 15 minutes at 2
+stars (seeds 1, 2; into the night): an incident in view 67 s and 14 s,
+coming into view 18× and 8×, gap median 18 s and 62 s (p90 110 s and
+208 s), 5 and 4 put on the road ahead. The runs are noisy (one bot route
+past a scene or not); read them as "something now happens in a pursuit"
+rather than a rate. Free roam moves only within the seeds' noise (stars
+there are cleared as they come, so little changed).
+
+**Review fix:** chases started while you were wanted broke off on their
+next step (`stepChase`), units and all driving off, so the counts above
+include some that did; chases now wait for no stars (`CHASE_HOLD` in
+`scenes/chases.ts`) until the chase stream's V2-03 lets one carry on.
+Re-run after that, pursuit only (`--roam 0 --pursuit 300`, so at night,
+hour ~2–3): an incident in view 12 / 12 / 7 s (seeds 1/2/3), coming into
+view 4× / 4× / 3×, 1 race each on the road ahead, no chase started.
+
+**Not yet:** no chase is seen in a pursuit until V2-03; the 5-minute pursuits run by day (17–19 h), when races are mostly
+put off; and free roam's p90 gap is still over 90 s on one seed in three
+(placement in free roam, or new incidents, is the next lever).
+
+**5-star soak, iPhone `medium`** (`mayhem.mjs --scenario pursuit --tier
+medium --time both --seconds 40 --step 100 --dpr 1`: 5 stars held, a busy
+scene forced round the player every 5 s past every hold and cap): draw
+calls peak 76 (average 60) by day, 68 (61) at night, with 7 police units
+and 2–3 busy scenes at once; the same drive with no stars 56 (47). Well
+under 150. The forced starts go past the tier cap the clocks keep to while
+wanted (`WANTED_SCENE_CAP`: high 4, medium 3, low 2), so in play it's at
+most this.
+
 ## Working conventions that worked
 
 - Big features as **streams in separate git worktrees** (`git worktree add

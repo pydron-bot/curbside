@@ -10,7 +10,7 @@
  * in by anyone who saw it (Witnesses asks `isMugger`). Ignore them and they
  * get away; a dropped bag nobody picks up is gone after a while.
  */
-import { LOUD } from '../../systems/cityScenes';
+import { BUSY, WANTED_PACE } from '../../systems/cityScenes';
 import { BLOCKS_PER_SIDE } from '../../world/city';
 import { blockAt, cornerPoint, hurtPed } from '../../systems/crowd';
 import { nextCorner } from '../../systems/streetPeople';
@@ -75,7 +75,7 @@ export class Muggings implements Scene {
   private readonly next = { bx: 0, bz: 0, corner: 0 };
 
   constructor(private readonly life: SceneCtx) {
-    life.clock.define('mugging', { every: [90, 180], cap: 1, first: 60, range: VICTIM_RING[1], hold: LOUD });
+    life.clock.define('mugging', { every: [90, 180], cap: 1, first: 60, range: VICTIM_RING[1], hold: BUSY, pace: WANTED_PACE });
     for (let i = 0; i < BAG_MAX; i++) this.bags.push({ x: 0, z: 0, until: 0, owner: null });
   }
 

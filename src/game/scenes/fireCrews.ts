@@ -10,12 +10,14 @@
  * walk back, and it drives off. Unattended fires burn out on their own.
  *
  * Faked light and particles only; the fires hurt nobody (a molotov's
- * still does: systems/projectiles.ts). Held off behind the title, in an
- * activity (a mission, a race, the Chaos Run: fires burn out by
- * themselves) and in the tutorial; MAX_TRUCKS at once.
+ * still does: systems/projectiles.ts). Held off behind the title, in a
+ * timed race or a mission that asks (fires burn out by themselves) and in
+ * the tutorial; MAX_TRUCKS at once. Stars don't slow it: your fires get
+ * their trucks.
  */
 import type { VehicleState } from '../../entities/vehicle';
 import { FireBoard, wallFireAt, type Fire } from '../../systems/emergency';
+import { BUSY } from '../../systems/cityScenes';
 import type { CrowdPed, Vehicle } from '../population';
 import { watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { ServiceRun, type ServiceSpec } from './service';
@@ -93,7 +95,7 @@ export class FireCrews implements Scene {
 
   constructor(private readonly life: SceneCtx) {
     for (let i = 0; i < this.board.fires.length; i++) this.cars.push(null);
-    life.clock.define('fire', { every: [4, 8], cap: MAX_TRUCKS, first: 3, range: CALL_RANGE, hold: ['title', 'activity', 'tutorial'] });
+    life.clock.define('fire', { every: [4, 8], cap: MAX_TRUCKS, first: 3, range: CALL_RANGE, hold: BUSY });
     life.d.bus.on('explosion', (e) => {
       if (e.source === 'grenade' || e.source === 'rocket') this.wallFire(e.x, e.z);
       else this.carFire(e.x, e.z);
