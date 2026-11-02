@@ -87,6 +87,8 @@ import type { PauseReason } from './ui/pauseOverlay';
 import { loadBest } from './ui/scoreHud';
 import { StampHud } from './ui/stampHud';
 import { Stamps } from './game/stamps';
+import { Scanner } from './game/scanner';
+import { ScannerHud } from './ui/scannerHud';
 import type { StampId } from './systems/stamps';
 import { mountTouchControls } from './ui/touchControls';
 import { mountCarButtons } from './ui/carButtons';
@@ -1375,6 +1377,8 @@ function updateHud(frameSeconds: number) {
   hudFrame.driveBy = v !== null && tool === null && gun !== null && WEAPONS[gun].driveBy;
   hudFrame.cheated = player.tainted;
   hud.update(frameSeconds, hudFrame);
+  scanner.step(frameSeconds);
+  scannerHud.update(frameSeconds);
   combatHud.update(player.armour, nitro.charge, nitro.boosting, nitro.charge >= NITRO_MIN);
   carButtons.update(v ? (gun && WEAPONS[gun].driveBy ? gun : player.arsenal.driveByGun()) : null, nitro.charge, nitro.charge >= NITRO_MIN || nitro.boosting, tool);
   touch.setWeapon(gun, gun !== null || ownsGun());
@@ -1407,6 +1411,20 @@ new StampHud(document.getElementById('hud')!, events);
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
 // Where the ambulances go.
 radar.setBlip('hospital', { x: cityLife.hospital.x, z: cityLife.hospital.z, kind: 'friend', icon: '+', size: 6 });
+// The police scanner (game/scanner.ts): dispatcher lines along the bottom and radar pings on the incidents.
+const scannerHud = new ScannerHud(document.getElementById('hud')!, events);
+const scanner = new Scanner({
+  bus: events,
+  now: () => simTime,
+  live: () => !attract.active,
+  position: () => player.position,
+  driving: () => player.driving,
+  stars: () => heat.wanted.level,
+  city: cityLife,
+  radar,
+  clear: () => scannerHud.clear(),
+  log: (kind, detail) => logEvent(kind, detail),
+});
 const wantedHud = new WantedHud(document.body, events);
 const heatPresenter = new HeatPresenter(heat, audio, radar, wantedHud, hud.score, events);
 const threats = new ThreatIndicators(document.body);
@@ -1776,6 +1794,9 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   stamps,
   /** Slam a stamp on now (smoke test, playtests): an id from STAMPS ('barbecueSeason', 'takeTheHeat', …). */
   stamp: (id: StampId) => stamps.force(id),
+  /** The police scanner: say(topic) (now, at the player's), setEnabled(on), feed (pings, stars, said). */
+  scanner,
+  scannerHud,
   /** The city's own life (game/cityLife.ts): clock, scenes, medics, drops, people, owned, hospital, bays. */
   cityLife,
   /** How much of the city the player has seen (systems/inViewMeter.ts): per-kind seconds in view, starts, seen, unseen. */

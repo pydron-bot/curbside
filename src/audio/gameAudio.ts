@@ -695,6 +695,11 @@ export class GameAudio {
         return this.onStamp();
       case 'tool':
         return this.onTool(e);
+      case 'scanner': {
+        // A burble a syllable per few letters, capped: the subtitle carries the words.
+        const syllables = Math.min(9, Math.max(4, Math.round(e.text.length / 7)));
+        return this.oneShot('ui', null, FALLOFF.near, 0.5, 0, (v) => sfx.squelch(v, syllables));
+      }
       default: {
         const unhandled: never = e;
         return unhandled;

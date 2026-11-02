@@ -12,7 +12,9 @@
  * screenshot, the report and the share sheet (mocked: shared, cancelled,
  * refused). On every profile, a named-mayhem stamp (and on the phones one
  * in a Chaos Run) must stay clear of the stars, radar, activity card and
- * score feed. Catches the wiring crashes `npm test` can't.
+ * score feed, and the police scanner's subtitle clear of all that, the
+ * radio's card and the thumbs, on foot and in a car. Catches the wiring
+ * crashes `npm test` can't.
  *
  *   npx -y -p playwright@1.63.0 node tools/smoke.mjs [--no-build] [--port 4318] [--out smoke-out]
  *
@@ -232,6 +234,79 @@ async function stampCheck(page, label, chaos) {
   await page.screenshot({ path: path.join(opt.out, `${label}${chaos ? '-chaos' : ''}-stamp.png`), timeout: 120000 });
 }
 
+/** What the scanner's subtitle must stay clear of: the stamp's list, the stamp itself, the radio's card, the prompts, the thumbs. */
+const SCANNER_CLEAR_OF = [...STAMP_CLEAR_OF, '#stamp .stamp-box', '#radio', '#act-prompt', '.hud-prompt', '.speedo', '.pedal-pad', '.stick-base', '.aim-base'];
+
+/**
+ * The police scanner's subtitle (V2-11) with everything else up at once:
+ * three stars, a stamp held mid-show, the radio's card in, on foot and
+ * then in a car (the touch layout changes). On screen and clear of all of
+ * it; a screenshot in the car.
+ */
+async function scannerCheck(page, label) {
+  for (const inCar of [false, true]) {
+    const r = await page.evaluate(
+      async ({ inCar, clearOf }) => {
+        const u = window.__ub;
+        const frames = async (n) => {
+          for (let i = 0; i < n; i++) await new Promise((res) => requestAnimationFrame(() => res()));
+        };
+        if (u.paused) u.setPaused(false);
+        if (inCar && !u.player.driving) u.testTools.spawn('sedan');
+        u.testTools.wanted(3);
+        u.stamp('neighbourhoodWatch');
+        await frames(3);
+        // The stamp sends the radio's card off; bring it back once it has gone, the stars and stamp step down for it.
+        await new Promise((res) => setTimeout(res, 600));
+        const radio = document.querySelector('#radio');
+        radio.hidden = false;
+        radio.classList.add('in');
+        // Held on screen while it's measured and shot (SwiftShader frames are slow enough to run its time out).
+        u.scannerHud.update = () => {};
+        u.scanner.say('fire');
+        await frames(3);
+        await Promise.race([Promise.all(document.getAnimations().filter((a) => a instanceof CSSTransition).map((a) => a.finished.catch(() => {}))), new Promise((res) => setTimeout(res, 5000))]);
+        for (const a of document.querySelector('#stamp .stamp-box').getAnimations()) {
+          a.pause();
+          a.currentTime = 800;
+        }
+        const rect = (el) => {
+          const b = el.getBoundingClientRect();
+          return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, w: b.width, h: b.height };
+        };
+        const box = document.querySelector('#scanner .sc-box');
+        const s = rect(box);
+        const hits = [];
+        for (const sel of clearOf) {
+          for (const el of document.querySelectorAll(sel)) {
+            const b = rect(el);
+            if (b.w === 0 || b.h === 0 || getComputedStyle(el).visibility === 'hidden') continue;
+            if (s.left < b.right && b.left < s.right && s.top < b.bottom && b.top < s.bottom) hits.push(`${sel} ${Math.round(b.left)},${Math.round(b.top)}–${Math.round(b.right)},${Math.round(b.bottom)}`);
+          }
+        }
+        return {
+          text: box.textContent,
+          opacity: Number(getComputedStyle(box).opacity),
+          inside: s.left >= 0 && s.right <= innerWidth && s.top >= 0 && s.bottom <= innerHeight,
+          driving: !!u.player.driving,
+          ping: u.scanner.feed.pinging,
+          hits,
+          s,
+        };
+      },
+      { inCar, clearOf: SCANNER_CLEAR_OF },
+    );
+    const where = `${label} ${inCar ? 'in a car' : 'on foot'}`;
+    check(r.text.includes('SCANNER') && r.opacity > 0.9 && r.inside && r.ping && r.driving === inCar, `${where}: scanner line and ping show (${Math.round(r.s.left)},${Math.round(r.s.top)} ${Math.round(r.s.w)}×${Math.round(r.s.h)})`);
+    check(r.hits.length === 0, `${where}: scanner line clear of the HUD, stamp, radio card and thumbs${r.hits.length ? ` (covers ${r.hits.join(', ')})` : ''}`);
+    if (inCar) await page.screenshot({ path: path.join(opt.out, `${label}-scanner.png`), timeout: 120000 });
+  }
+  await page.evaluate(() => {
+    const u = window.__ub;
+    delete u.scannerHud.update;
+  });
+}
+
 /**
  * REPORT BUG from the pause card (test tools on): a screenshot is taken, the
  * share sheet gets a JPEG and the JSON report, and a cancelled or refused
@@ -299,6 +374,7 @@ try {
       await play(page, label);
       if (saved?.testTools) await bugReport(page, label);
       await stampCheck(page, label, false);
+      await scannerCheck(page, label);
       // The phones: the Chaos Run's card and stars up too (stamps stay on there).
       if (label.startsWith('iphone')) await stampCheck(page, label, true);
     } catch (e) {

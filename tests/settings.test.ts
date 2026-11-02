@@ -30,6 +30,7 @@ describe('settings: sanitising what was stored', () => {
       godMode: true,
       testTools: true,
       debugLabels: true,
+      scanner: false,
     };
     expect(sanitizeSettings(stored)).toEqual(stored);
   });
@@ -64,6 +65,12 @@ describe('settings: sanitising what was stored', () => {
       expect(sanitizeSettings({ debugLabels: bad }).debugLabels).toBe(false);
     }
     expect(sanitizeSettings({ debugLabels: true }).debugLabels).toBe(true);
+  });
+
+  it('the police scanner is on by default and must be a boolean', () => {
+    expect(DEFAULT_SETTINGS.scanner).toBe(true);
+    for (const bad of ['false', 0, null, {}]) expect(sanitizeSettings({ scanner: bad }).scanner).toBe(true);
+    expect(sanitizeSettings({ scanner: false }).scanner).toBe(false);
   });
 
   it('god mode left on from before the TEST menu turns the menu on, so it can be turned off', () => {
