@@ -115,7 +115,9 @@ candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B five new
 weapons the owner picked (AIR HORN, STINGER, SMOKE GRENADE that confuses
 pursuing cops, TASER, STICKY CHARGE). W3-C four new street scenes
 the owner picked (QUIET PLEASE march, roadworks, bin day with a tipper
-for Borrowed Blues, delivery rush). Run at most three
+for Borrowed Blues, delivery rush); W3-D a desktop map editor whose edits ship in the
+game (place things, blocks, roads, districts) with an overlay of what
+depends on a route. Run at most three
 streams at once (4 cores; SwiftShader smoke tests are CPU-bound). Give
 each stream its own smoke port and scratch dir: `smoke.mjs` starts
 `vite preview` with output ignored, so a taken port silently tests

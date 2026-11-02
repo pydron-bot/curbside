@@ -552,6 +552,50 @@ TEST and OBSERVE palettes and gets a scanner line.
   (taxi-style pay). Builds on the scooter models and rider ejection, the
   police bike, `modes/taxi.ts` pay, the kebab shop.
 
+### W3-D · Map editor (owner request, 2026-11-02)
+
+> "A way for me to edit the map" — and "a way to see what depends upon a
+> particular route. Like an overlay."
+
+Owner's answers: edit everything (place things, blocks, roads,
+districts), desktop first, and the edits **ship in the game**.
+
+- **Shape:** the city stays generated from its seed; a committed map file
+  (e.g. `public/maps/city.json`, loaded with `publicUrl`) holds the owner's
+  edits as an overrides layer applied after `generateCity`: block kinds
+  (buildings and their height/style, park, car park, plaza, empty lot),
+  closed/opened road segments and one-way streets, district repaints, and
+  added/moved/deleted props, ramps, payphones, pickups, spawn points and
+  landmarks. Local edits sit in the browser until EXPORT writes the file
+  to commit; the editor can diff the two and revert.
+- **Editor:** a desktop mode (an EDIT entry with Test tools on) built on
+  observe mode's free camera: click to select, drag to move, Delete, a
+  side panel with the block/road/district tools and a palette of things to
+  place. Undo/redo. The city rebuilds the touched 256 m chunk, not the
+  whole map.
+- **Dependency overlay** (the owner's ask): select a road segment, block
+  or junction and see everything that relies on it, drawn on the map and
+  listed in the panel: race courses, story jobs' spawns and routes (s4's
+  tow truck, s6's coach tour), bus stops and routes, payphones, the docks
+  yard and safehouse, scene spots (vendors, shelters, hydrants, film
+  shoot), test spots, ramps. A road closure or block change that breaks
+  something turns it red before you commit (a course that can't be
+  driven, a spawn inside a building, a district a job names that no
+  longer contains its spot).
+- **Validation:** the same checks run in `npm test` against the committed
+  map (the existing placement and course tests read the edited city), so
+  a map that breaks a job can't ship.
+- **Risks:** roads are the deep end (traffic, races, routes, the scanner's
+  districts and story placement all read the road graph); start with
+  placing things, blocks and districts, roads last. The edited city must
+  stay inside the iPhone budgets (draw calls are per chunk, so fine;
+  buildings per chunk and the low-res pass's occluder boxes are the
+  limits). W3-A (a bigger city) should come first or be designed with it,
+  since new districts are exactly what the editor would build.
+- **First step:** an inventory of everything placed by hand or tied to a
+  spot (the dependency graph the overlay draws), then the overrides file
+  format with load/apply/round-trip tests, before any UI.
+
 ## Schedule
 
 | Days | Milestone | Items | Exit criteria |
