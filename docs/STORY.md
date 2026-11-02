@@ -70,7 +70,7 @@ every crash, bullet and blast sets off "your" alarms.
 
 | Speaker label | Who | Drawn as | Card badge |
 | --- | --- | --- | --- |
-| `DOREEN` | Runs the ice cream van, and the kerb traders. Lost her chimes to the Act. | (not seen yet) | mint |
+| `DOREEN` | Runs the ice cream van, and the kerb traders. Lost her chimes to the Act. | `player_f`, mint shirt (job 4) | mint |
 | `LIONEL` | Busker. Red waistcoat, a hat that is his livelihood. | `ped_slim`, red shirt | violet |
 | `MAYOR LULL` | Mayor Prudence Lull. Wants the *Quietest City* award. Heard on the radio, never seen. | — | pearl |
 | `VEX` | Runs the Graveyard Shift. Orange hair, blue overalls, toolbelt. | `vex` GLB | pink |
@@ -78,6 +78,8 @@ every crash, bullet and blast sets off "your" alarms.
 | `DEACON PIKE` | Leader of the Chrome Saints in chapter 1. Ruined and broke in chapter 2, and a reluctant informant. | `pike` GLB | steel blue |
 | `COMMISSIONER CLAMP` | Parking Commissioner, runs the city impound. Grey suit, clipboard. | `ped_coat`, grey shirt | traffic-cone orange |
 | — | Lull's wardens (main story, job 3) and Clamp's (Night Shift job 13). Hi-vis yellow. | `ped_stocky` | — |
+| — | The Graveyard Shift's tow truck (main story, job 4): Vex's crew, on a council contract. | `tow_truck`, Shift blue `#3c5a8c` | — |
+| — | Lull's limo (job 5), pearl; the award judges' coach (job 6), navy. Nobody inside is seen. | `limo`, `bus` | — |
 | — | The Collector, Pike's money man (Night Shift job 7). | `pike` GLB | — |
 
 The card picks a badge colour from the speaker label (`badgeFor` and
@@ -90,9 +92,9 @@ speaker in the story has one.
 
 | District | Name | In the story |
 | --- | --- | --- |
-| downtown | GLASS HEIGHTS | Lull's wardens and Lionel (job 3); the safehouse, the city impound, Clamp's office |
-| oldtown | COBBLE ROW | the street you wired (job 2); the Saints' vans (Night Shift) |
-| arts | NEON MILE | where Lionel plays (job 3); Tuna's hide-outs, Clamp's tow-away zone (Night Shift) |
+| downtown | GLASS HEIGHTS | Lull's wardens and Lionel (job 3); Lull's ribbon (job 5); where the judges' coach sets off (job 6); the safehouse, the city impound, Clamp's office |
+| oldtown | COBBLE ROW | the street you wired (job 2); Doreen's pitch (job 4); the coach's race (job 6); the Saints' vans (Night Shift) |
+| arts | NEON MILE | where Lionel plays (job 3); the Shift's truck with Doreen's van (job 4); the coach's fire and turf flare-up (job 6); Tuna's hide-outs, Clamp's tow-away zone (Night Shift) |
 | industrial | RUSTWATER DOCKS | the docks yard and its phone: the Night Shift's |
 | residential | MAPLE FLATS | the Collector, Pike's bus shelter (Night Shift) |
 
@@ -102,16 +104,16 @@ There are four payphones. The main story (after the cold open) rings from three
 same one; the Night Shift rings only from `phone-docks`. Tests check that
 the people, cars and areas are in the districts the dialogue names.
 
-## KEEP IT LOUD, chapter 1 (6 jobs)
+## KEEP IT LOUD, chapter 1 (6 jobs, $12,300)
 
 | # | Id | Job | Phone | Pay | What happens |
 | --- | --- | --- | --- | --- | --- |
 | 1 | `s1-wrongstop` | WRONG STOP | none (the cold open) | $300 | A getaway crashes at your bus shelter: GET IN · LOSE THE HEAT. |
 | 2 | `s2-noise` | MAKE SOME NOISE | oldtown | $1,000 | 2,500 points of mayhem in Cobble Row, with a street race started there to crash into. |
 | 3 | `s3-quiet` | QUIET PLEASE | suburbs | $1,500 | Flatten Lull's two wardens in Glass Heights, pick up Lionel, get him to Neon Mile. |
-| 4 | `s4` | NINETY-NINE PROBLEMS | — | — | Take Doreen's van back off a Graveyard Shift tow truck, unscratched. The Night Shift's one cameo. *Outline.* |
-| 5 | `s5` | RIBBON CUTTING | — | — | Wreck the Mayor's limo. *Outline.* |
-| 6 | `s6` | QUIETEST CITY | — | — | 5,000 points of mayhem near the award judges' coach, with a race, a fire and a turf flare-up started along its route. *Outline.* |
+| 4 | `s4-problems` | NINETY-NINE PROBLEMS | arts | $2,000 | Take Doreen's van back off a Graveyard Shift tow truck, unscratched, and bring it to her in Cobble Row. The Night Shift's one cameo. |
+| 5 | `s5-ribbon` | RIBBON CUTTING | oldtown | $2,500 | Wreck the Mayor's limo as it leaves her Silent Zone ribbon in Glass Heights. |
+| 6 | `s6-quietest` | QUIETEST CITY | suburbs | $5,000 | 5,000 points of mayhem round the award judges' coach as it tours, with a race, a fire and a turf flare-up started along its route. **STORY COMPLETE.** |
 
 The cold open runs once (a fresh save's first PLAY; Settings → REPLAY
 OPENING for another go). Once it has run, `s2` rings whether or not `s1`
@@ -186,32 +188,121 @@ HE WAS ON YOUR SIDE.
 > **LIONEL:** Neon Mile! An audience! Several of them are even awake!
 > **DOREEN:** Lull will send more wardens. Good. Means it's working.
 
-### 4–6 (outline)
+### 4. NINETY-NINE PROBLEMS
+
+`s4-problems` · phone-arts · $2,000
+
+The main story's one brush with the Night Shift: Lull has hired Vex's crew
+to tow the traders' vans. Towing is never a main-story verb: you take the
+van back, you don't hook it.
+
+> **DOREEN:** They're towing my van. Council contract. Some night crew in blue.
+> **VEX:** Nothing personal. Council pays by the van. You pay in compliments.
+> **DOREEN:** It's on their hook on Neon Mile. Box them in at a light. Not one scratch, mind. She's vintage.
+
+1. **TAKE THE VAN BACK · DON'T SCRATCH IT.** The Shift's tow truck (blue,
+   as Vex's) stands at a Neon Mile kerb with Doreen's mint ice cream van
+   on its hook, and pulls away into traffic once you're within 35 m (or
+   it's hit), at 10 m/s with the van trailing. The crew lets the van go
+   where it stands when the truck is caught standing for a moment with
+   you within 24 m (a red light, boxed in by your car), when its driver's
+   gone (carjacked, bailed out after a ram, the truck wrecked), or the
+   moment you get into the van itself (on foot, while it waits at a light).
+2. **BRING IT TO DOREEN IN COBBLE ROW.** Doreen waits on the pavement at
+   her pitch.
+
+The job fails if the van is wrecked, scratched (under 90% health, at any
+point: YOU SCRATCHED DOREEN'S VAN) or, once it's yours, left behind.
+
+> **DOREEN:** Not a scratch. Thirty years she's played Greensleeves. She's earned a lie-down.
+> **VEX:** Council's docking my pay for that. Worth it. You drive like somebody's nan.
+> **DOREEN:** Free cones for life. Small ones. Lovely.
+
+### 5. RIBBON CUTTING
+
+`s5-ribbon` · phone-oldtown · $2,500
+
+> **MAYOR LULL:** Mayor Lull. Today I open our first Silent Zone, in Glass Heights. Please don't clap.
+> **DOREEN:** She cuts her ribbon, then she's off in that limo. I want it in bits.
+> **LIONEL:** Take these. I call them fireworks. The council calls them evidence.
+
+1. **WRECK THE MAYOR'S LIMO.** You're given grenades. The pearl limo
+   stands at the ribbon outside the Town Hall in Glass Heights until
+   you're within 50 m (or it's hit), then drives off into traffic: ram it,
+   bomb it, chase it. Lull's in it, and is never seen.
+
+> **MAYOR LULL:** Mayor Lull. The Silent Zone is closed for repairs. As is my limo. Quietly.
+> **LIONEL:** That bang! The reverb! Glass Heights hasn't had applause like it since the eighties.
+> **DOREEN:** She'll be cross now. Lovely.
+
+### 6. QUIETEST CITY
+
+`s6-quietest` · phone-suburbs · $5,000 · night (21:00)
+
+> **MAYOR LULL:** Mayor Lull. The award judges tour our streets tonight. They will see nothing. That's the point.
+> **DOREEN:** Coach leaves Glass Heights at nine. Make sure they see everything.
+> **LIONEL:** I've done a running order. A race, a fire, a punch-up. Then me, obviously.
+
+1. **GIVE THE JUDGES A SHOW · 0 / 5,000.** A `mayhem` step whose area is
+   100 m round the judges' coach, wherever it's got to (on the radar
+   throughout, ringed in the street). The coach waits at its Glass Heights
+   kerb until you're within 60 m, then tours at a sightseer's 8 m/s, round
+   and round: north out of Glass Heights, into Cobble Row, along the top
+   of Neon Mile, down the Mile and back. On its route, each once you're
+   within 140 m of its crossing: a **street race** in Cobble Row, a **car
+   fire** on Neon Mile (a fire truck comes) and a **turf flare-up** where
+   the VIPERS' Mile meets Glass Heights (`scene` actions: featured, and
+   none of them needed).
+
+> **MAYOR LULL:** Quietest City has gone to a village with one goat. The goat was louder than you lot, apparently.
+> **LIONEL:** A judge asked for my autograph. Well. He asked where the toilets were. Same thing.
+> **DOREEN:** 'Curbside nuisances', she wrote. Can't even spell kerb. We're the Curbside, then. Lovely.
+
+The debrief says **STORY COMPLETE**; the main story's phones then ring
+with its jobs again as REPEAT JOBs.
+
+### Chapter 2 (outline only)
+
+Not in the game: an outline to write from (`s7`–`s12`, `chapter: 2`, when
+it is).
+
+Lull loses the award to the goat and blames "the Curbside". Her answer is
+the **Kerb Removal Order**: no kerb, no kerbside, no Curbside. The
+council's diggers start taking the kerbs out of Cobble Row, and the
+traders (Doreen, Lionel and, at last, the kebab shop) go to war with
+noise.
 
 ```
-JOB 4: NINETY-NINE PROBLEMS (the Graveyard Shift cameo)
-DOREEN: They're towing my van. Council contract. Some night crew in blue.
-VEX: Nothing personal. Council pays by the van. You pay in compliments.
-OBJECTIVE: TAKE THE VAN BACK · DON'T SCRATCH IT
+JOB 7: NO KERB, NO CURBSIDE
+MAYOR LULL: Mayor Lull. From Monday, kerbs are abolished. Pavements will simply... end. Quietly.
+DOREEN: She's digging up Cobble Row. Every kerb. Lionel's been sat on one since six.
+OBJECTIVE: WRECK THE COUNCIL'S 3 DIGGERS (driven: they pull out as you come)
 
-JOB 5: RIBBON CUTTING
-Lull opens a "silent zone". Wreck her limo at the ribbon.
+JOB 8: DONER (the kebab shop, the third trader)
+The kebab shop's spit is impounded. Get it back from the city impound, now Vex's
+yard since NO PARKING (a second and last Night Shift cameo, by day).
 
-JOB 6: QUIETEST CITY (finale)
-MAYOR LULL: The award judges tour our streets tonight. They will see nothing. That's the point.
-DOREEN: Coach leaves Glass Heights at nine. Make sure they see everything.
-OBJECTIVE: GIVE THE JUDGES A SHOW · 0 / 5,000
-MAYOR LULL (outro): Quietest City has gone to a village with one goat. The goat was louder than you lot, apparently.
+JOB 9: OPEN MIC
+Lionel's comeback gig on Neon Mile. Keep the crowd safe from Lull's wardens for
+three minutes: a survive step, hostile wardens walking in from both ends.
+
+JOB 10: PLANNING PERMISSION
+Lull's American consultant, who spelt it "curbside", flies out tonight. Get him and
+the Act's first draft to the ring road. He talks the whole way.
+
+JOB 11: ALARM CALL
+The player's trade pays off: wire Lull's own street. Fit five alarms round Glass
+Heights (a collect step), then set them all off at once (mayhem round her house).
+
+JOB 12: LOUDEST CITY (finale)
+Lull leaves to present the award to the goat's village. Wreck her convoy and make
+the city go off as it goes (mayhem round the convoy's lead car).
+MAYOR LULL (outro): I have taken a post in the village. The goat is very quiet. We understand each other.
 ```
 
-Job 6's mayhem counts round the coach (a `mayhem` area can follow a tagged
-car), and its race, fire and turf flare-up are `scene` actions along the
-coach's route.
-
-### Chapter 2 (later)
-
-Lull loses the award and blames "the Curbside". She bans kerbs. Not
-written; an outline when chapter 1 is done.
+Threads it can pull: Pike (a bus shelter, an informant) selling Lull's
+diary to Doreen; the Quiet Wardens (V2-15) as the chapter's foot soldiers
+in free roam.
 
 ## The Night Shift (side story)
 

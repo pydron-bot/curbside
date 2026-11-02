@@ -1629,11 +1629,13 @@ are `src/game/modes/*Mode.ts`.
   loseHeat, collect, race and mayhem (score this many chaos points in an
   area: a district, a radius round a point, or round a tagged car or
   person; anywhere without one); each with objective text, an optional
-  timer, fail conditions (a tagged car wrecked or left behind, a tagged
-  person knocked down) and actions on start / end (spawn a car, parked or
-  with `drive: true` pulling out into traffic with a lane-following driver
-  while staying pinned, or a person; set the wanted level, hand over a gun,
-  a passenger boards / alights; start a city scene). Score awards feed a
+  timer, fail conditions (a tagged car wrecked, left behind or scratched:
+  `damaged`, under `below` of its health, 90% by default, the moment it
+  is; a tagged person knocked down) and actions on start / end (spawn a
+  car, parked or with `drive: true` pulling out into traffic with a
+  lane-following driver while staying pinned, or a person; set the wanted
+  level, hand over a gun, a passenger boards / alights; start a city
+  scene; put a car on a truck's hook). Score awards feed a
   mayhem step (`MissionRun.award(points, view)`, counted where the player
   is; the step passes on its next update, never mid-award); the HUD shows
   `MAKE COBBLE ROW LOUD · 1,200 / 2,500` and the radar points at the area
@@ -1648,10 +1650,29 @@ are `src/game/modes/*Mode.ts`.
     stars, apart from a chase's); the job unfeatures it when it ends, by a
     pass, a fail, WASTED, BUSTED or a quit. One featured kind at a time
     (the last started).
+  - **Driven cars** (`SpawnCar`, glue in `MissionMode.tendCars`): with
+    `drive`, `wait: m` keeps it parked until the player is that close (or
+    it's hurt), `cruise` sets its pace, and `route` gives it crossings to
+    tour in turn, round and round (`routeLeg` moves on as it heads into
+    each; `routeToward`, as a pursuit steers, picks the turn for the next).
+    A mayhem area with a `tag` follows its car: on the radar throughout
+    (the route redrawn only once it has gone 24 m), ringed in the street.
+  - **The hook** (`{ do: 'tow', tag, truck }`, `hookLetGo`): the car rides
+    behind the truck as the city's tows carry theirs (`towPose`, no speed
+    of its own) until it's let go where it stands: the truck's driver gone
+    (wrecked, carjacked, bailed), the player in the car, or the truck
+    caught standing (under 2 m/s) with the player within 24 m for 1.2 s
+    (`CATCH_*`). Not a tool the player works: towing is never a main-story
+    verb (*Borrowed Blues* is the side job).
   - **Two arcs** (`arc` on `MissionDef`, `arcRings`, `nextInArc`). The main
     story, **KEEP IT LOUD** (`arc: 'main'`, ids `s1`–`s6`: DOREEN of the
     ice cream van, LIONEL the busker, against MAYOR LULL's Quiet Streets
-    Act), rings from sunrise to midnight from the city's three phones. The
+    Act: WRONG STOP, the cold open; MAKE SOME NOISE in Cobble Row; QUIET
+    PLEASE; NINETY-NINE PROBLEMS, Doreen's van off the Graveyard Shift's
+    hook without a scratch; RIBBON CUTTING, the Mayor's limo; QUIETEST
+    CITY, 5,000 round the judges' touring coach with a race, a fire and a
+    turf flare-up on its route), rings from sunrise to midnight from the
+    city's three phones. The
     **Night Shift** side story (`arc: 'night'`, the old Graveyard Shift jobs
     `m1`–`m13` with their ids, so saves keep their progress: VEX's tow crew
     and LIL' TUNA, eight jobs against DEACON PIKE's Chrome Saints, then
@@ -1671,7 +1692,7 @@ are `src/game/modes/*Mode.ts`.
   with an arrow): the call is a card, the job runs with its objective
   on the activity card and its targets marked (a step any sedan will do
   for rings and blips the three nearest, and the wrong car says NOT A
-  SEDAN); MIDNIGHT EXPRESS, PAPER TRAIL and NO PARKING pin the clock at night (a fail or quit puts the
+  SEDAN); MIDNIGHT EXPRESS, PAPER TRAIL, NO PARKING and QUIETEST CITY pin the clock at night (a fail or quit puts the
   hour back). Pay $300–$5,000; fail and the phone rings again. No main
   story job sets stars, and only s1 asks you to lose the ones its getaway
   brought. The last job of a chapter
@@ -1860,6 +1881,22 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   `--shots` saves the frames at those seconds (with `--fx auto`, each
   also from the same frame with smoke at full and at low resolution).
   JS ms is the median frame. Numbers under *Effects and camera*.
+- **`story.mjs [--job s4|s5|s6|all] [--shot dir]`**: KEEP IT LOUD's jobs
+  4–6 from the ringing payphone (the TEST tools' jump, then the call and
+  LET'S GO) to the debrief, with a bot driving and the police kept off (a
+  bot doesn't run). s4 follows the Shift's truck about 17 m back until
+  it's caught standing, or after 45 s parks across its lane, then takes
+  the van and drives the last 45 m to Doreen (the van's health at the
+  end); s5 rams the Mayor's limo (blows it up after 150 s, and says so);
+  s6 follows the coach for a lap (the crossings it took, the scenes
+  featured, what the street saw), then rams the traffic round it (the
+  real points counted; any short of 5,000 after 360 s are added, and
+  said). Then PROGRESS's two story rows and their bars (`--shot`: a
+  screenshot). 2026-11-02: all three passed; s4 caught at the block
+  (48 s; never at a light in 45 s of following), the van at 98–100%;
+  s5 in 28–44 s of ramming; s6's coach took the whole tour in order and
+  round again, its race, fire and turf flare-up started, 3,100–5,700
+  real points over runs.
 
 ## Layout
 
