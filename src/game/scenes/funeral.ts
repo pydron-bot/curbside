@@ -327,7 +327,7 @@ export class Funerals implements Scene {
       if (v === pl.driving || v.damage.wrecked || !roomFor(life, 2)) continue;
       for (const side of [1, -1]) {
         const at = this.doorOf(v, side);
-        const ped = life.addPed(at.x, at.z, v.sim.heading, MOURNER, streetBody(life));
+        const ped = life.addPed(at.x, at.z, v.sim.heading, MOURNER, streetBody(life, true));
         ped.agent.street = true;
         ped.agent.temper = 'fighter';
         c.mourners.push({ ped, car: v, side });

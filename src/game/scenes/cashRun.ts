@@ -46,7 +46,7 @@ import { BUS_PULL_IN, roadPoint, segmentValid } from '../../world/streetSpots';
 import type { CrowdPed, SceneDriver, Vehicle } from '../population';
 import { SCENE_RANGE, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { secs, type LabelSink } from '../debugLabels';
-import { handBack } from './people';
+import { handBack, streetBody } from './people';
 import { holdStill, pullIn, stopped } from './service';
 import { len2 } from '../../core/len';
 
@@ -353,7 +353,7 @@ export class CashRuns implements Scene {
     r.phase = 'stop';
     r.timer = 0;
     const rear = life.rearOf(r.v.sim, this.rear);
-    const g = life.addPed(rear.x, rear.z, r.heading + Math.PI, GUARD, 'ped_stocky');
+    const g = life.addPed(rear.x, rear.z, r.heading + Math.PI, GUARD, streetBody(life, true));
     g.agent.street = true;
     g.agent.temper = 'fighter';
     r.guard = g;
@@ -386,7 +386,7 @@ export class CashRuns implements Scene {
       v.ai = null;
       v.towable = true;
       const door = life.doorOf(v.sim);
-      r.mate = life.addPed(door.x, door.z, v.sim.heading, GUARD, 'ped_stocky');
+      r.mate = life.addPed(door.x, door.z, v.sim.heading, GUARD, streetBody(life, true));
       r.mate.agent.street = true;
       r.mate.agent.temper = 'fighter';
     }

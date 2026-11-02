@@ -255,7 +255,7 @@ export class Kebabs implements Scene {
     const s = k.spot;
     const rand = life.d.rand;
     const along = (rand() - 0.5) * 1.2;
-    const c = life.addPed(s.x - s.outX * 0.4 + s.alongX * along, s.z - s.outZ * 0.4 + s.alongZ * along, Math.atan2(s.outX, s.outZ), undefined, streetBody(life));
+    const c = life.addPed(s.x - s.outX * 0.4 + s.alongX * along, s.z - s.outZ * 0.4 + s.alongZ * along, Math.atan2(s.outX, s.outZ), undefined, streetBody(life, true));
     c.agent.street = true;
     // Drunk: anyone shoved squares up.
     c.agent.temper = rand() < 0.5 ? 'fighter' : 'calm';

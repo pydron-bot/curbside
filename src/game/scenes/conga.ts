@@ -212,7 +212,7 @@ export class Congas implements Scene {
     const outfit = PARTY_OUTFITS[party];
     for (let i = 0; i < n; i++) {
       const p = c.trail.at(from.x, from.z, i * CONGA_PITCH, this.p);
-      const ped = life.addPed(p.x, p.z, heading, outfit, streetBody(life));
+      const ped = life.addPed(p.x, p.z, heading, outfit, streetBody(life, true));
       ped.agent.street = true;
       ped.agent.temper = 'fighter';
       c.dancers.push(ped);

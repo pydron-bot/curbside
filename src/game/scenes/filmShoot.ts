@@ -4,8 +4,9 @@
  * SET_HALF: the parking strip and the pavement, cones along its ends and
  * road side, film lights on it): the star car (a red sports car) and the
  * picture car (the one that goes up) parked in it, a director (red beret)
- * and a clapper, and two extras as police: the force's uniform with a tell
- * (a costume-shop blue shirt and a cap the wrong blue). Passers-by stop to
+ * and a clapper, and two extras as police: the force's colours with a tell
+ * (a passer-by's build, no kit, the shirt a costume-shop blue and the cap
+ * the wrong blue). Passers-by stop to
  * watch from either end. Each take (TAKE): they get to their marks, ACTION
  * (`action`: the clapperboard and a sting), the extras run at the picture
  * car, the staged blast (`pyro`: Effects' explosion, nothing hurt, the car
@@ -246,13 +247,14 @@ export class FilmShoots implements Scene {
     // The crew on the pavement side of the set.
     const crewAt = (k: number): { x: number; z: number } => roadPoint(ix, iz, dir, along + k, ROAD_WIDTH / 2 + 1.4, { x: 0, z: 0 });
     const d = crewAt(0);
-    const director = life.addPed(d.x, d.z, heading, DIRECTOR, streetBody(life));
+    const director = life.addPed(d.x, d.z, heading, DIRECTOR, streetBody(life, true));
     const k = crewAt(-2.5);
-    const clapper = life.addPed(k.x, k.z, heading, CLAPPER, streetBody(life));
+    const clapper = life.addPed(k.x, k.z, heading, CLAPPER, streetBody(life, true));
     const cops: CrowdPed[] = [];
     for (const off of [3, 6.5]) {
       const q = crewAt(off);
-      const cop = life.addPed(q.x, q.z, heading + Math.PI, FAKE_COP, 'cop');
+      // A passer-by's build in the force's colours: the costume shows.
+      const cop = life.addPed(q.x, q.z, heading + Math.PI, FAKE_COP, streetBody(life, true));
       cops.push(cop);
     }
     for (const p of [director, clapper, ...cops]) p.agent.street = true;

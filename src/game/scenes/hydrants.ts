@@ -28,7 +28,7 @@ import type { CrowdPed, Vehicle } from '../population';
 import { watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { labelMembers, secs, type LabelSink } from '../debugLabels';
 import { Gathering } from './gathering';
-import { handBack, roomFor } from './people';
+import { handBack, roomFor, streetBody } from './people';
 import { len2 } from '../../core/len';
 
 /** Nobody's in the road or fighting: it waits only on someone playing. */
@@ -155,7 +155,7 @@ export class Hydrants implements Scene {
       // Kids come running from along the pavement (out of the spray's reach).
       for (let i = 0; i < KIDS; i++) {
         const a = (i / KIDS) * Math.PI * 2;
-        const ped = life.addPed(x + Math.sin(a) * 9, z + Math.cos(a) * 9, a + Math.PI, KID_OUTFITS[i % KID_OUTFITS.length], 'ped_slim');
+        const ped = life.addPed(x + Math.sin(a) * 9, z + Math.cos(a) * 9, a + Math.PI, KID_OUTFITS[i % KID_OUTFITS.length], streetBody(life, true));
         ped.agent.street = true;
         this.kidsIn.add(ped.agent);
         b.kids.push({ ped, angle: a, dir: i % 2 ? 1 : -1 });

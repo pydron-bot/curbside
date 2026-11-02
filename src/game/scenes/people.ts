@@ -22,13 +22,18 @@ export function roomFor(life: SceneCtx, n = 1): boolean {
  * already drawing comes in (each body is its own batch: a draw call and a
  * shadow pass). Undefined (any crowd body) if nobody's about.
  */
-export function streetBody(life: SceneCtx): BodyKind | undefined {
+export function streetBody(life: SceneCtx, onScreen = false): BodyKind | undefined {
   const crowd = life.d.population.crowd;
   // From a random place in the list, so the bodies stay as mixed as the street's.
   const from = Math.floor(life.d.rand() * crowd.length);
-  for (let k = 0; k < crowd.length; k++) {
-    const c = crowd[(from + k) % crowd.length];
-    if (c.agent.street && c.agent.role === 'civilian') return c.model.bodyKind;
+  // `onScreen`: one already drawn in view, so a group put down where it's seen costs no batch that wasn't drawn.
+  for (let pass = onScreen ? 0 : 1; pass < 2; pass++) {
+    for (let k = 0; k < crowd.length; k++) {
+      const c = crowd[(from + k) % crowd.length];
+      if (!c.agent.street || c.agent.role !== 'civilian') continue;
+      if (pass === 0 && !life.inView(c.agent.s.x, c.agent.s.z, 2)) continue;
+      return c.model.bodyKind;
+    }
   }
   return undefined;
 }
