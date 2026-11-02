@@ -9,6 +9,12 @@
   padding-right: calc(var(--moment-w) + 2vw + 12px);
 }
 
+/* The score's feed lines (the bill again, mostly) would run down into the
+   photo's corner: the WASTED card has the numbers. */
+body:has(#wasted.has-moment:not([hidden])) .score-feed {
+  display: none;
+}
+
 /* Sharing: the respawn waits, and so does its bar. */
 #wasted.moment-hold .wasted-timer > i {
   animation-play-state: paused;
@@ -137,15 +143,19 @@
   transform: scale(0.94);
 }
 
-/* Short phones (Safari's toolbar up): a size down and a little higher, clear
-   of the thumbs once the home indicator's inset lifts them on a device. */
+/* Short phones (Safari's toolbar up): smaller and a wider crop, centred
+   between the score and the thumbs. */
 @media (max-height: 360px) {
   #wasted {
-    --moment-w: clamp(160px, 23vw, 200px);
+    --moment-w: clamp(160px, 22vw, 190px);
   }
 
   .moment {
-    top: calc(50% - 7vmin);
+    top: 50%;
+  }
+
+  .moment-photo canvas {
+    aspect-ratio: 2.5;
   }
 }
 

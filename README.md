@@ -2989,8 +2989,10 @@ card and share in `ui/momentCard.ts` and `moment.css`.
 - **Card**: on WASTED / BUSTED the title and numbers step left
   (`#wasted.has-moment`) and the photo sits on the right, tilted, with the
   stamp's name in its ink, its line in lower case and where and when
-  (`NEON MILE · 21:07`, the district and the game clock), a size down and
-  higher at 360 px tall and under. It drops in with the numbers.
+  (`NEON MILE · 21:07`, the district and the game clock); at 360 px tall
+  and under a size down with a wider crop, centred between the score and
+  the thumbs. The score's feed lines hide while it shows (the card has the
+  numbers; they'd run into its corner). It drops in with the numbers.
 - **Share**: the JPEG (quality 0.85, the caption burnt into a dark band at
   the foot, `curbside-<stamp>-<yyyymmdd-hhmmss>.jpg`) is encoded once, on
   WASTED, with `toBlob`; SHARE is live once it's ready. It goes through the
