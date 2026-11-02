@@ -183,13 +183,13 @@ main-story verb.
 | V2-10 | Your Mess, Their Problem | M | should | A |
 | V2-11 | Scanner pings | M | should | A |
 | V2-12 | RACE CRASHER and VAN NICKED | M | should | A |
-| V2-13 | Two new incidents: cash-in-transit van, kebab chucking-out time | M | should | A |
+| V2-13 | Six new incidents (cash van, kebab chucking-out, funeral, hydrant, conga, film shoot) | L | must | A |
 | V2-14 | Launch gate: device pass, tier probe, blind playtest | M | must | A |
 | V2-15 | Quiet Wardens in free roam after the finale | M | stretch | A |
 | V2-16 | Best-moment picture on WASTED/BUSTED (owner-gated) | S | stretch | B |
 | V2-17 | Prune for newcomers; ship as 1.0.0 | S | must | A |
 
-Cut order if week 2 slips: V2-13, V2-12, V2-11, then V2-10. The stretch
+Cut order if week 2 slips: V2-12, V2-11, then V2-10. The stretch
 items wait for everything else to be green.
 
 ### V2-01 · In-view meter
@@ -362,13 +362,28 @@ Pull onto a street race's line to join (no rubber-banding); win and the race
 car is yours. Drive off in the ice cream van while there's a queue and the
 queue chases you on foot. A scene test per hook.
 
-### V2-13 · Two new incidents (should)
+### V2-13 · Six new incidents (must; the owner asked for more city life)
 
-A daytime **cash-in-transit van** on its rounds that spills a cash pickup when
-wrecked, and **kebab chucking-out time** at 2 a.m. in Neon Mile and Cobble
-Row (a stumbling crowd, one shouted argument, a taxi queue). Each gets an
-attract-show highlight, a street event and a `GameAudio` case. Existing
-batches only; no draw-call increase on the iPhone profile.
+Each is a new scene built from existing primitives (crowds, queues, service
+runs, knockables, the FX pools) with pure, tested rules, an attract-show
+highlight, a street event and a `GameAudio` case, and an obvious way for the
+player to join in or wreck it:
+
+1. **Cash-in-transit van** doing its rounds by day; wreck it and it spills a
+   cash pickup (and the guards give chase).
+2. **Kebab chucking-out time** at 2 a.m. in Neon Mile and Cobble Row: a
+   stumbling crowd, one shouted argument, a taxi queue.
+3. **Funeral procession**: a slow line of black cars that traffic won't
+   overtake; cut through it and the mourners take it personally.
+4. **Burst hydrant**: knock one over and it geysers, throwing spray that
+   knocks people down and flips scooters.
+5. **Hen/stag party conga** on the pavement that joins any fight going.
+6. **Film shoot** in Glass Heights: fake cops, a staged car explosion the
+   crowd cheers, until the player makes it real.
+
+New art is limited to paint and outfit colours (a cash-van livery, a party
+sash colour). Existing batches only: no draw-call increase on the iPhone
+profile.
 
 ### V2-14 · Launch gate
 
@@ -405,7 +420,7 @@ notes. A fresh save shows PLAY and Settings only.
 | 1 | **M0 Measure** | Direction chosen (A + B's mayhem). V2-01 baseline. V2-05 and V2-08 start. | Choice recorded in HANDOFF; baseline logged. |
 | 1–5 | **M1 The city doesn't stop** | Parallel workstreams: City (V2-02), Chase (V2-03 decision table, `adopt`), Story (V2-05 landed, s1–s3 drafted), Side (V2-08), Presentation (V2-04). | The owner plays 20 minutes on the iPhone and says yes to: did a race, fight or accident get in the way of my chase? Did I steal a getaway and inherit its cops? Did a stamp land? In-view numbers up on the baseline. |
 | 5–8 | **M2 First session and device gate** | V2-07 cold open; V2-03 finished; s1–s3 playable; V2-14 device pass and 5-star soak; V2-09 action-button slot with the hose and the winch prototype. | Smoke test passes at all three sizes including the fallback; under 150 draw calls in the 5-star soak; s1–s3 complete on the phone; a stolen fire truck hoses a crowd. |
-| 8–12 | **M3 Story and side job** | s4–s6 and the coach finale; V2-09 chime, winch and Vex's call; V2-10; V2-11; V2-12 and V2-13 as capacity allows. | Chapter 1 completes on desktop and iPhone; a wreck towed to the yard on the phone; the chime pulls a queue; `npm test` and `npm run build` green. |
+| 8–12 | **M3 Story and side job** | s4–s6 and the coach finale; V2-09 chime, winch and Vex's call; V2-10; V2-11; V2-12 as capacity allows. (V2-13 runs from day 1 as its own stream.) | Chapter 1 completes on desktop and iPhone; a wreck towed to the yard on the phone; the chime pulls a queue; `npm test` and `npm run build` green. |
 | 12–14 | **M4 Playtest and ship** | V2-14 blind playtests and top-3 fixes; V2-17 and the changelog; stretch items only if green. | Three strangers reach a stolen car within 20 s and play 10 minutes unprompted; the owner signs off a 20-minute session; pushed to main with the smoke test passing. |
 
 ## Not in V2
@@ -422,7 +437,6 @@ notes. A fresh save shows PLAY and Settings only.
 | B's tabloid story and notoriety gate | The owner chose the alarm-fitter story; mayhem never gates the story. |
 | WATCH mode (a free-flying camera to incidents) | The scanner pings serve "just watching" more cheaply for now. |
 | Film/"in frame" mission steps, a news-crew protagonist | A passive verb fenced with star penalties: the towing mistake again. |
-| Funeral procession, stag conga, film shoot, hydrant geyser | Two new incidents are enough; more depends on the in-view numbers. |
 | End-of-life replay reel | Fiddly, and duplicates the picture's job. |
 
 ## Risks
