@@ -71,7 +71,10 @@ export const CHAOS_CATEGORIES: ReadonlyArray<{ id: ChaosCategory; label: string 
 ];
 
 export function categoryOf(kind: ScoreKind): ChaosCategory {
-  return kind === 'copRam' || kind === 'copWreck' || kind === 'evaded' ? 'cops' : kind;
+  if (kind === 'copRam' || kind === 'copWreck' || kind === 'evaded') return 'cops';
+  // The incidents' awards count as smashing things up.
+  if (kind === 'cashGrab' || kind === 'wrapped' || kind === 'noRespect') return 'smash';
+  return kind;
 }
 
 export type ChaosEnd = 'time' | 'wasted' | 'busted';

@@ -14,7 +14,11 @@ export type ScoreKind =
   | 'copRam'
   | 'copWreck'
   | 'evaded'
-  | 'stunt';
+  | 'stunt'
+  // The city's incidents (game/scenes/): the cash van done over, a film set wrecked, a funeral cut up.
+  | 'cashGrab'
+  | 'wrapped'
+  | 'noRespect';
 
 export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   nearMiss: 100,
@@ -29,6 +33,9 @@ export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   evaded: 0,
   // All bonus: see systems/stunts.ts.
   stunt: 0,
+  cashGrab: 300,
+  wrapped: 400,
+  noRespect: 250,
 };
 
 export const LABELS: Record<ScoreKind, string> = {
@@ -43,6 +50,9 @@ export const LABELS: Record<ScoreKind, string> = {
   copWreck: 'COP CAR WRECKED',
   evaded: 'EVADED',
   stunt: 'STUNT',
+  cashGrab: 'CASH GRAB',
+  wrapped: "THAT'S A WRAP",
+  noRespect: 'NO RESPECT',
 };
 
 /** Shaking off a chase of this many stars or more earns the EVADED bonus. */

@@ -50,3 +50,22 @@ export function handBack(life: SceneCtx, c: CrowdPed): void {
   const i = life.people.indexOf(c);
   if (i >= 0) life.people.splice(i, 1);
 }
+
+/**
+ * Let go of someone as they are: walking, they walk on (handBack); down,
+ * they lie there; swinging at the player (a drunk or a dancer provoked),
+ * they keep swinging. Only for those no scene set on anyone (a
+ * scene's fighter would turn on the player).
+ */
+export function letGo(life: SceneCtx, c: CrowdPed): void {
+  const m = c.agent.mode;
+  if (m !== 'fight' && m !== 'shoot') {
+    handBack(life, c);
+    return;
+  }
+  c.phone = false;
+  if (!life.present(c) || !c.agent.scene) return;
+  c.agent.scene = false;
+  const i = life.people.indexOf(c);
+  if (i >= 0) life.people.splice(i, 1);
+}

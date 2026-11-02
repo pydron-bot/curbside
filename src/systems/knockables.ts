@@ -112,6 +112,30 @@ export class Knockables {
     }
   }
 
+  /** The standing `kind` nearest (x, z) within `range` m, or null (a scene bursting a hydrant). */
+  nearest(kind: string, x: number, z: number, range: number): KnockableItem | null {
+    let best: KnockableItem | null = null;
+    let bestD = range * range;
+    for (let i = 0; i < this.items.length; i++) {
+      const k = this.items[i];
+      if (k.kind !== kind || this.knockedAt[i] >= 0) continue;
+      const d = (k.x - x) ** 2 + (k.z - z) ** 2;
+      if (d < bestD) {
+        bestD = d;
+        best = k;
+      }
+    }
+    return best;
+  }
+
+  /** Knock `item` over without a car (it comes back as usual). False if it's already down. */
+  knock(item: KnockableItem): boolean {
+    const i = this.items.findIndex((k) => k.id === item.id);
+    if (i < 0 || this.knockedAt[i] >= 0) return false;
+    this.knockedAt[i] = this.time;
+    return true;
+  }
+
   /**
    * Keep a person out of the standing furniture around them (a bench by its
    * box, the rest by their radius): pushed clear, with their speed into it

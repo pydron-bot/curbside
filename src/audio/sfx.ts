@@ -1308,3 +1308,134 @@ export function distantSiren(v: Voice): void {
   g.gain.linearRampToValueAtTime(0.35, t + len * 0.45);
   g.gain.linearRampToValueAtTime(0, t + len);
 }
+
+// --- The city's incidents (V2) ---
+
+/** A struck bell: inharmonic partials over `hz`, each dying away (a handbell, a church bell). */
+function bell(v: Voice, at: number, hz: number, peak: number, decay: number, partials: readonly (readonly [number, number])[]): void {
+  for (const [mul, level] of partials) {
+    const o = v.osc('sine', hz * mul, at, at + decay * 4);
+    const g = v.gain();
+    v.chain(o, g, v.input);
+    g.gain.setValueAtTime(0, at);
+    g.gain.linearRampToValueAtTime(peak * level, at + 0.004);
+    g.gain.setTargetAtTime(0, at + 0.004, (decay * level) / (level + 0.3));
+  }
+}
+
+/** Cash spilling: a rustle of notes and a scatter of coins ringing on the tarmac. */
+export function cashSpill(v: Voice): void {
+  const t = v.t;
+  const n = v.noise(v.bank.pink, t, t + 0.5);
+  const bp = v.filter('bandpass', 3200, 1.4);
+  const g = v.gain();
+  v.chain(n, bp, g, v.input);
+  perc(g.gain, t, 0.35, 0.02, 0.09);
+  for (let i = 0; i < 7; i++) {
+    const at = t + 0.03 + Math.random() * 0.45;
+    const hz = rnd(2400, 4200);
+    const o = v.osc('sine', hz, at, at + 0.2);
+    const og = v.gain();
+    v.chain(o, og, v.input);
+    perc(og.gain, at, 0.18, 0.001, 0.03);
+  }
+}
+
+/** Last orders at the kebab shop: a hand bell rung twice. */
+export function lastOrders(v: Voice): void {
+  const hz = 1150 * vary(0.04);
+  const partials = [
+    [1, 1],
+    [2.76, 0.45],
+    [5.4, 0.2],
+  ] as const;
+  bell(v, v.t, hz, 0.32, 0.35, partials);
+  bell(v, v.t + 0.32, hz, 0.28, 0.4, partials);
+}
+
+/** A funeral's bell: one slow, low toll from somewhere up the street. */
+export function toll(v: Voice): void {
+  bell(v, v.t, 196, 0.42, 1.6, [
+    [0.5, 0.5],
+    [1, 1],
+    [1.19, 0.4],
+    [1.5, 0.35],
+    [2, 0.3],
+    [2.74, 0.15],
+  ]);
+}
+
+/** A burst hydrant gushing: a roar of white water with a low rumble under it. */
+export function gush(v: Voice): void {
+  const t = v.t;
+  const len = 1.9;
+  const n = v.noise(v.bank.white, t, t + len + 0.1);
+  const hp = v.filter('highpass', 1300, 0.6);
+  const bp = v.filter('peaking', 4200, 1);
+  bp.gain.value = 5;
+  const g = v.gain();
+  v.chain(n, hp, bp, g, v.input);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.26, t + 0.12);
+  g.gain.setValueAtTime(0.24, t + len - 0.5);
+  g.gain.linearRampToValueAtTime(0, t + len);
+  const r = v.noise(v.bank.brown, t, t + len + 0.1);
+  const lp = v.filter('lowpass', 220, 0.8);
+  const rg = v.gain();
+  v.chain(r, lp, rg, v.input);
+  rg.gain.setValueAtTime(0, t);
+  rg.gain.linearRampToValueAtTime(0.5, t + 0.15);
+  rg.gain.linearRampToValueAtTime(0, t + len);
+}
+
+/** A conga line: da-da-da-da-da-da-HEY on a hand drum, the HEY a shout. */
+export function conga(v: Voice): void {
+  const t = v.t;
+  const step = 0.17;
+  const hits = [0, 1, 2, 4, 5, 6];
+  for (const k of hits) {
+    const at = t + k * step;
+    const hz = k % 2 ? 330 : 260;
+    thump(v, at, hz * 1.5, hz, 0.03, 0.45, 0.06);
+    noiseHit(v, v.bank.white, at, 'bandpass', 2400, 1.5, 0.12, 0.001, 0.012);
+  }
+  // HEY: a voiced shout on the kick.
+  const at = t + 7 * step;
+  const o = v.osc('sawtooth', 210, at, at + 0.3);
+  sweep(o.frequency, at, 240, 180, 0.25);
+  const f1 = v.filter('bandpass', 750, 3);
+  const f2 = v.filter('bandpass', 1800, 4);
+  const g = v.gain();
+  o.connect(f1);
+  o.connect(f2);
+  f1.connect(g);
+  f2.connect(g);
+  g.connect(v.input);
+  perc(g.gain, at, 0.4, 0.02, 0.07);
+  thump(v, at, 160, 80, 0.06, 0.6, 0.07);
+}
+
+/** ACTION: the clapperboard's clack, then a little brass stab. */
+export function clapper(v: Voice): void {
+  const t = v.t;
+  noiseHit(v, v.bank.white, t, 'highpass', 2500, 0.8, 0.7, 0.0005, 0.008);
+  thump(v, t, 900, 500, 0.02, 0.5, 0.015, 'triangle');
+  const at = t + 0.28;
+  for (const [midi, off] of [
+    [62, 0],
+    [69, 0.12],
+  ] as const) {
+    const s = at + off;
+    const hz = midiToHz(midi);
+    const lp = v.filter('lowpass', 900, 1.5);
+    sweep(lp.frequency, s, 900, 3200, 0.06);
+    const g = v.gain();
+    for (const d of [-8, 8]) {
+      const o = v.osc('sawtooth', hz, s, s + 0.4);
+      o.detune.value = d;
+      o.connect(lp);
+    }
+    v.chain(lp, g, v.input);
+    perc(g.gain, s, 0.22, 0.01, off ? 0.12 : 0.05);
+  }
+}
