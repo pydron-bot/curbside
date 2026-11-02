@@ -460,6 +460,36 @@ notes. A fresh save shows PLAY and Settings only.
   widest zoom; leaving restores the title or the paused run exactly; pure
   logic (camera clamps, fade timer, follow pick) has tests.
 
+## Wave 3 candidates
+
+Not scheduled yet; decided after wave 2.
+
+### W3-A · A bigger city (owner request, 2026-11-02)
+
+Measured on 0.13 (16 × 16 blocks of 64 m, about 1 km²): 1,404 buildings,
+7,621 street props (2,298 knockable), 3,072 lamps; city generation about
+185 ms at boot (Node, on a loaded 4-core server) and about 43 MB of JS heap;
+50–75 draw calls in play.
+
+- **Engine headroom is large.** Draw calls don't grow with the map (256 m
+  chunks culled whole, props culled by cell), and the simulation only lives
+  round the focus (recycling and sim level of detail). Boot generation and
+  memory grow with area: about 4× for 32 × 32, still well inside an iPhone
+  tab. One fix needed: the low-res smoke pass draws every building as an
+  occluder box (`lowResFx.ts` `buildingBoxes`, not culled), 1,400 today,
+  5,600 at 32 × 32.
+- **The cost is content.** Districts are five slices round the centre
+  (`districtOf`), so a plain scale-up makes each one bigger rather than adding
+  places; payphones, story spawns (with district tests), races, packages,
+  ramps, the safehouse and the docks yard are placed by hand; mission timers,
+  incident pacing and taxi/export distances are tuned to today's size.
+- **Proposal:** about 24 × 24 (1.5 km, 2.25× the area), with the new space
+  as one or two new districts with their own character (a seafront, the
+  suburbs, a ring road for chases) rather than a uniform scale-up.
+- **First step (about an hour):** a spike that generates 24 × 24 and 32 × 32
+  cities and measures boot time, memory and draw calls on the iPhone, then
+  decide the size and the districts.
+
 ## Schedule
 
 | Days | Milestone | Items | Exit criteria |
