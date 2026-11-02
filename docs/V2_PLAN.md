@@ -187,7 +187,7 @@ main-story verb.
 | V2-14 | Launch gate: device pass, tier probe, blind playtest | M | must | A |
 | V2-15 | Quiet Wardens in free roam after the finale | M | stretch | A |
 | V2-16 | Best-moment picture on WASTED/BUSTED (owner-gated) | S | stretch | B |
-| V2-17 | Prune for newcomers; ship as a minor version | S | must | A |
+| V2-17 | Prune for newcomers; ship as 1.0.0 | S | must | A |
 
 Cut order if week 2 slips: V2-13, V2-12, V2-11, then V2-10. The stretch
 items wait for everything else to be green.
@@ -212,8 +212,7 @@ items wait for everything else to be green.
   never zero. `LOUD` stays for title and tutorial. A `routeAhead` placement
   that picks a lane-graph spot 60–150 m ahead of the player's velocity,
   off-screen, at most once per 45 s and only while wanted. Mode audit: race
-  modes keep the hold; free roam, taxi and frenzies don't; Chaos Run is an
-  open question.
+  modes keep the hold; free roam, taxi, frenzies and Chaos Run don't.
 - **Builds on:** `systems/cityScenes.ts`, every `clock.define` in `scenes/*`,
   `fireCrews.ts:96` (fires already run while wanted, so the pattern is
   proven), `simLod`, the lane graph, police pursuit.
@@ -396,7 +395,7 @@ if a 10-minute static mock is something the owner would send a friend.
 ### V2-17 · Prune for newcomers
 
 Remove the three-pointer tutorial in favour of the cold open; side modes
-become an unlock list; ship as a minor version with player-facing changelog
+become an unlock list; ship as **1.0.0** with player-facing changelog
 notes. A fresh save shows PLAY and Settings only.
 
 ## Schedule
@@ -447,19 +446,19 @@ notes. A fresh save shows PLAY and Settings only.
 - **HUD crowding at 852×340** with stamps, scanner, stars, radar and activity
   card → smoke screenshots at every milestone.
 
-## Open questions
+## Decisions
 
-_Answered 2026-11-02: direction A with B's mayhem; the alarm-fitter story._
+Answered by the owner on 2026-11-02:
 
-1. **Chaos Run:** keep its empty streets (a fair timed score), or let the
-   living city run through it too?
-2. **TAKE THE HEAT:** land on 2 stars, or 1 or 3?
-3. **Night Shift:** ring only at night, or any time from the docks-yard phone?
-4. **Picture of your best moment:** would you send one to a friend? A quick
-   mock decides V2-16.
-5. **Hiding side modes** from brand-new players until the second story job:
-   OK?
-6. **Version:** ship as 0.14.0, or is this the 1.0 you post to Reddit and itch?
+- **Direction:** A with B's mayhem; the alarm-fitter story.
+- **Chaos Run:** the living city runs through it too (no empty streets).
+- **TAKE THE HEAT:** lands on 2 stars.
+- **Night Shift:** jobs ring only after dark.
+- **Best-moment picture:** a 10-minute mock first; built only if the owner
+  would share it.
+- **Side modes:** hidden from brand-new players until story job 2.
+- **Version:** the finished V2 ships as **1.0.0**, the public release.
+  Milestone builds that go to `main` before then are 0.14, 0.15, ….
 
 ## Sample script
 
