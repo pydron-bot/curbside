@@ -574,6 +574,52 @@ export function taser(v: Voice, hit: boolean): void {
 }
 
 /**
+ * A stinger (W3-B) going down: it hits the tarmac and the hinged sections
+ * slap out one after another, a run of tinny clanks with a little ring to
+ * them, quickening as it unrolls. ~0.45 s.
+ */
+export function stingerDown(v: Voice): void {
+  const t = v.t;
+  const b = v.bank;
+  noiseHit(v, b.brown, t, 'lowpass', 900, 0.7, 0.6, 0.002, 0.03);
+  let at = t + 0.05;
+  for (let i = 0; i < 6; i++) {
+    noiseHit(v, b.white, at, 'bandpass', rnd(2200, 3400), 2.5, 0.5 - i * 0.05, 0.0008, 0.012);
+    const o = v.osc('triangle', rnd(1900, 2900), at, at + 0.12);
+    const g = v.gain();
+    v.chain(o, g, v.input);
+    perc(g.gain, at, 0.08, 0.001, 0.02);
+    at += 0.075 - i * 0.008;
+  }
+}
+
+/**
+ * Tyres bursting on a stinger: a sharp double bang (front, then rear) with
+ * a thump under it, a hiss of air, then the shredded rubber flapping round,
+ * slowing as the car does. `speed` (m/s) quickens the flaps. ~1.3 s.
+ */
+export function tyresBurst(v: Voice, speed: number): void {
+  const t = v.t;
+  const b = v.bank;
+  const k = clamp01(speed / 25);
+  for (const at of [t, t + rnd(0.06, 0.12)]) {
+    noiseHit(v, b.white, at, 'highpass', 1800, 0.7, 0.9, 0.0005, 0.018);
+    thump(v, at, 160, 55, 0.08, 0.6, 0.04);
+  }
+  noiseHit(v, b.white, t + 0.02, 'bandpass', 5200, 0.8, 0.25, 0.01, 0.12);
+  // The flaps: a rubbery slap per wheel turn, spacing out as it slows.
+  let gap = 0.05 + 0.06 * (1 - k);
+  let at = t + 0.18;
+  let level = 0.45;
+  while (at < t + 1.3) {
+    noiseHit(v, b.brown, at, 'bandpass', rnd(300, 450), 1.2, level, 0.002, 0.018);
+    at += gap;
+    gap *= 1.08;
+    level *= 0.94;
+  }
+}
+
+/**
  * One cycle (ALARM_CYCLE s) of a car alarm through its little horn speaker:
  * pattern 0 whoops (rising sweeps), 1 a hi-lo two-tone, 2 chirps then two
  * honks. Repeated by the street event while it sounds.

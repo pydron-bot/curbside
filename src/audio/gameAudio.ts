@@ -634,6 +634,12 @@ export class GameAudio {
         const hit = e.hit;
         return this.oneShot('gun', e, FALLOFF.punch, e.byPlayer ? 0.85 : 0.7, 0.15, (v) => sfx.taser(v, hit), hit ? 0.15 : 0);
       }
+      case 'stinger':
+        return this.oneShot('impact', e, FALLOFF.punch, 0.75, 0.15, sfx.stingerDown);
+      case 'tyresBurst': {
+        const speed = e.speed;
+        return this.oneShot('crash', e, FALLOFF.crash, e.own ? 1 : 0.8, 0.2, (v) => sfx.tyresBurst(v, speed), e.byPlayer && !e.own ? 0.3 : 0);
+      }
       case 'bulletHit':
         return this.onBulletHit(e);
       case 'punch':

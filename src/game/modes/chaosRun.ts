@@ -79,6 +79,8 @@ export function categoryOf(kind: ScoreKind): ChaosCategory {
     case 'takeTheHeat':
     case 'citizensArrest':
     case 'haveAGo':
+    // A police car's tyres burst on a stinger.
+    case 'spiked':
       return 'cops';
     // The incidents' awards count as smashing things up.
     case 'cashGrab':

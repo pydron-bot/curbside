@@ -103,6 +103,7 @@ const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
   rocket: { r: 0.9, g: 0.35, b: 1 },
   horn: { r: 1, g: 0.4, b: 0.75 },
   taser: { r: 0.5, g: 0.55, b: 1 },
+  stinger: { r: 0.8, g: 0.88, b: 1 },
 };
 
 export class FxDirector {
@@ -149,6 +150,8 @@ export class FxDirector {
     bus.on('shot', (e) => this.onShot(e));
     bus.on('airHorn', (e) => this.onAirHorn(e));
     bus.on('taser', (e) => this.onTaser(e));
+    bus.on('stinger', (e) => this.onStinger(e));
+    bus.on('tyresBurst', (e) => this.onTyresBurst(e));
     bus.on('bulletHit', (e) => this.onBulletHit(e));
     bus.on('punch', (e) => this.onPunch(e));
     bus.on('pedDown', (e) => this.onPedDown(e));
@@ -347,6 +350,32 @@ export class FxDirector {
       this.lastCombat = this.realTime;
       this.d.rig.addTrauma(0.05);
     }
+  }
+
+  /** A stinger going down: grit kicked up along it as it unrolls. */
+  private onStinger(e: EventOf<'stinger'>): void {
+    const fx = this.d.effects;
+    const n = Math.max(2, Math.round(5 * fx.scale));
+    for (let k = 0; k < n; k++) {
+      const u = (k / (n - 1) - 0.5) * e.length;
+      fx.puff(e.x + e.ax * u, 0.15, e.z + e.az * u, 0.55, 0.3, 1.1, 0.3, 0, 0.3, 0, 0.6);
+    }
+  }
+
+  /** Tyres burst on a stinger: sparks off the rims, shreds of rubber flung out, a puff of dust; a jolt in your own car. */
+  private onTyresBurst(e: EventOf<'tyresBurst'>): void {
+    const fx = this.d.effects;
+    const scale = fx.scale;
+    fx.sparks(e.x, 0.35, e.z, Math.round((6 + Math.min(10, e.speed * 0.4)) * scale), 3, 6 + e.speed * 0.3, 0, 0);
+    fx.puff(e.x, 0.3, e.z, 0.3, 0.6, 2 + e.speed * 0.05, 0.4);
+    for (let k = Math.round(3 + Math.min(4, e.speed / 6)); k > 0; k--) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 1.5 + Math.random() * 3;
+      fx.debris.throw(e.x, 0.3, e.z, Math.cos(a) * sp, 2 + Math.random() * 3, Math.sin(a) * sp, 0.12 + Math.random() * 0.14, 0.03, 0.08 + Math.random() * 0.1, 0.05, 0.05, 0.055, 6, 8);
+    }
+    if (!e.own || !this.playing) return;
+    this.d.rig.addTrauma(0.3);
+    this.hitStop.hit(0.04, 0.08);
   }
 
   private onShot(e: EventOf<'shot'>): void {

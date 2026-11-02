@@ -45,6 +45,7 @@ import { emptySummary, FrameStats, formatFps, formatFrameStats } from './core/fr
 import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
 import { CombatLook } from './render/combatLook';
+import { StingerLook } from './render/stingerLook';
 import { PeoplePose } from './render/peoplePose';
 import { PigeonLook } from './render/pigeonMesh';
 import { createRenderer } from './render/post';
@@ -454,6 +455,7 @@ const combat = new Combat({
   pose: playerModel,
 });
 const combatLook = new CombatLook(scene, look, effects, combat, population.crowd, player);
+const stingerLook = new StingerLook(scene, look, combat);
 
 // --- The city's own life (game/cityLife.ts): ambient scenes, parking, dropped guns ---
 const cityLife = new CityLife({
@@ -840,7 +842,7 @@ function simulate(dt: number) {
       prof.end(P_DRIVE);
     }
     prof.begin(P_PHYSICS);
-    const landed = stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt);
+    const landed = stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt, v.damage);
     prof.end(P_PHYSICS);
     if (landed > 0) carLanded(v, landed, v === driving);
     if (rideRamps(v.sim, ramps) === 'launch') carJumped(v, v === driving);
@@ -1322,6 +1324,7 @@ function frame(now: number) {
   // Bikes lean and carry their riders; emergency sirens and the ice cream chime.
   streetLife.update(frameSeconds, focus.x, focus.z, !attract.active);
   combatLook.update(frameSeconds * fx.hitStop.scale * slow);
+  stingerLook.update();
   stamps.step();
   updateHud(frameSeconds);
   progress.update(frameSeconds);

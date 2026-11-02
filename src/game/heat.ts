@@ -164,6 +164,12 @@ export class Heat {
     bus.on('airHorn', (e) => {
       if (e.byPlayer) this.crime('nuisance', e.x, e.z);
     });
+    // Your stinger: someone's tyres are a nuisance, a patrol car's an attack on
+    // the police. Once they're after you it's no fresh crime (the stinger is
+    // how you shake them; it mustn't restart the clock it's meant to beat).
+    bus.on('tyresBurst', (e) => {
+      if (e.byPlayer && !e.own && this.wanted.level === 0) this.crime(e.police ? 'shootCop' : 'nuisance', e.x, e.z);
+    });
     bus.on('explosion', (e) => {
       // Your own car going up isn't a crime (what it takes with it is).
       if (!e.byPlayer || e.ownCar || !this.live) return;

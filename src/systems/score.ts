@@ -27,7 +27,9 @@ export type ScoreKind =
   | 'domino'
   // Gatecrashing the city (V2-12): a street race won from the outside, the ice cream van driven off from its queue.
   | 'raceCrasher'
-  | 'vanNicked';
+  | 'vanNicked'
+  // A police car's tyres burst on the player's stinger (W3-B, systems/stinger.ts).
+  | 'spiked';
 
 export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   nearMiss: 100,
@@ -52,6 +54,7 @@ export const BASE_POINTS: Record<Exclude<ScoreKind, 'drift'>, number> = {
   domino: 0,
   raceCrasher: 750,
   vanNicked: 300,
+  spiked: 300,
 };
 
 export const LABELS: Record<ScoreKind, string> = {
@@ -75,6 +78,7 @@ export const LABELS: Record<ScoreKind, string> = {
   domino: 'DOMINO',
   raceCrasher: 'RACE CRASHER',
   vanNicked: 'VAN NICKED',
+  spiked: 'SPIKED',
 };
 
 /** Shaking off a chase of this many stars or more earns the EVADED bonus. */

@@ -213,7 +213,7 @@ share sheet mocked.
   score points; anything within 3 s of the last event raises a ×2…×10
   combo. Best score is kept in localStorage (`curbside.best`).
 - **Weapons** (`src/systems/weapons.ts`, `src/world/pickups.ts`): pistol,
-  SMG, shotgun, grenades, molotovs, rockets, the air horn and the taser, plus health, armour and
+  SMG, shotgun, grenades, molotovs, rockets, the air horn, the taser and the stinger, plus health, armour and
   ammo crates on sidewalks (respawn 30 s); hitscan with lock-on and spread
   bloom, tracers, walls stop bullets, cars take damage; drive-bys.
 - **Fighting back** (`src/systems/crowd.ts`): peds are calm (70%),
@@ -397,7 +397,7 @@ survivable, and spread 60% wider at a running target.
 first and is lost on death; health creeps back to 40 at 4/s after 6 s
 unhurt. Crates: health +50, armour +50, ammo (half a clip for each gun
 owned, 3 blasts for an air horn, 2 taser cartridges), weapons (capped: pistol 120, SMG 300,
-shotgun 48, grenades 12, molotovs 10, rockets 8, air horn 12, taser 8).
+shotgun 48, grenades 12, molotovs 10, rockets 8, air horn 12, taser 8, stinger 4).
 
 **On foot** (`game/combat.ts`, `systems/crowd.ts`, `systems/weapons.ts`).
 Everyone, officers included, has 100 HP: pistol 34 (3 hits), SMG 15 (~7),
@@ -486,6 +486,37 @@ ticking over a thin buzz (`sfx.taser`, one gated noise source). Pickups:
 an electric-blue-ringed crate (the ammo box until `pickups.glb` has a
 `crate_taser`); in the hand, nothing shows until `weapons.glb` has a
 `taser` root.
+
+**The stinger** (W3-B, `systems/stinger.ts`, `Combat.throwIt` /
+`dropStinger`): a folding spike strip, thrown like a grenade on foot (16 m
+at most, the landing ring as usual) or, the one throwable that goes out of
+a car, dropped 1.2 m behind the back bumper. A crate is 2 (4 at most). On a
+straight road it squares itself across one carriageway (`ROAD_WIDTH / 2`,
+more if it lands over the middle) and stays on the tarmac; in a junction or
+off the road it lies square to the throw or the drive. At most 3 are down
+(the oldest is pulled up), each for 40 s or 6 cars. Any car whose wheels
+cross it on the ground (one in the air over it is spared) gets its tyres
+burst (`tyresBurst`): a slew (a yaw kick up to 1.4 rad/s and the rear let
+loose, full from 20 m/s), then life on the rims, kept on `DamageState`
+until a respray or another car (`FLAT_*` in `entities/vehicle.ts`: half the
+top speed, less grip and brakes, a pull to one side). Traffic brakes hard
+and sits 1.5–3 s, then limps on; police in a chase limp on and fall
+behind, so it shakes a chase without a shot. A police car's tyres on your
+strip pay **SPIKED** (300) and a scanner line (UNIT DOWN TO ITS RIMS IN …,
+60 s cooldown). Heat: a civilian's tyres are a nuisance, a patrol car's an
+attack on the police, and nothing once you're already wanted (it mustn't
+restart the clock it's there to beat); your own car's tyres are free. The
+look is the one flat prop, built in code (`render/stingerLook.ts`: a black
+hinged strip, yellow hinge blocks, two rows of spikes, drawn above life
+size across like guns in hand), one instanced mesh that draws only while a
+strip is down or flying; it unrolls from the middle in 0.3 s, tumbles
+folded in flight, glints in headlights, and in hand a ghost shows where it
+would lie. Flats scrape rim streaks and sparks (`fxDriving`). The sound is
+the sections slapping out (`sfx`, ~0.45 s) and the burst's double bang,
+hiss and flapping rubber that slows with the car (~1.3 s). Pickups: a
+steel-ringed crate (the ammo box until `pickups.glb` has a
+`crate_stinger`); in the hand, nothing shows until `weapons.glb` has a
+`stinger` root.
 
 **Stunts** (`world/ramps.ts`, `systems/stunts.ts`). Ten stunt ramps
 (6 × 3.2 m, 1.6 m lip, matching the `ramp` model in props.glb) on road
@@ -623,7 +654,9 @@ of any police (car, officer, helicopter): knocking someone down +0.3
 unit running down its officer beside you isn't on you),
 carjack +0.35, a shot +0.05 (at most +0.5 per 5 s), an air horn blast
 +0.1 (a nuisance: at most +0.2 per 5 s), tasing someone as knocking them
-down (an officer +1), an explosion you
+down (an officer +1), a civilian's tyres on your stinger as a nuisance
+(a patrol car's as shooting at the police; nothing while you're wanted),
+an explosion you
 caused +0.6 (not your own car going up, even after you bail out of it
 burning: `explosion.ownCar`), clearly ramming a police car
 +0.6 (bumps in a chase don't count, nor does smashing through a roadblock

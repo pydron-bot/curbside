@@ -14,6 +14,7 @@ const COLORS: Record<PickupKind, string> = {
   rocket: '#d94dff',
   horn: '#ff5fb4',
   taser: '#7f8cff',
+  stinger: '#cfd8e6',
   health: '#5be36a',
   armour: '#3fd2ff',
   ammo: '#ffd23f',
@@ -59,6 +60,8 @@ export const PICKUP_MODELS: Readonly<Record<PickupKind, string>> = {
   horn: 'ammo_box',
   // No crate_taser in pickups.glb yet: the ammo box stands in, in the taser's electric-blue ring.
   taser: 'ammo_box',
+  // Nor a crate_stinger: the ammo box again, in the stinger's steel ring.
+  stinger: 'ammo_box',
   health: 'health_kit',
   armour: 'armour',
   ammo: 'ammo_box',

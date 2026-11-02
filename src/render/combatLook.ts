@@ -172,7 +172,8 @@ export class CombatLook {
     const list = this.combat.projectiles.list;
     for (let i = 0; i < list.length; i++) {
       const p = list[i];
-      if (!p.alive) {
+      // A stinger in flight is StingerLook's.
+      if (!p.alive || p.kind === 'stinger') {
         this.debt[i] = 0;
         continue;
       }

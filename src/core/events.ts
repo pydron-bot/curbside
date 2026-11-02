@@ -88,8 +88,8 @@ export type GameEvent =
    * 'rocket' is a rocket leaving the launcher. driveBy: out of a car window.
    */
   | { type: 'shot'; x: number; z: number; dirX: number; dirZ: number; weapon: WeaponKind | null; byPlayer: boolean; driveBy?: boolean }
-  /** A grenade or molotov was thrown from (x, z) toward (toX, toZ). */
-  | { type: 'throw'; x: number; z: number; toX: number; toZ: number; weapon: 'grenade' | 'molotov'; byPlayer: boolean }
+  /** A grenade, molotov or stinger was thrown from (x, z) toward (toX, toZ). */
+  | { type: 'throw'; x: number; z: number; toX: number; toZ: number; weapon: 'grenade' | 'molotov' | 'stinger'; byPlayer: boolean }
   /**
    * An air horn blast from (x, z) along (dirX, dirZ) (systems/airHorn.ts's
    * cone, `reach` m). startled: people it sent running; stalled: drivers it
@@ -102,6 +102,18 @@ export type GameEvent =
    * follows), or missed into a wall, a car or thin air.
    */
   | { type: 'taser'; x: number; z: number; dirX: number; dirZ: number; toX: number; toZ: number; hit: boolean; byPlayer: boolean }
+  /**
+   * A stinger (systems/stinger.ts) went down across the road: its middle
+   * (x, z), lying along unit (ax, az), `length` m; `dropped` out of a car
+   * rather than thrown.
+   */
+  | { type: 'stinger'; x: number; z: number; ax: number; az: number; length: number; byPlayer: boolean; dropped: boolean }
+  /**
+   * A car ran over a stinger at (x, z) going `speed` m/s and burst its tyres.
+   * police: a police car; chasing: it was after the player; own: the
+   * player's own car; byPlayer: the player's strip.
+   */
+  | { type: 'tyresBurst'; x: number; z: number; speed: number; police: boolean; chasing: boolean; own: boolean; byPlayer: boolean }
   /** A molotov burst: a patch of fire of `radius` m at (x, z). */
   | { type: 'ignite'; x: number; z: number; radius: number; byPlayer: boolean }
   /**
@@ -317,7 +329,9 @@ export type StreetWhat =
   | 'raceCrasher'
   | 'vanNicked'
   // The player's air horn (W3-B) went off in someone's face: a noise complaint for the scanner.
-  | 'noise';
+  | 'noise'
+  // The player's stinger (W3-B) burst a police car's tyres.
+  | 'spiked';
 
 /**
  * What a borrowed service vehicle's tool did: the hose on, still going (the
