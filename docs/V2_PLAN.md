@@ -16,9 +16,12 @@ advocate & reach), a critical judge scoring owner fit first, a rebuttal
 round, and a final verdict giving three directions to choose from.
 Constraints: wider public release, offline only, two weeks._
 
-**Status: waiting on the owner's choice of direction.** The detailed plan
-below is for the recommended direction, A. Several items (V2-01, V2-02,
-V2-05, V2-08, V2-09, V2-14, V2-17) are needed whichever direction is picked.
+**Decided 2026-11-02: direction A (Have-a-Go) with B's mayhem, and the
+alarm-fitter story (*Keep It Loud*).** From B come the stolen service
+vehicles' tools (fire hose, ice cream chime, alongside the tow winch, V2-09)
+and named mayhem with bystanders filming (V2-04); B's tabloid story and
+notoriety gate are not used. The three directions are kept below for the
+record.
 
 ## What's wrong today
 
@@ -33,7 +36,7 @@ scenery.
 
 ## Three directions
 
-### A · HAVE-A-GO: the city doesn't stop for you (recommended)
+### A · HAVE-A-GO: the city doesn't stop for you (chosen)
 
 > Every chase, race, fire and punch-up in this city happens whether you're
 > there or not, and now your mayhem can crash straight into them.
@@ -97,19 +100,22 @@ mobility scooter. **Biggest risk:** closest to a GTA 2 recreation (crew
 respect and per-crew jobs), the largest build (only the VIPERS exist as a
 crew today), and its payoff shows only after an hour of play.
 
-### Mix and match
+### What was chosen
 
-Directions differ in gameplay **and** story, but the two halves can be
-swapped: A's gameplay with B's Menace story is a real option, since both use
-the same engine work.
+A's gameplay and story, plus B's mayhem: the service-vehicle tools and the
+named stamps. Both were already scored well by the judge (stealing the fire
+truck and hosing people is "the kind of mayhem a GTA 2 fan expects, attached
+to vehicles the owner has watched do their jobs").
 
-## Answers to the owner's questions (direction A)
+## Answers to the owner's questions
 
 **The hook.** "Every chase, race, fire and punch-up in this city is happening
 whether you're there or not. Drive into one." You're wanted and the city keeps
 going: your pursuers pile into a street race, you steal a getaway mid-chase
 and inherit its cops, your own fender-bender becomes a scene you watch in
-the mirror.
+the mirror. And everything the incidents bring in works when you take it:
+steal the fire truck and hose the crowd, steal the ice cream van and its
+chime pulls a queue to wherever you park.
 
 **Versus GTA 2.** Kept on purpose: top-down camera, carjacking, wanted stars
 with roadblocks, SWAT and the helicopter, payphone jobs, guns, mayhem for its
@@ -149,36 +155,42 @@ main-story verb.
 2. **Every incident has a way in.** Watch it, or in a second steal, end or
    wreck it, with no menu or phone call.
 3. **Your mess becomes the city's problem.** What you smash, shoot and shunt
-   starts scenes the city's own crews play out.
-4. **Mayhem drives the story.** No main job fails you for getting stars; the
+   starts scenes the city's own crews play out, and your biggest chaos gets a
+   name and an audience.
+4. **Steal the city's workers.** The vehicles the incidents bring in do their
+   job for you: hose, chime, winch.
+5. **Mayhem drives the story.** No main job fails you for getting stars; the
    villain wants the city quiet.
-5. **The first 15 seconds are an incident**, and a stranger on a phone is
+6. **The first 15 seconds are an incident**, and a stranger on a phone is
    causing mayhem in it before any menu.
-6. **Phones first.** Under 150 draw calls on the iPhone, instanced batches,
+7. **Phones first.** Under 150 draw calls on the iPhone, instanced batches,
    no runtime lights, no per-frame allocation, measured on a real device
    mid-plan, not at the end.
 
-## Scope (direction A)
+## Scope
 
-| # | Item | Size | Priority | Any direction? |
+| # | Item | Size | Priority | From |
 |---|---|---|---|---|
-| V2-01 | In-view meter: how much of the city the player sees | S | must | yes |
-| V2-02 | The city doesn't stop: hold split and route-ahead placement | M | must | yes |
-| V2-03 | Chase handoff: TAKE THE HEAT, CITIZEN'S ARREST | L | must | |
-| V2-04 | Stamp HUD and named mayhem | S | must | |
-| V2-05 | Incident-aware missions: a `scene` action and a `mayhem` step | S | must | yes |
-| V2-06 | KEEP IT LOUD chapter 1 (6 jobs) and the main/side split | L | must | |
-| V2-07 | Live cold open; side modes hidden for new players | M | must | |
-| V2-08 | Night Shift side story | S | must | yes |
-| V2-09 | Tow side job: the winch | M | must | yes |
-| V2-10 | Your Mess, Their Problem | M | should | |
-| V2-11 | Scanner pings | M | should | |
-| V2-12 | RACE CRASHER and VAN NICKED | M | should | |
-| V2-13 | Two new incidents: cash-in-transit van, kebab chucking-out time | M | should | |
-| V2-14 | Launch gate: device pass, tier probe, blind playtest | M | must | yes |
-| V2-15 | Quiet Wardens in free roam after the finale | M | stretch | |
-| V2-16 | Best-moment picture on WASTED/BUSTED (owner-gated) | S | stretch | |
-| V2-17 | Prune for newcomers; ship as a minor version | S | must | yes |
+| V2-01 | In-view meter: how much of the city the player sees | S | must | A |
+| V2-02 | The city doesn't stop: hold split and route-ahead placement | M | must | A |
+| V2-03 | Chase handoff: TAKE THE HEAT, CITIZEN'S ARREST | L | must | A |
+| V2-04 | Named mayhem: stamps and bystanders filming | S | must | B |
+| V2-05 | Incident-aware missions: a `scene` action and a `mayhem` step | S | must | A |
+| V2-06 | KEEP IT LOUD chapter 1 (6 jobs) and the main/side split | L | must | A |
+| V2-07 | Live cold open; side modes hidden for new players | M | must | A |
+| V2-08 | Night Shift side story | S | must | A |
+| V2-09 | Borrowed Blues: winch, hose and chime on stolen service vehicles | L | must | A + B |
+| V2-10 | Your Mess, Their Problem | M | should | A |
+| V2-11 | Scanner pings | M | should | A |
+| V2-12 | RACE CRASHER and VAN NICKED | M | should | A |
+| V2-13 | Two new incidents: cash-in-transit van, kebab chucking-out time | M | should | A |
+| V2-14 | Launch gate: device pass, tier probe, blind playtest | M | must | A |
+| V2-15 | Quiet Wardens in free roam after the finale | M | stretch | A |
+| V2-16 | Best-moment picture on WASTED/BUSTED (owner-gated) | S | stretch | B |
+| V2-17 | Prune for newcomers; ship as a minor version | S | must | A |
+
+Cut order if week 2 slips: V2-13, V2-12, V2-11, then V2-10. The stretch
+items wait for everything else to be green.
 
 ### V2-01 · In-view meter
 
@@ -230,14 +242,18 @@ main-story verb.
   running; a second test rams the getaway next to a patrol and asserts an
   arrest with the player at 0 stars.
 
-### V2-04 · Stamp HUD and named mayhem
+### V2-04 · Named mayhem: stamps and bystanders filming
 
 - **What:** one big centred stamp (pooled, no per-frame allocation), synced
   with the `fxDirector` hit-stop: one at a time, at most one every 4 s, bigger
-  wins. A pure detector over score awards and street events: 3+ chained
-  explosions, a pile-up within 3 s, 3 cop cars wrecked in one pursuit, a bus
-  through a queue. About 12 original names. Bystanders in view switch to the
-  witnesses' film pose. Off in Chaos Run.
+  wins. A pure detector over score awards and street events for the player's
+  own chaos: 3+ chained explosions (BARBECUE SEASON; `combat.ts` already
+  ripples chain reactions), a pile-up within 3 s, 3 cop cars wrecked in one
+  pursuit, a bus through a queue, a rocket into a fire truck mid-hose. The
+  have-a-go moments from V2-03 use the same stamp. About 12 original names.
+  Bystanders in view switch to the witnesses' film pose, so the street
+  visibly reacts (reusing people already on the street, not adding any). Off
+  in Chaos Run.
 - **Done when:** detector tests (windows, cooldown, priority); smoke
   screenshots at 852×340 show no overlap with stars, radar or activity card.
 
@@ -292,16 +308,34 @@ main-story verb.
   phone; a grep test finds no "arts quarter", "suburbs" or "old town";
   existing saves keep their progress.
 
-### V2-09 · Tow side job
+### V2-09 · Borrowed Blues: steal a service vehicle and its tool works
 
-- **What:** an action button on the tow truck (the fire button's slot on
-  touch). The winch hooks the nearest towable within a few metres (accident
-  wrecks, dumped getaways); the hooked car follows softly and the truck is
-  speed-capped. Deliver to the docks yard for pay by condition, with a small
-  streak. Vex phones after dark with a tow contract. A guard stops the AI
-  service runs claiming the player's stolen truck.
-- **Done when:** tests for hook range, speed cap, pay table and the guard; on
-  the iPhone a wreck can be towed to the yard without clipping kerbs.
+- **What:** one action-button slot per vehicle type (the fire button's place
+  on touch), built once and used by three tools:
+  - **Hose (fire truck):** a knockback cone that knocks people flat and puts
+    out a burning wreck on hit, drawn with the pooled water/steam particles
+    (no new draw calls). Aimed with the existing twin-stick aim on touch.
+    Put out a fire before the crew left on the pavement does for a small
+    duty streak.
+  - **Chime (ice cream van):** the van's chime recruits a queue
+    (`Gathering`) to wherever you park it: a lure for mayhem.
+  - **Winch (tow truck), the tow side job:** hooks the nearest towable within
+    a few metres (accident wrecks, dumped getaways); the hooked car follows
+    softly and the truck is speed-capped. Deliver to the docks yard for pay
+    by condition, with a small streak. Vex phones after dark with a tow
+    contract.
+
+  A guard stops the AI service runs claiming the player's stolen vehicle.
+  Ambulance, bus and police duty wait for a later version.
+- **Builds on:** `scenes/fireCrews.ts` (fire rules, hose water and steam in
+  the effects pools), `scenes/iceCream.ts` and `gathering.ts`,
+  `scenes/tows.ts` and `systems/emergency.ts` (`towPose`, `winch`),
+  `accidents.towables()`, `scenes/service.ts`, the firetruck, ice cream van
+  and tow truck GLBs, `modes/taxi.ts` streak pay.
+- **Done when:** tests for the hose cone (knockback, fire out), chime
+  recruiting and releasing, hook range, speed cap, pay table and the guard; on
+  the iPhone a wreck can be towed to the yard without clipping kerbs, and
+  hosing a crowd stays within the draw-call budget.
 
 ### V2-10 · Your Mess, Their Problem (should)
 
@@ -369,10 +403,10 @@ notes. A fresh save shows PLAY and Settings only.
 
 | Days | Milestone | Items | Exit criteria |
 |---|---|---|---|
-| 1 | **M0 Choose and measure** | The owner picks a direction (nothing story-specific is written before that). V2-01 baseline. Direction-free work starts: V2-05, V2-08. | Choice recorded in HANDOFF; baseline logged. |
+| 1 | **M0 Measure** | Direction chosen (A + B's mayhem). V2-01 baseline. V2-05 and V2-08 start. | Choice recorded in HANDOFF; baseline logged. |
 | 1–5 | **M1 The city doesn't stop** | Parallel workstreams: City (V2-02), Chase (V2-03 decision table, `adopt`), Story (V2-05 landed, s1–s3 drafted), Side (V2-08), Presentation (V2-04). | The owner plays 20 minutes on the iPhone and says yes to: did a race, fight or accident get in the way of my chase? Did I steal a getaway and inherit its cops? Did a stamp land? In-view numbers up on the baseline. |
-| 5–8 | **M2 First session and device gate** | V2-07 cold open; V2-03 finished; s1–s3 playable; V2-14 device pass and 5-star soak; V2-09 winch prototype. | Smoke test passes at all three sizes including the fallback; under 150 draw calls in the 5-star soak; s1–s3 complete on the phone. |
-| 8–12 | **M3 Story and side job** | s4–s6 and the coach finale; V2-09 with Vex's call; V2-10; V2-11; V2-12 and V2-13 as capacity allows. | Chapter 1 completes on desktop and iPhone; a wreck towed to the yard on the phone; `npm test` and `npm run build` green. |
+| 5–8 | **M2 First session and device gate** | V2-07 cold open; V2-03 finished; s1–s3 playable; V2-14 device pass and 5-star soak; V2-09 action-button slot with the hose and the winch prototype. | Smoke test passes at all three sizes including the fallback; under 150 draw calls in the 5-star soak; s1–s3 complete on the phone; a stolen fire truck hoses a crowd. |
+| 8–12 | **M3 Story and side job** | s4–s6 and the coach finale; V2-09 chime, winch and Vex's call; V2-10; V2-11; V2-12 and V2-13 as capacity allows. | Chapter 1 completes on desktop and iPhone; a wreck towed to the yard on the phone; the chime pulls a queue; `npm test` and `npm run build` green. |
 | 12–14 | **M4 Playtest and ship** | V2-14 blind playtests and top-3 fixes; V2-17 and the changelog; stretch items only if green. | Three strangers reach a stolen car within 20 s and play 10 minutes unprompted; the owner signs off a 20-minute session; pushed to main with the smoke test passing. |
 
 ## Not in V2
@@ -385,7 +419,8 @@ notes. A fresh save shows PLAY and Settings only.
 | District CRACKDOWN/LAWLESS states | Retunes scene rates and patrols, and only pays off after an hour. Revisit after the launch gate. |
 | Photo mode, trailer tooling, store GIF production | A free camera fights shadows and culling; the rest is marketing tooling, not game. |
 | DJs, idents, parody ads, news bulletins | Too much writing for synthesised audio that may read as noise; only the scanner pings ship. |
-| Ambulance, bus and police duty jobs; fire hose; ice cream chime | Four sub-mechanics is too many. The winch ships because towing was asked for; hose and chime are next. |
+| Ambulance, bus and police duty jobs | Each is its own mini-activity with HUD needs; the hose, chime and winch ship first on the same action-button slot. |
+| B's tabloid story and notoriety gate | The owner chose the alarm-fitter story; mayhem never gates the story. |
 | WATCH mode (a free-flying camera to incidents) | The scanner pings serve "just watching" more cheaply for now. |
 | Film/"in frame" mission steps, a news-crew protagonist | A passive verb fenced with star penalties: the towing mistake again. |
 | Funeral procession, stag conga, film shoot, hydrant geyser | Two new incidents are enough; more depends on the in-view numbers. |
@@ -414,21 +449,19 @@ notes. A fresh save shows PLAY and Settings only.
 
 ## Open questions
 
-1. **Which direction:** A (Have-a-Go + Keep It Loud), B (The Menace) or
-   C (Turf + Nana Viper)? Or A's gameplay with B's story?
-2. **Backstory (if A):** is the alarm fitter sacked by a Quiet Streets Act a
-   story you'd enjoy?
-3. **Chaos Run:** keep its empty streets (a fair timed score), or let the
-   living city run through it too?
-4. **TAKE THE HEAT:** land on 2 stars, or 1 or 3?
-5. **Night Shift:** ring only at night, or any time from the docks-yard phone?
-6. **Picture of your best moment:** would you send one to a friend? A quick
-   mock decides V2-16.
-7. **Hiding side modes** from brand-new players until the second story job:
-   OK?
-8. **Version:** ship as 0.14.0, or is this the 1.0 you post to Reddit and itch?
+_Answered 2026-11-02: direction A with B's mayhem; the alarm-fitter story._
 
-## Sample script (direction A)
+1. **Chaos Run:** keep its empty streets (a fair timed score), or let the
+   living city run through it too?
+2. **TAKE THE HEAT:** land on 2 stars, or 1 or 3?
+3. **Night Shift:** ring only at night, or any time from the docks-yard phone?
+4. **Picture of your best moment:** would you send one to a friend? A quick
+   mock decides V2-16.
+5. **Hiding side modes** from brand-new players until the second story job:
+   OK?
+6. **Version:** ship as 0.14.0, or is this the 1.0 you post to Reddit and itch?
+
+## Sample script
 
 ```
 COLD OPEN (no card; the only prompt over the live crash)

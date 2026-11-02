@@ -70,6 +70,14 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
+**V2 is planned in `docs/V2_PLAN.md` (2026-11-02).** The owner chose
+direction A, *Have-a-Go* (the city's incidents keep running while you're
+wanted, and you can join them), with B's mayhem (stolen service vehicles'
+hose, chime and winch; named stamps) and the alarm-fitter main story,
+*Keep It Loud*. The Graveyard Shift becomes the Night Shift side story, and
+towing a side job. A towing-first draft was rejected ("I don't want to play
+a tow truck simulator"). V2 work takes priority over the list below.
+
 Re-planned 2026-10-30 after a scoping pass: every item below was checked
 against the code. **`docs/BACKLOG.md` has the details for each one** (cause
 with file:line, proposed fix, risks, how to verify, what the user must
