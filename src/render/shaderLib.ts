@@ -13,7 +13,7 @@
  */
 import { Color, type IUniform } from 'three';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT } from '../world/city';
-import { LAMP_ARM, LAMP_HEIGHT, LAMP_OFFSET, LAMP_SPACING } from '../world/streetLamps';
+import { LAMP_ARM, LAMP_HEIGHT, LAMP_OFFSET, LAMP_REACH2, LAMP_SPACING, lampsNear } from '../world/streetLamps';
 
 export const worldUniforms = {
   /** Seconds since start (animated water, blinking lights, neon flicker). */
@@ -100,7 +100,7 @@ export const UB_STREET_LIGHT = /* glsl */ `
 const float UB_LAMP_OFF = ${f(LAMP_OFFSET - LAMP_ARM)};
 const float UB_LAMP_SPACING = ${f(LAMP_SPACING)};
 const float UB_LAMP_H = ${f(LAMP_HEIGHT - 0.25)};
-const float UB_LAMP_REACH2 = 132.0;
+const float UB_LAMP_REACH2 = ${f(LAMP_REACH2)};
 
 float ubLampTerm(vec3 wp, vec3 n, vec2 lamp) {
   vec3 L = vec3(lamp.x, UB_LAMP_H, lamp.y) - wp;
@@ -142,6 +142,42 @@ vec3 ubStreetLight(vec3 wp, vec3 n) {
     }
   }
   return uLampColor * (sum * uNight);
+}
+`;
+
+/** aLamps.x for a thing no lamp reaches (an empty slot is the same: far away, it adds nothing). */
+export const LAMPS_NONE = 1e5;
+/** aLamps.x for a thing more lamps reach than the list holds: the shader walks the lattice (ubStreetLight). */
+export const LAMPS_ALL = -1e6;
+
+/**
+ * A thing's street-lamp short list for UB_LAMP_LIST, into `out` at `o`
+ * (x, z, x, z): the two heads that can reach anything within `radius` of
+ * (x, z), else LAMPS_NONE or LAMPS_ALL. Allocates nothing.
+ */
+export function lampList(x: number, z: number, radius: number, out: Float32Array, o: number): void {
+  const n = lampsNear(x, z, radius, out, o, 2);
+  if (n > 2) out[o] = LAMPS_ALL;
+  else if (n === 0) out[o] = LAMPS_NONE;
+  if (n < 2) {
+    out[o + 2] = LAMPS_NONE;
+    out[o + 3] = LAMPS_NONE;
+  }
+}
+
+/**
+ * The street lamps' light from a short list worked out per instance on the
+ * CPU (lampList: the two heads in reach of the whole thing), in place of
+ * ubStreetLight's lattice walk of eight per fragment: the same light (every
+ * lamp left out is out of reach), at a quarter of the terms. Things more
+ * lamps reach (at a junction, the big ones) walk the lattice as before.
+ * Needs UB_STREET_LIGHT and `vPropLamps` (the instance's aLamps, flat).
+ */
+export const UB_LAMP_LIST = /* glsl */ `
+vec3 ubListedLight(vec3 wp, vec3 n) {
+  if (uNight < 0.01 || vPropLamps.x > ${f(LAMPS_NONE / 2)}) return vec3(0.0);
+  if (vPropLamps.x < ${f(LAMPS_ALL / 2)}) return ubStreetLight(wp, n);
+  return uLampColor * ((ubLampTerm(wp, n, vPropLamps.xy) + ubLampTerm(wp, n, vPropLamps.zw)) * uNight);
 }
 `;
 

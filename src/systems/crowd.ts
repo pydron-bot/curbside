@@ -521,6 +521,24 @@ function dodge(p: PedAgent, v: VehicleState, sp: number) {
   p.fleeZ = -fx * side;
 }
 
+/**
+ * Must this ped think every step wherever they are (systems/simLod.ts)?
+ * Officers, anyone fighting, shooting or running to an arrest, anyone
+ * reeling or on fire, and the people other systems own (gangs, story
+ * characters, fares: neither passers-by nor a scene's): only the street's
+ * ordinary walkers and a scene's people go slower off screen.
+ */
+export function fullRatePed(p: PedAgent): boolean {
+  return (
+    p.role === 'cop' ||
+    p.mode === 'fight' ||
+    p.mode === 'shoot' ||
+    p.stagger > 0 ||
+    p.burning > 0 ||
+    (p.street !== true && p.scene !== true)
+  );
+}
+
 /** Calm down and head back to the sidewalk loop. */
 export function resumeWalking(p: PedAgent) {
   const { bx, bz } = blockAt(p.s.x, p.s.z);

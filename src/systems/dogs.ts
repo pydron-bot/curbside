@@ -9,6 +9,7 @@
  */
 import { BLOCKS_PER_SIDE } from '../world/city';
 import { blockAt, cornerPoint } from './crowd';
+import type { SimClock } from './simLod';
 import { len2 } from '../core/len';
 
 export type DogMode = 'trot' | 'sniff' | 'chase' | 'flee' | 'down';
@@ -44,6 +45,8 @@ export interface Dog {
   stride: number;
   /** Coat colour index (the look's palette). */
   coat: number;
+  /** Its tick clock off screen (systems/simLod.ts: the scene keeps it). */
+  lod?: SimClock;
 }
 
 /** Someone a dog might chase. */
@@ -147,6 +150,8 @@ export class DogPack {
       stride: r(),
       coat,
     } satisfies Dog);
+    // A pooled dog's clock owes its last life nothing.
+    if (d.lod) d.lod.owed = d.lod.dt = 0;
     this.dogs.push(d);
     return d;
   }
@@ -189,32 +194,35 @@ export class DogPack {
   }
 
   step(dt: number, w: DogWorld): void {
-    for (const d of this.dogs) {
-      d.calm = Math.max(0, d.calm - dt);
-      this.hitByCar(d, w);
-      switch (d.mode) {
-        case 'down':
-          d.speed = 0;
-          if ((d.timer -= dt) <= 0) this.flee(d, d.x - d.awayX, d.z - d.awayZ, 2.5);
-          break;
-        case 'flee':
-          this.move(d, d.awayX, d.awayZ, FLEE_SPEED, dt, w);
-          if ((d.timer -= dt) <= 0) this.resume(d);
-          break;
-        case 'chase':
-          this.chase(d, dt, w);
-          break;
-        case 'sniff':
-          d.speed = 0;
-          if ((d.timer -= dt) <= 0) d.mode = 'trot';
-          this.spot(d, w);
-          break;
-        default:
-          this.trot(d, dt, w);
-          this.spot(d, w);
-      }
-      if (d.speed > 0) d.stride = (d.stride + (d.speed * dt) / STRIDE) % 1;
+    for (const d of this.dogs) this.stepDog(d, dt, w);
+  }
+
+  /** One dog, `dt` on (off screen, a dog steps on its own tick: systems/simLod.ts). */
+  stepDog(d: Dog, dt: number, w: DogWorld): void {
+    d.calm = Math.max(0, d.calm - dt);
+    this.hitByCar(d, w);
+    switch (d.mode) {
+      case 'down':
+        d.speed = 0;
+        if ((d.timer -= dt) <= 0) this.flee(d, d.x - d.awayX, d.z - d.awayZ, 2.5);
+        break;
+      case 'flee':
+        this.move(d, d.awayX, d.awayZ, FLEE_SPEED, dt, w);
+        if ((d.timer -= dt) <= 0) this.resume(d);
+        break;
+      case 'chase':
+        this.chase(d, dt, w);
+        break;
+      case 'sniff':
+        d.speed = 0;
+        if ((d.timer -= dt) <= 0) d.mode = 'trot';
+        this.spot(d, w);
+        break;
+      default:
+        this.trot(d, dt, w);
+        this.spot(d, w);
     }
+    if (d.speed > 0) d.stride = (d.stride + (d.speed * dt) / STRIDE) % 1;
   }
 
   // --- Internals ------------------------------------------------------------------

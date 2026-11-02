@@ -8,11 +8,13 @@
  * family.
  */
 import { DogPack, type Dog, type DogCar, type DogRunner, type DogWorld } from '../../systems/dogs';
-import { cornerPoint } from '../../systems/crowd';
+import { cornerPoint, scare } from '../../systems/crowd';
+import { newSimClock } from '../../systems/simLod';
 import { StaticGrid } from '../../world/collision';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT } from '../../world/city';
 import { districtAt, type District } from '../../world/districts';
-import type { Scene, SceneCtx } from '../cityLife';
+import type { Scene, SceneCtx, Subject } from '../cityLife';
+import type { CrowdPed } from '../population';
 import { dogText, type LabelSink } from '../debugLabels';
 import { len2 } from '../../core/len';
 
@@ -30,6 +32,9 @@ const CARE = 90;
 const BLAST = 8;
 const BLAST_SCARE = 45;
 const PUNCH = 1;
+/** chaseRunner: a passer-by within this of the player runs for this long, m / s. */
+const RUNNER_RANGE = 45;
+const RUNNER_SECONDS = 9;
 
 export class StrayDogs implements Scene {
   readonly pack: DogPack;
@@ -40,6 +45,8 @@ export class StrayDogs implements Scene {
   private readonly carPool: DogCar[] = [];
   private readonly corner = { x: 0, z: 0 };
   private readonly world: DogWorld;
+  /** Someone chaseRunner() set running. */
+  private chased: CrowdPed | null = null;
 
   constructor(private readonly life: SceneCtx) {
     this.pack = new DogPack(life.d.rand, {
@@ -88,50 +95,134 @@ export class StrayDogs implements Scene {
     const want = Math.max(1, Math.round(MAX_DOGS * AREA[districtAt(at.x, at.z)]));
     if (dogs.length < want && life.due('dog', dogs.length)) this.putDown(at.x, at.z);
     if (dogs.length === 0) return;
+    const lod = life.d.lod;
+    if (!lod) {
+      this.gather(at.x, at.z);
+      this.pack.step(dt, this.world);
+      return;
+    }
+    // Off screen each on its own tick (a chase every step); nobody due, nothing to gather.
+    let due = false;
+    for (let i = 0; i < dogs.length; i++) {
+      const d = dogs[i];
+      if (lod.due((d.lod ??= newSimClock()), lod.tier(d.x, d.z), dt, d.mode === 'chase') > 0) due = true;
+    }
+    if (!due) return;
     this.gather(at.x, at.z);
-    this.pack.step(dt, this.world);
+    for (let i = 0; i < dogs.length; i++) {
+      const d = dogs[i];
+      if (d.lod!.dt > 0) this.pack.stepDog(d, d.lod!.dt, this.world);
+    }
   }
 
   reset(): void {
     this.pack.clear();
+    this.chased = null;
   }
 
   /** Debug (TEST menu): a dog on the pavement nearest the player now (in view), up to the cap. */
   force(): boolean {
     if (this.pack.dogs.length >= MAX_DOGS) return false;
     const at = this.life.d.focus();
+    return this.putNear(at.x, at.z, 12, 13) !== null;
+  }
+
+  /**
+   * The TEST menu and the title's highlights: a passer-by on screen near
+   * the player breaks into a run, a dog or two put down just behind them.
+   * Null with nobody to run (or no pavement for a dog).
+   */
+  chaseRunner(): CrowdPed | null {
+    const life = this.life;
+    const at = life.d.focus();
+    let ped: CrowdPed | null = null;
+    let best = RUNNER_RANGE;
+    for (const c of life.d.population.crowd) {
+      const a = c.agent;
+      if (!a.street || a.scene || a.role !== 'civilian' || a.mode !== 'walk' || a.injured || !life.inView(a.s.x, a.s.z, -4)) continue;
+      const d = len2(a.s.x - at.x, a.s.z - at.z);
+      if (d < best) {
+        best = d;
+        ped = c;
+      }
+    }
+    if (!ped) return null;
+    const s = ped.agent.s;
+    let dog: Dog | null = null;
+    for (let i = 0; i < 2; i++) {
+      // Room for them: the furthest dog out of view goes.
+      if (this.pack.dogs.length >= MAX_DOGS) this.dropFurthest(at.x, at.z);
+      if (this.pack.dogs.length >= MAX_DOGS) break;
+      dog = this.putNear(s.x, s.z, 4 + i * 2, 4) ?? dog;
+    }
+    if (!dog) return null;
+    scare(ped.agent, dog.x, dog.z, RUNNER_SECONDS);
+    this.chased = ped;
+    return ped;
+  }
+
+  /** The runner chaseRunner() set off, while they're still running. */
+  subject(out: Subject): boolean {
+    const c = this.chased;
+    if (!c || !this.life.present(c) || c.agent.mode !== 'flee') {
+      this.chased = null;
+      return false;
+    }
+    const s = c.agent.s;
+    out.x = s.x;
+    out.z = s.z;
+    out.vx = s.vx;
+    out.vz = s.vz;
+    return true;
+  }
+
+  describe(out: LabelSink): void {
+    for (const d of this.pack.dogs) out.spot(d, dogText(d.mode), 'people');
+  }
+
+  /** A dog on the pavement of the block at (x, z), as near `want` m from it as can be (within `slack`). */
+  private putNear(x: number, z: number, want: number, slack: number): Dog | null {
     const clamp = (v: number) => Math.max(0, Math.min(BLOCKS_PER_SIDE - 1, Math.floor((v + HALF_EXTENT) / BLOCK_SIZE)));
-    const bx = clamp(at.x);
-    const bz = clamp(at.z);
+    const bx = clamp(x);
+    const bz = clamp(z);
     let best = Infinity;
     let edge = -1;
     let sx = 0;
     let sz = 0;
-    // Somewhere 8–25 m off along the block's four pavement edges.
+    // Along the block's four pavement edges.
     for (let e = 0; e < 4; e++) {
       for (let t = 0.1; t < 0.95; t += 0.1) {
         const p = cornerPoint(bx, bz, e, this.corner);
         const px = p.x;
         const pz = p.z;
         const q = cornerPoint(bx, bz, e + 1, this.corner);
-        const x = px + (q.x - px) * t;
-        const z = pz + (q.z - pz) * t;
-        const d = Math.abs(len2(x - at.x, z - at.z) - 12);
-        if (d < best && d < 13 && !this.world.blocked(x, z, 0.5)) {
+        const ex = px + (q.x - px) * t;
+        const ez = pz + (q.z - pz) * t;
+        const d = Math.abs(len2(ex - x, ez - z) - want);
+        if (d < best && d < slack && !this.world.blocked(ex, ez, 0.5)) {
           best = d;
           edge = e;
-          sx = x;
-          sz = z;
+          sx = ex;
+          sz = ez;
         }
       }
     }
-    if (edge < 0) return false;
-    this.pack.add(sx, sz, bx, bz, edge + 1, Math.floor(this.life.d.rand() * DOG_COATS));
-    return true;
+    if (edge < 0) return null;
+    return this.pack.add(sx, sz, bx, bz, edge + 1, Math.floor(this.life.d.rand() * DOG_COATS));
   }
 
-  describe(out: LabelSink): void {
-    for (const d of this.pack.dogs) out.spot(d, dogText(d.mode), 'people');
+  /** Take off the dog furthest from (x, z) that's out of view. */
+  private dropFurthest(x: number, z: number): void {
+    let far: Dog | null = null;
+    let farD = 0;
+    for (const d of this.pack.dogs) {
+      const dist = len2(d.x - x, d.z - z);
+      if (dist > farD && !this.life.inView(d.x, d.z, 4)) {
+        farD = dist;
+        far = d;
+      }
+    }
+    if (far) this.pack.remove(far);
   }
 
   /** A dog somewhere on a pavement in the ring round the player, out of view. */
