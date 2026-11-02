@@ -1975,8 +1975,9 @@ and every new program is compiled behind the current frame.
     clear of the walking line)`, stopX, stopZ, stopHeading` (where a bus
     pulls in, by the kerb beside it)`, dir, ix, iz }` (its lane, travelling
     `dir` toward junction (ix, iz)).
-- **Stand-ins** (`render/propStandIns.ts`): props.glb has no models yet for
-  the round-2 kinds, so each is a few boxes (five faces each, no bottom)
+- **Stand-ins** (`render/propStandIns.ts`): props.glb has had models for all
+  twenty round-2 kinds since 0.13.0 (10–120 tris each), so these now only
+  draw for a kind the GLB lacks; each is a few boxes (five faces each, no bottom)
   tagged with the material names the GLB will use, so they light the same
   (`blink_amber` blinks, `ad_panel` / `screen` / `stripe_*` are self-lit,
   `roadwork_sign` / `barrier_orange` catch the light, `paint` takes the

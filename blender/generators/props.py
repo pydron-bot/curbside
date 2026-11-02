@@ -22,6 +22,10 @@ from lib.common import (
     box,
     cylinder,
     export_glb,
+    fan,
+    open_box,
+    prism,
+    strips,
     group,
     hull,
     ico,
@@ -77,6 +81,48 @@ def mats():
         "garage_door": material("garage_door", (120, 126, 132), 0.6),
         "frenzy": material("frenzy", (255, 60, 60), 0.3),
         "cone_orange": material("cone_orange", (250, 100, 20), 0.6),
+        # Street props, round 2 (colours from src/render/propStandIns.ts).
+        "blink_amber": material("blink_amber", (255, 176, 32), 0.3),
+        "roadwork_sign": material("roadwork_sign", (255, 148, 24), 0.5),
+        "sign_black": material("sign_black", (20, 20, 20), 0.6),
+        "steel_plate": material("steel_plate", (92, 98, 103), 0.5),
+        "trench": material("trench", (36, 28, 20), 0.95),
+        "spoil": material("spoil", (125, 100, 72), 0.95),
+        "skip_paint": material("skip_paint", (230, 174, 23), 0.6),
+        "rubble": material("rubble", (123, 116, 106), 0.95),
+        "rubble_dark": material("rubble_dark", (89, 75, 61), 0.95),
+        "digger_paint": material("digger_paint", (240, 180, 24), 0.5),
+        "track": material("track", (35, 35, 35), 0.8),
+        "toilet_blue": material("toilet_blue", (45, 111, 194), 0.6),
+        "toilet_door": material("toilet_door", (32, 84, 150), 0.6),
+        "toilet_roof": material("toilet_roof", (228, 230, 226), 0.6),
+        "cart_steel": material("cart_steel", (201, 204, 208), 0.35),
+        "umbrella_red": material("umbrella_red", (200, 48, 42), 0.7),
+        "umbrella_yellow": material("umbrella_yellow", (242, 194, 27), 0.7),
+        "coffee_brown": material("coffee_brown", (107, 66, 40), 0.7),
+        "canopy_green": material("canopy_green", (31, 90, 68), 0.7),
+        "canopy_cream": material("canopy_cream", (239, 226, 200), 0.7),
+        "fruit_red": material("fruit_red", (216, 50, 42), 0.7),
+        "fruit_orange": material("fruit_orange", (240, 138, 26), 0.7),
+        "fruit_yellow": material("fruit_yellow", (242, 208, 42), 0.7),
+        "fruit_green": material("fruit_green", (108, 184, 58), 0.7),
+        "awning_green": material("awning_green", (47, 138, 74), 0.7),
+        "shelter_glass": material("shelter_glass", (127, 159, 174), 0.15),
+        "shelter_roof": material("shelter_roof", (214, 218, 221), 0.6),
+        "stripe_bus": material("stripe_bus", (31, 111, 209), 0.4),
+        "ad_panel": material("ad_panel", (243, 231, 200), 0.3),
+        "bike_frame": material("bike_frame", (47, 163, 107), 0.5),
+        "flowers": material("flowers", (216, 72, 122), 0.7),
+        "meter": material("meter", (61, 68, 72), 0.5),
+        "meter_cap": material("meter_cap", (201, 162, 39), 0.5),
+        "recycle_blue": material("recycle_blue", (42, 98, 184), 0.6),
+        "recycle_lid": material("recycle_lid", (75, 134, 214), 0.6),
+        "umbrella_cream": material("umbrella_cream", (239, 228, 204), 0.7),
+        "paint": material("paint", (200, 42, 42), 0.5),
+        "atm_body": material("atm_body", (91, 102, 112), 0.5),
+        "screen": material("screen", (89, 198, 255), 0.2),
+        "stripe_atm": material("stripe_atm", (42, 125, 225), 0.4),
+        "cart_red": material("cart_red", (200, 48, 42), 0.5),
     }
 
 
@@ -473,6 +519,265 @@ def road_barrier_long(m):
     return parts
 
 
+# ---------------------------------------------------------------- street props, round 2 (§10)
+# Low-tri: everything joins the one `street` family draw, and each copy in view runs its model's
+# vertices, so faces nobody sees (undersides) are left out (open_box, prism, fan, strips).
+
+def lamp_pyramid(name, x, y, z, size, m):
+    """A small blinking warning lamp: a square pyramid (6 tris), reads from above."""
+    h = size / 2
+    return hull(name, [(x - h, y - h, z), (x + h, y - h, z), (x - h, y + h, z), (x + h, y + h, z),
+                       (x, y, z + size * 0.9)], m["blink_amber"])
+
+
+def traffic_barrel(m):
+    o, w = m["barrier_orange"], m["white"]
+    return [
+        prism("traffic_barrel_drum", [(0, 0.28), (0.3, 0.3), (0.44, 0.3), (0.7, 0.3), (0.84, 0.29)], [o, w, o, w], o,
+              verts=6),
+        lamp_pyramid("traffic_barrel_lamp", 0, 0, 0.84, 0.18, m),
+    ]
+
+
+def work_barrier(m):
+    # Long side along X; the face (game +Z) is Blender -Y.
+    return [
+        open_box("work_barrier_panel", (1.8, 0.16, 0.7), (0, 0, 0.47), m["barrier_orange"]),
+        open_box("work_barrier_band", (1.82, 0.18, 0.18), (0, 0, 0.68), m["white"]),
+        open_box("work_barrier_foot_l", (0.16, 0.5, 0.12), (-0.72, 0, 0.06), m["dark"]),
+        open_box("work_barrier_foot_r", (0.16, 0.5, 0.12), (0.72, 0, 0.06), m["dark"]),
+        lamp_pyramid("work_barrier_lamp", 0.78, 0, 0.82, 0.16, m),
+    ]
+
+
+def roadwork_sign(m):
+    # A-frame: the face leans back from the front (Blender -Y), the dark back panel from +Y.
+    tilt = 13.0
+    front = rotate(open_box("roadwork_sign_face", (1.1, 0.05, 1.15), (0, -0.165, 0.6), m["roadwork_sign"]),
+                   (-tilt, 0, 0), pivot=(0, -0.165, 0.6))
+    band = rotate(open_box("roadwork_sign_band", (0.7, 0.03, 0.16), (0, -0.2, 0.78), m["sign_black"]),
+                  (-tilt, 0, 0), pivot=(0, -0.165, 0.6))
+    back = rotate(open_box("roadwork_sign_back", (1.1, 0.05, 1.15), (0, 0.165, 0.6), m["dark"]),
+                  (tilt, 0, 0), pivot=(0, 0.165, 0.6))
+    # From above it's two slivers: a bold amber ridge along the top.
+    ridge = open_box("roadwork_sign_ridge", (1.14, 0.16, 0.08), (0, 0, 1.18), m["roadwork_sign"])
+    return [front, band, back, ridge]
+
+
+def steel_plate(m):
+    # Lying flat over a trench, long side along Z (game), drawn only.
+    return [open_box("steel_plate_plate", (1.6, 2.4, 0.04), (0, 0, 0.02), m["steel_plate"])]
+
+
+def work_trench(m):
+    # The cut on the +X side, the spoil heap on -X, both along the game's Z.
+    parts = [open_box("work_trench_cut", (0.8, 3.6, 0.02), (0.3, 0, 0.01), m["trench"])]
+    parts.append(hull("work_trench_spoil", [(-0.75, -1.5, 0), (-0.15, -1.5, 0), (-0.75, 1.5, 0), (-0.15, 1.5, 0),
+                                             (-0.45, -1.2, 0.3), (-0.45, 1.1, 0.35)], m["spoil"]))
+    parts.append(hull("work_trench_lump", [(-0.7, -0.4, 0), (-0.2, -0.4, 0), (-0.45, 0.3, 0), (-0.5, -0.1, 0.35)],
+                      m["rubble_dark"]))
+    return parts
+
+
+def skip(m):
+    # Sloped ends, yellow, rubble showing over the top; long side along the game's Z.
+    y = m["skip_paint"]
+    parts = [
+        hull("skip_body", [(-0.75, -1.0, 0), (0.75, -1.0, 0), (-0.75, 1.0, 0), (0.75, 1.0, 0),
+                           (-0.8, -1.3, 1.0), (0.8, -1.3, 1.0), (-0.8, 1.3, 1.0), (0.8, 1.3, 1.0)], y),
+        open_box("skip_rubble", (1.4, 2.3, 0.06), (0, 0, 1.01), m["rubble"]),
+        hull("skip_heap", [(-0.5, -0.6, 1.0), (0.4, -0.7, 1.0), (-0.4, 0.6, 1.0), (0.5, 0.5, 1.0), (0.05, -0.1, 1.3)],
+             m["rubble"]),
+        hull("skip_chunk", [(0.0, 0.2, 1.02), (0.55, 0.3, 1.02), (0.3, 0.9, 1.02), (0.3, 0.5, 1.3)], m["rubble_dark"]),
+        hull("skip_chunk2", [(-0.55, -0.8, 1.02), (-0.15, -1.05, 1.02), (-0.2, -0.5, 1.02), (-0.35, -0.8, 1.22)],
+             m["rubble_dark"]),
+    ]
+    for x in (-1, 1):  # lifting lugs on the sides
+        parts.append(open_box(f"skip_lug{x:+d}", (0.12, 0.3, 0.2), (x * 0.82, 0, 0.75), m["dark"]))
+    return parts
+
+
+def mini_digger(m):
+    # Tracks along Y, house and cab behind, boom and bucket out in front (Blender -Y) on the -X side.
+    p = m["digger_paint"]
+    parts = []
+    for x in (-0.55, 0.55):
+        parts.append(hull(f"mini_digger_track{x:+.0f}", [(x - 0.19, -0.7, 0), (x + 0.19, -0.7, 0), (x - 0.19, 1.3, 0),
+                                                          (x + 0.19, 1.3, 0), (x - 0.19, -0.85, 0.4),
+                                                          (x + 0.19, -0.85, 0.4), (x - 0.19, 1.45, 0.4),
+                                                          (x + 0.19, 1.45, 0.4)], m["track"]))
+    parts += [
+        open_box("mini_digger_house", (1.3, 1.4, 0.75), (0, 0.35, 0.8), p),
+        open_box("mini_digger_weight", (1.3, 0.3, 0.6), (0, 1.15, 0.75), p),
+        open_box("mini_digger_cab", (0.85, 0.9, 0.85), (0.15, 0.5, 1.6), m["glass"]),
+        open_box("mini_digger_roof", (0.95, 1.0, 0.08), (0.15, 0.5, 2.07), p),
+    ]
+    # Boom up and out from the house's front, then the arm down to the bucket on the ground.
+    parts.append(rotate(box("mini_digger_boom", (0.22, 0.22, 1.1), (-0.35, -0.55, 1.35), p), (-50, 0, 0),
+                        pivot=(-0.35, -0.55, 1.35)))
+    parts.append(rotate(box("mini_digger_arm", (0.18, 0.18, 1.0), (-0.35, -1.2, 1.0), p), (25, 0, 0),
+                        pivot=(-0.35, -1.2, 1.0)))
+    parts.append(hull("mini_digger_bucket", [(-0.6, -1.15, 0.0), (-0.1, -1.15, 0.0), (-0.6, -1.45, 0.05),
+                                              (-0.1, -1.45, 0.05), (-0.6, -1.1, 0.45), (-0.1, -1.1, 0.45),
+                                              (-0.6, -1.4, 0.45), (-0.1, -1.4, 0.45)], m["dark"]))
+    return parts
+
+
+def portable_toilet(m):
+    return [
+        open_box("portable_toilet_body", (1.1, 1.1, 2.2), (0, 0, 1.1), m["toilet_blue"]),
+        open_box("portable_toilet_door", (0.7, 0.03, 1.9), (0, -0.56, 1.0), m["toilet_door"]),
+        open_box("portable_toilet_roof", (1.16, 1.16, 0.1), (0, 0, 2.25), m["toilet_roof"]),
+        open_box("portable_toilet_vent", (0.14, 0.14, 0.2), (0.35, 0.35, 2.4), m["dark"]),
+    ]
+
+
+def food_cart_hotdog(m):
+    # Serving side to the front (Blender -Y); the quartered umbrella is what reads from above.
+    return [
+        open_box("food_cart_hotdog_body", (1.6, 0.8, 0.6), (0, 0, 0.62), m["cart_steel"]),
+        open_box("food_cart_hotdog_glass", (1.2, 0.04, 0.22), (0, -0.3, 1.03), m["glass"]),
+        open_box("food_cart_hotdog_leg", (0.08, 0.5, 0.32), (0.7, 0, 0.16), m["dark"]),
+        cylinder("food_cart_hotdog_wheel_l", 0.3, 0.06, (-0.5, -0.43, 0.3), m["dark"], verts=6, rotation=(90, 0, 0)),
+        cylinder("food_cart_hotdog_wheel_r", 0.3, 0.06, (-0.5, 0.43, 0.3), m["dark"], verts=6, rotation=(90, 0, 0)),
+        open_box("food_cart_hotdog_handle", (0.06, 0.6, 0.06), (0.9, 0, 0.95), m["pole"]),
+        open_box("food_cart_hotdog_pole", (0.05, 0.05, 1.1), (0, 0, 1.47), m["pole"]),
+        fan("food_cart_hotdog_umbrella", 1.0, 1.95, 0.25,
+            lambda i: m["umbrella_red"] if (i // 2) % 2 == 0 else m["umbrella_yellow"], segs=8, spin=0.0),
+    ]
+
+
+def food_cart_coffee(m):
+    return [
+        open_box("food_cart_coffee_body", (1.5, 0.8, 0.75), (0, 0, 0.68), m["coffee_brown"]),
+        cylinder("food_cart_coffee_wheel_l", 0.3, 0.06, (0.45, -0.43, 0.3), m["dark"], verts=6, rotation=(90, 0, 0)),
+        cylinder("food_cart_coffee_wheel_r", 0.3, 0.06, (0.45, 0.43, 0.3), m["dark"], verts=6, rotation=(90, 0, 0)),
+        open_box("food_cart_coffee_leg", (0.08, 0.5, 0.3), (-0.65, 0, 0.15), m["dark"]),
+        cylinder("food_cart_coffee_urn", 0.14, 0.32, (-0.35, -0.1, 1.21), m["cart_steel"], verts=6),
+        # Two posts at the back (Blender +Y) carrying the striped canopy.
+        open_box("food_cart_coffee_post_l", (0.05, 0.05, 0.95), (-0.68, 0.32, 1.5), m["pole"]),
+        open_box("food_cart_coffee_post_r", (0.05, 0.05, 0.95), (0.68, 0.32, 1.5), m["pole"]),
+        strips("food_cart_coffee_canopy", -0.9, 0.9, [-0.6, -0.3, 0.0, 0.3, 0.6], 1.9, 2.0,
+               [m["canopy_green"], m["canopy_cream"]]),
+    ]
+
+
+def fruit_stand(m):
+    # Crates at the front (Blender -Y), an awning over the back half only.
+    parts = [open_box("fruit_stand_table", (2.0, 1.0, 0.8), (0, 0, 0.4), m["wood"])]
+    for i, c in enumerate(("fruit_red", "fruit_orange", "fruit_yellow", "fruit_green")):
+        parts.append(open_box(f"fruit_stand_crate{i}", (0.46, 0.5, 0.22), (-0.72 + i * 0.48, -0.2, 0.91), m[c]))
+    for x in (-1.0, 1.0):
+        parts.append(open_box(f"fruit_stand_post{x:+.0f}", (0.05, 0.05, 1.2), (x, 0.45, 1.4), m["pole"]))
+    parts.append(strips("fruit_stand_awning", -1.1, 1.1, [-0.05, 0.13, 0.31, 0.49, 0.7], 1.95, 2.05,
+                        [m["awning_green"], m["white"]]))
+    return parts
+
+
+def bus_shelter(m):
+    # Open to the road (Blender -Y). The game's walls: back y +0.33..+0.45, ends x ±1.6..±1.72.
+    g = m["shelter_glass"]
+    return [
+        open_box("bus_shelter_back", (3.44, 0.06, 2.1), (0, 0.39, 1.15), g),
+        open_box("bus_shelter_end_l", (0.06, 0.75, 2.1), (-1.66, 0.05, 1.15), g),
+        open_box("bus_shelter_end_r", (0.08, 0.75, 2.1), (1.66, 0.05, 1.15), m["ad_panel"]),
+        open_box("bus_shelter_bench", (2.2, 0.36, 0.06), (0, 0.22, 0.45), m["wood"]),
+        open_box("bus_shelter_bench_leg_l", (0.06, 0.3, 0.42), (-0.9, 0.24, 0.21), m["dark"]),
+        open_box("bus_shelter_bench_leg_r", (0.06, 0.3, 0.42), (0.9, 0.24, 0.21), m["dark"]),
+        open_box("bus_shelter_post_l", (0.07, 0.07, 2.2), (-1.66, -0.31, 1.1), m["pole"]),
+        open_box("bus_shelter_post_r", (0.07, 0.07, 2.2), (1.66, -0.31, 1.1), m["pole"]),
+        open_box("bus_shelter_roof", (3.6, 0.95, 0.08), (0, 0.06, 2.24), m["shelter_roof"]),
+        open_box("bus_shelter_stripe", (3.6, 0.18, 0.1), (0, -0.38, 2.25), m["stripe_bus"]),
+        open_box("bus_shelter_flagpole", (0.07, 0.07, 2.55), (1.95, -0.32, 1.275), m["pole"]),
+        open_box("bus_shelter_flag", (0.42, 0.12, 0.42), (1.95, -0.32, 2.51), m["stripe_bus"]),
+    ]
+
+
+def bike_rack(m):
+    met = m["metal"]
+    parts = [open_box("bike_rack_rail", (1.8, 0.08, 0.06), (0, 0, 0.03), met)]
+    for i, x in enumerate((-0.62, 0.0, 0.62)):  # hoops along X: thin plates, lines from above
+        parts.append(open_box(f"bike_rack_hoop{i}", (0.5, 0.05, 0.8), (x, 0, 0.4), met))
+    # One bike locked to it, in front (Blender -Y): wheels and frame are thin plates.
+    parts += [
+        open_box("bike_rack_bike_frame", (1.1, 0.06, 0.35), (0.1, -0.14, 0.58), m["bike_frame"]),
+        open_box("bike_rack_bike_wheel_f", (0.62, 0.04, 0.62), (0.62, -0.14, 0.31), m["dark"]),
+        open_box("bike_rack_bike_wheel_b", (0.62, 0.04, 0.62), (-0.42, -0.14, 0.31), m["dark"]),
+        open_box("bike_rack_bike_bars", (0.06, 0.5, 0.05), (0.62, -0.14, 0.92), m["dark"]),
+    ]
+    return parts
+
+
+def planter(m):
+    return [
+        open_box("planter_trough", (1.2, 0.7, 0.5), (0, 0, 0.25), m["concrete"]),
+        hull("planter_shrub", [(-0.5, -0.25, 0.48), (0.2, -0.27, 0.48), (-0.45, 0.25, 0.48), (0.25, 0.24, 0.48),
+                               (-0.15, 0.0, 0.92), (-0.4, -0.05, 0.8), (0.05, 0.15, 0.85)], m["leaf"]),
+        hull("planter_flowers", [(0.15, -0.2, 0.5), (0.55, -0.2, 0.5), (0.15, 0.2, 0.5), (0.55, 0.2, 0.5),
+                                 (0.35, 0.0, 0.72)], m["flowers"]),
+    ]
+
+
+def parking_meter(m):
+    return [
+        open_box("parking_meter_pole", (0.07, 0.07, 1.0), (0, 0, 0.5), m["meter"]),
+        open_box("parking_meter_head", (0.22, 0.16, 0.36), (0, 0, 1.18), m["meter"]),
+        open_box("parking_meter_window", (0.14, 0.02, 0.1), (0, -0.08, 1.26), m["glass"]),
+        open_box("parking_meter_cap", (0.24, 0.18, 0.05), (0, 0, 1.385), m["meter_cap"]),
+    ]
+
+
+def recycling_bin(m):
+    return [
+        open_box("recycling_bin_body", (0.6, 0.6, 0.92), (0, 0, 0.46), m["recycle_blue"]),
+        open_box("recycling_bin_lid", (0.64, 0.64, 0.06), (0, 0, 0.95), m["recycle_lid"]),
+        open_box("recycling_bin_slot", (0.4, 0.1, 0.015), (0, -0.08, 0.985), m["white"]),
+        open_box("recycling_bin_badge", (0.24, 0.02, 0.24), (0, -0.305, 0.6), m["white"]),
+    ]
+
+
+def cafe_table(m):
+    parts = [
+        open_box("cafe_table_pole", (0.05, 0.05, 2.05), (0, 0, 1.025), m["pole"]),
+        open_box("cafe_table_top", (0.7, 0.7, 0.04), (0, 0, 0.74), m["white"]),
+    ]
+    for x in (-1, 1):  # a chair either side along X, backs outward
+        parts.append(open_box(f"cafe_table_seat{x:+d}", (0.4, 0.4, 0.05), (x * 0.6, 0, 0.45), m["dark"]))
+        parts.append(open_box(f"cafe_table_back{x:+d}", (0.05, 0.4, 0.85), (x * 0.78, 0, 0.425), m["dark"]))
+    parts.append(fan("cafe_table_umbrella", 0.85, 1.95, 0.2,
+                     lambda i: m["umbrella_cream"] if (i // 2) % 2 == 0 else m["paint"], segs=8))
+    return parts
+
+
+def vending_machine(m):
+    return [
+        open_box("vending_machine_body", (1.0, 0.8, 1.85), (0, 0, 0.925), m["paint"]),
+        open_box("vending_machine_panel", (0.65, 0.02, 1.1), (-0.1, -0.41, 1.15), m["ad_panel"]),
+        open_box("vending_machine_slot", (0.2, 0.02, 0.5), (0.33, -0.41, 1.1), m["dark"]),
+        open_box("vending_machine_top", (0.9, 0.22, 0.03), (0, -0.12, 1.865), m["white"]),
+    ]
+
+
+def atm(m):
+    return [
+        open_box("atm_body", (0.8, 0.6, 1.7), (0, 0, 0.85), m["atm_body"]),
+        open_box("atm_screen", (0.45, 0.02, 0.35), (0, -0.31, 1.18), m["screen"]),
+        open_box("atm_shelf", (0.6, 0.18, 0.05), (0, -0.38, 0.95), m["dark"]),
+        open_box("atm_stripe", (0.84, 0.64, 0.12), (0, 0, 1.76), m["stripe_atm"]),
+    ]
+
+
+def shopping_cart(m):
+    # The handle at the back (game -Z, Blender +Y).
+    return [
+        hull("shopping_cart_basket", [(-0.25, -0.4, 0.4), (0.25, -0.4, 0.4), (-0.27, 0.42, 0.4), (0.27, 0.42, 0.4),
+                                      (-0.27, -0.45, 0.9), (0.27, -0.45, 0.9), (-0.28, 0.45, 0.9),
+                                      (0.28, 0.45, 0.9)], m["metal"]),
+        open_box("shopping_cart_base", (0.45, 0.75, 0.12), (0, 0, 0.14), m["dark"]),
+        open_box("shopping_cart_handle", (0.55, 0.06, 0.06), (0, 0.48, 0.97), m["cart_red"]),
+    ]
+
+
 PROPS = {
     "streetlamp": streetlamp, "traffic_light": traffic_light, "hydrant": hydrant, "bench": bench,
     "trash_bin": trash_bin, "dumpster": dumpster, "bollard": bollard, "newspaper_box": newspaper_box,
@@ -484,6 +789,13 @@ PROPS = {
     "barrier": barrier, "spray_booth": spray_booth, "police_sign": police_sign,
     "start_gantry": start_gantry, "export_bay": export_bay, "safehouse_door": safehouse_door,
     "frenzy_token": frenzy_token, "traffic_cone": traffic_cone, "road_barrier_long": road_barrier_long,
+    # Street props, round 2 (§10).
+    "traffic_barrel": traffic_barrel, "work_barrier": work_barrier, "roadwork_sign": roadwork_sign,
+    "steel_plate": steel_plate, "work_trench": work_trench, "skip": skip, "mini_digger": mini_digger,
+    "portable_toilet": portable_toilet, "food_cart_hotdog": food_cart_hotdog, "food_cart_coffee": food_cart_coffee,
+    "fruit_stand": fruit_stand, "bus_shelter": bus_shelter, "bike_rack": bike_rack, "planter": planter,
+    "parking_meter": parking_meter, "recycling_bin": recycling_bin, "cafe_table": cafe_table,
+    "vending_machine": vending_machine, "atm": atm, "shopping_cart": shopping_cart,
 }
 
 

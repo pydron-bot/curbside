@@ -15,6 +15,15 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.13.0',
+    date: '2026-11-02',
+    title: 'Real street furniture',
+    notes: [
+      'Road works, food carts, bus shelters and the rest of the new kerbside furniture are proper models now instead of boxes: barrels and barriers with blinking lamps, a mini digger, skips, a hot-dog cart under its umbrella, a coffee cart, fruit stands, bike racks, café tables and more.',
+      "Café umbrellas are red and cream instead of plain white.",
+    ],
+  },
+  {
     version: '0.12.2',
     date: '2026-11-02',
     title: 'Better performance reports',
