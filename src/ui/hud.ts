@@ -248,8 +248,8 @@ export class Hud {
     this.score.setBest(best);
   }
 
-  /** 'title' hides the game HUD and touch controls; 'play' shows them (body[data-scene]). */
-  setScene(scene: 'title' | 'play'): void {
+  /** 'title' and 'observe' hide the game HUD and touch controls; 'play' shows them (body[data-scene]). */
+  setScene(scene: 'title' | 'play' | 'observe'): void {
     this.playing = scene === 'play';
     if (document.body.dataset.scene !== scene) document.body.dataset.scene = scene;
   }

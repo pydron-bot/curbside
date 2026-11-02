@@ -127,6 +127,24 @@ export const ICONS = {
   bug: svg(
     '<ellipse cx="12" cy="14" rx="5" ry="6.2" fill="currentColor"/><circle cx="12" cy="6.6" r="2.6" fill="currentColor"/><path d="M7 11H3.5M7 15H3M7.6 18.8 4.5 21M17 11h3.5M17 15h4M16.4 18.8l3.1 2.2M10.3 4.6 8.6 2.6M13.7 4.6l1.7-2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>',
   ),
+  /** An eye: OBSERVE. */
+  eye: svg(
+    '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.4" fill="currentColor"/>',
+  ),
+  /** Skip ahead: NEXT INCIDENT. */
+  next: svg('<path d="M4.5 6v12l7.5-6zM12 6v12l7.5-6z" fill="currentColor"/><rect x="19" y="6" width="2" height="12" rx="1" fill="currentColor"/>'),
+  /** Crosshair ring: follow what's under it. */
+  target: svg(
+    '<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  ),
+  /** The sun: time of day. */
+  sun: svg(
+    '<circle cx="12" cy="12" r="4.2" fill="currentColor"/><path d="M12 2.8v2.6M12 18.6v2.6M2.8 12h2.6M18.6 12h2.6M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M5.5 18.5l1.8-1.8M16.7 7.3l1.8-1.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  ),
+  /** A cloud and drops: the rain. */
+  rain: svg(
+    '<path d="M7 15.5a4 4 0 0 1-.4-8A5.5 5.5 0 0 1 17.2 8.6 3.5 3.5 0 0 1 17 15.5z" fill="currentColor"/><path d="M8 18l-1 2.5M12 18l-1 2.5M16 18l-1 2.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  ),
 } as const;
 
 export type IconName = keyof typeof ICONS;

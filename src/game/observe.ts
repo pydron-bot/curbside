@@ -301,3 +301,27 @@ export function spawnShield(view: Rect, x: number, z: number, height: number, ou
   out.maxZ = z + (view.maxZ - z) * k;
   return out;
 }
+
+/** The time-of-day nudge's stops, in order through the day (the city's incidents keep hours: kebabs at closing, a conga at night). */
+export const OBSERVE_HOURS: ReadonlyArray<readonly [string, number]> = [
+  ['DAWN', 6.4],
+  ['NOON', 12.5],
+  ['GOLDEN HOUR', 18.2],
+  ['DUSK', 19.6],
+  ['NIGHT', 22.5],
+  ['SMALL HOURS', 2],
+];
+
+/** The first stop over half an hour after `hour` (wrapping past midnight): each press moves the day on. */
+export function nextHour(hour: number): readonly [string, number] {
+  let best = OBSERVE_HOURS[0];
+  let bestAhead = Infinity;
+  for (const stop of OBSERVE_HOURS) {
+    const ahead = (((stop[1] - hour - 0.5) % 24) + 24) % 24;
+    if (ahead < bestAhead) {
+      bestAhead = ahead;
+      best = stop;
+    }
+  }
+  return best;
+}

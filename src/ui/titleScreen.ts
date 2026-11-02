@@ -3,7 +3,7 @@ import { VERSION } from '../core/changelog';
 import './title.css';
 import type { GameAudio } from '../audio/gameAudio';
 import type { InputDevice } from '../core/input';
-import { ICONS } from './icons';
+import { ICONS, type IconName } from './icons';
 import { onInstallAvailable, promptInstall } from './installPrompt';
 import { MenuNav, menuButton, type NavItem, type Panel } from './menu';
 import { fmt } from './scoreHud';
@@ -182,6 +182,21 @@ export class TitleScreen implements Panel {
     this.modes.append(el);
     const item = this.nav.add({ el, activate: () => this.select(() => this.opts.onMode(mode)) });
     this.modeItems.set(mode.id, { el, item });
+  }
+
+  /** A small button of another system's at the front of the row under the modes (e.g. OBSERVE). */
+  addRowButton(label: string, icon: IconName, activate: () => void): HTMLButtonElement {
+    const b = menuButton(label, { icon, className: 'small' });
+    this.root.querySelector('.title-row')!.prepend(b);
+    this.nav.add({
+      el: b,
+      activate: () => {
+        this.audio.unlock();
+        this.audio.ui('click');
+        activate();
+      },
+    });
+    return b;
   }
 
   /** A line of another system's under the best score (e.g. cash); the hub link stays last. */

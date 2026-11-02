@@ -12,6 +12,7 @@ import {
   SHIELD_HEIGHT,
   clampHeight,
   clampToCity,
+  nextHour,
   nextLive,
   pickFollow,
   roofFloor,
@@ -273,5 +274,25 @@ describe('observe: the city lives with nobody playing', () => {
     // Nothing waits on the player: still not playing.
     expect(life.d.playing()).toBe(false);
     world.observing = false;
+  });
+});
+
+describe('observe time nudge', () => {
+  it('moves the day on to the next stop, wrapping past midnight', () => {
+    expect(nextHour(13)[0]).toBe('GOLDEN HOUR');
+    expect(nextHour(12.5)[0]).toBe('GOLDEN HOUR');
+    expect(nextHour(12.1)[0]).toBe('GOLDEN HOUR');
+    expect(nextHour(11.9)[0]).toBe('NOON');
+    expect(nextHour(23)[0]).toBe('SMALL HOURS');
+    expect(nextHour(2)[0]).toBe('DAWN');
+    // A full round visits every stop.
+    let h = 0;
+    const seen = new Set<string>();
+    for (let i = 0; i < 6; i++) {
+      const [name, at] = nextHour(h);
+      seen.add(name);
+      h = at;
+    }
+    expect(seen.size).toBe(6);
   });
 });

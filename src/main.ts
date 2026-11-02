@@ -142,6 +142,7 @@ import { SceneCensus } from './render/sceneCensus';
 import { snapshotView } from './render/snapshot';
 import { worldUniforms } from './render/shaderLib';
 import { addBugReportButton, BugReportSheet } from './ui/bugReport';
+import { ObserveMode } from './ui/observeMode';
 
 const app = document.getElementById('app')!;
 
@@ -333,6 +334,8 @@ rig.setHeights(...CAMERA_FOOT);
 rig.snapTo(player.ped.x, player.ped.z);
 
 const viewRect: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
+/** Observe mode (ui/observeMode.ts): a free camera over the city, no player; created with the menus, below. */
+let observe: ObserveMode | null = null;
 /** Attract mode: the sim runs behind the title with the camera cruising over traffic. */
 const attract = new AttractCamera(rand);
 attract.start(SPAWN_POINT.x, SPAWN_POINT.z);
@@ -358,6 +361,8 @@ function maintainPopulation(seed = false, parked = seed) {
     vx: at.vx,
     vz: at.vz,
     view: rig.visibleGround(viewRect),
+    // Observe's wide zoom: spawns kept out of a smaller patch round the camera.
+    spawnView: observe?.spawnView(viewRect),
     keep: keepVehicles,
     trafficScale: getQuality().trafficScale,
     crowdScale: getQuality().crowdScale * cityMood.densityAt(at.x, at.z),
@@ -448,6 +453,7 @@ const cityLife = new CityLife({
   now: () => simTime,
   view: (out) => rig.visibleGround(out),
   playing: () => !attract.active,
+  observing: () => observe?.active ?? false,
   lod: simLod,
   // Only a timed race or a mission that asks holds the busy scenes off; Chaos Run, fares and frenzies get the city.
   activity: () => activityHolds(progress.busy, progress.missions.quiet),
@@ -763,11 +769,13 @@ const contact: CarContact = { x: 0, z: 0, nx: 0, nz: 0, closingA: 0, closingB: 0
 // Indexed loops throughout: simulate is too big for V8 to inline every array
 // iterator into, and each one it doesn't allocates a result per element.
 function simulate(dt: number) {
-  const driving = player.driving;
+  // Observing from a paused run: the run waits (the player, their car, the police on them, heat, score, the activity).
+  const hold = observe?.holdsRun ?? false;
+  const driving = hold ? null : player.driving;
   // A race or Chaos Run 3-2-1 holds the car on the line.
   const playerControls = driving && !progress.holdControls ? input.readVehicle(driving.sim, dt) : NO_CONTROLS;
   // Nitro burns only while held, lit and in the tank.
-  const boosting = nitro.step(dt, driving !== null && playerControls.boost === true && !attract.active, driving ? driving.sim : null);
+  const boosting = hold ? false : nitro.step(dt, driving !== null && playerControls.boost === true && !attract.active, driving ? driving.sim : null);
   // NO_CONTROLS is shared: only the frame's own read gets the boost flag.
   if (playerControls !== NO_CONTROLS) playerControls.boost = boosting;
 
@@ -791,6 +799,11 @@ function simulate(dt: number) {
 
   for (let i = 0; i < vehicles.length; i++) {
     const v = vehicles[i];
+    // A held car stays put: any shove last step is undone.
+    if (hold && observe!.held(v)) {
+      copyVehicleState(v.sim, v.prev);
+      continue;
+    }
     copyVehicleState(v.prev, v.sim);
     let controls = NO_CONTROLS;
     if (v.damage.wrecked) controls = NO_CONTROLS;
@@ -810,7 +823,7 @@ function simulate(dt: number) {
   }
 
   copyPedState(player.prev, player.ped);
-  if (!driving) {
+  if (!driving && !hold) {
     stepPedestrian(player.ped, player.down || attract.active ? NO_MOVE : input.readMove(), PLAYER_ON_FOOT, dt);
     // Twin-stick: face the lock-on or the aim while walking (strafe), not the way you walk.
     const face = combat.lockHeading() ?? aimHeadingNow;
@@ -857,6 +870,7 @@ function simulate(dt: number) {
   prof.begin(P_COLLIDE);
   for (let i = 0; i < vehicles.length; i++) {
     const v = vehicles[i];
+    if (hold && observe!.held(v)) continue;
     let impact = collideVehicleStatic(v.sim, collision, contact, v.prev);
     // A ramp's sides and back are solid to anything not riding up it.
     if (!v.sim.airborne && v.sim.y <= 0 && !enteringRamp(v.sim, ramps)) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact, v.prev));
@@ -881,8 +895,9 @@ function simulate(dt: number) {
       const impact = collideVehicles(a.sim, b.sim, contact, ma, mb);
       if (impact <= 0) continue;
       // The rammer takes less than the car it hits, the heavier car less than the lighter.
-      const hitA = crashDamage(impact, contact.closingA, contact.closingB, ma, mb) * (a === driving ? PLAYER_CRASH_SHARE : 1);
-      const hitB = crashDamage(impact, contact.closingB, contact.closingA, mb, ma) * (b === driving ? PLAYER_CRASH_SHARE : 1);
+      // A held car takes nothing (it's put back where it was next step).
+      const hitA = hold && observe!.held(a) ? 0 : crashDamage(impact, contact.closingA, contact.closingB, ma, mb) * (a === driving ? PLAYER_CRASH_SHARE : 1);
+      const hitB = hold && observe!.held(b) ? 0 : crashDamage(impact, contact.closingB, contact.closingA, mb, ma) * (b === driving ? PLAYER_CRASH_SHARE : 1);
       applyDamage(a.damage, hitA);
       applyDamage(b.damage, hitB);
       // A hard hit throws a bike's rider off (whichever of the two is a bike);
@@ -915,7 +930,7 @@ function simulate(dt: number) {
   // --- Stunt scoring ---
   simTime += dt;
   signals.step(dt);
-  score.step(dt);
+  if (!hold) score.step(dt);
   if (driving) {
     const stunt = stunts.step(driving.sim, dt);
     if (stunt && !driving.damage.wrecked) {
@@ -926,7 +941,7 @@ function simulate(dt: number) {
       const ds = driving.sim;
       events.emit({ type: 'stunt', x: ds.x, z: ds.z, airtime: stunt.airtime, distance: stunt.distance, spin: stunt.spin, points: a.points, label: stunt.label });
     }
-  } else stunts.cancel(); // thrown out mid-air (the car blew up): that jump is void
+  } else if (!hold) stunts.cancel(); // thrown out mid-air (the car blew up): that jump is void (held: it waits in the air)
   if (driving && !driving.damage.wrecked && !driving.sim.airborne) {
     const ds = driving.sim;
     const slip = Math.abs(lateralSpeed(ds));
@@ -960,7 +975,7 @@ function simulate(dt: number) {
     }
   }
   prof.begin(P_HEAT);
-  heat.step(dt);
+  if (!hold) heat.step(dt);
   prof.end(P_HEAT);
   prof.begin(P_COMBAT);
   combat.step(dt);
@@ -969,10 +984,10 @@ function simulate(dt: number) {
   cityLife.step(dt);
   prof.end(P_SCENES);
   // Cash, the Chaos Run clock and the free-roam activities.
-  progress.step(dt);
+  if (!hold) progress.step(dt);
   // Back on your feet: after dying a fresh run; after a bust, released at the station.
   const held = player.arrested;
-  if (player.step(dt)) {
+  if (!hold && player.step(dt)) {
     if (held) releasePlayer();
     else respawnPlayer();
   }
@@ -980,11 +995,12 @@ function simulate(dt: number) {
   // --- Fire and explosions ---
   for (let i = 0; i < vehicles.length; i++) {
     const v = vehicles[i];
+    if (hold && observe!.held(v)) continue;
     // NPC drivers bail out of burning cars.
     if (v.ai && v.damage.burning) ejectDriver(v, v.sim.x, v.sim.z);
     if (stepDamage(v.damage, dt)) explode(v);
   }
-  if (!player.driving) {
+  if (!player.driving && !hold) {
     for (let i = 0; i < vehicleStates.length; i++) {
       const s = vehicleStates[i];
       collidePedVehicle(player.ped, s);
@@ -1243,12 +1259,12 @@ function frame(now: number) {
   // Computed once: fx.simScale advances the hit-stop.
   // TEST's slow motion scales it like a hit-stop (people, pigeons and combat effects too, below).
   const slow = testTools.timeScale;
-  const simDt = frameSeconds * fx.simScale(frameSeconds) * progress.simScale() * slow;
+  const simDt = frameSeconds * fx.simScale(frameSeconds) * (observe?.holdsRun ? 1 : progress.simScale()) * slow;
   const alpha = loop.advance(simDt, simulate);
 
   // Interpolate render state between the last two sim steps.
   // Read once per frame: the wheel steer and the engine sound share it.
-  const controls = player.driving ? input.readVehicle(player.driving.sim) : null;
+  const controls = player.driving && !attract.active ? input.readVehicle(player.driving.sim) : null;
   const steer = controls ? controls.steer : 0;
   for (const v of vehicles) {
     v.mesh.root.position.set(lerp(v.prev.x, v.sim.x, alpha), lerp(v.prev.y, v.sim.y, alpha), lerp(v.prev.z, v.sim.z, alpha));
@@ -1283,7 +1299,8 @@ function frame(now: number) {
   progress.update(frameSeconds);
   heatPresenter.update(frameSeconds, focus.x, focus.z, playing);
 
-  if (attract.active) titleCam.update(frameSeconds, viewW);
+  if (observe?.active) observe.update(frameSeconds);
+  else if (attract.active) titleCam.update(frameSeconds, viewW);
   else if (player.driving) {
     const v = player.driving;
     rig.update(frameSeconds, v.mesh.root.position.x, v.mesh.root.position.z, v.sim.vx, v.sim.vz);
@@ -1579,8 +1596,9 @@ document.addEventListener('visibilitychange', () => {
     return;
   }
   // Wall clock: performance.now() can stall while an iPhone sleeps, hiding a long absence.
-  updates.pageHidden(Date.now(), frontDoor.inTitle);
-  if (frontDoor.inTitle) return;
+  updates.pageHidden(Date.now(), frontDoor.inTitle || (observe?.atTitle ?? false));
+  // Observing holds nothing that an app switch could cost.
+  if (frontDoor.inTitle || observe?.active) return;
   pausedForContext = false;
   setPaused(true);
 });
@@ -1660,6 +1678,38 @@ mountTestMenu(testTools, frontDoor, audio, city, {
   showFocus: () => input.lastDevice !== 'touch',
   at: () => player.position,
   notice: (text) => hud.score.notice(text, 'progress'),
+});
+// OBSERVE (title and pause menu): a free camera over the live city, no player, no HUD; incidents on demand.
+observe = new ObserveMode({
+  parent: document.body,
+  canvas: renderer.domElement,
+  rig,
+  attract,
+  titleCam,
+  frontDoor,
+  input,
+  audio,
+  hud,
+  radar,
+  haptics,
+  screenAwake,
+  life: cityLife,
+  starter: testTools.starter,
+  vehicles,
+  crowd: population.crowd,
+  buildings: city.buildings,
+  player,
+  playerModel,
+  police: heat.police,
+  activityCars,
+  time: look.time,
+  weather: fx.weather,
+  look,
+  tier: () => getQuality().name,
+  heights: { title: CAMERA_ATTRACT, foot: CAMERA_FOOT, car: CAMERA_CAR },
+  best: () => score.best,
+  setPaused: (p) => setPaused(p),
+  moved: () => maintainPopulation(true, false),
 });
 // REPORT BUG (pause card corner and the Diagnostics sheet, with test tools or the perf overlay on).
 const bugReport = new BugReportSheet(document.body, {
@@ -1789,6 +1839,10 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   attract,
   touch,
   haptics,
+  /** Observe mode: enterFromTitle(), enterFromRun(), exit(), cam (height, yaw…), next(), spawn(id), held(v). */
+  get observe() {
+    return observe;
+  },
   /** The PLAY button: closes the title and starts a fresh run. */
   startGame: () => frontDoor.play(),
   enterTitle,
