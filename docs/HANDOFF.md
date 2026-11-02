@@ -421,6 +421,43 @@ The ice cream van (56 started), the bus (29) and stray dogs (235) were
 never in view from a moving car. The pursuit is the gap V2-02 is for: the
 city stops dead the moment you have a star.
 
+**After V2-02 (busy scenes run while wanted at the wanted pace, chases and
+races sometimes on the road ahead, accidents and turf on your way):**
+
+| | seed 1 | seed 2 | seed 3 |
+|---|---|---|---|
+| Free roam: an incident in view | 81 s (7%) | 52 s (4%) | 73 s (6%) |
+| Free roam: came into view after a quiet spell | 28× | 22× | 27× |
+| Free roam: gap median / p90 | 11 / 143 s | 37 / 80 s | 43 / 69 s |
+| 2-star pursuit (5 min): an incident in view | 1 s | 15 s | 10 s |
+| 2-star pursuit: came into view / gap median | 1× / 178 s | 6× / 30 s | 5× / 37 s |
+| 2-star pursuit: put on the road ahead | 1 | 1 | 2 |
+| 2-star pursuit: busy scenes started | 7 | 9 | 8 |
+
+Seen in the pursuits: turf wars (2 of 3 started), muggings (2 of 3),
+accidents (2 of 4), tows (3 of 8), a race (1 of 2). Over 15 minutes at 2
+stars (seeds 1, 2; into the night): an incident in view 67 s and 14 s,
+coming into view 18× and 8×, gap median 18 s and 62 s (p90 110 s and
+208 s), 5 and 4 put on the road ahead. The runs are noisy (one bot route
+past a scene or not); read them as "something now happens in a pursuit"
+rather than a rate. Free roam moves only within the seeds' noise (stars
+there are cleared as they come, so little changed).
+
+**Not yet:** chases started while you're wanted still break off at once
+(`stepChase`, the chase stream's V2-03), so none is seen in a pursuit
+here; the 5-minute pursuits run by day (17–19 h), when races are mostly
+put off; and free roam's p90 gap is still over 90 s on one seed in three
+(placement in free roam, or new incidents, is the next lever).
+
+**5-star soak, iPhone `medium`** (`mayhem.mjs --scenario pursuit --tier
+medium --time both --seconds 40 --step 100 --dpr 1`: 5 stars held, a busy
+scene forced round the player every 5 s past every hold and cap): draw
+calls peak 76 (average 60) by day, 68 (61) at night, with 7 police units
+and 2–3 busy scenes at once; the same drive with no stars 56 (47). Well
+under 150. The forced starts go past the tier cap the clocks keep to while
+wanted (`WANTED_SCENE_CAP`: high 4, medium 3, low 2), so in play it's at
+most this.
+
 ## Working conventions that worked
 
 - Big features as **streams in separate git worktrees** (`git worktree add
