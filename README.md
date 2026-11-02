@@ -31,7 +31,11 @@ no page or console errors, under 150 draw calls, and a named-mayhem stamp
 (`__ub.stamp(id)`, held mid-show) clear of the stars, radar, status,
 activity card and score feed (on the phones in a Chaos Run too), and the
 police scanner's subtitle (`__ub.scanner.say()`) clear of all that, the
-stamp, the radio's card and the thumbs, on foot and in a car; then
+stamp, the radio's card and the thumbs, on foot and in a car; the
+best-moment picture on WASTED (a forced stamp, then death: the photo and
+caption inside the view, clear of WASTED's title, numbers and timer, the
+pause button, corners and thumbs; SHARE gives the mocked share sheet a
+JPEG, a refused share saves it, the respawn frees it); then
 installability and an offline boot from the service worker. ~3 min. CI (`.github/workflows/ci.yml`)
 runs it with the unit tests, types and GLB contracts on every branch and pull
 request; Pages (`pages.yml`) runs the tests and contracts before deploying
@@ -273,7 +277,8 @@ share sheet mocked.
   two-line feed that merges repeats; segmented health; an arc speedometer
   with the car's health inside it; weapon and ammo; a vmin-sized damage
   vignette; a WASTED screen with the life's stats and what it cost
-(POINTS LOST on a bust, the HOSPITAL bill or CASH FINE). Circular north-up radar
+(POINTS LOST on a bust, the HOSPITAL bill or CASH FINE) and a photo of
+  the life's best stamped moment to share (*Best moment*, below). Circular north-up radar
   (the city pre-rendered once, traffic, pickups, hostiles, blips and a
   waypoint route, zooming out with speed, ≤30 Hz) and red edge chevrons for
   off-screen attackers.
@@ -2961,6 +2966,43 @@ stamps.show('takeTheHeat')     // name a moment (cooldown and weights apply)
 stamps.force('barbecueSeason') // now, whatever the cooldown (debug)
 STAMPS[id]                      // { label, sub, weight, tone }
 __ub.stamp('neighbourhoodWatch') // force one from the console / smoke test
+```
+
+### Best moment (the WASTED picture)
+
+The life's best stamp is photographed as it lands and shown on WASTED /
+BUSTED with its caption, to share. Ranking, caption and file name in
+`systems/bestMoment.ts` (pure, `tests/bestMoment.test.ts`); the capture,
+card and share in `ui/momentCard.ts` and `moment.css`.
+
+- **Best**: the heaviest stamp of the life (the table's weight); a later
+  heavier one replaces it, a tie keeps the first. A respawn (or a bust's
+  release, PLAY, the title) starts a new life. No stamp, no picture.
+- **Capture**: on the frame the better stamp lands (inside its hit-stop),
+  `moment.afterRender()`, called in `main.ts` right after
+  `look.render(camera)`, copies the WebGL canvas into one 2D canvas at most
+  800 px wide (`MOMENT_WIDTH`) in the same task: no extra render pass, no
+  `preserveDrawingBuffer`, and every other frame it is one branch. The
+  canvas is reused for the life (≈1.2 MB at 800×369) and zero-sized on
+  respawn. Headless Chromium copies in 0.1–1.5 ms; the session log gets a
+  `moment` line with the copy's ms (and the JPEG's size and time).
+- **Card**: on WASTED / BUSTED the title and numbers step left
+  (`#wasted.has-moment`) and the photo sits on the right, tilted, with the
+  stamp's name in its ink, its line in lower case and where and when
+  (`NEON MILE · 21:07`, the district and the game clock), a size down and
+  higher at 360 px tall and under. It drops in with the numbers.
+- **Share**: the JPEG (quality 0.85, the caption burnt into a dark band at
+  the foot, `curbside-<stamp>-<yyyymmdd-hhmmss>.jpg`) is encoded once, on
+  WASTED, with `toBlob`; SHARE is live once it's ready. It goes through the
+  bug report's path (`shareFiles`, then `saveFiles` if the sheet refuses or
+  is missing): SHARED, SHARE again after a cancel, or SAVED. While the
+  sheet is up the respawn waits (`moment.simScale()` is 0 and the timer bar
+  pauses; at most 60 s). Touch, mouse and VoiceOver; no pad binding.
+
+```ts
+__ub.moment.picture   // the life's photo (a canvas) or null
+__ub.moment.best      // BestMoment: { has, moment: { id, x, z, hour } }
+__ub.moment.copyMs    // the last copy's cost; encodeMs: the JPEG's
 ```
 
 ## Destruction test
