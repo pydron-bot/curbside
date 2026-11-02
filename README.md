@@ -1936,7 +1936,9 @@ are `src/game/modes/*Mode.ts`.
   within 45 m of it. TOUGH SKIN (+50 max health, the stand-in for body
   armour: `Player.maxHealth`, the health bar shows the share) $3,000;
   PAY 'N' SPRAY CARD $1,500; PACKAGE SCANNER $2,000; pistol / SMG / shotgun
-  ammo $150 / $400 / $300 (`arsenal.pickUp`). Something you can't afford
+  ammo $150 / $400 / $300, BODY ARMOUR $600, GRENADES $500, and a crate's
+  worth of the W3-B weapons: AIR HORN $200, TASER $450, STINGERS $500,
+  SMOKE GRENADES $600 (`arsenal.pickUp`, drawn as you buy). Something you can't afford
   shakes and flashes the cash red (and a haptic tick).
 - **CHAOS RUN** (title, once the side modes are open; `modes/chaosRun.ts`, `chaosRunMode.ts`): a sports
   car at a random crossing and the same loadout every run (`CHAOS_LOADOUT`:
