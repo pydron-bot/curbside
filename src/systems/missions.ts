@@ -29,8 +29,8 @@ export interface DialogueLine {
 
 /** Something the glue does when a step starts or ends. */
 export type MissionAction =
-  /** A parked car (or, with `drive`, one driven by traffic AI) for the mission, kept until the mission ends. */
-  | { do: 'spawnCar'; tag: string; archetype: VehicleArchetype; paint: string; x: number; z: number; heading: number; drive?: boolean }
+  /** A car for the mission, kept until the mission ends: parked, or with `drive` driven by traffic AI (see SpawnCar). */
+  | SpawnCar
   /**
    * Someone for the mission; `hostile` ones fight (armed: shoot) when the
    * player comes close. `body`: who they're drawn as (a story character's
@@ -41,6 +41,11 @@ export type MissionAction =
   | { do: 'give'; weapon: WeaponKind }
   /** The tagged person gets into the player's car (off the street). */
   | { do: 'board'; tag: string }
+  /**
+   * The tagged car on the tagged truck's hook (both spawned): carried
+   * behind it as the city's tows carry theirs, until it's let go (hookLetGo).
+   */
+  | { do: 'tow'; tag: string; truck: string }
   /** The passenger gets out beside the player's car and walks off. */
   | { do: 'alight'; tag: string }
   /**
@@ -49,6 +54,24 @@ export type MissionAction =
    * a fire. It may not start (no room, no people near); no step depends on it.
    */
   | SceneAction;
+
+export interface SpawnCar {
+  do: 'spawnCar';
+  tag: string;
+  archetype: VehicleArchetype;
+  paint: string;
+  x: number;
+  z: number;
+  heading: number;
+  /** Driven by traffic AI (it stays pinned, so upkeep never recycles it). */
+  drive?: boolean;
+  /** With `drive`: waits parked until the player is this close (or it's hurt), m. */
+  wait?: number;
+  /** With `drive`: its cruising speed, m/s (traffic's own if left out). */
+  cruise?: number;
+  /** With `drive`: crossings (ix, iz) it heads for in turn, round and round (routeLeg); traffic's own turns if left out. */
+  route?: ReadonlyArray<readonly [number, number]>;
+}
 
 /** The scenes a job can start (SceneStarter's, less the TEST menu's rain). */
 export type MissionSceneId = Exclude<SceneId, 'rain'>;
@@ -81,6 +104,9 @@ export interface MissionFail {
   down?: string;
   /** Fails when the tagged car is gone or further than LOST_RANGE from the player. */
   lost?: string;
+  /** Fails when the tagged car's health drops below `below` of its max (SCRATCH_LINE if left out): don't scratch it. */
+  damaged?: string;
+  below?: number;
   reason: string;
 }
 
@@ -153,7 +179,8 @@ export interface MissionView {
   carHealth: number;
   speed: number;
   stars: number;
-  vehicle(tag: string): { x: number; z: number; wrecked: boolean } | null;
+  /** A tagged car: where, wrecked yet, and its health 0..1 (full if left out). */
+  vehicle(tag: string): { x: number; z: number; wrecked: boolean; health?: number } | null;
   ped(tag: string): { x: number; z: number; down: boolean } | null;
 }
 
@@ -177,6 +204,8 @@ export const PICKUP_SPEED = 2;
 export const PICKUP_HOLD = 0.8;
 /** A tagged car further than this from the player has been lost, m. */
 export const LOST_RANGE = 320;
+/** A `damaged` fail's line, share of max health: below it the car counts as scratched. */
+export const SCRATCH_LINE = 0.9;
 /** Heat must stay at zero this long to count as lost, s. */
 const CLEAN_FOR = 0.5;
 const BLOCK = 64;
@@ -230,6 +259,10 @@ export class MissionRun {
       if (f.lost) {
         const car = v.vehicle(f.lost);
         if (!car || len2(car.x - v.x, car.z - v.z) > LOST_RANGE) return this.fail(f.reason);
+      }
+      if (f.damaged) {
+        const car = v.vehicle(f.damaged);
+        if (car && (car.health ?? 1) < (f.below ?? SCRATCH_LINE)) return this.fail(f.reason);
       }
     }
     return this.check(s, dt, v);
@@ -401,6 +434,47 @@ export function missionTags(def: MissionDef): { cars: string[]; peds: string[] }
     }
   }
   return { cars: [...cars], peds: [...peds] };
+}
+
+// --- Driven cars: a hook, a route ---------------------------------------------------
+
+/** A hooked car is let go once its truck has stood this long, this slow, with the player this close: caught. */
+export const CATCH_RANGE = 24;
+export const CATCH_SPEED = 2;
+export const CATCH_HOLD = 1.2;
+
+/** What a 'tow' action's hook needs to know each step. */
+export interface HookView {
+  /** Someone's at the truck's wheel: not wrecked, not the player's, its driver still in (or waiting to pull out). */
+  driven: boolean;
+  /** The player is in the car on the hook. */
+  taken: boolean;
+  /** The truck's speed, m/s, and the player's distance from it, m. */
+  speed: number;
+  distance: number;
+}
+
+/**
+ * Does the hook let its car go this step? At once if the truck's driver is
+ * gone (wrecked, carjacked, bailed out) or the player is in the car; or once
+ * the player has caught the truck standing (a red light, boxed in) for
+ * CATCH_HOLD: the crew gives it up. `held` carries the time caught.
+ */
+export function hookLetGo(hook: { held: number }, dt: number, v: HookView): boolean {
+  if (!v.driven || v.taken) return true;
+  hook.held = v.speed < CATCH_SPEED && v.distance < CATCH_RANGE ? hook.held + dt : 0;
+  return hook.held >= CATCH_HOLD;
+}
+
+/**
+ * A routed car's leg: the index of the crossing it heads for. Arriving
+ * toward that crossing (its driver's next one is it) moves it on to the
+ * next, round and round, so the turn taken there already heads for the one after.
+ */
+export function routeLeg(route: ReadonlyArray<readonly [number, number]>, leg: number, ix: number, iz: number): number {
+  if (route.length === 0) return 0;
+  const at = route[leg % route.length];
+  return at[0] === ix && at[1] === iz ? (leg + 1) % route.length : leg % route.length;
 }
 
 // --- The two arcs ---------------------------------------------------------------

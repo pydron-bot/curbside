@@ -26,11 +26,14 @@ import {
   arcOf,
   arcRings,
   endsChapter,
+  hookLetGo,
   inArea,
   MissionRun,
   MissionScenes,
   nextInArc,
   replayReward,
+  routeLeg,
+  type MayhemArea,
   type MissionAction,
   type MissionArc,
   type MissionDef,
@@ -38,7 +41,10 @@ import {
   type MissionStep,
   type MissionView,
   type SceneHost,
+  type SpawnCar,
 } from '../../systems/missions';
+import { towPose, type Pose } from '../../systems/emergency';
+import { routeToward } from '../../systems/pursuit';
 import { buildMissions } from '../../systems/missionsData';
 import type { DialogueCard } from '../../ui/progressScreens';
 import type { BlipOptions } from '../../ui/radar';
@@ -67,6 +73,8 @@ const COLLECT_IDS = Array.from({ length: 16 }, (_, i) => `m-c${i}`);
 /** "STEAL A SEDAN" with no particular car: the nearest few that would do are ringed and on the radar. */
 const MATCH_IDS = ['m-match0', 'm-match1', 'm-match2'];
 const MATCH_RANGE = 140;
+/** A route to a moving car is redrawn once it's this far from the last, m. */
+const REROUTE = 24;
 /** Hostile targets turn on you this close, m. */
 const HOSTILE_RANGE = 18;
 /** The ringing phone's radar icon, by arc (the Night Shift's is a moon). */
@@ -92,7 +100,20 @@ interface MissionCar {
   blipId: string;
   v: Vehicle;
   /** What the engine reads (refreshed on each query). */
-  view: { x: number; z: number; wrecked: boolean };
+  view: { x: number; z: number; wrecked: boolean; health: number };
+  /** A driven car still parked: pulls out when the player comes this close (or it's hurt), m; 0 once going (or never waiting). */
+  wake: number;
+  /** A driven car's cruising speed (0: traffic's own) and the crossings it tours, with the one it's heading for. */
+  cruise: number;
+  route: SpawnCar['route'] | null;
+  leg: number;
+}
+
+/** A car on a mission truck's hook (a 'tow' action) and the time the player has had the truck caught. */
+interface MissionHook {
+  car: MissionCar;
+  truck: MissionCar;
+  held: number;
 }
 
 interface MissionPed {
@@ -152,6 +173,11 @@ export class MissionMode implements Mode {
   private savedClock: { speed: number; hour: number } | null = null;
   /** Waiting for the intro card to be dismissed. */
   private calling = false;
+  /** A car the job has on a truck's hook, until it's let go. */
+  private hook: MissionHook | null = null;
+  private readonly pose: Pose = { x: 0, z: 0, heading: 0 };
+  /** A hook's look at its truck (reused). */
+  private readonly hookView = { driven: false, taken: false, speed: 0, distance: 0 };
   private readonly view: MissionView;
 
   /** Does the job on ask the city to hold its busy scenes off (a `quiet` job, or a checkpoint race step)? */
@@ -185,6 +211,7 @@ export class MissionMode implements Mode {
         c.view.x = c.v.sim.x;
         c.view.z = c.v.sim.z;
         c.view.wrecked = c.v.damage.wrecked;
+        c.view.health = c.v.damage.health / c.v.damage.maxHealth;
         return c.view;
       },
       ped(tag) {
@@ -284,6 +311,7 @@ export class MissionMode implements Mode {
     if (run) {
       this.updateView();
       this.tendPeds(dt);
+      this.tendCars(dt);
       const started = this.scenes.step(dt, at.x, at.z, this.sceneHost);
       if (started) ctx.deps.audio.ui('click');
       const s = run.update(dt, this.view);
@@ -350,10 +378,8 @@ export class MissionMode implements Mode {
     ctx.busy = 'mission';
     if (lend) {
       // Kept like a car the job spawned (pinned, blipped, unpinned when it ends).
-      const car: MissionCar = { tag: lend.tag, blipId: `m-${lend.tag}`, v: lend.v, view: { x: lend.v.sim.x, z: lend.v.sim.z, wrecked: false } };
-      this.cars.set(lend.tag, car);
-      this.carList.push(car);
-      ctx.pin(lend.v);
+      const car = this.track(lend.tag, lend.v);
+      ctx.pin(car.v);
     }
     if (m.hour !== undefined) {
       const time = ctx.deps.look.time;
@@ -428,6 +454,7 @@ export class MissionMode implements Mode {
   private finish(passed = false): void {
     const ctx = this.ctx;
     this.run = null;
+    this.hook = null;
     // Its scenes play on, but nothing is featured for it any more.
     this.scenes.end(this.sceneHost);
     this.calling = false;
@@ -461,12 +488,21 @@ export class MissionMode implements Mode {
     for (const a of actions) {
       switch (a.do) {
         case 'spawnCar': {
-          const v = ctx.spawnCar(a.archetype, a.paint, a.x, a.z, a.heading);
-          // A driven target pulls out into traffic (it stays pinned, so upkeep never recycles it).
-          if (a.drive) v.ai = driverFor(v.sim, ctx.deps.rand);
-          const car: MissionCar = { tag: a.tag, blipId: `m-${a.tag}`, v, view: { x: a.x, z: a.z, wrecked: false } };
-          this.cars.set(a.tag, car);
-          this.carList.push(car);
+          const car = this.track(a.tag, ctx.spawnCar(a.archetype, a.paint, a.x, a.z, a.heading));
+          car.cruise = a.cruise ?? 0;
+          car.route = a.route ?? null;
+          // A driven target pulls out into traffic (it stays pinned, so upkeep never recycles it), now or once you're close.
+          if (a.drive && a.wait) car.wake = a.wait;
+          else if (a.drive) this.drive(car);
+          break;
+        }
+        case 'tow': {
+          const car = this.cars.get(a.tag);
+          const truck = this.cars.get(a.truck);
+          if (car && truck) {
+            this.hook = { car, truck, held: 0 };
+            this.carry(this.hook);
+          }
           break;
         }
         case 'spawnPed':
@@ -529,6 +565,72 @@ export class MissionMode implements Mode {
           break;
       }
     }
+  }
+
+  /** A car the job keeps (pinned by whoever made it), by its tag. */
+  private track(tag: string, v: Vehicle): MissionCar {
+    const car: MissionCar = { tag, blipId: `m-${tag}`, v, view: { x: v.sim.x, z: v.sim.z, wrecked: false, health: 1 }, wake: 0, cruise: 0, route: null, leg: 0 };
+    this.cars.set(tag, car);
+    this.carList.push(car);
+    return car;
+  }
+
+  /** Give a job's car its driver (at its own cruising speed, if it has one). */
+  private drive(c: MissionCar): void {
+    c.wake = 0;
+    const ai = driverFor(c.v.sim, this.ctx.deps.rand);
+    if (c.cruise > 0) ai.cruise = c.cruise;
+    c.v.ai = ai;
+  }
+
+  /** The job's driven cars: one waiting pulls out when you're close (or it's hit), a routed one turns for its next crossing; the hook carries its car. */
+  private tendCars(dt: number): void {
+    const at = this.ctx.deps.player.position;
+    for (const c of this.carList) {
+      const v = c.v;
+      if (v.damage.wrecked) continue;
+      if (c.wake > 0 && (len2(v.sim.x - at.x, v.sim.z - at.z) < c.wake || v.damage.health < v.damage.maxHealth)) this.drive(c);
+      const ai = v.ai;
+      const route = c.route;
+      if (!ai || !route || route.length === 0 || ai.phase !== 'approach') continue;
+      c.leg = routeLeg(route, c.leg, ai.ix, ai.iz);
+      const wp = route[c.leg];
+      ai.next = routeToward(ai.ix, ai.iz, ai.dir, wp[0] * BLOCK_SIZE, wp[1] * BLOCK_SIZE);
+    }
+    const hook = this.hook;
+    if (!hook) return;
+    const { player } = this.ctx.deps;
+    const truck = hook.truck.v;
+    const h = this.hookView;
+    h.driven = !truck.damage.wrecked && player.driving !== truck && (truck.ai !== null || hook.truck.wake > 0);
+    h.taken = player.driving === hook.car.v;
+    h.speed = len2(truck.sim.vx, truck.sim.vz);
+    h.distance = len2(truck.sim.x - at.x, truck.sim.z - at.z);
+    if (hookLetGo(hook, dt, h)) {
+      // Off the hook, where it stands.
+      this.hook = null;
+      const cs = hook.car.v.sim;
+      cs.vx = cs.vz = cs.yawRate = 0;
+      if (!h.taken) this.ctx.notice('OFF THE HOOK', 'progress');
+      this.ctx.deps.audio.ui('confirm');
+      return;
+    }
+    this.carry(hook);
+  }
+
+  /** The hooked car trails behind its truck (towPose, as the city's tows), carried with no speed of its own. */
+  private carry(hook: MissionHook): void {
+    const ts = hook.truck.v.sim;
+    const cs = hook.car.v.sim;
+    const pose = this.pose;
+    pose.x = cs.x;
+    pose.z = cs.z;
+    pose.heading = cs.heading;
+    towPose(ts, ts.body?.reach ?? 3.2, cs.body?.reach ?? 2.4, pose, pose);
+    cs.x = pose.x;
+    cs.z = pose.z;
+    cs.heading = pose.heading;
+    cs.vx = cs.vz = cs.yawRate = 0;
   }
 
   private updateView(): void {
@@ -655,13 +757,18 @@ export class MissionMode implements Mode {
         break;
       }
       case 'mayhem': {
-        // Outside its area: the radar points there.
+        // Outside its area: the radar points there (round a car: the car, on the radar throughout).
         const a = s.near;
         if (!a) break;
         const at = this.ctx.deps.player.position;
+        const c = this.areaCar(a);
+        if (c) this.carBlip(c.tag, 'objective');
         if (inArea(a, at.x, at.z, this.view)) {
           this.drop('m-goal');
           this.noWaypoint();
+        } else if (c) {
+          // A moving car: the route is redrawn only once it has gone a way (setWaypoint allocates).
+          if (Number.isNaN(this.wpX) || len2(c.v.sim.x - this.wpX, c.v.sim.z - this.wpZ) > REROUTE) this.waypoint(c.v.sim.x, c.v.sim.z);
         } else {
           this.point('m-goal', a.x, a.z, 'objective', '');
           this.waypoint(a.x, a.z);
@@ -685,6 +792,11 @@ export class MissionMode implements Mode {
       default:
         break;
     }
+  }
+
+  /** The car a mayhem area goes round, if it has one (a person's area keeps to its point on the radar). */
+  private areaCar(a: MayhemArea): MissionCar | null {
+    return a.tag ? (this.cars.get(a.tag) ?? null) : null;
   }
 
   /** The archetype the current step wants you in, when any car of it will do and you're not in one. */
@@ -886,6 +998,12 @@ export class MissionMode implements Mode {
         const col = s.kind === 'knockOut' ? MARK.target : MARK.taxi;
         groundRing(g, ped.agent.s.x, ped.agent.s.z, 2.4, col, pulse, t);
         beacon(g, ped.agent.s.x, ped.agent.s.z, 0.8, 5, col, 0.5);
+        break;
+      }
+      case 'mayhem': {
+        // Round a car (the judges' coach): it's ringed where it goes.
+        const car = s.near ? this.areaCar(s.near)?.v : undefined;
+        if (car && !car.damage.wrecked && nearView(car.sim.x, car.sim.z, view, 6)) groundRing(g, car.sim.x, car.sim.z, 12, c, pulse, t);
         break;
       }
       case 'knockOutAll':
