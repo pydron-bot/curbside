@@ -188,6 +188,7 @@ main-story verb.
 | V2-15 | Quiet Wardens in free roam after the finale | M | stretch | A |
 | V2-16 | Best-moment picture on WASTED/BUSTED (owner-gated) | S | stretch | B |
 | V2-17 | Prune for newcomers; ship as 1.0.0 | S | must | A |
+| V2-18 | **Observe mode**: a free camera over the living city, incidents on demand | M | must | owner |
 
 Cut order if week 2 slips: V2-12, V2-11, then V2-10. The stretch
 items wait for everything else to be green.
@@ -413,6 +414,52 @@ Remove the three-pointer tutorial in favour of the cold open; side modes
 become an unlock list; ship as **1.0.0** with player-facing changelog
 notes. A fresh save shows PLAY and Settings only.
 
+### V2-18 · Observe mode (must; the owner asked for it)
+
+> "Kind of like the title screen, but you can just move the camera view
+> around and not control a player. No UI in the way. Just observing the
+> city. Perhaps the ability to spawn incidents."
+
+- **What:** an OBSERVE entry on the title (and in the pause menu) that drops
+  the menus and the player and hands the camera to you over the live city.
+  - **Camera:** pan, zoom and rotate. Desktop: WASD/arrows or drag to pan,
+    wheel to zoom, Q/E to rotate. Touch: one-finger drag to pan, pinch to
+    zoom, two-finger twist to rotate. Gamepad: left stick pans, right stick
+    zooms and rotates. Zoom from street level up to a whole-district view,
+    clamped to the city and held off the roofs, with the same smoothing as
+    the title camera.
+  - **Follow:** tap or click a car or person to ride along with it (the
+    camera follows until you pan away); a NEXT INCIDENT control glides to
+    whatever is happening, like the title's highlight show.
+  - **No UI in the way:** no HUD, radar or score. One small control strip
+    (exit, follow / next incident, spawn, time of day) fades out after a
+    few seconds idle and comes back on any touch, mouse move or key. The
+    area card can show where you are, then fades.
+  - **Spawn incidents:** a palette of every city scene (the existing ones and
+    V2-13's six), started where the camera is looking, via `SceneStarter`
+    like the TEST menu but without needing Test tools on. Optional
+    time-of-day and weather nudges, since incidents depend on the hour.
+  - The player isn't in the world while observing: no heat, no damage, no
+    CRED. Leaving returns to the title or to the paused run, as you
+    entered.
+- **Builds on:** `CityLife`'s `focus()` (it already follows either the
+  player or the title's cruising camera, `cityLife.ts:136`), the attract
+  camera and highlight director (`ui/titleCamera.ts`, `ui/attractShow.ts`,
+  `game/attractHighlights.ts`), `game/sceneStarter.ts` and the TEST menu's
+  scene list, the camera rig, `Population` and `simLod` around the focus,
+  `timeOfDay`, `fxWeather`, the input layer (touch, mouse, pad).
+- **Risks:** the city spawns and thinks around the focus, so a fast pan or a
+  wide zoom must not empty the streets or blow the iPhone draw-call budget
+  (cap the zoom-out per quality tier; stream at the camera's speed). Free
+  zoom near roofs fights the roof cap and culling (clamp the height range).
+- **Done when:** from the title, OBSERVE shows the city with no HUD;
+  panning, zooming and rotating work on desktop, touch and gamepad; the
+  controls fade when idle and return on input; tapping a car follows it;
+  NEXT INCIDENT finds a running scene; every scene in the palette starts in
+  view; the iPhone `medium` profile stays under 150 draw calls at the
+  widest zoom; leaving restores the title or the paused run exactly; pure
+  logic (camera clamps, fade timer, follow pick) has tests.
+
 ## Schedule
 
 | Days | Milestone | Items | Exit criteria |
@@ -420,7 +467,7 @@ notes. A fresh save shows PLAY and Settings only.
 | 1 | **M0 Measure** | Direction chosen (A + B's mayhem). V2-01 baseline. V2-05 and V2-08 start. | Choice recorded in HANDOFF; baseline logged. |
 | 1–5 | **M1 The city doesn't stop** | Parallel workstreams: City (V2-02), Chase (V2-03 decision table, `adopt`), Story (V2-05 landed, s1–s3 drafted), Side (V2-08), Presentation (V2-04). | The owner plays 20 minutes on the iPhone and says yes to: did a race, fight or accident get in the way of my chase? Did I steal a getaway and inherit its cops? Did a stamp land? In-view numbers up on the baseline. |
 | 5–8 | **M2 First session and device gate** | V2-07 cold open; V2-03 finished; s1–s3 playable; V2-14 device pass and 5-star soak; V2-09 action-button slot with the hose and the winch prototype. | Smoke test passes at all three sizes including the fallback; under 150 draw calls in the 5-star soak; s1–s3 complete on the phone; a stolen fire truck hoses a crowd. |
-| 8–12 | **M3 Story and side job** | s4–s6 and the coach finale; V2-09 chime, winch and Vex's call; V2-10; V2-11; V2-12 as capacity allows. (V2-13 runs from day 1 as its own stream.) | Chapter 1 completes on desktop and iPhone; a wreck towed to the yard on the phone; the chime pulls a queue; `npm test` and `npm run build` green. |
+| 8–12 | **M3 Story and side job** | V2-18 observe mode; s4–s6 and the coach finale; V2-09 chime, winch and Vex's call; V2-10; V2-11; V2-12 as capacity allows. (V2-13 runs from day 1 as its own stream.) | Chapter 1 completes on desktop and iPhone; a wreck towed to the yard on the phone; the chime pulls a queue; `npm test` and `npm run build` green. |
 | 12–14 | **M4 Playtest and ship** | V2-14 blind playtests and top-3 fixes; V2-17 and the changelog; stretch items only if green. | Three strangers reach a stolen car within 20 s and play 10 minutes unprompted; the owner signs off a 20-minute session; pushed to main with the smoke test passing. |
 
 ## Not in V2
@@ -435,7 +482,6 @@ notes. A fresh save shows PLAY and Settings only.
 | DJs, idents, parody ads, news bulletins | Too much writing for synthesised audio that may read as noise; only the scanner pings ship. |
 | Ambulance, bus and police duty jobs | Each is its own mini-activity with HUD needs; the hose, chime and winch ship first on the same action-button slot. |
 | B's tabloid story and notoriety gate | The owner chose the alarm-fitter story; mayhem never gates the story. |
-| WATCH mode (a free-flying camera to incidents) | The scanner pings serve "just watching" more cheaply for now. |
 | Film/"in frame" mission steps, a news-crew protagonist | A passive verb fenced with star penalties: the towing mistake again. |
 | End-of-life replay reel | Fiddly, and duplicates the picture's job. |
 
@@ -471,6 +517,8 @@ Answered by the owner on 2026-11-02:
 - **Best-moment picture:** a 10-minute mock first; built only if the owner
   would share it.
 - **Side modes:** hidden from brand-new players until story job 2.
+- **Observe mode** (added 2026-11-02): a free camera over the city with no
+  UI and incidents on demand, in wave 2 (V2-18).
 - **Version:** the finished V2 ships as **1.0.0**, the public release.
   Milestone builds that go to `main` before then are 0.14, 0.15, ….
 
