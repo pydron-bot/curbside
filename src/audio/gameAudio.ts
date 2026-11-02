@@ -691,6 +691,8 @@ export class GameAudio {
         return; // the race banner / results card play their own stings
       case 'street':
         return this.onStreet(e);
+      case 'stamp':
+        return this.onStamp();
       default: {
         const unhandled: never = e;
         return unhandled;
@@ -1274,6 +1276,15 @@ export class GameAudio {
         this.music?.duck(0.45, 1.4);
       }
     }
+  }
+
+  /** Named mayhem (game/stamps.ts): the stamp's thunk and chord, the music ducked under it. */
+  private onStamp(): void {
+    const v = this.voice(null, FALLOFF.near, 0.85, 0, 0, 'ui');
+    if (!v) return;
+    sfx.stamp(v, this.musicKey, this.musicMajor);
+    this.commit('award', v);
+    this.music?.duck(0.6, 0.9);
   }
 
   /** Track this life's points; true the first time they pass the best score (once per session, like the HUD). */

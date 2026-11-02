@@ -7,6 +7,7 @@
 import type { VehicleArchetype } from '../entities/vehicle';
 import type { BlastKind } from '../systems/damage';
 import type { Award } from '../systems/score';
+import type { StampId } from '../systems/stamps';
 import type { WantedReason } from '../systems/wanted';
 import type { WeaponKind } from '../systems/weapons';
 import type { PickupKind } from '../world/pickups';
@@ -165,6 +166,12 @@ export type GameEvent =
    * see StreetWhat. Nothing to do with the player's heat or score.
    */
   | { type: 'street'; what: StreetWhat; x: number; z: number }
+  /**
+   * Named mayhem (game/stamps.ts): a stamp across the screen for the
+   * player's own big moment, at the player's (x, z). One at a time, at most
+   * one every few seconds (systems/stamps.ts).
+   */
+  | { type: 'stamp'; id: StampId; x: number; z: number }
   /** The game was paused or resumed (menu, app switch, lost graphics context). */
   | { type: 'pause'; paused: boolean }
   /**

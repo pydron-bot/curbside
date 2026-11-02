@@ -956,6 +956,17 @@ export function fanfare(v: Voice, key: number): void {
   noiseHit(v, v.bank.white, end, 'highpass', 6500, 0.6, 0.12, 0.004, 0.4);
 }
 
+/** A named-mayhem stamp: the thunk of a rubber stamp, then a quick bright chord climbing on top. */
+export function stamp(v: Voice, key: number, major = false): void {
+  const t = v.t;
+  thump(v, t, 150, 55, 0.1, 0.75, 0.1);
+  noiseHit(v, v.bank.white, t, 'bandpass', 1500, 1.1, 0.4, 0.001, 0.05);
+  const root = fold(key, 64);
+  const third = major ? 4 : 3;
+  const notes = [0, third, 7, 12];
+  for (let i = 0; i < notes.length; i++) pluck(v, t + 0.05 + i * 0.035, root + notes[i], 0.16, 0.2, 6500);
+}
+
 // --- Theme stings ---
 
 /** Where a sting's drums come from: a take of the radio's kit, or null for the synth stand-ins. */
