@@ -31,10 +31,15 @@ jobs:
       - run: npm test
       - run: python3 blender/check_assets.py public/assets
 
+  # One job per profile, in parallel: the whole run in software rendering took
+  # ~20 min one after another once wave 2's checks were in.
   smoke:
     runs-on: ubuntu-latest
-    # Wave 2 (cold open, observe, scanner checks) takes it to ~20 min on a runner.
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [desktop, 852x393, 852x340, pwa]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -43,10 +48,10 @@ jobs:
           cache: npm
       - run: npm ci
       # Playwright isn't a game dependency: fetched for this job only.
-      - run: npx -y -p playwright@1.63.0 sh -c 'playwright install --with-deps chromium && node tools/smoke.mjs'
+      - run: npx -y -p playwright@1.63.0 sh -c 'playwright install --with-deps chromium && node tools/smoke.mjs --only ${{ matrix.profile }}'
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: smoke-screenshots
+          name: smoke-screenshots-${{ matrix.profile }}
           path: smoke-out
           if-no-files-found: ignore

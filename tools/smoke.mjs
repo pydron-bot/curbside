@@ -22,6 +22,7 @@
  * `npm test` can't.
  *
  *   npx -y -p playwright@1.63.0 node tools/smoke.mjs [--no-build] [--port 4318] [--out smoke-out]
+ *     [--only desktop|852x393|852x340|pwa]
  *
  * SwiftShader runs at ~1 fps, so it judges draw calls and errors, never
  * frame times. Exit code 1 on any failure; screenshots land in --out.
@@ -31,7 +32,13 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { args, launch, playwright } from './tune/lib.mjs';
 
-const opt = args({ build: true, port: 4318, out: 'smoke-out' });
+const opt = args({ build: true, port: 4318, out: 'smoke-out', only: '' });
+/** --only desktop | 852x393 | 852x340 | pwa: one profile (CI runs them as parallel jobs). */
+const ONLY = ['', 'desktop', '852x393', '852x340', 'pwa'];
+if (!ONLY.includes(String(opt.only))) {
+  console.error(`--only must be one of ${ONLY.slice(1).join(', ')}`);
+  process.exit(2);
+}
 const BASE = '/curbside/';
 const URL = `http://localhost:${opt.port}${BASE}`;
 const DRAW_BUDGET = 150;
@@ -568,7 +575,7 @@ try {
     ['desktop-1280x720', { viewport: { width: 1280, height: 720 } }],
     ['iphone-852x393', { ...iphone, viewport: { width: 852, height: 393 } }, { testTools: true }],
     ['iphone-852x340', { ...iphone, viewport: { width: 852, height: 340 } }],
-  ];
+  ].filter(([label]) => !opt.only || label.includes(String(opt.only)));
   for (const [label, ctxOpt, saved] of profiles) {
     console.log(label);
     const ctx = await browser.newContext({ ...ctxOpt, serviceWorkers: 'block', acceptDownloads: true });
@@ -591,6 +598,17 @@ try {
     await ctx.close();
   }
 
+  if (!opt.only || opt.only === 'pwa') await pwaCheck();
+} catch (e) {
+  failures.push(e.message);
+  console.error(e);
+} finally {
+  await browser?.close();
+  server?.kill();
+}
+
+/** Installable, then offline once the service worker has precached: the cold open still plays. */
+async function pwaCheck() {
   console.log('pwa');
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await ctx.newPage();
@@ -612,12 +630,6 @@ try {
   }
   check(errors.length === 0, `pwa: no page or console errors${errors.length ? `\n      ${errors.join('\n      ')}` : ''}`);
   await ctx.close();
-} catch (e) {
-  failures.push(e.message);
-  console.error(e);
-} finally {
-  await browser?.close();
-  server?.kill();
 }
 
 console.log(failures.length ? `\nSMOKE FAILED: ${failures.length} check(s)` : '\nSMOKE OK');

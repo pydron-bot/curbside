@@ -38,9 +38,11 @@ best-moment picture on WASTED (a forced stamp, then death: the photo and
 caption inside the view, clear of WASTED's title, numbers and timer, the
 pause button, corners and thumbs; SHARE gives the mocked share sheet a
 JPEG, a refused share saves it, the respawn frees it); then
-installability and an offline boot from the service worker. ~3 min. CI (`.github/workflows/ci.yml`)
-runs it with the unit tests, types and GLB contracts on every branch and pull
-request; Pages (`pages.yml`) runs the tests and contracts before deploying
+installability and an offline boot from the service worker. ~20 min
+locally (software rendering); `--only desktop|852x393|852x340|pwa` runs one
+profile. CI (`.github/workflows/ci.yml`) runs the four profiles as parallel
+jobs, beside the unit tests, types and GLB contracts, on every branch and
+pull request; Pages (`pages.yml`) runs the tests and contracts before deploying
 main.
 
 On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on boot;
