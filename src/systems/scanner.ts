@@ -452,7 +452,8 @@ export class ScannerFeed {
     }
     const o = this.pending;
     if (!o.live) return null;
-    if (!o.forced && now - o.at > STALE) {
+    // Stale, or the stars went up while it waited.
+    if (!o.forced && (now - o.at > STALE || o.priority < minPriority(this.stars))) {
       o.live = false;
       return null;
     }

@@ -254,6 +254,15 @@ describe('scanner: while wanted', () => {
     expect(run(feed, 20, 21)).toHaveLength(1);
   });
 
+  it('a street line waiting when the stars go up is dropped if it no longer makes the cut', () => {
+    const feed = new ScannerFeed(first);
+    feed.street('alarm', 0, 0, 'NEON MILE', 10, 0);
+    feed.step(0, STILL);
+    feed.street('chase', 300, 0, 'NEON MILE', 10, 1);
+    feed.stars = 4;
+    expect(run(feed, 1, 10)).toHaveLength(0);
+  });
+
   it('at five stars only a spilled cash van and your own lines get through, at most one every 14 s', () => {
     const feed = new ScannerFeed(first);
     feed.wanted(5, 4, 'crime', 'RED SALOON', 'NEON MILE', 0, 0, 0);
