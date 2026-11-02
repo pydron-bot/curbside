@@ -25,10 +25,10 @@ export const SIDE_MODES_AFTER = 's2-noise';
 /** An unlock (save.unlocks) that opens them without it: a save from before the gate. */
 export const SIDE_MODES_UNLOCK = 'sideModes';
 
-/** The player stands this far past the middle of the shelter (toward where the getaway ends up), m. */
-export const STAND_AHEAD = 4.5;
+/** The player stands this far past the middle of the shelter (by its end, toward where the getaway ends up: in view on a phone), m. */
+export const STAND_AHEAD = 7;
 /** The getaway piles in this far ahead of the bus's stop (clear of its nose), m... */
-export const CRASH_AHEAD = 12;
+export const CRASH_AHEAD = 11;
 /** ...this far from the road's centreline on the shelter's side (its kerb lane, tight to the kerb), m. */
 export const CRASH_ACROSS = 5;
 /** It starts on the far lane this far ahead of the stop (off screen), coming the other way, m. */
@@ -97,12 +97,23 @@ export function roomAhead(s: BusStop): number {
   return (s.ix * BLOCK_SIZE - s.stopX) * fx + (s.iz * BLOCK_SIZE - s.stopZ) * fz;
 }
 
-/** The shelter the opening plays at: the nearest to (x, z) with room for the crash ahead of it (null if none). */
+/**
+ * Is the shelter on the south side of its road? The camera looks north
+ * with a tilt (render/cameraRig.ts), so the building behind such a shelter
+ * stands between the camera and the player.
+ */
+export function southSide(s: BusStop): boolean {
+  const ax = s.waitX - s.stopX;
+  const az = s.waitZ - s.stopZ;
+  return az > 0.5 * Math.hypot(ax, az);
+}
+
+/** The shelter the opening plays at: the nearest to (x, z) in view of the camera, with room for the crash ahead of it (null if none). */
 export function pickOpeningStop(stops: readonly BusStop[], x: number, z: number): BusStop | null {
   let best: BusStop | null = null;
   let bestD = Infinity;
   for (const s of stops) {
-    if (roomAhead(s) < ROOM_AHEAD) continue;
+    if (roomAhead(s) < ROOM_AHEAD || southSide(s)) continue;
     const d = Math.hypot(s.waitX - x, s.waitZ - z);
     if (d < bestD) {
       bestD = d;

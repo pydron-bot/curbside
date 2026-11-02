@@ -1364,12 +1364,14 @@ are `src/game/modes/*Mode.ts`.
   director's modes, its city side `openingStage` wired in main.ts). PLAY
   on a save that hasn't had it (`openingDue`: `save.opening` false) drops
   the player at the bus shelter nearest the safehouse with room ahead of it
-  (`pickOpeningStop`), standing just past the shelter, as a bus pulls in
+  and not on the south side of its road (`pickOpeningStop`, `southSide`:
+  the tilted camera would see the building, not the player), standing at
+  the shelter's end, as a bus pulls in
   22 m back (`Buses.force(stop, back)`). The getaway's road is cleared of
   traffic and parked cars (`onOpeningRoad`; the screen has only just cut
   there). A staged chase (`Chases.stage`, a sedan and two units 30 and 44 m
   behind it) waits 62 m up the far lane for 2 s with its sirens going, then
-  comes flat out, swerves across and piles into the kerb 12 m ahead of the
+  comes flat out, swerves across and piles into the kerb 11 m ahead of the
   stop (on reaching it, on hitting anything on the way, or 6 s after setting
   off: about 5.4 s after PLAY): a crash, half its health gone (smoking),
   stopped dead; its driver runs, and it's an abandoned car (off the

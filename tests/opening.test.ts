@@ -20,6 +20,7 @@ import {
   openingPlan,
   pickOpeningStop,
   roomAhead,
+  southSide,
 } from '../src/game/opening';
 import { Player } from '../src/game/player';
 import type { Vehicle } from '../src/game/population';
@@ -46,10 +47,12 @@ const offRoad = (x: number, z: number) => {
 describe('the cold open: where it plays', () => {
   const stop = pickOpeningStop(stops, SAFEHOUSE.x, SAFEHOUSE.z)!;
 
-  it('picks the shelter nearest the safehouse (and the spawn corner) with room for the crash before the junction', () => {
+  it('picks the shelter nearest the safehouse (and the spawn corner) with room for the crash before the junction, not behind its building from the camera', () => {
     expect(stop).not.toBeNull();
+    expect(southSide(stop)).toBe(false);
     const d = (s: (typeof stops)[number]) => Math.hypot(s.waitX - SAFEHOUSE.x, s.waitZ - SAFEHOUSE.z);
-    for (const s of stops) if (roomAhead(s) >= CRASH_AHEAD + 12) expect(d(s)).toBeGreaterThanOrEqual(d(stop));
+    for (const s of stops) if (roomAhead(s) >= CRASH_AHEAD + 12 && !southSide(s)) expect(d(s)).toBeGreaterThanOrEqual(d(stop));
+    expect(stops.some((s) => southSide(s) && d(s) < d(stop))).toBe(true);
     expect(d(stop)).toBeLessThan(120);
     expect(pickOpeningStop([], 0, 0)).toBeNull();
   });
@@ -64,13 +67,13 @@ describe('the cold open: where it plays', () => {
       // Standing at the shelter, on the pavement, clear of the buildings.
       expect(blocked(p.stand.x, p.stand.z, 0.4), where).toBe(false);
       expect(offRoad(p.stand.x, p.stand.z), where).toBeGreaterThan(ROAD_WIDTH / 2);
-      expect(Math.hypot(p.stand.x - s.waitX, p.stand.z - s.waitZ)).toBeLessThan(6);
+      expect(Math.hypot(p.stand.x - s.waitX, p.stand.z - s.waitZ)).toBeLessThan(8);
       // The crash: on the road on the shelter's side, tight to the kerb, ahead of the bus, a short walk away.
       expect(offRoad(p.crash.x, p.crash.z), where).toBeCloseTo(5, 3);
       expect(blocked(p.crash.x, p.crash.z, 2.5), where).toBe(false);
       const walk = Math.hypot(p.crash.x - p.stand.x, p.crash.z - p.stand.z);
       expect(walk, where).toBeGreaterThan(5);
-      expect(walk, where).toBeLessThan(12);
+      expect(walk, where).toBeLessThan(8);
       const fx = Math.sin(s.stopHeading);
       const fz = Math.cos(s.stopHeading);
       expect((p.crash.x - s.stopX) * fx + (p.crash.z - s.stopZ) * fz).toBeCloseTo(CRASH_AHEAD, 3);
