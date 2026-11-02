@@ -68,7 +68,7 @@ for (const scenario of String(opt.scenarios).split(',')) {
         for (let i = 0; i < 60; i++) u.stepFrame(stepMs);
         const sm = u.renderer.shadowMap;
         const info = u.renderer.info.render;
-        const stats = u.look.shadowStats;
+        const stats = u.look.shadowStats ?? { staticRenders: 0, reasons: {} }; // none before the cache
         const frames = [];
         let cur = null;
         const inner = sm.render;

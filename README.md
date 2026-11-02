@@ -1457,6 +1457,14 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   `--shots` saves the frames at those seconds (with `--fx auto`, each
   also from the same frame with smoke at full and at low resolution).
   JS ms is the median frame. Numbers under *Effects and camera*.
+- **`shadows.mjs [--tier medium] [--seconds 6] [--times day,dusk,dawn,night] [--scenarios park,drive] [--step 16.67]`**:
+  the sun's shadow pass alone on the iPhone profile, real frames stepped
+  at 60 Hz: draw calls and triangles per frame (mean, p95, max), the
+  frames that redraw the shadow cache and their cost, and the redraws a
+  second by reason (`look.shadowStats`). `park` stands still, `drive`
+  boards the nearest car and drives on (about 20 m/s). Runs on a build
+  without the cache too (no redraws), for a before. Numbers under *Look*
+  (*Shadow cache*).
 
 ## Layout
 
