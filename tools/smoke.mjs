@@ -3,7 +3,10 @@
  * and play it headless (Chromium + SwiftShader) on desktop 1280×720 and the
  * iPhone 15 Pro landscape profile at 852×393 and 852×340 (Safari's toolbar
  * showing): it must boot, start a run and simulate 30 s with no page or
- * console errors, and draw under the 150-call budget. Then the PWA: the
+ * console errors, and draw under the 150-call budget. A fresh save has no
+ * side modes on the title and PLAY is the cold open: the player must be in
+ * the getaway within 20 s, then again with chases forced off (the fallback),
+ * and a second PLAY must not replay it. Then the PWA: the
  * manifest is installable, and once the service worker has the game cached,
  * it boots and plays offline. On the 852×393 profile, REPORT BUG too: the
  * screenshot, the report and the share sheet (mocked: shared, cancelled,
@@ -64,24 +67,103 @@ const check = (ok, what) => {
   if (!ok) failures.push(what);
 };
 
-/** Boot, start a run, simulate, draw: the checks every profile gets. */
-async function play(page, label) {
+/**
+ * PLAY into the cold open (a save that hasn't had it): the getaway crashes at
+ * the kerb, the bot walks to its door at a walking pace and presses E. In
+ * the getaway within 20 s of PLAY, with the 2 stars. `fallback`: chases
+ * forced off first, so the crashed getaway is already there.
+ */
+async function coldOpen(page, label, fallback) {
+  const crash = await page.evaluate(async (fallback) => {
+    const u = window.__ub;
+    const o = u.progress.opening;
+    if (fallback) {
+      u.progress.opening.forget();
+      u.cityLife.chases.enabled = false;
+      u.enterTitle();
+    }
+    u.startGame();
+    window.__openAt = u.simTime;
+    for (let i = 0; i < 60 && o.phase !== 'crashed'; i++) u.fastForward(0.25);
+    // Drawn as it stands: the getaway at the kerb, GET IN up.
+    for (let i = 0; i < 2; i++) await new Promise((res) => requestAnimationFrame(() => res()));
+    return { crashedAt: u.simTime - window.__openAt, phase: o.phase };
+  }, fallback);
+  if (!fallback) await page.screenshot({ path: path.join(opt.out, `${label}-cold-open.png`), timeout: 120000 });
+  const r = await page.evaluate(() => {
+    const u = window.__ub;
+    const o = u.progress.opening;
+    const car = o.car;
+    if (!car || o.phase !== 'crashed') return { inCarAt: Infinity };
+    // To the driver's door (the left of the car), 5 m/s.
+    const p = u.player.ped;
+    for (let i = 0; i < 200; i++) {
+      const s = car.sim;
+      const dx = s.x + Math.cos(s.heading) * 1.6 - p.x;
+      const dz = s.z - Math.sin(s.heading) * 1.6 - p.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 0.8) break;
+      const k = Math.min(1, 0.5 / d);
+      p.x += dx * k;
+      p.z += dz * k;
+      u.fastForward(0.1);
+    }
+    u.input.keyboard.actionPresses++;
+    u.stepFrame();
+    u.fastForward(0.5);
+    u.cityLife.chases.enabled = true;
+    return {
+      inCarAt: u.simTime - window.__openAt,
+      driving: u.player.driving === car,
+      stars: u.heat.wanted.level,
+      fallback: o.fallback,
+      opened: u.progress.progress.data.opening,
+      job: u.progress.missions.running?.id ?? null,
+    };
+  });
+  const what = fallback ? 'fallback (chases off)' : 'cold open';
+  check(
+    r.driving && r.inCarAt < 20 && crash.crashedAt < 10 && r.fallback === fallback && r.stars >= 2 && r.opened && r.job === 's1-wrongstop',
+    `${label}: ${what}: at the kerb ${crash.crashedAt.toFixed(1)} s, in the getaway ${r.inCarAt.toFixed(1)} s after PLAY, ${r.stars ?? '?'}★${r.driving ? '' : ` (${JSON.stringify({ ...crash, ...r })})`}`,
+  );
+}
+
+/** Boot, start a run (the cold open on a fresh save), simulate, draw: the checks every profile gets. `full`: the fallback and a second PLAY too. */
+async function play(page, label, full = true) {
   await page.goto(URL);
   await page.waitForFunction(() => window.__ub, null, { timeout: 90000 });
   await page.waitForTimeout(2000);
+  const fresh = await page.evaluate(() => ({
+    titleModes: [...document.querySelectorAll('#title [data-mode]')].map((el) => el.dataset.mode),
+    due: !window.__ub.progress.progress.data.opening,
+  }));
+  check(fresh.titleModes.length === 0 && fresh.due, `${label}: a fresh save: no side modes on the title (${fresh.titleModes.join(', ') || 'none'}), the cold open due`);
+  await coldOpen(page, label, false);
   const r = await page.evaluate(async () => {
     const u = window.__ub;
-    u.startGame();
-    u.fastForward(30);
+    const side = u.progress.sideModes;
+    // On to 30 s of play: in the getaway, the chase's cops after you.
+    u.fastForward(Math.max(0, 30 - u.simTime));
     // A few real frames, so the renderer draws the scene as it stands.
     for (let i = 0; i < 3; i++) await new Promise((res) => requestAnimationFrame(() => res()));
-    return { sim: u.simTime, calls: u.renderer.info.render.calls, alive: u.player.ped !== undefined, paused: u.paused };
+    return { sim: u.simTime, calls: u.renderer.info.render.calls, alive: u.player.ped !== undefined, paused: u.paused, side };
   });
+  check(!r.side, `${label}: no frenzies, races, exports or fares offered before story job 2`);
   check(r.sim >= 29, `${label}: simulated 30 s (simTime ${r.sim.toFixed(1)})`);
   check(r.calls > 0 && r.calls < DRAW_BUDGET, `${label}: ${r.calls} draw calls (budget ${DRAW_BUDGET})`);
   // A 1280×720 'high' frame on SwiftShader takes ~20 s to capture on a busy runner (main and branches
   // alike), so the default 30 s ran out now and then; a hung renderer still fails here.
   await page.screenshot({ path: path.join(opt.out, `${label}.png`), timeout: 120000 });
+  if (!full) return r;
+  const again = await page.evaluate(() => {
+    const u = window.__ub;
+    u.enterTitle();
+    u.startGame();
+    u.fastForward(1);
+    return { phase: u.progress.opening.phase, d: Math.hypot(u.player.ped.x - 9.5, u.player.ped.z - 9.5) };
+  });
+  check(again.phase === 'idle' && again.d < 4, `${label}: a second PLAY starts at the spawn corner, no cold open (${JSON.stringify(again)})`);
+  await coldOpen(page, label, true);
   return r;
 }
 
@@ -241,7 +323,7 @@ try {
   await page.waitForFunction(() => navigator.serviceWorker.controller !== null, null, { timeout: 60000 });
   await ctx.setOffline(true);
   try {
-    await play(page, 'pwa-offline');
+    await play(page, 'pwa-offline', false);
   } catch (e) {
     check(false, `pwa-offline: ${e.message.split('\n')[0]}`);
   }
