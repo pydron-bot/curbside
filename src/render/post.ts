@@ -63,6 +63,11 @@ export function createRenderer(): WebGLRenderer {
   return renderer;
 }
 
+/** Does `renderer` draw into the half-float pipeline (linear HDR, tone mapping in the output pass)? */
+export function isHdr(renderer: WebGLRenderer): boolean {
+  return hdrRenderers.has(renderer);
+}
+
 /**
  * Compile every material in `scene` for the pass it is really drawn in. With
  * the half-float pipeline the scene renders into a linear HDR target (tone
