@@ -80,6 +80,8 @@ export class OpeningMode implements Mode {
   private stage: OpeningStage | null = null;
   private plan: OpeningPlan | null = null;
   private t = 0;
+  /** WRONG STOP started with the getaway (its end, before the player got in, ends the opening too). */
+  private jobOn = false;
   private readonly job: MissionDef | null;
 
   constructor(
@@ -138,6 +140,8 @@ export class OpeningMode implements Mode {
     // Crashed, waiting for the player to get in.
     const p = ctx.deps.player;
     if (car && p.driving === car) this.gotIn(car);
+    // WRONG STOP ended without them in it (the getaway wrecked): it has had its go, and the story goes on.
+    else if (this.jobOn && this.missions.running?.id !== OPENING_JOB) this.ran();
   }
 
   hud(): boolean {
@@ -166,6 +170,7 @@ export class OpeningMode implements Mode {
     this.car = null;
     this.fallback = false;
     this.t = 0;
+    this.jobOn = false;
   }
 
   /** To the shelter, the bus pulling in, the chase waiting off screen (or the crashed getaway already there). */
@@ -212,7 +217,7 @@ export class OpeningMode implements Mode {
   private crashed(v: Vehicle): void {
     this.car = v;
     this.phase = 'crashed';
-    if (this.job) this.missions.beginNow(this.job, { tag: GETAWAY_TAG, v });
+    this.jobOn = this.job !== null && this.missions.beginNow(this.job, { tag: GETAWAY_TAG, v });
   }
 
   /**
@@ -227,6 +232,10 @@ export class OpeningMode implements Mode {
       bus.emit({ type: 'award', award: score.award('takeTheHeat') });
       bus.emit({ type: 'street', what: 'takeTheHeat', x: v.sim.x, z: v.sim.z });
     }
+    this.ran();
+  }
+
+  private ran(): void {
     const p = this.ctx.progress;
     p.data.opening = true;
     p.markDirty();

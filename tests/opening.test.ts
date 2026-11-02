@@ -257,6 +257,19 @@ describe('the cold open: the runtime', () => {
     expect(w.progress.data.opening).toBe(true);
   });
 
+  it('the getaway wrecked before anyone gets in: WRONG STOP fails, the opening has had its go', () => {
+    const w = setup({ chase: false });
+    w.play();
+    w.step();
+    w.opening.car!.damage.wrecked = true;
+    w.step(0.1);
+    expect(w.missions.running).toBeNull();
+    expect(w.opening.phase).toBe('done');
+    expect(w.opening.holding).toBe(false);
+    expect(w.progress.data.opening).toBe(true);
+    expect(w.progress.data.missions).not.toContain(OPENING_JOB);
+  });
+
   it('a chase that never crashes gives way to the fallback', () => {
     const w = setup({ chase: true });
     w.play();

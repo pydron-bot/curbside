@@ -1383,7 +1383,8 @@ are `src/game/modes/*Mode.ts`.
   that gave up on the car) the opening calls it in itself (`tookGetaway`,
   the `takeTheHeat` award and street event). It has run once the player is
   in the car (`save.opening`, flushed); a respawn before that (WASTED on the
-  pavement) starts it over, and a quit leaves it due. It's armed by any
+  pavement) starts it over, a quit leaves it due, and a getaway wrecked
+  before anyone's in it ends it (s1 failed; the story goes on from s2). It's armed by any
   respawn (PLAY, RESTART, after WASTED) and starts on the next sim step,
   unless a Chaos Run took the run. While it's on (`OpeningMode.holding`)
   the busy scenes hold off (`CityLifeDeps.opening`). Settings → REPLAY
