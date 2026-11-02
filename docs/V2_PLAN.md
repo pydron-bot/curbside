@@ -489,7 +489,7 @@ Measured on 0.13 (16 × 16 blocks of 64 m, about 1 km²): 1,404 buildings,
 - **First step (about an hour):** a spike that generates 24 × 24 and 32 × 32
   cities and measures boot time, memory and draw calls on the iPhone, then
   decide the size and the districts.
-- **Groundwork done (2026-11-02, branch `claude/w3-city`, details in
+- **Groundwork done, shipped as 0.19.0 (2026-11-02, branch `claude/w3-city`, details in
   `docs/W3A_CITY.md`):** `?city=24` / `?city=32` builds the bigger city as
   a ring round today's 16 × 16, which stays block for block (pinned by
   `tests/cityCore.test.ts` at every size; the shipped city is

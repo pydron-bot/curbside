@@ -15,6 +15,15 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.19.0',
+    date: '2026-11-02',
+    title: 'Room to grow',
+    notes: [
+      'Groundwork for a bigger city. Nothing moves in the city you know: a test build can now add a ring of new streets round it (add ?city=24 or ?city=32 to the address), with its own save so your real one is untouched. The new streets are blank for now; their districts and things to do come next.',
+      'Smoke costs less to draw: the buildings that hide it are only drawn near the camera.',
+    ],
+  },
+  {
     version: '0.18.0',
     date: '2026-11-02',
     title: 'Taser, stinger and smoke',
