@@ -152,6 +152,23 @@ export interface CityLifeDeps {
 /** A scene's view of the director. */
 export type SceneCtx = CityLife;
 
+/** Where a camera watching a scene looks (the title's highlights): a point and its velocity. */
+export interface Subject {
+  x: number;
+  z: number;
+  vx: number;
+  vz: number;
+}
+
+/** Write a subject into `out` (for a scene's subject(): `return watch(out, s.x, s.z, s.vx, s.vz)`). */
+export function watch(out: Subject, x: number, z: number, vx = 0, vz = 0): true {
+  out.x = x;
+  out.z = z;
+  out.vx = vx;
+  out.vz = vz;
+  return true;
+}
+
 /**
  * A kind of ambient scene: stepped every sim step, reset for a fresh run.
  * It defines its kind on the clock (life.clock.define) in its constructor,
@@ -166,6 +183,8 @@ export interface Scene {
   reset(): void;
   /** Debug labels (settings.debugLabels, ~5 Hz): what its people and cars are doing. */
   describe?(out: LabelSink): void;
+  /** The title's highlights (game/attractHighlights.ts): what to watch of it into `out`; false with nothing on. */
+  subject?(out: Subject): boolean;
 }
 
 export class CityLife {
@@ -207,6 +226,11 @@ export class CityLife {
   private readonly world: SceneWorld = { playing: false, activity: false, stars: 0, tutorial: false };
   private scanTimer = 0;
   private tidyTimer = 0;
+  /**
+   * The kind the title's show is directing (game/attractHighlights.ts):
+   * nothing holds it off, and its people gather as in play (lively).
+   */
+  featured: string | null = null;
 
   constructor(d: CityLifeDeps) {
     this.d = d;
@@ -348,7 +372,17 @@ export class CityLife {
     w.activity = this.d.activity();
     w.stars = this.d.stars();
     w.tutorial = this.d.tutorial();
+    if (kind === this.featured) {
+      // Directed behind the title: no holds (a first run's tutorial included).
+      w.playing = true;
+      w.activity = w.tutorial = false;
+    }
     return this.clock.due(kind, this.now, running, w);
+  }
+
+  /** Should `kind`'s people come and gather (queues, crowds)? In play, or the title's show is on it. */
+  lively(kind: string): boolean {
+    return this.d.playing() || kind === this.featured;
   }
 
   /** Is (x, z) close enough to the player for `kind` to start there? */

@@ -21,7 +21,7 @@ import { driveAi, type Obstacle } from '../../systems/traffic';
 import { forwardSpeed, isBike, type VehicleControls } from '../../entities/vehicle';
 import { entryPoint } from '../../world/roads';
 import type { CrowdPed, SceneDriver, Vehicle } from '../population';
-import { SCENE_DROP, type Scene, type SceneCtx } from '../cityLife';
+import { SCENE_DROP, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { COP_OUTFIT } from '../../systems/police';
 import { incident } from './chases';
 import { LaneBlock } from './laneBlock';
@@ -128,6 +128,18 @@ export class Accidents implements Scene {
       if (c.officer) out.ped(c.officer, 'COP (accident)', 'police');
       if (c.police) out.car(c.police.v, 'POLICE (accident)', 'police');
     }
+  }
+
+  /** The two cars closing, then the drivers' argument; nothing once everyone's left. */
+  subject(out: Subject): boolean {
+    for (const c of this.list) {
+      if (c.phase === 'left') continue;
+      const a = c.a.sim;
+      const b = c.b.sim;
+      if (c.phase === 'closing') return watch(out, (a.x + b.x) / 2, (a.z + b.z) / 2, a.vx, a.vz);
+      return c.phase === 'crashed' ? watch(out, (a.x + b.x) / 2, (a.z + b.z) / 2) : watch(out, c.x, c.z);
+    }
+    return false;
   }
 
   /** Cars crashes left in the road for a tow (also flagged Vehicle.towable). */

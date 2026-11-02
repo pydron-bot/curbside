@@ -18,7 +18,7 @@ import { BLOCKS_PER_SIDE, BLOCK_SIZE, ROAD_WIDTH, SIDEWALK, isCarPark, lotBytes 
 import { dirHeading, type Dir } from '../../world/roads';
 import { BUS_PULL_IN, roadPoint, segmentValid } from '../../world/streetSpots';
 import type { SceneDriver, Vehicle } from '../population';
-import { SCENE_RANGE, type Scene, type SceneCtx } from '../cityLife';
+import { SCENE_RANGE, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { secs, labelMembers, type LabelSink } from '../debugLabels';
 import type { Fights } from './fights';
 import { Gathering } from './gathering';
@@ -64,6 +64,8 @@ export class IceCream implements Scene {
   readonly kind = 'iceCream';
   readonly vans: Van[] = [];
   private scan = 0;
+  /** The van force() put down (the title's highlight watches it, not one adopted from traffic). */
+  private forced: Van | null = null;
   private readonly left = { m: 0 };
   private readonly p = { x: 0, z: 0 };
   private readonly driver: SceneDriver;
@@ -116,6 +118,7 @@ export class IceCream implements Scene {
   reset(): void {
     for (const van of this.vans) this.untrack(van);
     this.vans.length = 0;
+    this.forced = null;
   }
 
   describe(out: LabelSink): void {
@@ -126,10 +129,18 @@ export class IceCream implements Scene {
     }
   }
 
-  /** Debug (__ub): a van put down at the kerb near the player, open, with a few already queueing. */
+  /** The van force() put down, while it's open; nothing once it drives on. */
+  subject(out: Subject): boolean {
+    const van = this.forced;
+    if (!van || !this.vans.includes(van) || van.phase === 'drive') return false;
+    const s = van.v.sim;
+    return watch(out, s.x, s.z, s.vx, s.vz);
+  }
+
+  /** Debug (__ub) and the title's highlights: a van put down at the kerb near the player, open, with a few already queueing. */
   force(): boolean {
     const life = this.life;
-    const p = life.d.player.position;
+    const p = life.d.focus();
     let best = Infinity;
     let bx = 0;
     let bz = 0;
@@ -153,6 +164,7 @@ export class IceCream implements Scene {
     van.z = bz;
     van.heading = bh;
     this.open(van);
+    this.forced = van;
     for (let i = 0; i < 3; i++) {
       const c = life.addPed(bx - Math.cos(bh) * 4 + (life.d.rand() - 0.5) * 4, bz + Math.sin(bh) * 4 + (life.d.rand() - 0.5) * 4, 0, undefined, streetBody(life));
       c.agent.street = true;
@@ -250,7 +262,7 @@ export class IceCream implements Scene {
     const q = van.queue;
     van.timer += dt;
     // Calm people walking by come over (not in the last few seconds).
-    if (scan && van.timer < OPEN_FOR - 6 && life.d.playing() && roomFor(life, 2)) q.recruit();
+    if (scan && van.timer < OPEN_FOR - 6 && life.lively('iceCream') && roomFor(life, 2)) q.recruit();
     const served = q.step(dt);
     if (served) {
       served.model.cheer(1.2);

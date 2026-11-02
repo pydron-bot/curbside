@@ -86,8 +86,11 @@ drawing); tap a spot to go to the nearest road or pavement there (with the
 car: the nearer lane, facing its traffic, out of the junction), or SAFEHOUSE,
 HOSPITAL, NEON MILE, DOCKS. SCENES: start any city scene near you now (the
 scenes' `force()` / `begin()` / `soon()`; the fire blows up a car 11–24 m
-off and calls the truck; the tow leaves a car for the truck; RAIN CROWD
-turns the rain on; TURF WAR still waits for its holds). SAVE: +1 CRED
+off and calls the truck; the tow leaves a car for the truck; DOGS CHASE A
+RUNNER sets a passer-by running past a dog or two; RAIN CROWD turns the
+rain on; TURF WAR still waits for its holds). The starting is
+`game/sceneStarter.ts` (`SceneStarter.start(id, x, z, heading)`), shared
+with the title's highlights. SAVE: +1 CRED
 level, max perks, reset CRED, +$10,000, unlock all jobs, jump to any story
 job (it becomes the next job; you land by its payphone), tutorial done /
 reset, reset the save, export (share sheet, else clipboard) and import (a
@@ -231,7 +234,8 @@ share sheet mocked.
   *Look* below.
 - **Front door, controls and HUD** (`src/ui/`, see *UI* below): a title
   screen over a live attract mode (the city runs, the camera cruises after
-  traffic) with PLAY, a mode list other systems extend, settings, how to
+  traffic and now and then cuts to a city scene: *Title highlights* under
+  *UI*) with PLAY, a mode list other systems extend, settings, how to
   play, the best score and a small MORE AT DEEEK.ORG link to the hub (title
   only, never the pause menu); the first tap unlocks audio, shaders are warmed
   behind it; a one-time "Add to Home Screen" tip on iPhone Safari. Pause
@@ -964,6 +968,9 @@ life.near('ice', x, z)            // within its range of the player (default SCE
 life.clock.start('ice', life.now) // wind the clock (or .defer(kind, now, s): nowhere to put one yet)
 // Holds: 'title' (attract), 'activity' (mission, race, frenzy, fare, Chaos Run), 'wanted', 'tutorial'.
 // LOUD = all four (chases, races, brawls); IN_PLAY = ['title'].
+// life.featured = kind: the title's highlight (game/attractHighlights.ts) lifts every hold for that kind alone;
+// life.lively(kind): d.playing() or featured (use it, not d.playing(), for people gathering to a scene).
+// subject?(out): Scene's optional hook for the highlights: where to look (x, z, vx, vz; cityLife watch()), false when over.
 
 // A service vehicle's call-out (scenes/service.ts): ambulance, fire truck, tow truck, police
 const run = ServiceRun.call(life, { archetype: 'firetruck', paint: '#c3191c', claimRange: 140, emergency: true,
@@ -2482,4 +2489,47 @@ haptics.pulse(strength0to1, ms)                          // also fired by crash 
 
 Kinds: `objective`, `enemy`, `police`, `pickup`, `friend`, `shop`, `race`,
 `marker` (each has a default colour).
+
+**Title highlights** (`game/attractHighlights.ts`; when and which is
+`ui/attractShow.ts`, pure and tested; the camera is `ui/titleCamera.ts`).
+Behind the title the camera cruises after traffic (`ui/attract.ts`); after
+10–14 s, then every 15–25 s of cruising, it cuts to something happening:
+a police chase (the getaway; a scooter one in four), a street race (the
+leader, then the winner), a car fire and its truck (framed together as the
+truck comes in), a turf war, an accident and the argument, the ice cream
+van and its queue, a bus pulling in at a stop, a busker and the crowd, a
+mugging (the mugger), stray dogs after a runner. A shuffled round, never the
+same twice running. The scene is started round the camera with the TEST
+menu's `SceneStarter`; `CityLife.featured` lifts its holds (the title, a
+first run's tutorial) and its people gather (`lively`), every other scene
+stays held, so there's one at a time. It's followed through its
+`subject()` until that says it's over (then 3 s more) or for 25–40 s; one
+with nothing to show 8 s after starting, or that won't start, is skipped
+for the next (four refusals in a row: cruise again). Close by and on
+screen the camera glides over; otherwise the city fades out over 0.3 s
+(`.title-fade`, under the menu), the camera jumps and the streets are
+filled round it, and it fades back in over 0.5 s. A caption fades in for
+~4.5 s under the version, top right (`POLICE CHASE` / `NEON MILE`: the
+district). A scene the show moved on from is reset once out of view (or
+after 30 s); the fire, the turf war and the dogs wind down by themselves.
+Highlights start only with the title open (not under Settings or How to
+play). PLAY stops the show, clears `featured` and resets every scene with
+the run (no title actors, no stars).
+**Framing:** what the camera follows sits in the middle of the free area
+right of the menu column, not the screen centre: `TitleScreen.menuRight`
+(`.title-main`'s right edge in px, measured by a ResizeObserver, never per
+frame) → half of it in px (`freeCentreOffsetPx`, capped at 70% of the width)
+→ ground metres through the rig's camera (`groundPerPx`: height, tilt, FOV,
+aspect; exact on the ground line through the look point, checked against the
+projection at 852×393, 852×340, 1280×720 and 1920×1080) taken off the
+camera's x, eased (`TitleFraming`, 2.5/s) as the layout changes or the
+title closes. A gentler look-ahead behind the title (`LEAD_ATTRACT`; FxDirector
+only sets the lead in play) and no lead of the attract camera's own on a
+highlight keep a racer at 30 m/s in that area on a 340 px-high screen; in
+play the rig is as before.
+
+```ts
+__ub.highlights.show.phase / .current   // 'cruise' | 'cue' | 'watch' | 'linger'; the highlight id
+__ub.highlights.show.timing             // SHOW_TIMING: cruise, first, settle, watch, linger, tries (mutable for a test)
+```
 

@@ -88,7 +88,9 @@ import { mountCarButtons } from './ui/carButtons';
 import { CombatHud } from './ui/combatHud';
 import { AIM_TURN_RATE, aimHeading, approachAngle } from './core/aim';
 import { getDevice } from './render/quality';
-import { AttractCamera } from './ui/attract';
+import { AttractCamera, LEAD_ATTRACT } from './ui/attract';
+import { TitleCamera } from './ui/titleCamera';
+import { AttractHighlights } from './game/attractHighlights';
 import { FrontDoor } from './ui/frontDoor';
 import { addDiagnosticsButton, Diagnostics } from './ui/diagnostics';
 import { blockBrowserGestures } from './ui/gestures';
@@ -1248,10 +1250,8 @@ function frame(now: number) {
   progress.update(frameSeconds);
   heatPresenter.update(frameSeconds, focus.x, focus.z, playing);
 
-  if (attract.active) {
-    attract.update(frameSeconds, vehicles);
-    rig.update(frameSeconds, attract.x, attract.z, attract.vx, attract.vz);
-  } else if (player.driving) {
+  if (attract.active) titleCam.update(frameSeconds, viewW);
+  else if (player.driving) {
     const v = player.driving;
     rig.update(frameSeconds, v.mesh.root.position.x, v.mesh.root.position.z, v.sim.vx, v.sim.vz);
   } else {
@@ -1432,7 +1432,7 @@ function warmShaders(): number {
 /** PLAY: from the attract city to a fresh run at the spawn corner. */
 function startGame() {
   progress.startRun();
-  attract.stop();
+  titleCam.stop();
   hud.setScene('play');
   radar.visible = true;
   haptics.enabled = true;
@@ -1452,7 +1452,7 @@ function enterTitle() {
   screenAwake.set(false);
   respawnPlayer();
   playerModel.root.visible = false;
-  attract.start(rig.focusX, rig.focusZ);
+  titleCam.start(rig.focusX, rig.focusZ);
   rig.setHeights(...CAMERA_ATTRACT);
   hud.setScene('title');
   radar.visible = false;
@@ -1464,6 +1464,7 @@ function enterTitle() {
 // Boot into the title over attract mode.
 playerModel.root.visible = false;
 rig.setHeights(...CAMERA_ATTRACT);
+rig.setLead(LEAD_ATTRACT);
 hud.setScene('title');
 radar.visible = false;
 haptics.enabled = false;
@@ -1594,6 +1595,16 @@ const testTools = new TestTools({
   },
   reload: () => location.reload(),
 });
+// The title's highlights: now and then the camera leaves traffic for a scene (started like the TEST menu's).
+const highlights = new AttractHighlights({ life: cityLife, starter: testTools.starter, rand, ready: () => frontDoor.inTitle });
+const titleCam = new TitleCamera({
+  attract,
+  highlights,
+  rig,
+  title: frontDoor.title,
+  vehicles,
+  moved: () => maintainPopulation(true, false),
+});
 mountTestMenu(testTools, frontDoor, audio, city, {
   resume: () => setPaused(false),
   showFocus: () => input.lastDevice !== 'touch',
@@ -1695,6 +1706,8 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   cityLife,
   /** The TEST menu's actions (game/testTools.ts): scene(id), spawn(archetype), teleport(x, z), timeScale... */
   testTools,
+  /** The title's highlights (game/attractHighlights.ts): show (phase, current), subject, caption, step(dt). */
+  highlights,
   /** Playtest labels: toggle(on?), list() (nearest first), stats() (JS ms per frame), resetStats(). */
   labels: {
     toggle: (on?: boolean) => toggleLabels(on),
