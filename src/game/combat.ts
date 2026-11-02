@@ -677,7 +677,7 @@ export class Combat {
     if (res === 'none') return;
     const a = c.agent;
     if (res === 'down' || res === 'ko') {
-      this.d.bus.emit({ type: 'pedDown', x: a.s.x, z: a.s.z, cause, byPlayer, cop: a.role === 'cop', ko: res === 'ko', gang: a.gang });
+      this.d.bus.emit({ type: 'pedDown', x: a.s.x, z: a.s.z, cause, byPlayer, cop: a.role === 'cop', ko: res === 'ko', gang: a.gang, suspect: a.suspect });
     }
     if (res === 'ko') {
       if (byPlayer) this.d.award(this.d.score.award('knockout'));

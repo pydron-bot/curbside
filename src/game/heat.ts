@@ -19,7 +19,7 @@ import { PoliceForce, type PoliceContext, type Suspect } from '../systems/police
 import { createPursuit, drivePursuit, type PursuitTarget } from '../systems/pursuit';
 import { evadeBonus, type Award, type Score } from '../systems/score';
 import { driveAi, reactToHit, rerouteAi, scareDriver, shouldYield, YIELD_RANGE, type Obstacle } from '../systems/traffic';
-import { Wanted, WITNESS_RANGE, type Crime } from '../systems/wanted';
+import { CRIME_FLOOR, Wanted, WITNESS_RANGE, type Crime } from '../systems/wanted';
 import { DELAYED_CRIMES } from '../systems/witnesses';
 import type { City, Rect } from '../world/city';
 import type { StaticGrid } from '../world/collision';
@@ -88,6 +88,13 @@ export interface HeatDeps {
    * caller's stopped). False, or no hook: it counts at once, as before.
    */
   witnesses?(crime: Crime, x: number, z: number): boolean;
+  /**
+   * The player rammed `v`, a police car a city scene is driving (a chase's,
+   * not a unit): true if the scene forgives it (a bump while boxing its
+   * getaway in, scenes/chases.ts). Otherwise it's a ram like any other, and
+   * the scene knows it's been attacked.
+   */
+  rammedSceneCop?(v: Vehicle): boolean;
 }
 
 export class Heat {
@@ -137,7 +144,8 @@ export class Heat {
 
     // --- Crimes, as the simulation reports them ---
     bus.on('pedDown', (e) => {
-      if (e.byPlayer && !e.isPlayer) this.crime(e.cop ? 'copDown' : 'assault', e.x, e.z);
+      // Flooring a fleeing suspect (a chase's, a mugger) is a have-a-go, not an assault.
+      if (e.byPlayer && !e.isPlayer && !e.suspect) this.crime(e.cop ? 'copDown' : 'assault', e.x, e.z);
     });
     bus.on('carjack', (e) => this.crime('carjack', e.x, e.z));
     bus.on('shot', (e) => {
@@ -254,6 +262,7 @@ export class Heat {
       const last = this.rammed.get(other) ?? -Infinity;
       this.rammed.set(other, this.time);
       if (this.time - last < RAM_REPEAT) return;
+      if (!unit && this.deps.rammedSceneCop?.(other)) return;
       // The cop you hit saw it.
       this.wanted.commit('ramCop', true);
       this.deps.award(this.deps.score.award('copRam'));
@@ -268,6 +277,16 @@ export class Heat {
     } else if (reaction === 'bail') {
       this.deps.ejectDriver(other, own.sim.x, own.sim.z);
     }
+  }
+
+  /**
+   * A city scene's police car (with `aboard` officers) joins the player's
+   * pursuit (TAKE THE HEAT, scenes/chases.ts): false if the force is at
+   * strength for the level, and the scene keeps it.
+   */
+  adopt(v: Vehicle, aboard: number): boolean {
+    if (!this.live) return false;
+    return this.police.adopt(v, aboard, this.wanted.level) !== null;
   }
 
   /** A fresh run (or the title): nobody's wanted, the police clear the street. */
@@ -326,7 +345,7 @@ export class Heat {
     if (witnessed && this.deps.witnesses && DELAYED_CRIMES.has(crime) && !this.police.copWithin(x, z, WITNESS_RANGE) && this.deps.witnesses(crime, x, z)) return;
     this.wanted.commit(crime, witnessed);
     // Called in: the police know where you are.
-    if (witnessed || crime === 'copCarStolen') this.police.report(this.updateSuspect());
+    if (witnessed || CRIME_FLOOR[crime] !== undefined) this.police.report(this.updateSuspect());
   }
 
   private evadedAward(): Award | null {

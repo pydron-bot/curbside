@@ -24,7 +24,7 @@ import { DIR_VEC, MAX_NODE, type Dir } from '../world/roads';
 import { carsTouching } from './arrest';
 import { HELI_FROM, HELI_GONE, HELI_REFUEL, HELI_SHIFT, HELI_SPAWN, stepHelicopter, type Helicopter } from './helicopter';
 import { lineOfSight, sees } from './sight';
-import { knockDown, resumeWalking, spawnPed } from './crowd';
+import { knockDown, resumeWalking, spawnPed, type PedRole } from './crowd';
 import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from './pursuit';
 import { CRUISE_SPEED, TURN_SPEED, createDriver, rerouteAi, spawnAi, type AiDriver, type Obstacle } from './traffic';
 import { len2 } from '../core/len';
@@ -250,6 +250,28 @@ export class PoliceForce {
     const c = drivePursuit(u.driver, v.sim, t, obstacles, rand, dt);
     t.seen = radio;
     return c;
+  }
+
+  /**
+   * Take on a police car another system was driving (a city chase's: TAKE
+   * THE HEAT) as a pursuit unit with `aboard` officers, within the unit cap
+   * for `stars` (the level now: this step's may not have caught up). Null
+   * if the force is at strength or the car has no driver to hand over.
+   */
+  adopt(v: Vehicle, aboard: number, stars: number): PoliceUnit | null {
+    const road = v.ai;
+    if (!road || this.byVehicle.has(v) || v.damage.wrecked) return null;
+    if (this.activeUnits >= UNITS_BY_STARS[Math.max(0, Math.min(5, Math.max(this.stars, stars)))]) return null;
+    const kind: UnitKind = v.archetype === 'swat' ? 'swat' : v.archetype === 'cop_bike' ? 'bike' : 'patrol';
+    v.police = true;
+    v.ambient = false;
+    v.scene = null;
+    v.emergency = false;
+    v.mesh.siren = true;
+    const u = this.addUnit(v, kind, 'pursuit', road);
+    u.aboard = Math.max(0, Math.min(u.aboard, aboard));
+    u.driver.mode = 'chase';
+    return u;
   }
 
   /** Distance from (x, z) to the nearest officer on their feet, m. */
@@ -833,6 +855,15 @@ export class PoliceForce {
       if (len2(h.x - s.x, h.z - s.z) > HELI_GONE) h.active = h.leaving = false;
     }
   }
+}
+
+/**
+ * Officers never fire on a player with no stars. One a city scene set on
+ * someone else falls back on the player as a target once that fight is
+ * over, so the shot is checked here rather than trusted to every scene.
+ */
+export function holdsFire(role: PedRole, stars: number): boolean {
+  return role === 'cop' && stars <= 0;
 }
 
 /** Placement for a new unit: on a lane, out of view, heading the player's way. */
