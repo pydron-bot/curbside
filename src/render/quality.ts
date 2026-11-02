@@ -1,6 +1,6 @@
 /**
  * Quality tiers: the one place render code asks "how much can I draw?" —
- * pixel-ratio range, sun shadow map size, bloom, particle budget, and how big
+ * pixel-ratio range, sun shadow map size, bloom, smoke resolution, particle budget, and how big
  * the crowd and traffic are. The tier comes from settings.quality ('auto'
  * picks by device: phones and tablets start at 'medium', desktops at 'high')
  * and DynamicResolution steps it down at runtime when frames run slow.
@@ -23,6 +23,12 @@ export interface QualityTier {
   readonly shadowMapSize: number;
   /** Full-screen bloom pass. */
   readonly bloom: boolean;
+  /**
+   * Resolution of the soft particles (smoke, dust) against the screen's: 1
+   * draws them with the scene; below it they go offscreen at this scale when
+   * that saves fill, and are composited back (lowResFx.ts).
+   */
+  readonly fxScale: number;
   /** Multiplier on particle counts and emission rates. */
   readonly particleScale: number;
   /** Multipliers on Population's CROWD_COUNT / TRAFFIC_COUNT. */
@@ -53,6 +59,7 @@ export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
     minPixelRatio: 1,
     shadowMapSize: 2048,
     bloom: true,
+    fxScale: 1,
     particleScale: 1,
     crowdScale: 1,
     trafficScale: 1,
@@ -73,6 +80,7 @@ export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
     minPixelRatio: 1,
     shadowMapSize: 1024,
     bloom: false,
+    fxScale: 0.5,
     particleScale: 0.75,
     crowdScale: 1,
     trafficScale: 1,
@@ -90,6 +98,7 @@ export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
     minPixelRatio: 1,
     shadowMapSize: 0,
     bloom: false,
+    fxScale: 0.5,
     particleScale: 0.5,
     crowdScale: 0.8,
     trafficScale: 0.8,

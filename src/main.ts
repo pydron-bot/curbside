@@ -46,7 +46,7 @@ import { addHeatLook } from './render/heatLook';
 import { CombatLook } from './render/combatLook';
 import { PeoplePose } from './render/peoplePose';
 import { PigeonLook } from './render/pigeonMesh';
-import { createRenderer, precompile } from './render/post';
+import { createRenderer } from './render/post';
 import { getQuality, setQualityTier } from './render/quality';
 import { VehicleModels } from './render/vehicleModels';
 import { charVehicle, restoreVehicleLook } from './render/vehicleLooks';
@@ -189,6 +189,7 @@ const breaches = new Breaches(
   look.plans.map((p) => p.shopfronts.filter((s) => s.awning !== null)),
 );
 const effects = new Effects(scene);
+look.useLowResFx(effects.lowRes);
 /** Hydrants, bins, benches, cones: a car knocks them flying (they're back a minute later). */
 const knockables = new Knockables(dressing.knockables);
 const knockFx = new KnockFx(look.props, effects);
@@ -1340,8 +1341,7 @@ const progress = new ProgressDirector({
 function warmShaders(): number {
   const t0 = performance.now();
   try {
-    precompile(renderer, scene, rig.camera);
-    look.cars.precompileDepth(scene, rig.camera);
+    look.precompile(rig.camera);
     resolution.holdOff(1);
   } catch {
     // A lost context mid-compile: the first frames compile instead.

@@ -9,6 +9,7 @@ import {
   PlaneGeometry,
   ShaderMaterial,
   DynamicDrawUsage,
+  GLSL3,
   Vector4,
   type Scene,
   type Texture,
@@ -19,6 +20,7 @@ import { Debris } from './fxDebris';
 import { DECAL, GroundDecals } from './fxDecals';
 import { FLAG, FRAME, InstanceBuffer, ParticlePool, RAMP, type Frame } from './fxParticles';
 import { GLOW, type GlowShape, type GlowSprites } from './glowSprites';
+import type { LowResSource } from './lowResFx';
 import { getQuality } from './quality';
 import { worldUniforms } from './shaderLib';
 import { len2 } from '../core/len';
@@ -72,6 +74,8 @@ export class Effects {
   readonly soft: ParticlePool;
   readonly decals = new GroundDecals();
   readonly debris = new Debris(128);
+  /** The soft particles (smoke, dust) for Look's offscreen path (lowResFx.ts). */
+  readonly lowRes: LowResSource;
   /** Global breeze smoke drifts with (m/s). */
   windX = 0.8;
   windZ = 0.15;
@@ -121,8 +125,15 @@ export class Effects {
     this.softOut = new InstanceBuffer(softCapacity);
     this.atlas = createFxAtlas();
     // Fire, sparks and flashes are their own light: full brightness day and night.
-    this.hotMesh = particleMesh(this.hotOut, this.atlas, { value: { r: 1, g: 1, b: 1 } }, { value: new Vector4(0, 0, 0, 0) }, 'fxHot');
-    this.softMesh = particleMesh(this.softOut, this.atlas, this.ambient, this.hole, 'fxSoft');
+    this.hotMesh = particleMesh(particleGeometry(this.hotOut), particleMaterial(this.atlas, { value: { r: 1, g: 1, b: 1 } }, { value: new Vector4(0, 0, 0, 0) }), 'fxHot');
+    const softGeo = particleGeometry(this.softOut);
+    this.softMesh = particleMesh(softGeo, particleMaterial(this.atlas, this.ambient, this.hole), 'fxSoft');
+    // The same smoke for the offscreen path (Look's LowResFx draws it, not the scene).
+    this.lowRes = {
+      main: this.softMesh,
+      offscreen: particleMesh(softGeo, particleMaterial(this.atlas, this.ambient, this.hole, true), 'fxSoftLow'),
+      instances: this.softOut,
+    };
     // Fire first, smoke over it, both after every other transparent.
     this.hotMesh.renderOrder = 3;
     this.softMesh.renderOrder = 4;
@@ -844,13 +855,53 @@ function upload(mesh: Mesh, out: InstanceBuffer): void {
 
 const INSTANCE_ATTRIBUTES = ['iPos', 'iAxis', 'iCol', 'iFx'] as const;
 
-/**
- * A camera-facing particle quad mesh over `out`'s arrays. Blending is
- * premultiplied: rgb·a is added and a·(1 − add) of what's behind is covered,
- * so one material does both smoke (add 0) and light (add 1). Tone mapping
- * and the output colour space run here like in any built-in material.
- */
-function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb }, hole: { value: Vector4 }, name: string): Mesh {
+/** The particle quads' vertex shader (the colour and depth materials share it). */
+const PARTICLE_VERTEX = /* glsl */ `
+  attribute vec4 iPos;
+  attribute vec4 iAxis;
+  attribute vec4 iCol;
+  attribute vec2 iFx;
+  uniform vec4 uHole;
+  varying vec2 vUv;
+  varying vec4 vCol;
+  varying float vAdd;
+  varying vec3 vClip;
+  varying vec4 vHole;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(iPos.xyz, 1.0);
+    float size = iPos.w;
+    vec2 corner = position.xy;
+    // Stretched along the axis as seen on screen, or a turned square.
+    vec3 axis = mat3(viewMatrix) * iAxis.xyz;
+    float len = length(axis.xy);
+    vec2 offset;
+    if (len > 1e-4) {
+      vec2 dir = axis.xy / len;
+      // Clockwise of dir, so (across, dir) keeps the quad's winding
+      // counter-clockwise: the other way round it faces away and is culled.
+      vec2 across = vec2(dir.y, -dir.x);
+      offset = dir * corner.y * (len + size) + across * corner.x * size;
+    } else {
+      float c = cos(iAxis.w);
+      float s = sin(iAxis.w);
+      offset = vec2(c * corner.x - s * corner.y, s * corner.x + c * corner.y) * size;
+    }
+    mv.xy += offset;
+    gl_Position = projectionMatrix * mv;
+    // The see-through hole: this vertex and the hole's centre on screen, the
+    // hole's radius in NDC at its depth, and the aspect to keep it round.
+    vClip = gl_Position.xyw;
+    vec4 hc = projectionMatrix * viewMatrix * vec4(uHole.xyz, 1.0);
+    vHole = vec4(hc.xy / hc.w, uHole.w * projectionMatrix[1][1] / hc.w, projectionMatrix[1][1] / projectionMatrix[0][0]);
+    float f = iFx.x;
+    vec2 cell = vec2(mod(f, ${ATLAS_CELLS.toFixed(1)}), ${(ATLAS_CELLS - 1).toFixed(1)} - floor(f / ${ATLAS_CELLS.toFixed(1)}));
+    vUv = (cell + uv) / ${ATLAS_CELLS.toFixed(1)};
+    vCol = iCol;
+    vAdd = iFx.y;
+  }`;
+
+/** The instanced quad geometry over `out`'s arrays. */
+function particleGeometry(out: InstanceBuffer): InstancedBufferGeometry {
   const plane = new PlaneGeometry(1, 1);
   const geo = new InstancedBufferGeometry();
   geo.index = plane.index;
@@ -862,52 +913,32 @@ function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb
   geo.setAttribute('iCol', attr(out.colour, 4));
   geo.setAttribute('iFx', attr(out.fx, 2));
   geo.instanceCount = 0;
-  const material = new ShaderMaterial({
+  return geo;
+}
+
+/**
+ * A camera-facing particle quad material. Blending is premultiplied: rgb·a
+ * is added and a·(1 − add) of what's behind is covered, so one material does
+ * both smoke (add 0) and light (add 1); the same "over" accumulates in an
+ * offscreen target and composites back unchanged (lowResFx.ts). Tone mapping
+ * and the output colour space run here like in any built-in material.
+ *
+ * `offscreen`: the low-resolution pass (depth-tested against the buildings
+ * there), with a second output gathering the smoke's view depth weighted the
+ * same way as its colour, (a·w, a), so the composite knows how deep it sits.
+ */
+function particleMaterial(atlas: Texture, ambient: { value: Rgb }, hole: { value: Vector4 }, offscreen = false): ShaderMaterial {
+  return new ShaderMaterial({
     uniforms: { map: { value: atlas }, uAmbient: ambient, uHole: hole },
-    vertexShader: /* glsl */ `
-      attribute vec4 iPos;
-      attribute vec4 iAxis;
-      attribute vec4 iCol;
-      attribute vec2 iFx;
-      uniform vec4 uHole;
-      varying vec2 vUv;
-      varying vec4 vCol;
-      varying float vAdd;
-      varying vec3 vClip;
-      varying vec4 vHole;
-      void main() {
-        vec4 mv = modelViewMatrix * vec4(iPos.xyz, 1.0);
-        float size = iPos.w;
-        vec2 corner = position.xy;
-        // Stretched along the axis as seen on screen, or a turned square.
-        vec3 axis = mat3(viewMatrix) * iAxis.xyz;
-        float len = length(axis.xy);
-        vec2 offset;
-        if (len > 1e-4) {
-          vec2 dir = axis.xy / len;
-          // Clockwise of dir, so (across, dir) keeps the quad's winding
-          // counter-clockwise: the other way round it faces away and is culled.
-          vec2 across = vec2(dir.y, -dir.x);
-          offset = dir * corner.y * (len + size) + across * corner.x * size;
-        } else {
-          float c = cos(iAxis.w);
-          float s = sin(iAxis.w);
-          offset = vec2(c * corner.x - s * corner.y, s * corner.x + c * corner.y) * size;
-        }
-        mv.xy += offset;
-        gl_Position = projectionMatrix * mv;
-        // The see-through hole: this vertex and the hole's centre on screen, the
-        // hole's radius in NDC at its depth, and the aspect to keep it round.
-        vClip = gl_Position.xyw;
-        vec4 hc = projectionMatrix * viewMatrix * vec4(uHole.xyz, 1.0);
-        vHole = vec4(hc.xy / hc.w, uHole.w * projectionMatrix[1][1] / hc.w, projectionMatrix[1][1] / projectionMatrix[0][0]);
-        float f = iFx.x;
-        vec2 cell = vec2(mod(f, ${ATLAS_CELLS.toFixed(1)}), ${(ATLAS_CELLS - 1).toFixed(1)} - floor(f / ${ATLAS_CELLS.toFixed(1)}));
-        vUv = (cell + uv) / ${ATLAS_CELLS.toFixed(1)};
-        vCol = iCol;
-        vAdd = iFx.y;
-      }`,
+    vertexShader: PARTICLE_VERTEX,
     fragmentShader: /* glsl */ `
+      ${
+        offscreen
+          ? `layout(location = 0) out highp vec4 pc_fragColor;
+      layout(location = 1) out highp vec4 pc_fragDepth;
+      #define gl_FragColor pc_fragColor`
+          : ''
+      }
       uniform sampler2D map;
       uniform vec3 uAmbient;
       varying vec2 vUv;
@@ -927,7 +958,9 @@ function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
         gl_FragColor = vec4(gl_FragColor.rgb * a, a * (1.0 - vAdd));
+        ${offscreen ? 'pc_fragDepth = vec4(a * vClip.z, 0.0, 0.0, a);' : ''}
       }`,
+    glslVersion: offscreen ? GLSL3 : null,
     transparent: true,
     depthWrite: false,
     blending: CustomBlending,
@@ -937,6 +970,9 @@ function particleMesh(out: InstanceBuffer, atlas: Texture, ambient: { value: Rgb
     blendSrcAlpha: OneFactor,
     blendDstAlpha: OneMinusSrcAlphaFactor,
   });
+}
+
+function particleMesh(geo: InstancedBufferGeometry, material: ShaderMaterial, name: string): Mesh {
   const mesh = new Mesh(geo, material);
   mesh.frustumCulled = false; // particles move; culled by being few
   mesh.visible = false;
