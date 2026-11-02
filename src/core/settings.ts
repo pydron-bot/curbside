@@ -43,6 +43,8 @@ export interface Settings {
   testTools: boolean;
   /** Testing: labels over the people and cars doing something notable (ui/labelsOverlay.ts; Shift+L). */
   debugLabels: boolean;
+  /** The police scanner's lines and radar pings (game/scanner.ts). */
+  scanner: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -60,6 +62,7 @@ export const DEFAULT_SETTINGS: Settings = {
   godMode: false,
   testTools: false,
   debugLabels: false,
+  scanner: true,
 };
 
 const KEY = 'curbside.settings';
@@ -83,7 +86,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     const v = raw[k];
     if (typeof v === 'number' && Number.isFinite(v)) out[k] = Math.min(1, Math.max(0, v));
   }
-  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics', 'godMode', 'testTools', 'debugLabels'] as const) {
+  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics', 'godMode', 'testTools', 'debugLabels', 'scanner'] as const) {
     const v = raw[k];
     if (typeof v === 'boolean') out[k] = v;
   }

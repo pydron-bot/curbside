@@ -7,7 +7,7 @@ import { MenuNav, overlay, type Panel } from './menu';
 import { onTap } from './tap';
 
 type SliderKey = 'masterVolume' | 'sfxVolume' | 'musicVolume';
-type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics' | 'testTools';
+type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics' | 'testTools' | 'scanner';
 type ChoiceKey = 'quality' | 'steering' | 'perfOverlay';
 
 type Row =
@@ -123,6 +123,7 @@ export class SettingsPanel implements Panel {
           ['full', 'Full'],
         ],
       },
+      { kind: 'toggle', key: 'scanner', label: 'Police scanner', sub: 'Dispatch lines and radar pings' },
     ];
     // Its own section in the shorter column, so both still fit unscrolled on a phone.
     const testingRows: Row[] = [{ kind: 'toggle', key: 'testTools', label: 'Test tools', sub: 'Adds TEST to the pause menu' }];

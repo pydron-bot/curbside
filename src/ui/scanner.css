@@ -1,0 +1,119 @@
+/* --- Police scanner subtitle (src/ui/scannerHud.ts) --- */
+
+/* Keyboard / pad: bottom centre, above the marker prompt (bottom + 60) and
+   the HUD's own prompt (bottom + 18), well under the stamps (42%+). */
+#scanner {
+  --sc: var(--amber);
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--edge-b) + 98px);
+  display: flex;
+  justify-content: center;
+  width: min(64vw, 560px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+#scanner[hidden] {
+  display: none;
+}
+
+/* Touch: the lane along the bottom edge between the resting steer stick
+   (edge + 22 + 116 px) and the right thumb's buttons (pedal pad 204 + FIRE 80;
+   on foot the resting aim pad, 172 + 104), under the marker prompt (bottom +
+   60). Mirrored for left-handed play. */
+body[data-device='touch'] #scanner {
+  left: calc(var(--edge-l) + 150px);
+  right: calc(var(--edge-r) + 292px);
+  bottom: calc(var(--edge-b) + 2px);
+  width: auto;
+  transform: none;
+}
+
+body[data-device='touch'][data-hand='left'] #scanner {
+  left: calc(var(--edge-l) + 292px);
+  right: calc(var(--edge-r) + 150px);
+}
+
+/* The perf overlay has the bottom edge: sit over it. */
+#hud:has(.hud-debug:not([hidden])) #scanner {
+  margin-bottom: 30px;
+}
+
+.sc-box {
+  display: grid;
+  gap: 1px;
+  max-width: 100%;
+  padding: 3px 9px 4px;
+  border-radius: 6px;
+  border-left: 3px solid var(--sc);
+  background: rgb(8 10 16 / 0.72);
+  box-shadow: 0 1px 6px rgb(0 0 0 / 0.45);
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.3s,
+    transform 0.3s cubic-bezier(0.2, 1.3, 0.4, 1);
+}
+
+#scanner.in .sc-box {
+  opacity: 1;
+  transform: none;
+}
+
+.sc-tag {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: 800 8px/1 var(--hud-font);
+  letter-spacing: 0.22em;
+  color: var(--sc);
+}
+
+/* The "on air" light. */
+.sc-tag i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--sc);
+  box-shadow: 0 0 5px var(--sc);
+  animation: sc-air 0.9s steps(2, jump-none) infinite;
+}
+
+.sc-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font: 800 clamp(11px, 3.3vmin, 14px)/1.22 var(--hud-font);
+  letter-spacing: 0.03em;
+  color: var(--ink);
+  text-wrap: balance;
+}
+
+/* A spilled cash van: worth a look. */
+#scanner[data-tone='hot'] {
+  --sc: #ff8a3c;
+}
+
+/* About the player: the police's blue. */
+#scanner[data-tone='you'] {
+  --sc: #5f9bff;
+}
+
+@keyframes sc-air {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-box {
+    transition: opacity 0.3s;
+    transform: none;
+  }
+
+  .sc-tag i {
+    animation: none;
+  }
+}
