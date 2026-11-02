@@ -46,6 +46,20 @@ export function shareFiles(nav: Partial<ShareNav>, files: File[], title: string,
   }
 }
 
+/** Download `files` (a refused or missing share sheet's fallback). Throws if the browser won't. */
+export function saveFiles(files: File[]): void {
+  for (const f of files) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(f);
+    a.download = f.name;
+    a.rel = 'noopener';
+    document.body.append(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
+  }
+}
+
 /**
  * REPORT BUG: opened from the pause card or the Diagnostics sheet, it
  * captures the moment (a screenshot of the game, where the player is, the
@@ -248,16 +262,7 @@ export class BugReportSheet implements Panel {
   private save(r = this.report()): void {
     if (!r) return;
     try {
-      for (const f of this.files(r)) {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(f);
-        a.download = f.name;
-        a.rel = 'noopener';
-        document.body.append(a);
-        a.click();
-        a.remove();
-        window.setTimeout(() => URL.revokeObjectURL(a.href), 30_000);
-      }
+      saveFiles(this.files(r));
       this.status(`Saved ${this.shot ? 'the screenshot and ' : ''}the report`);
     } catch {
       this.copy(r);
