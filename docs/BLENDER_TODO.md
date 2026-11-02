@@ -717,3 +717,18 @@ The held model swaps in by name; the crate needs a one-line code change:
   the lid (the game rings it pink, `#ff5fb4`); then point
   `PICKUP_MODELS.horn` (`src/render/pickupMesh.ts`) and the `things`
   family's list (`src/render/worldProps.ts`) at it.
+
+## 12. The stinger (W3-B)
+
+The stinger is in the game (README → *Driving and combat*, the stinger).
+The strip on the road is built in code (`src/render/stingerLook.ts`) and
+needs no model; nothing shows in the hand and the ammo box stands in for
+its crate:
+
+- **`weapons.glb` root `stinger`**: the strip folded up, a black block
+  ~0.3 × 0.1 × 0.1 m with yellow hinge blocks, carried in one hand like the
+  grenade (thrown, so no `muzzle`). ≤ 120 tris.
+- **`pickups.glb` root `crate_stinger`**: the gun crate with a folded strip
+  on the lid (the game rings it steel, `#cfd8e6`); then point
+  `PICKUP_MODELS.stinger` (`src/render/pickupMesh.ts`) and the `things`
+  family's list (`src/render/worldProps.ts`) at it.
