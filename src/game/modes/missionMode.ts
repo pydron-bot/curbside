@@ -585,10 +585,12 @@ export class MissionMode implements Mode {
 
   /** The job's driven cars: one waiting pulls out when you're close (or it's hit), a routed one turns for its next crossing; the hook carries its car. */
   private tendCars(dt: number): void {
-    const at = this.ctx.deps.player.position;
+    const { player } = this.ctx.deps;
+    const at = player.position;
     for (const c of this.carList) {
       const v = c.v;
-      if (v.damage.wrecked) continue;
+      // The player's now (got in while it waited, carjacked it): no driver for it.
+      if (v.damage.wrecked || v === player.driving) continue;
       if (c.wake > 0 && (len2(v.sim.x - at.x, v.sim.z - at.z) < c.wake || v.damage.health < v.damage.maxHealth)) this.drive(c);
       const ai = v.ai;
       const route = c.route;
@@ -599,7 +601,6 @@ export class MissionMode implements Mode {
     }
     const hook = this.hook;
     if (!hook) return;
-    const { player } = this.ctx.deps;
     const truck = hook.truck.v;
     const h = this.hookView;
     h.driven = !truck.damage.wrecked && player.driving !== truck && (truck.ai !== null || hook.truck.wake > 0);

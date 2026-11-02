@@ -194,6 +194,16 @@ describe("RIBBON CUTTING and QUIETEST CITY: the Mayor's limo and the judges' coa
     }
   });
 
+  it('a waiting car the player has got into gets no driver of its own', () => {
+    const { cars, player, step, begin } = setup();
+    begin('s5-ribbon');
+    const limo = cars.find((c) => c.archetype === 'limo')!;
+    stand(player, limo.sim.x + 2, limo.sim.z);
+    player.enter(limo);
+    step(0.5);
+    expect(limo.ai).toBeNull();
+  });
+
   it("the coach waits for the player, then tours at its own pace, steered for the route's next crossing; the radar follows it", () => {
     const { cars, player, blips, step, begin, bus, progress, shown } = setup();
     // The rest of the story done, so this is its last job.
