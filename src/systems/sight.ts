@@ -1,16 +1,20 @@
 /**
  * Who can see whom: line of sight across the city's buildings and trees,
- * for the police watching the player. Allocation-free (it runs several
- * times a second per unit).
+ * for the police watching the player, and through (or rather not through)
+ * a smoke grenade's cloud (systems/smoke.ts). Allocation-free (it runs
+ * several times a second per unit).
  */
 import type { StaticGrid } from '../world/collision';
+import type { SmokeView } from './smoke';
 import { len2 } from '../core/len';
 
 /**
- * Can someone at (ax, az) see (bx, bz)? Always within `near`; within `far`
- * if no building (or tree) blocks the straight line between them.
+ * Can someone at (ax, az) see (bx, bz)? Never into, out of or through thick
+ * `smoke` (beyond arm's length); otherwise always within `near`, and within
+ * `far` if no building (or tree) blocks the straight line between them.
  */
-export function sees(grid: StaticGrid, ax: number, az: number, bx: number, bz: number, near: number, far: number): boolean {
+export function sees(grid: StaticGrid, ax: number, az: number, bx: number, bz: number, near: number, far: number, smoke?: SmokeView): boolean {
+  if (smoke?.blocks(ax, az, bx, bz)) return false;
   const d = len2(bx - ax, bz - az);
   if (d < near) return true;
   if (d > far) return false;

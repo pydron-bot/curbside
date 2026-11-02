@@ -55,7 +55,8 @@ export type StreetTopic =
   | 'raceCrasher'
   | 'vanNicked'
   | 'noise'
-  | 'spiked';
+  | 'spiked'
+  | 'smoke';
 
 /** The player's own: a star up, a district crossed or a car switched while wanted, and how it ended. */
 export type YouTopic = 'wanted' | 'heading' | 'switched' | 'evaded' | 'respray' | 'busted';
@@ -210,6 +211,7 @@ export const TOPICS: Readonly<Record<ScannerTopic, TopicSpec>> = {
   vanNicked: { priority: 2, cooldown: 90, lines: ["ICE CREAM VAN NICKED IN {place}. QUEUE IN PURSUIT."] },
   noise: { priority: 1, cooldown: 90, lines: ['NOISE COMPLAINT IN {place}. SOME CLOWN WITH AN AIR HORN.', 'NOISE COMPLAINT, {place}. FOOTBALL FAN, PROBABLY.'] },
   spiked: { priority: 3, cooldown: 60, lines: ['UNIT DOWN TO ITS RIMS IN {place}. SUSPECT HAS A STINGER.', "STINGER ACROSS THE ROAD IN {place}. AND IT ISN'T OURS."] },
+  smoke: { priority: 3, cooldown: 60, lines: ['SMOKE ON THE STREET IN {place}. UNITS, NO VISUAL.', 'THICK SMOKE IN {place}. NOT A FIRE, APPARENTLY.'] },
   // The player's own (wanted lines: WANTED_LINES by stars).
   wanted: { priority: 4, cooldown: 0, lines: [] },
   heading: { priority: 4, cooldown: 30, lines: ['{suspect} HEADING INTO {place}.', '{suspect} NOW IN {place}. STAY ON IT.'] },
@@ -259,6 +261,7 @@ export const STREET_TOPICS: Readonly<Partial<Record<StreetWhat, StreetTopic>>> =
   vanNicked: 'vanNicked',
   noise: 'noise',
   spiked: 'spiked',
+  smoke: 'smoke',
 };
 
 /** Street events that end an incident: its scene's pings close by go. */

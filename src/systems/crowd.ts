@@ -73,6 +73,11 @@ export interface PedAgent {
   burning: number;
   /** Seconds left crouched with their arms over their head (scared stiff), then they run. */
   cower: number;
+  /**
+   * Seconds left coughing in a smoke grenade's cloud (systems/smoke.ts):
+   * officers and fighters stop where they are; everyone else walks out of it.
+   */
+  cough: number;
   /** A gang member: the gang's id (game/gangs.ts). */
   gang?: string;
   /**
@@ -174,6 +179,7 @@ export function spawnPed(bx: number, bz: number, edge: number, t: number, rand: 
     ko: false,
     burning: 0,
     cower: 0,
+    cough: 0,
   };
 }
 
@@ -389,6 +395,15 @@ export function stepCrowdPed(
     return null;
   }
 
+  // Coughing in smoke: officers and fighters stand there (no shots, no punches); the rest walk out of it.
+  if (p.cough > 0) {
+    p.cough = Math.max(0, p.cough - dt);
+    const out = p.mode === 'flee';
+    stepPedestrian(p.s, out ? move(p.fleeX, -p.fleeZ, false) : move(0, 0, false), NPC_SPEC, dt);
+    if (out && p.cough === 0) resumeWalking(p);
+    return null;
+  }
+
   if (p.mode === 'fight' || p.mode === 'shoot') return stepHostile(p, target, dt);
   if (p.mode === 'arrest') {
     stepArrest(p, target, dt);
@@ -526,7 +541,7 @@ function dodge(p: PedAgent, v: VehicleState, sp: number) {
 /**
  * Must this ped think every step wherever they are (systems/simLod.ts)?
  * Officers, anyone fighting, shooting or running to an arrest, anyone
- * reeling or on fire, and the people other systems own (gangs, story
+ * reeling, on fire or coughing, and the people other systems own (gangs, story
  * characters, fares: neither passers-by nor a scene's): only the street's
  * ordinary walkers and a scene's people go slower off screen.
  */
@@ -537,6 +552,7 @@ export function fullRatePed(p: PedAgent): boolean {
     p.mode === 'shoot' ||
     p.stagger > 0 ||
     p.burning > 0 ||
+    p.cough > 0 ||
     (p.street !== true && p.scene !== true)
   );
 }

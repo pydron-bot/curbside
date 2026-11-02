@@ -173,12 +173,13 @@ function poseCrowdPed(c: CrowdPed, dt: number, alpha: number, view: Rect | null)
   const m = c.model;
   m.root.position.set(lerp(c.prev.x, s.x, alpha), 0, lerp(c.prev.z, s.z, alpha));
   m.root.rotation.y = lerpAngle(c.prev.heading, s.heading, alpha);
-  // Shooters draw (SWAT an SMG, everyone else a pistol); a hit makes them reel.
-  const shooting = a.mode === 'shoot';
+  // Shooters draw (SWAT an SMG, everyone else a pistol), not while coughing in smoke; a hit makes them reel.
+  const shooting = a.mode === 'shoot' && a.cough <= 0;
   m.hold(shooting ? (c.gun ?? 'pistol') : null, shooting);
   // A phone held up to call or film: the one-handed aim with nothing in the hand.
   if (c.phone && !shooting) m.armed = 'one';
-  m.cowering = a.cower > 0 && a.mode === 'flee';
+  // Crouched in fear, or (an officer, a fighter stopped in smoke) doubled over coughing.
+  m.cowering = (a.cower > 0 && a.mode === 'flee') || (a.cough > 0 && a.mode !== 'flee' && a.mode !== 'down');
   m.followStagger(a.stagger);
   const down = a.mode === 'down';
   const shown = !view || nearView(view, m.root.position.x, m.root.position.z, POSE_MARGIN);

@@ -18,6 +18,9 @@
  * picking out a fleeing suspect first. The stinger is thrown like a
  * grenade or, in a car, dropped out of the back; it lies across the road
  * and bursts the tyres of every car that runs over it (systems/stinger.ts).
+ * A smoke grenade is thrown like a grenade and pours a cloud
+ * (systems/smoke.ts) that people cough their way out of and drivers stop
+ * dead in; the police side is systems/police.ts's.
  */
 import type { EventBus } from '../core/events';
 import { CAR_BODY, VEHICLE_SPECS, isPoliceArchetype } from '../entities/vehicle';
@@ -41,6 +44,7 @@ import {
 } from '../systems/damage';
 import { HORN_RANGE, hornClear, hornHit, startle, startleDriverByHorn } from '../systems/airHorn';
 import { TASER_HIT_RADIUS, TASER_RANGE, TASER_SCARE, TASER_SCARE_SECONDS, stun } from '../systems/taser';
+import { SMOKE_RADIUS, SMOKE_THICK, SmokeClouds, brakeInSmoke, cough } from '../systems/smoke';
 import { bodyDistance, bodyOf, carCircles } from '../systems/physics';
 import { DROP_BEHIND, STINGER_LENGTH, Stingers, burstTyres, stingerAcross, stingerTouches, stungDriver, type Stinger, type StingerPlace } from '../systems/stinger';
 import { FIRE_RADIUS, MIN_THROW, Projectiles, clampThrowToWalls, throwTarget, type ProjectileWorld } from '../systems/projectiles';
@@ -123,6 +127,8 @@ const ARMED_JOIN = 18;
 const COWER_RANGE = 8;
 const COWER_PACE = 0.56;
 const COWER_SECONDS = 2.2;
+/** At most one cough heard this often, s (a crowd in the smoke isn't a choir). */
+const COUGH_EVERY = 0.45;
 
 export interface CombatDeps {
   bus: EventBus;
@@ -143,6 +149,8 @@ export interface CombatDeps {
   focus(): { x: number; z: number };
   /** Wanted stars: with any, the police count as hostile for lock-on. */
   stars(): number;
+  /** Smoke grenades' clouds, shared with the police (Heat); Combat makes its own if left out. */
+  smoke?: SmokeClouds;
   /** The player's body, for punch, recoil and throw poses (optional: tests leave it out). */
   pose?: { punch(step: number): void; shoot(): void; throw?(): void };
 }
@@ -176,6 +184,8 @@ export class Combat {
   readonly projectiles = new Projectiles();
   /** Stingers down on the road. */
   readonly stingers = new Stingers();
+  /** Smoke grenades' clouds (systems/smoke.ts). */
+  readonly smoke: SmokeClouds;
   /** Who the gun is locked on to (a ped), while firing. */
   lock: CrowdPed | null = null;
   /** Where a throw would land now (the landing marker), while one is ready; `blocked`: a wall cut it short. */
@@ -185,6 +195,7 @@ export class Combat {
   comboTimer = 0;
   private sinceShot = Infinity;
   private firePlayerTimer = 0;
+  private coughIn = 0;
   private readonly playerLit = new Set<PedAgent>();
   private readonly candidates: Candidate[] = [];
   private candidateCount = 0;
@@ -200,6 +211,7 @@ export class Combat {
   private readonly world: ProjectileWorld;
 
   constructor(private readonly d: CombatDeps) {
+    this.smoke = d.smoke ?? new SmokeClouds();
     this.world = {
       grid: d.grid,
       rocketHits: (x, z, r, byPlayer) => this.rocketHits(x, z, r, byPlayer),
@@ -207,6 +219,7 @@ export class Combat {
       explode: (kind, x, z, byPlayer) => this.blast(kind, x, z, byPlayer),
       ignite: (x, z, byPlayer) => d.bus.emit({ type: 'ignite', x, z, radius: FIRE_RADIUS, byPlayer }),
       lay: (x, z, dirX, dirZ, byPlayer) => this.layStinger(x, z, dirX, dirZ, byPlayer, false),
+      smoke: (x, z, byPlayer) => this.pourSmoke(x, z, byPlayer),
     };
   }
 
@@ -214,6 +227,7 @@ export class Combat {
   reset(): void {
     this.projectiles.clear();
     this.stingers.clear();
+    this.smoke.clear();
     this.playerLit.clear();
     this.lock = null;
     this.marker.show = false;
@@ -222,13 +236,15 @@ export class Combat {
     this.sinceShot = Infinity;
   }
 
-  /** One sim step: things in flight, fires, people burning, the combo clock. */
+  /** One sim step: things in flight, fires, people burning, smoke, the combo clock. */
   step(dt: number): void {
     this.comboTimer = Math.max(0, this.comboTimer - dt);
     this.sinceShot += dt;
     this.projectiles.step(dt, this.world);
     this.stepFires(dt);
     this.stepStingers(dt);
+    this.smoke.step(dt);
+    this.stepSmoke(dt);
   }
 
   // --- Aim ------------------------------------------------------------------
@@ -297,7 +313,7 @@ export class Combat {
     const kind = p.arsenal.current;
     if (!kind || p.driving || !p.ready || !p.arsenal.ready) return false;
     const spec = WEAPONS[kind];
-    if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov' | 'stinger', aim);
+    if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov' | 'stinger' | 'smoke', aim);
     if (spec.mode === 'horn') return this.blowHorn(aim);
     if (spec.mode === 'taser') return this.tase(aim);
     // Spread before this shot's bloom; running sprays more.
@@ -429,7 +445,7 @@ export class Combat {
     return true;
   }
 
-  private throwIt(kind: 'grenade' | 'molotov' | 'stinger', aim: AimInput): boolean {
+  private throwIt(kind: 'grenade' | 'molotov' | 'stinger' | 'smoke', aim: AimInput): boolean {
     const p = this.d.player;
     const { x, z } = p.ped;
     const blocked = this.throwPoint(WEAPONS[kind].range, aim, this.target);
@@ -764,6 +780,36 @@ export class Combat {
         const res = hurtPed(a, blastDamage(dist, b.radius, b.pedDamage), x, z, 6);
         this.resolve(c, res, 'blast', x, z, byPlayer);
       } else if (dist < 30) scare(a, x, z, 4);
+    }
+  }
+
+  /** A smoke grenade's fuse ran down: the cloud pours (and the scanner hears of the player's). */
+  private pourSmoke(x: number, z: number, byPlayer: boolean): void {
+    this.smoke.add(x, z, byPlayer);
+    this.d.bus.emit({ type: 'smoke', x, z, radius: SMOKE_RADIUS, seconds: SMOKE_THICK, byPlayer });
+    if (byPlayer && this.d.playing()) this.d.bus.emit({ type: 'street', what: 'smoke', x, z });
+  }
+
+  /**
+   * People in a thick cloud cough (officers stop, the rest walk out); drivers
+   * in one brake hard and sit there (not the police: systems/police.ts
+   * confuses those; not road ragers, nor the player's). Coughs are heard
+   * one at a time.
+   */
+  private stepSmoke(dt: number): void {
+    this.coughIn -= dt;
+    if (!this.smoke.thick) return;
+    const d = this.d;
+    for (const c of d.crowd) {
+      const a = c.agent;
+      const cloud = this.smoke.at(a.s.x, a.s.z);
+      if (!cloud || !cough(a, cloud.x, cloud.z) || this.coughIn > 0) continue;
+      this.coughIn = COUGH_EVERY;
+      d.bus.emit({ type: 'cough', x: a.s.x, z: a.s.z, cop: a.role === 'cop' });
+    }
+    for (const v of d.vehicles) {
+      if (!v.ai || v.police || v.pursuit || v.damage.wrecked || v === d.player.driving) continue;
+      if (this.smoke.at(v.sim.x, v.sim.z)) brakeInSmoke(v.ai);
     }
   }
 

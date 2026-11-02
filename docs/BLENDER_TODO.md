@@ -749,3 +749,17 @@ its crate:
   on the lid (the game rings it steel, `#cfd8e6`); then point
   `PICKUP_MODELS.stinger` (`src/render/pickupMesh.ts`) and the `things`
   family's list (`src/render/worldProps.ts`) at it.
+
+## 14. The smoke grenade (W3-B, requested 2026-11-02)
+
+The smoke grenade is in the game (README → *Driving and combat*, the smoke
+grenade) with nothing in the hand and the grenade crate standing in for its
+crate. The cloud is particles and needs no model.
+
+- **`weapons.glb` root `smoke_grenade`**: a grey-green cylinder canister
+  ~0.15 m tall with a lever and pull ring on top, held like the grenade
+  (thrown, so no `muzzle`). ≤ 120 tris.
+- **`pickups.glb` root `crate_smoke`**: the grenade crate with a smoke
+  canister on the lid (the game rings it pale grey, `#b8c4cc`); then point
+  `PICKUP_MODELS.smoke` (`src/render/pickupMesh.ts`) and the `things`
+  family's list (`src/render/worldProps.ts`) at it.

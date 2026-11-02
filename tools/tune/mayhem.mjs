@@ -8,7 +8,7 @@
  * yardstick; run it before and after a change with the same seed.
  *
  *   npx -y -p playwright@1.63.0 node tools/tune/mayhem.mjs [--tier medium|low|high|all] [--time day|night|both]
- *       [--seconds 36] [--seed 7] [--scenario mayhem|single|drive|pursuit] [--no-city-fires] [--shot dir]
+ *       [--seconds 36] [--seed 7] [--scenario mayhem|single|drive|pursuit|smoke] [--no-city-fires] [--shot dir]
  *       [--shots 0.4,3,17] [--fx auto|off|on] [--fx-scale 0.25] [--step 50] [--dpr 3]
  *
  * Frames are stepped `--step` ms apart (coarser runs faster on a busy
@@ -23,7 +23,9 @@
  * drives the same way at 5 stars with the city's busy scenes started round
  * it every 5 s (a race, a chase, an accident, a fight, a tow, a turf war,
  * a fire: the TEST menu's starter, past the holds and the wanted cap, so a
- * worst case), for the draw calls with police and scene cars at once.
+ * worst case), for the draw calls with police and scene cars at once;
+ * smoke pours two smoke grenades' clouds (systems/smoke.ts's MAX_CLOUDS) on
+ * the player on foot, nothing blown up (W3-B's budget check: --seconds 12).
  * --shot saves the last frame to that directory, or with --shots the frames
  * at those seconds (same seed, same moments: before/after comparisons).
  * Smoke work is the soft particles' fragment work in full-resolution screens:
@@ -85,7 +87,7 @@ for (const tier of TIERS) {
     await page.waitForFunction(() => window.__ub, null, { timeout: 90000 });
     await page.waitForTimeout(1500);
     const r = await page.evaluate(
-      async ({ time, seconds, stepMs, cityFires, wantShot, shotsAt, single, drive, pursuit, fx, fxScale }) => {
+      async ({ time, seconds, stepMs, cityFires, wantShot, shotsAt, single, drive, pursuit, smoke, fx, fxScale }) => {
         const u = window.__ub;
         // Rapier loads behind the title in a real frame (stubbed here): load it now, then play.
         u.destruction.preload();
@@ -228,7 +230,13 @@ for (const tier of TIERS) {
             if (u.player.driving) u.player.driving.damage.health = u.player.driving.damage.maxHealth;
             if (k >= first && k % Math.round(5000 / stepMs) === 0) u.testTools.scene(SCENES[nextScene++ % SCENES.length]);
           }
-          if (drive) {
+          if (smoke) {
+            // Two clouds, the most there can be: one on the player, one beside.
+            if (k === first) {
+              u.combat.smoke.add(px, pz + 3, true);
+              u.combat.smoke.add(px - 9, pz - 4, true);
+            }
+          } else if (drive) {
             // nothing blown up
           } else if (single) {
             // Normal play: one car blowing up near you.
@@ -237,7 +245,7 @@ for (const tier of TIERS) {
             for (const w of walls) blast(w.x, w.z);
             for (const c of cars().slice(0, 4)) boom(c.v);
           }
-          if (single || drive) {
+          if (single || drive || smoke) {
             // nothing more
           } else if (k === Math.round(8000 / stepMs)) for (const c of cars().slice(0, 2)) boom(c.v);
           else if (k === Math.round(16000 / stepMs)) {
@@ -334,6 +342,7 @@ for (const tier of TIERS) {
         single: opt.scenario === 'single',
         drive: opt.scenario === 'drive' || opt.scenario === 'pursuit',
         pursuit: opt.scenario === 'pursuit',
+        smoke: opt.scenario === 'smoke',
         fx: opt.fx,
         fxScale: opt['fx-scale'],
       },

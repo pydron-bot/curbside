@@ -3,7 +3,7 @@
  * handles: grenades, molotov bottles and rockets in flight (weapons.glb's
  * `rocket`, `grenade` and `molotov` in one instanced mesh, boxes until it
  * arrives; one draw call only while something flies), the rocket's smoke
- * trail and flame, a grenade's blinking fuse light, the throw marker (a
+ * trail and flame, a grenade's blinking fuse light, a smoke grenade's wisp, the throw marker (a
  * landing ring and a dotted arc from the hand), the red lock-on ring under
  * the target, molotov fire patches and people on fire.
  *
@@ -49,6 +49,8 @@ const ARC_DOTS = 9;
 const GRENADE_COLOUR = new Color('#4b5a2a');
 const BOTTLE_COLOUR = new Color('#c9822b');
 const ROCKET_COLOUR = new Color('#6f7a4a');
+/** A smoke grenade: the grenade model (or box) in pale canister grey until weapons.glb has its own. */
+const SMOKE_COLOUR = new Color('#9aa3a8');
 const WHITE = new Color(1, 1, 1);
 
 /** The models in flight, in weapons.glb, by the index the shader selects them with. */
@@ -196,6 +198,13 @@ export class CombatLook {
           this.debt[i] -= 1;
           fx.flare(p.x, p.y + 0.25, p.z, 0.4, 0.08, 2.6, 1.4, 0.4);
         }
+      } else if (p.kind === 'smoke') {
+        // A thin wisp from the nozzle in flight, building as the fuse runs down.
+        this.debt[i] += dt * (6 + 10 * Math.min(1, p.age)) * scale;
+        while (this.debt[i] >= 1) {
+          this.debt[i] -= 1;
+          fx.puff(p.x, p.y + 0.15, p.z, 0.8, 0.25, 1.1, 0.4, 0, 0.6, 0, 0.9);
+        }
       }
     }
     this.mesh.count = n;
@@ -244,11 +253,11 @@ export class CombatLook {
     if (this.modelled) {
       const s = MODEL_SCALE[kind];
       this.scale.set(s, s, s);
-      this.mesh.setColorAt(i, WHITE);
+      this.mesh.setColorAt(i, p.kind === 'smoke' ? SMOKE_COLOUR : WHITE);
     } else {
       const [sx, sy, sz] = STAND_IN[kind];
       this.scale.set(sx, sy, sz);
-      this.mesh.setColorAt(i, kind === 'rocket' ? ROCKET_COLOUR : kind === 'molotov' ? BOTTLE_COLOUR : GRENADE_COLOUR);
+      this.mesh.setColorAt(i, kind === 'rocket' ? ROCKET_COLOUR : kind === 'molotov' ? BOTTLE_COLOUR : p.kind === 'smoke' ? SMOKE_COLOUR : GRENADE_COLOUR);
     }
     this.sel.array[i] = MODELS.indexOf(kind);
     this.q.setFromEuler(this.e);

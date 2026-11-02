@@ -88,8 +88,12 @@ export type GameEvent =
    * 'rocket' is a rocket leaving the launcher. driveBy: out of a car window.
    */
   | { type: 'shot'; x: number; z: number; dirX: number; dirZ: number; weapon: WeaponKind | null; byPlayer: boolean; driveBy?: boolean }
-  /** A grenade, molotov or stinger was thrown from (x, z) toward (toX, toZ). */
-  | { type: 'throw'; x: number; z: number; toX: number; toZ: number; weapon: 'grenade' | 'molotov' | 'stinger'; byPlayer: boolean }
+  /** A grenade, molotov, stinger or smoke grenade was thrown from (x, z) toward (toX, toZ). */
+  | { type: 'throw'; x: number; z: number; toX: number; toZ: number; weapon: 'grenade' | 'molotov' | 'stinger' | 'smoke'; byPlayer: boolean }
+  /** A smoke grenade (W3-B) started pouring at (x, z): a cloud of up to `radius` m, thick for `seconds` (systems/smoke.ts). */
+  | { type: 'smoke'; x: number; z: number; radius: number; seconds: number; byPlayer: boolean }
+  /** Someone in the smoke started coughing at (x, z) (an officer: `cop`). */
+  | { type: 'cough'; x: number; z: number; cop: boolean }
   /**
    * An air horn blast from (x, z) along (dirX, dirZ) (systems/airHorn.ts's
    * cone, `reach` m). startled: people it sent running; stalled: drivers it
@@ -331,7 +335,9 @@ export type StreetWhat =
   // The player's air horn (W3-B) went off in someone's face: a noise complaint for the scanner.
   | 'noise'
   // The player's stinger (W3-B) burst a police car's tyres.
-  | 'spiked';
+  | 'spiked'
+  // The player's smoke grenade (W3-B) started pouring: the scanner's smoke report.
+  | 'smoke';
 
 /**
  * What a borrowed service vehicle's tool did: the hose on, still going (the

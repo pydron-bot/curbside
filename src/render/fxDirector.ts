@@ -104,6 +104,7 @@ const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
   horn: { r: 1, g: 0.4, b: 0.75 },
   taser: { r: 0.5, g: 0.55, b: 1 },
   stinger: { r: 0.8, g: 0.88, b: 1 },
+  smoke: { r: 0.75, g: 0.82, b: 0.88 },
 };
 
 export class FxDirector {
