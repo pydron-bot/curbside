@@ -221,7 +221,7 @@ export class Accidents implements Scene {
       !isBike(v.archetype) &&
       !v.damage.burning &&
       v !== life.d.player.driving &&
-      !life.d.keep(v)
+      !life.keeps(v)
     );
   }
 

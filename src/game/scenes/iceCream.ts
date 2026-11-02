@@ -193,7 +193,7 @@ export class IceCream implements Scene {
     const life = this.life;
     const p = life.d.player;
     for (const v of life.d.vehicles) {
-      if (v.archetype !== 'ice_cream_van' || !v.ai || v.scene || v.police || v.pursuit || v === p.driving || life.d.keep(v)) continue;
+      if (v.archetype !== 'ice_cream_van' || !v.ai || v.scene || v.police || v.pursuit || v === p.driving || life.keeps(v)) continue;
       if (life.distance(v.sim.x, v.sim.z) > SCENE_RANGE) continue;
       this.track(v, life.now + 10);
     }

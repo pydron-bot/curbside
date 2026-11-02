@@ -77,6 +77,8 @@ export interface FireCrew {
   readonly men: (CrowdPed | null)[];
   /** Which of them is hosing now (the look draws their jets). */
   readonly hosing: boolean[];
+  /** The truck was stolen from under them: they hose on by hand, then walk off (V2-09). */
+  stranded: boolean;
 }
 
 export class FireCrews implements Scene {
@@ -148,7 +150,7 @@ export class FireCrews implements Scene {
     const run = f && ServiceRun.call(life, FIRE_TRUCK, f.x, f.z);
     if (!f || !run) return false;
     f.claimed = true;
-    this.crews.push({ run, fire: f, fireId: f.id, work: 'walk', timer: 0, out: false, men: [null, null], hosing: [false, false] });
+    this.crews.push({ run, fire: f, fireId: f.id, work: 'walk', timer: 0, out: false, men: [null, null], hosing: [false, false], stranded: false });
     life.emit('fireTruck', run.v.sim.x, run.v.sim.z);
     return true;
   }
@@ -167,7 +169,7 @@ export class FireCrews implements Scene {
 
   describe(out: LabelSink): void {
     for (const c of this.crews) {
-      out.car(c.run.v, c.run.phase === 'drive' ? 'FIRE TRUCK → fire' : 'FIRE TRUCK', 'emergency');
+      if (!c.stranded) out.car(c.run.v, c.run.phase === 'drive' ? 'FIRE TRUCK → fire' : 'FIRE TRUCK', 'emergency');
       for (let i = 0; i < c.men.length; i++) {
         const m = c.men[i];
         if (m) out.ped(m, c.hosing[i] ? 'FIREFIGHTER (hosing)' : 'FIREFIGHTER', 'emergency');
@@ -220,7 +222,7 @@ export class FireCrews implements Scene {
     }
     life.clock.start('fire', life.now);
     f.claimed = true;
-    this.crews.push({ run, fire: f, fireId: f.id, work: 'walk', timer: 0, out: false, men: [null, null], hosing: [false, false] });
+    this.crews.push({ run, fire: f, fireId: f.id, work: 'walk', timer: 0, out: false, men: [null, null], hosing: [false, false], stranded: false });
     life.emit('fireTruck', run.v.sim.x, run.v.sim.z);
   }
 
@@ -229,6 +231,7 @@ export class FireCrews implements Scene {
     const run = c.run;
     const f = c.fire;
     const burning = f.alive && f.id === c.fireId;
+    if (c.stranded) return this.onFoot(c, burning, dt);
     if (run.phase === 'drive') {
       // Burnt out before it got there: back to the station, lights off.
       if (!burning) run.leave();
@@ -236,6 +239,8 @@ export class FireCrews implements Scene {
     }
     const phase = run.step(dt);
     if (phase === 'done' || phase === 'failed') {
+      // The player took the truck mid-job: the crew's left on the pavement, hosing on by hand.
+      if (c.out && burning && run.v === this.life.d.player.driving && this.strand(c)) return true;
       this.endCrew(c);
       return false;
     }
@@ -319,6 +324,66 @@ export class FireCrews implements Scene {
       c.work = 'pack';
       c.timer = 0;
     }
+  }
+
+  /** Left behind by their truck: a wave after it, and on with the job. False if nobody's left to. */
+  private strand(c: FireCrew): boolean {
+    let any = false;
+    for (const m of c.men) {
+      if (!m || !this.life.present(m)) continue;
+      any = true;
+      if (m.agent.mode !== 'down') m.model.hail(1.6);
+    }
+    c.stranded = any;
+    return any;
+  }
+
+  /**
+   * A stranded crew: each firefighter in reach hoses from where they stand
+   * (the rest walk in closer), at a crew's pace, so a borrowed fire truck's
+   * monitor beats them to it if the player's quick. Out (or burnt out),
+   * they walk off as passers-by. False once over.
+   */
+  private onFoot(c: FireCrew, burning: boolean, dt: number): boolean {
+    const life = this.life;
+    const f = c.fire;
+    let hoses = 0;
+    let left = 0;
+    for (let i = 0; i < CREW; i++) {
+      const m = c.men[i];
+      c.hosing[i] = false;
+      if (!m) continue;
+      if (!life.present(m)) {
+        c.men[i] = null;
+        continue;
+      }
+      left++;
+      if (!burning || m.agent.mode === 'down') continue;
+      const s = m.agent.s;
+      const d = len2(s.x - f.x, s.z - f.z) || 1;
+      if (d < HOSE_REACH) {
+        life.walkTo(m, s.x, s.z);
+        life.lookAt(m, f.x, f.z);
+        c.hosing[i] = true;
+        hoses++;
+      } else life.walkTo(m, f.x + ((s.x - f.x) / d) * 6, f.z + ((s.z - f.z) / d) * 6);
+    }
+    if (hoses > 0 && this.board.hose(f, dt, hoses)) {
+      life.emit('fireOut', f.x, f.z);
+      burning = false;
+    }
+    if (burning && left > 0) return true;
+    if (f.id === c.fireId) f.claimed = false;
+    for (let i = 0; i < CREW; i++) {
+      const m = c.men[i];
+      c.men[i] = null;
+      c.hosing[i] = false;
+      if (!m || !life.present(m)) continue;
+      // Ordinary people from here (the crowd recycles them once far off).
+      m.agent.street = true;
+      life.giveBack(m);
+    }
+    return false;
   }
 
   /**

@@ -186,7 +186,7 @@ export class Tows implements Scene, SceneDriver {
     let bestScore = 0;
     for (const v of life.d.vehicles) {
       if (v === p.driving || v.ai || v.police || v.ambient || v.scene || v.exported || v.tipped || !v.mesh.root.visible) continue;
-      if (isBike(v.archetype) || (v.sim.body?.reach ?? 2.4) > MAX_REACH || life.d.keep(v) || this.towing(v)) continue;
+      if (isBike(v.archetype) || (v.sim.body?.reach ?? 2.4) > MAX_REACH || life.keeps(v) || this.towing(v)) continue;
       // The car the player just left stays put for them, unless it's a wreck.
       if (v === p.lastDriven && !v.damage.wrecked) continue;
       // A crash left in the lane (scenes/accidents.ts, a dumped getaway car) goes first, like a wreck.
@@ -209,7 +209,8 @@ export class Tows implements Scene, SceneDriver {
     const { truck, car } = t;
     const p = life.d.player;
     t.timer += dt;
-    const carGone = !car.mesh.root.visible || car === p.driving || car.ai !== null || (t.stage === 'drive' && (car.ambient === true || Boolean(car.scene)));
+    // On its way, the car may be taken from under it: a scene's, or the player's (on their winch: the guard).
+    const carGone = !car.mesh.root.visible || car === p.driving || car.ai !== null || (t.stage === 'drive' && (car.ambient === true || Boolean(car.scene) || life.keeps(car)));
     if (carGone) {
       this.drop(t);
       return false;
