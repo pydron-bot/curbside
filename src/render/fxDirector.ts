@@ -97,6 +97,7 @@ const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
   grenade: { r: 0.6, g: 1, b: 0.35 },
   molotov: { r: 1, g: 0.5, b: 0.15 },
   rocket: { r: 0.9, g: 0.35, b: 1 },
+  horn: { r: 1, g: 0.4, b: 0.75 },
 };
 
 export class FxDirector {
@@ -141,6 +142,7 @@ export class FxDirector {
     bus.on('crash', (e) => this.onCrash(e));
     bus.on('explosion', (e) => this.onExplosion(e));
     bus.on('shot', (e) => this.onShot(e));
+    bus.on('airHorn', (e) => this.onAirHorn(e));
     bus.on('bulletHit', (e) => this.onBulletHit(e));
     bus.on('punch', (e) => this.onPunch(e));
     bus.on('pedDown', (e) => this.onPedDown(e));
@@ -305,6 +307,16 @@ export class FxDirector {
       if (close > 0.35) rig.punchFov(5 * close);
     }
     if (e.byPlayer || e.ownCar ? close > 0.25 : close > 0.6) this.hitStop.hit(0.075, 0.06);
+  }
+
+  /** The air horn: pale shock rings rolling out down the cone (Effects' pooled fake lights) and a jolt. */
+  private onAirHorn(e: EventOf<'airHorn'>): void {
+    const fx = this.d.effects;
+    for (let k = 0; k < 3; k++) {
+      const at = 1 + k * 2.6;
+      fx.light(e.x + e.dirX * at, 0.1, e.z + e.dirZ * at, 0.4 + k * 0.6, 1.6 + k * 1.4, 0.55, 0.6, 0.7, 0.28 + k * 0.08, GLOW.ring);
+    }
+    if (this.playing && e.byPlayer) this.d.rig.addTrauma(0.08);
   }
 
   private onShot(e: EventOf<'shot'>): void {

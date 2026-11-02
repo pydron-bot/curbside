@@ -125,6 +125,7 @@ export class PigeonLook {
     look.addGlowSource((_glows, view) => this.flush(look, view));
 
     bus.on('shot', (ev) => this.flocks.startle(ev.x, ev.z, SHOT_REACH));
+    bus.on('airHorn', (ev) => this.flocks.startle(ev.x, ev.z, SHOT_REACH));
     bus.on('explosion', (ev) => this.flocks.startle(ev.x, ev.z, BLAST_REACH));
     bus.on('crash', (ev) => ev.impact > 8 && this.flocks.startle(ev.x, ev.z, CRASH_REACH));
     bus.on('horn', (ev) => this.flocks.startle(ev.x, ev.z, HORN_REACH));

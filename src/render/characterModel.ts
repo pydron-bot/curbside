@@ -393,6 +393,7 @@ export type ArmedPose = false | 'one' | 'two' | 'rocket';
 export function poseFor(weapon: WeaponKind | null): ArmedPose {
   switch (weapon) {
     case 'pistol':
+    case 'horn':
       return 'one';
     case 'smg':
     case 'shotgun':

@@ -64,6 +64,13 @@ export const ICONS = {
       '<path d="M6 14.2l-1 4.6h2.6l1-4.6M11 14.2v3.4h2.4v-3.4" fill="currentColor" opacity=".85"/>' +
       '<path d="M4 10v4.2M15 10v4.2" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
   ),
+  /** An air horn: the canister, the grip and the flared trumpet. */
+  horn: svg(
+    '<rect x="2.5" y="8" width="7" height="10" rx="2" fill="currentColor"/>' +
+      '<path d="M9.5 11.2h3l7.5-4.7v11l-7.5-4.7h-3z" fill="currentColor"/>' +
+      '<path d="M4.5 8V5.8h3V8" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
+      '<path d="M2.5 13h7M17 9v6" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
+  ),
   /** Body armour: a vest. */
   armour: svg(
     '<path d="M8 3h2.2c.4 1.4 1 2 1.8 2s1.4-.6 1.8-2H16l3.5 2.4-1.6 4.4V20a1 1 0 0 1-1 1H7.1a1 1 0 0 1-1-1V9.8L4.5 5.4z" fill="currentColor"/>' +

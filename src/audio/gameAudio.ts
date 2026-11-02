@@ -628,6 +628,8 @@ export class GameAudio {
         return this.onBreach(e);
       case 'shot':
         return this.onShot(e);
+      case 'airHorn':
+        return this.oneShot('horn', e, FALLOFF.gun, e.byPlayer ? 0.9 : 0.7, 0.3, sfx.airHorn, 0.3);
       case 'bulletHit':
         return this.onBulletHit(e);
       case 'punch':
