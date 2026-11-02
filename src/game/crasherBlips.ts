@@ -1,9 +1,10 @@
 /**
  * Gatecrashing on the radar (V2-12): while the player's in a street race
  * (RACE CRASHER), its next junction pulses in the racers' pink, pinned to
- * the rim when it's off the radar; the car they won waits as a gold `★`
- * until they take it. update() once a frame from main.ts; the options
- * objects are reused (Radar.setBlip copies them), so nothing allocates.
+ * the rim when it's off the radar; the car they won is a gold `★` (from
+ * the win, as it finishes and pulls up) until they take it. update() once
+ * a frame from main.ts; the options objects are reused (Radar.setBlip
+ * copies them), so nothing allocates.
  */
 import type { BlipOptions } from '../ui/radar';
 import type { StreetRaces } from './scenes/streetRaces';
@@ -42,7 +43,7 @@ export class CrasherBlips {
       this.nextOn = false;
     }
     const pz = this.races.prize;
-    if (pz && pz.handed) {
+    if (pz) {
       this.prize.x = pz.v.sim.x;
       this.prize.z = pz.v.sim.z;
       this.radar.setBlip(PRIZE, this.prize);

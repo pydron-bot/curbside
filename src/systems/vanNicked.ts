@@ -4,10 +4,11 @@
  * in tests/crashers.test.ts; game/scenes/vanNicked.ts runs them.
  *
  * - **Whose queue**: the city's van taken while it's open (the queue at
- *   its hatch: scenes/iceCream.ts) pays VAN NICKED once per van with
- *   NICK_PAY_QUEUE or more queueing; the player's own chime queue
- *   (Borrowed Blues, scenes/serviceTools.ts) chases the same way and pays
- *   nothing (it's your van already, and a chime is free to press).
+ *   its hatch: scenes/iceCream.ts) pays VAN NICKED with NICK_PAY_QUEUE or
+ *   more queueing (once: left standing, nobody drives it to open again);
+ *   the player's own chime queue (Borrowed Blues, scenes/serviceTools.ts)
+ *   chases the same way and pays nothing (it's your van already, and a
+ *   chime is free to press).
  * - **When**: they stand and stare until the van has gone NICK_OFF m from
  *   where it stood (NICK_WAIT s of it not going and they shrug and walk
  *   on); then they run after the player (in the van, or out of it).
@@ -45,8 +46,8 @@ export function nickStarts(x0: number, z0: number, x: number, z: number): boolea
 }
 
 /** Does driving off with this queue pay VAN NICKED? */
-export function nickPays(own: boolean, queued: number, paidBefore: boolean): boolean {
-  return !own && !paidBefore && queued >= NICK_PAY_QUEUE;
+export function nickPays(own: boolean, queued: number): boolean {
+  return !own && queued >= NICK_PAY_QUEUE;
 }
 
 /** A chaser `age` s in, after their own `limit`, `gap` m behind the player: still after them? */

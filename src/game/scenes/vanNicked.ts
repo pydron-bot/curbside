@@ -8,8 +8,8 @@
  * one who reaches the van parked with its chime on joins the chime queue.
  * Rules pure in systems/vanNicked.ts. Nothing here is heat: they're held
  * by this scene (no witness calls), and hitting one is an assault as ever.
- * The city van's theft pays VAN NICKED once (deps.award; the stamp reads
- * the award). One chase at a time; nothing allocates per step.
+ * The city van's theft pays VAN NICKED (deps.award; the stamp reads the
+ * award): once, as a van the player's left has nobody to open it again. One chase at a time; nothing allocates per step.
  */
 import { speed } from '../../entities/vehicle';
 import {
@@ -57,8 +57,6 @@ export class VanNicked implements Scene {
   private x0 = 0;
   private z0 = 0;
   private queued = 0;
-  /** City vans already paid for. */
-  private readonly paid = new WeakSet<Vehicle>();
   private readonly spot = { x: 0, z: 0 };
   /** How many have started a chase, by whose queue (diagnostics, tests). */
   readonly counts = { city: 0, own: 0, paid: 0, gaveUp: 0, queued: 0 };
@@ -193,8 +191,7 @@ export class VanNicked implements Scene {
     this.life.emit('vanNicked', van.sim.x, van.sim.z);
     if (this.own) this.counts.own++;
     else this.counts.city++;
-    if (nickPays(this.own, this.queued, this.paid.has(van))) {
-      this.paid.add(van);
+    if (nickPays(this.own, this.queued)) {
       this.counts.paid++;
       this.life.d.award?.('vanNicked');
     }

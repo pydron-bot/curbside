@@ -39,7 +39,7 @@ import type { SceneDriver, Vehicle } from '../population';
 import { SCENE_DROP, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { incident, type Chases } from './chases';
 import { raceRank, racing, type LabelSink } from '../debugLabels';
-import { PRIZE_KEEP, PRIZE_OUT, ahead, joinsRace, passes, routeLeg, toNode } from '../../systems/raceCrasher';
+import { PRIZE_FINISH, PRIZE_KEEP, PRIZE_OUT, PRIZE_STUCK, ahead, joinsRace, passes, routeLeg, toNode } from '../../systems/raceCrasher';
 import { holdStill, stopped } from './service';
 import { streetBody } from './people';
 
@@ -95,6 +95,8 @@ export interface Prize {
   /** Seconds since it was won; stood still (for the driver getting out). */
   age: number;
   still: number;
+  /** Still racing to the line (it pulls up past it). */
+  finishing: boolean;
   /** Its driver's out: it's the player's to take. */
   handed: boolean;
 }
@@ -151,8 +153,9 @@ export class StreetRaces implements Scene {
       }
       if (left > 0 && (r.police -= dt) <= 0) this.callPolice(r);
       const racing = this.crash(r);
-      // The player still in it keeps it going (they may have left the rest behind, or seen them all crash out).
-      const far = !racing && (!lead || (life.distance(lead.sim.x, lead.sim.z) > SCENE_DROP && !life.inView(lead.sim.x, lead.sim.z, 4)));
+      // The player still in it keeps it going (they may have left the rest behind, or seen them all crash out); so does their prize on its way to the line.
+      const prizeDue = this.prize !== null && this.prize.finishing && this.prize.v.scene === this.driver;
+      const far = !racing && !prizeDue && (!lead || (life.distance(lead.sim.x, lead.sim.z) > SCENE_DROP && !life.inView(lead.sim.x, lead.sim.z, 4)));
       if ((left === 0 && !racing) || r.age > RACE_TIMEOUT || far) {
         if (r.crasher && !r.crasher.out) this.crasherOut(r, false);
         for (const racer of r.racers) this.letGo(racer);
@@ -310,6 +313,15 @@ export class StreetRaces implements Scene {
   private finish(r: StreetRace, racer: Racer): void {
     const life = this.life;
     const v = racer.v;
+    // The prize, over the line behind the player: it pulls up there.
+    const pz = this.prize;
+    if (pz && pz.finishing && pz.v === v) {
+      racer.done = true;
+      racer.nitro = 0;
+      pz.finishing = false;
+      v.scene = this.conceder;
+      return;
+    }
     if (!r.winner) {
       r.winner = v;
       life.emit('raceWon', v.sim.x, v.sim.z);
@@ -374,7 +386,7 @@ export class StreetRaces implements Scene {
     if (!won) this.crashed.lost++;
   }
 
-  /** The leader of the rest (further down the route, then nearer its next junction) pulls up for the player. */
+  /** The leader of the rest (further down the route, then nearer its next junction) finishes and pulls up for the player. */
   private handOver(r: StreetRace): void {
     let best: Racer | null = null;
     let bestD = Infinity;
@@ -388,12 +400,9 @@ export class StreetRaces implements Scene {
       bestD = d;
     }
     if (!best) return;
-    best.done = true;
-    best.nitro = 0;
     // The last one's still waiting: it goes back to the city.
     this.dropPrize();
-    best.v.scene = this.conceder;
-    this.prize = { v: best.v, age: 0, still: 0, handed: false };
+    this.prize = { v: best.v, age: 0, still: 0, finishing: true, handed: false };
   }
 
   /** The prize: braked to a stop, its driver out and off; kept for the player until they take it or PRIZE_KEEP runs out. */
@@ -406,7 +415,17 @@ export class StreetRaces implements Scene {
       return;
     }
     if (pz.handed) return;
-    // Taken off it some other way (its driver dragged out): it's an ordinary car now.
+    if (pz.finishing) {
+      // Held up short of the line (the player's car across the junction, say): it pulls up there.
+      // Lost its way (off the route after a botched turn), or taking too long about it: the same.
+      pz.still = v.scene === this.driver && stopped(v.sim, 1) ? pz.still + dt : 0;
+      if (v.scene === this.driver && pz.still < PRIZE_STUCK && pz.age < PRIZE_FINISH) return;
+      pz.still = 0;
+      // Let go before the line (the race called off): it pulls up where it is.
+      pz.finishing = false;
+      if (v.ai && (!v.scene || v.scene === this.driver) && !life.lost(v)) v.scene = this.conceder;
+    }
+    // Taken off it some other way (its driver dragged out, another scene): it's an ordinary car now.
     if (!v.ai || v.scene !== this.conceder) {
       pz.handed = true;
       return;

@@ -81,13 +81,12 @@ describe('race crasher: the rules', () => {
 });
 
 describe('van nicked: the rules', () => {
-  it('starts once the van has gone, and pays only for the city queue, once', () => {
+  it('starts once the van has gone, and pays only for the city queue', () => {
     expect(nickStarts(0, 0, NICK_OFF - 0.5, 0)).toBe(false);
     expect(nickStarts(0, 0, 0, NICK_OFF + 0.5)).toBe(true);
-    expect(nickPays(false, NICK_PAY_QUEUE, false)).toBe(true);
-    expect(nickPays(false, NICK_PAY_QUEUE - 1, false)).toBe(false);
-    expect(nickPays(true, 9, false)).toBe(false);
-    expect(nickPays(false, 9, true)).toBe(false);
+    expect(nickPays(false, NICK_PAY_QUEUE)).toBe(true);
+    expect(nickPays(false, NICK_PAY_QUEUE - 1)).toBe(false);
+    expect(nickPays(true, 9)).toBe(false);
   });
 
   it('gives up on its own time, or left behind', () => {

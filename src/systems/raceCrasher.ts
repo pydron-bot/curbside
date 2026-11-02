@@ -12,9 +12,10 @@
  *   you've won. No rubber-banding: the racers drive exactly as they do
  *   without you (no slowing for you, no catching up).
  * - **The prize**: the racer furthest ahead of the rest when you cross the
- *   line (the race's leader, as it were) pulls up and its driver hands it
- *   over: gets out and walks off, the car left for you (no carjacking) and
- *   kept from the city's scenes for PRIZE_KEEP s or until you take it.
+ *   line (the race's leader, as it were) races on to the line, pulls up
+ *   past it and its driver hands it over: gets out and walks off, the car
+ *   left for you (no carjacking) and kept from the city's scenes for
+ *   PRIZE_KEEP s or until you take it.
  */
 import { DIR_VEC, dirHeading, type Dir } from '../world/roads';
 import { BLOCK_SIZE, ROAD_WIDTH } from '../world/city';
@@ -36,6 +37,9 @@ const LEG_HALF_WIDTH = ROAD_WIDTH / 2 + 1;
 export const PRIZE_KEEP = 90;
 /** Its driver gets out once it's stood this long, s. */
 export const PRIZE_OUT = 0.6;
+/** Held up this long short of the line, or not over it this long after the win, it pulls up where it is, s. */
+export const PRIZE_STUCK = 2.5;
+export const PRIZE_FINISH = 20;
 
 /** A race's junction: (ix, iz) reached heading `dir`. */
 export interface RaceNode {
