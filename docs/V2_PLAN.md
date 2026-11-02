@@ -490,6 +490,42 @@ Measured on 0.13 (16 × 16 blocks of 64 m, about 1 km²): 1,404 buildings,
   cities and measures boot time, memory and draw calls on the iPhone, then
   decide the size and the districts.
 
+### W3-B · Five new weapons (owner picked, 2026-11-02)
+
+Chosen from six offered; the owner swapped the fire extinguisher for a
+smoke grenade. Not scheduled yet.
+
+- **AIR HORN** (*Keep It Loud* in your hand): a short cone blast that
+  scatters people, sets off car alarms (V2-10's chain, so DOMINO pays) and
+  makes drivers swerve or stall. Non-lethal. Reuses the hose's knockback
+  cone (V2-09) and a scanner line ("NOISE COMPLAINT IN …"). Cheapest.
+- **STINGER**: a thrown spike strip across a road; cars that cross it
+  burst tyres, slow and slew (police too), a way to shake a chase without
+  shooting. Throw mode, skid marks, handling and damage. One flat prop.
+- **SMOKE GRENADE** (instead of the extinguisher): a thrown canister that
+  pours a thick cloud for about 8–10 s. The cloud blocks the police's line
+  of sight (`systems/sight.ts`): a unit inside or looking through it loses
+  you and drops into search. Cars in it are **confused**: each picks one of
+  crawl to a stop, stop dead with hazards on, or take a wrong turn at the
+  next junction (roughly a third each, so a chase visibly scatters).
+  Officers on foot stop and cough; the helicopter's spotlight can't find
+  you inside it. Civilian drivers brake hard (rear-end shunts welcome);
+  people cough and walk out of it. Tests: sight blocked, the confusion
+  split, timings, no effect once the cloud thins. Risk: smoke is the
+  costliest effect on the iPhone (0.12.1 lightened it): one or two clouds
+  at most, from the existing smoke pool and low-res pass, measured against
+  the draw-call and fill budget at 852×393.
+- **TASER**: stuns one person for a few seconds; on a mugger or fleeing
+  suspect it's HAVE-A-GO HERO / CITIZEN'S ARREST rather than assault, on a
+  cop it's still a crime. Knockdown/get-up, the chase handoff rules, a
+  brief wire effect (no real light).
+- **STICKY CHARGE**: stick it to a car (cash van, the Mayor's limo) and
+  set it off when you choose; a new stamp (PARTING GIFT). Explosion
+  sequence, debris, stamps. A story-job reward.
+
+City life ideas offered the same day (QUIET PLEASE march, roadworks, bin
+day, learner driver, delivery rush, school run) await the owner's picks.
+
 ## Schedule
 
 | Days | Milestone | Items | Exit criteria |

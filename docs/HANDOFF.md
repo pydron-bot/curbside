@@ -110,10 +110,12 @@ best-moment copy's cost in the hit-stop (Diagnostics `moment` lines),
 reaching SHARE within WASTED's 3 s, the share sheet, its fit with real
 safe areas at 852×340; the fresh title and STILL TO COME at 852×340; no
 black lines at the end of headlight beams at night.
-**Next:** the iPhone device pass (V2-14) on 0.16.0, then 1.0.0. Ideas offered
-to the owner for wave 3 (none chosen yet): weapons AIR HORN, STINGER, FIRE
-EXTINGUISHER, TASER, STICKY CHARGE; city life QUIET PLEASE march,
-roadworks, bin day, learner driver, delivery rush, school run. Run at most three
+**Next:** the iPhone device pass (V2-14) on 0.16.0, then 1.0.0. Wave 3
+candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B five new
+weapons the owner picked (AIR HORN, STINGER, SMOKE GRENADE that confuses
+pursuing cops, TASER, STICKY CHARGE). City life ideas offered (QUIET
+PLEASE march, roadworks, bin day, learner driver, delivery rush, school
+run) await the owner's picks. Run at most three
 streams at once (4 cores; SwiftShader smoke tests are CPU-bound). Give
 each stream its own smoke port and scratch dir: `smoke.mjs` starts
 `vite preview` with output ignored, so a taken port silently tests
