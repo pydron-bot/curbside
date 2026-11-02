@@ -7,7 +7,9 @@
  * and getting in brings the same 2 stars. It runs once (`save.opening`).
  *
  * Also the side-mode gate: Chaos Run, frenzies, races, exports and taxi
- * fares stay hidden from a brand-new player until story job 2 is passed.
+ * fares stay hidden from a brand-new player until story job 2 is passed;
+ * and what the title offers each save (V2-17), with PROGRESS's list of
+ * what's still to come.
  *
  * Pure (no three.js): modes/openingMode.ts puts it on the street.
  */
