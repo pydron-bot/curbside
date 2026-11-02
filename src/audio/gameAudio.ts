@@ -630,6 +630,12 @@ export class GameAudio {
         return this.onShot(e);
       case 'airHorn':
         return this.oneShot('horn', e, FALLOFF.gun, e.byPlayer ? 0.9 : 0.7, 0.3, sfx.airHorn, 0.3);
+      case 'stinger':
+        return this.oneShot('impact', e, FALLOFF.punch, 0.75, 0.15, sfx.stingerDown);
+      case 'tyresBurst': {
+        const speed = e.speed;
+        return this.oneShot('crash', e, FALLOFF.crash, e.own ? 1 : 0.8, 0.2, (v) => sfx.tyresBurst(v, speed), e.byPlayer && !e.own ? 0.3 : 0);
+      }
       case 'bulletHit':
         return this.onBulletHit(e);
       case 'punch':

@@ -71,6 +71,12 @@ export const ICONS = {
       '<path d="M4.5 8V5.8h3V8" fill="none" stroke="currentColor" stroke-width="1.6"/>' +
       '<path d="M2.5 13h7M17 9v6" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
   ),
+  /** A stinger: the hinged strip, a row of spikes along it. */
+  stinger: svg(
+    '<rect x="1.5" y="14" width="21" height="4.5" rx="1" fill="currentColor"/>' +
+      '<path d="M1.5 14l1.5-5.5 1.5 5.5M4.5 14l1.5-5.5 1.5 5.5M7.5 14l1.5-5.5 1.5 5.5M10.5 14l1.5-5.5 1.5 5.5M13.5 14l1.5-5.5 1.5 5.5M16.5 14l1.5-5.5 1.5 5.5M19.5 14l1.5-5.5 1.5 5.5" fill="currentColor"/>' +
+      '<path d="M8.5 14v4.5M15.5 14v4.5" stroke="rgb(0 0 0 / .4)" stroke-width="1.2"/>',
+  ),
   /** Body armour: a vest. */
   armour: svg(
     '<path d="M8 3h2.2c.4 1.4 1 2 1.8 2s1.4-.6 1.8-2H16l3.5 2.4-1.6 4.4V20a1 1 0 0 1-1 1H7.1a1 1 0 0 1-1-1V9.8L4.5 5.4z" fill="currentColor"/>' +

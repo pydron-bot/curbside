@@ -4,7 +4,8 @@
  * real slide (the player's drift smoke warms from white through gold to
  * pink as the drift's points pile up); dust off grass; wind streaks past the
  * player's car at speed; and smoke, flames, embers and a flickering fire glow
- * from damaged and burning cars. Also runs each car's body motion
+ * from damaged and burning cars; black streaks from tyres burst on a stinger
+ * and sparks off the rims after. Also runs each car's body motion
  * (fxCarBody.ts). The decision logic (skidAmount, driftTint, isGrass) is
  * pure and unit-tested.
  */
@@ -52,6 +53,10 @@ const SEGMENT = 0.4;
 const FX_RANGE = 110;
 /** Most burning cars that get a fire glow in one frame. */
 const MAX_FIRE_GLOWS = 12;
+/** Burst tyres leave rubber streaks this long after, s, this dark (a skid amount); then the rims spark at this rate, per s. */
+const RIM_STREAK = 3;
+const RIM_MARK = 0.4;
+const RIM_SPARKS = 3;
 /** Nose-up pitch on a ramp's slope, rad. */
 const RAMP_PITCH = -Math.atan2(RAMP_HEIGHT, RAMP_LENGTH);
 
@@ -208,6 +213,8 @@ interface CarFx {
   /** Accel along the car (from the body's velocity tracking), m/s². */
   accel: number;
   svF: number;
+  /** Seconds of shredded-rubber streaks left; -1 until its tyres burst (then it stays ≥ 0). */
+  rim: number;
 }
 
 /** A flickering fire glow to draw this frame. */
@@ -302,7 +309,13 @@ export class DrivingFx {
       sk.accel = rec.accel;
       sk.handbrake = isPlayer && controls !== null && controls.handbrake;
       sk.throttle = isPlayer && controls ? controls.throttle : 0;
-      const amount = skidAmount(sk);
+      // Tyres burst (a stinger): streaks of shredded rubber, then the rims grinding.
+      const flat = v.damage.flat ?? 0;
+      if (flat <= 0) rec.rim = -1;
+      else if (rec.rim < 0) rec.rim = RIM_STREAK;
+      const streak = rec.rim > 0 && sp > 3;
+      if (rec.rim > 0) rec.rim = Math.max(0, rec.rim - dt);
+      const amount = Math.max(skidAmount(sk), streak ? RIM_MARK : 0);
       const w = WHEELS[v.archetype] ?? DEFAULT_WHEELS;
       const sin = Math.sin(s.heading);
       const cos = Math.cos(s.heading);
@@ -340,6 +353,10 @@ export class DrivingFx {
             this.fx.soft.b[i] = 0.27;
           }
         }
+      }
+      if (flat > 0 && !streak && sp > 6 && Math.random() < dt * RIM_SPARKS * scale) {
+        const side = Math.random() < 0.5;
+        this.fx.sparks(side ? lx : qx, 0.15, side ? lz : qz, 2, 2, 5, -s.vx / sp, -s.vz / sp);
       }
       if (isPlayer) this.speedStreaks(v, sp, dt, scale);
     }
@@ -474,7 +491,7 @@ export class DrivingFx {
   private record(v: Vehicle): CarFx {
     let rec = this.cars.get(v);
     if (!rec) {
-      rec = { body: new CarBody(), left: new SkidTrail(), right: new SkidTrail(), smokeDebt: 0, fireDebt: 0, dustDebt: 0, accel: 0, svF: 0 };
+      rec = { body: new CarBody(), left: new SkidTrail(), right: new SkidTrail(), smokeDebt: 0, fireDebt: 0, dustDebt: 0, accel: 0, svF: 0, rim: -1 };
       this.cars.set(v, rec);
     }
     return rec;
