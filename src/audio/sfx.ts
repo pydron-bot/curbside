@@ -272,6 +272,58 @@ export function ignite(v: Voice): void {
   thump(v, t + 0.04, 90, 40, 0.2, 0.6, 0.08);
 }
 
+/**
+ * A smoke grenade starting to pour (W3-B): the pop of the cap, then a long
+ * hiss of gas through the nozzle that settles into a steady rush and tails
+ * off. ~3 s (the cloud itself is silent after that).
+ */
+export function smokePop(v: Voice): void {
+  const t = v.t;
+  const b = v.bank;
+  noiseHit(v, b.white, t, 'bandpass', 1800, 1.2, 0.6, 0.001, 0.02);
+  thump(v, t, 260, 120, 0.05, 0.35, 0.04);
+  const len = 3;
+  const n = v.noise(b.white, t + 0.02, t + len);
+  const hp = v.filter('highpass', 2400 * vary(0.08), 0.5);
+  sweep(hp.frequency, t + 0.02, 4200, 2400, 0.4);
+  const lp = v.filter('lowpass', 9000, 0.5);
+  const g = v.gain();
+  v.chain(n, hp, lp, g, v.input);
+  g.gain.setValueAtTime(0, t + 0.02);
+  g.gain.linearRampToValueAtTime(0.55, t + 0.08);
+  g.gain.setTargetAtTime(0.3, t + 0.3, 0.4);
+  g.gain.setTargetAtTime(0, t + len - 0.9, 0.3);
+  // The rush of the cloud billowing out, low under the hiss.
+  const r = v.noise(b.pink, t + 0.05, t + len);
+  const bp = v.filter('bandpass', 500, 0.8);
+  const rg = v.gain();
+  v.chain(r, bp, rg, v.input);
+  rg.gain.setValueAtTime(0, t + 0.05);
+  rg.gain.linearRampToValueAtTime(0.35, t + 0.5);
+  rg.gain.setTargetAtTime(0, t + 1.4, 0.5);
+}
+
+/**
+ * Someone coughing in the smoke: two or three dry barks of breathy noise
+ * through a throaty band, pitched lower for an officer (`deep`).
+ */
+export function cough(v: Voice, deep: boolean): void {
+  const t = v.t;
+  const hacks = Math.random() < 0.5 ? 2 : 3;
+  const centre = (deep ? 700 : 1000) * vary(0.15);
+  for (let i = 0; i < hacks; i++) {
+    const at = t + i * rnd(0.16, 0.24);
+    const n = v.noise(v.bank.pink, at, at + 0.22);
+    const bp = v.filter('bandpass', centre * vary(0.08), 1.6);
+    sweep(bp.frequency, at, centre * 1.3, centre * 0.8, 0.1);
+    const g = v.gain();
+    v.chain(n, bp, g, v.input);
+    perc(g.gain, at, i === 0 ? 0.9 : 0.6, 0.008, 0.045);
+    // The voiced edge of the bark.
+    thump(v, at, deep ? 150 : 210, deep ? 110 : 160, 0.06, 0.12, 0.04, 'triangle');
+  }
+}
+
 /** A bullet passing close by: a short tearing hiss. */
 export function whiz(v: Voice): void {
   const t = v.t;
@@ -537,6 +589,86 @@ export function airHorn(v: Voice): void {
   g.gain.setValueAtTime(0.5, t + len - 0.1);
   g.gain.linearRampToValueAtTime(0, t + len);
   noiseHit(v, v.bank.white, t, 'highpass', 3000, 0.7, 0.18, 0.005, 0.05);
+}
+
+/**
+ * A taser (W3-B): the cartridge's nitrogen pop and a snap of the doors,
+ * then, if the darts land, ~0.8 s of the current: a dry, fast ticking
+ * crackle (one noise source gated ~20 times a second, each tick a little
+ * different) over a thin electrical buzz.
+ */
+export function taser(v: Voice, hit: boolean): void {
+  const t = v.t;
+  const p = vary(0.05);
+  noiseHit(v, v.bank.white, t, 'bandpass', 2600 * p, 0.9, 0.55, 0.001, 0.012);
+  thump(v, t, 320 * p, 120, 0.04, 0.3, 0.015, 'triangle');
+  if (!hit) return;
+  const start = t + 0.05;
+  const len = 0.8;
+  const n = v.noise(v.bank.white, start, start + len + 0.05);
+  const hp = v.filter('highpass', 2200 * p, 0.8);
+  const ticks = v.gain();
+  v.chain(n, hp, ticks, v.input);
+  ticks.gain.setValueAtTime(0, start);
+  for (let at = start; at < start + len; at += 0.045 + Math.random() * 0.012) {
+    const peak = (0.35 + Math.random() * 0.35) * (1 - (at - start) / (len * 1.6));
+    ticks.gain.setValueAtTime(peak, at);
+    ticks.gain.setTargetAtTime(0, at + 0.002, 0.006);
+  }
+  const buzz = v.osc('sawtooth', 110 * p, start, start + len + 0.05);
+  const bp = v.filter('bandpass', 1800, 2);
+  const bg = v.gain();
+  v.chain(buzz, bp, bg, v.input);
+  bg.gain.setValueAtTime(0, start);
+  bg.gain.linearRampToValueAtTime(0.12, start + 0.02);
+  bg.gain.setValueAtTime(0.1, start + len - 0.08);
+  bg.gain.linearRampToValueAtTime(0, start + len);
+}
+
+/**
+ * A stinger (W3-B) going down: it hits the tarmac and the hinged sections
+ * slap out one after another, a run of tinny clanks with a little ring to
+ * them, quickening as it unrolls. ~0.45 s.
+ */
+export function stingerDown(v: Voice): void {
+  const t = v.t;
+  const b = v.bank;
+  noiseHit(v, b.brown, t, 'lowpass', 900, 0.7, 0.6, 0.002, 0.03);
+  let at = t + 0.05;
+  for (let i = 0; i < 6; i++) {
+    noiseHit(v, b.white, at, 'bandpass', rnd(2200, 3400), 2.5, 0.5 - i * 0.05, 0.0008, 0.012);
+    const o = v.osc('triangle', rnd(1900, 2900), at, at + 0.12);
+    const g = v.gain();
+    v.chain(o, g, v.input);
+    perc(g.gain, at, 0.08, 0.001, 0.02);
+    at += 0.075 - i * 0.008;
+  }
+}
+
+/**
+ * Tyres bursting on a stinger: a sharp double bang (front, then rear) with
+ * a thump under it, a hiss of air, then the shredded rubber flapping round,
+ * slowing as the car does. `speed` (m/s) quickens the flaps. ~1.3 s.
+ */
+export function tyresBurst(v: Voice, speed: number): void {
+  const t = v.t;
+  const b = v.bank;
+  const k = clamp01(speed / 25);
+  for (const at of [t, t + rnd(0.06, 0.12)]) {
+    noiseHit(v, b.white, at, 'highpass', 1800, 0.7, 0.9, 0.0005, 0.018);
+    thump(v, at, 160, 55, 0.08, 0.6, 0.04);
+  }
+  noiseHit(v, b.white, t + 0.02, 'bandpass', 5200, 0.8, 0.25, 0.01, 0.12);
+  // The flaps: a rubbery slap per wheel turn, spacing out as it slows.
+  let gap = 0.05 + 0.06 * (1 - k);
+  let at = t + 0.18;
+  let level = 0.45;
+  while (at < t + 1.3) {
+    noiseHit(v, b.brown, at, 'bandpass', rnd(300, 450), 1.2, level, 0.002, 0.018);
+    at += gap;
+    gap *= 1.08;
+    level *= 0.94;
+  }
 }
 
 /**

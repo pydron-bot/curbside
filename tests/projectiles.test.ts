@@ -27,6 +27,7 @@ function world(rects = [] as Array<{ minX: number; minZ: number; maxX: number; m
     bottleHits: () => false,
     explode: (kind, x, z, byPlayer) => booms.push({ kind, x, z, byPlayer }),
     ignite: (x, z) => fires.push({ x, z }),
+    lay: () => {},
   };
   return { w, booms, fires };
 }

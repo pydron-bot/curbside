@@ -41,6 +41,9 @@ const FIGHT_SECONDS = 4;
 const SEE_THROUGH = 2.8;
 /** Where crash sparks, flares and chips start, m: just over a car's roof. */
 const CRASH_Y = 1.6;
+/** A taser's wires show this long on a hit (crackling while the current runs), on a miss just a flick, s. */
+const TASER_WIRE_SECONDS = 0.8;
+const TASER_WIRE_MISS = 0.25;
 
 /** What the director needs from the player (the game's Player fits). */
 export interface FxPlayer {
@@ -67,9 +70,10 @@ export interface FxDeps {
   audio?: { setRain(amount: number): void };
   /**
    * Where a shot's muzzle really is (the end of the barrel in the shooter's
-   * hand, `out` in world space), or false to keep the shot's own point.
+   * hand, `out` in world space), or false to keep the shot's own point
+   * (taser darts too).
    */
-  muzzle?: (e: EventOf<'shot'>, out: { x: number; y: number; z: number }) => boolean;
+  muzzle?: (e: Pick<EventOf<'shot'>, 'x' | 'z' | 'dirX' | 'dirZ' | 'driveBy'>, out: { x: number; y: number; z: number }) => boolean;
   /**
    * The colour (linear, into `out`) of the wall a carless blast is about to
    * breach (the destruction test), or false: it throws lumps of that wall
@@ -98,6 +102,9 @@ const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
   molotov: { r: 1, g: 0.5, b: 0.15 },
   rocket: { r: 0.9, g: 0.35, b: 1 },
   horn: { r: 1, g: 0.4, b: 0.75 },
+  taser: { r: 0.5, g: 0.55, b: 1 },
+  stinger: { r: 0.8, g: 0.88, b: 1 },
+  smoke: { r: 0.75, g: 0.82, b: 0.88 },
 };
 
 export class FxDirector {
@@ -143,6 +150,9 @@ export class FxDirector {
     bus.on('explosion', (e) => this.onExplosion(e));
     bus.on('shot', (e) => this.onShot(e));
     bus.on('airHorn', (e) => this.onAirHorn(e));
+    bus.on('taser', (e) => this.onTaser(e));
+    bus.on('stinger', (e) => this.onStinger(e));
+    bus.on('tyresBurst', (e) => this.onTyresBurst(e));
     bus.on('bulletHit', (e) => this.onBulletHit(e));
     bus.on('punch', (e) => this.onPunch(e));
     bus.on('pedDown', (e) => this.onPedDown(e));
@@ -319,6 +329,56 @@ export class FxDirector {
     if (this.playing && e.byPlayer) this.d.rig.addTrauma(0.08);
   }
 
+  /**
+   * The taser: two wires from the one in hand to the darts (Effects.wire,
+   * streaks in the hot batch), a blue pop at the nose and, on a hit, sparks
+   * and a cold flicker on the ground (pooled fake lights, no real light).
+   */
+  private onTaser(e: EventOf<'taser'>): void {
+    const fx = this.d.effects;
+    const m = this.muzzleAt;
+    const inHand = this.d.muzzle?.(e, m) ?? false;
+    const x = inHand ? m.x : e.x;
+    const z = inHand ? m.z : e.z;
+    fx.wire(x, z, e.toX, e.toZ, e.hit ? TASER_WIRE_SECONDS : TASER_WIRE_MISS);
+    fx.flare(x, inHand ? m.y : 1.15, z, 0.5, 0.07, 1.4, 1.7, 2.6);
+    if (e.hit) {
+      fx.sparks(e.toX, 1, e.toZ, Math.max(3, Math.round(8 * fx.scale)), 2, 5, 0, 0);
+      fx.light(e.toX, 0.1, e.toZ, 0.4, 1.4, 0.3, 0.42, 1, 0.45, GLOW.disc);
+      fx.light(e.toX, 0.1, e.toZ, 0.3, 1.1, 0.25, 0.35, 0.9, TASER_WIRE_SECONDS, GLOW.ring);
+    }
+    if (this.playing && e.byPlayer) {
+      this.lastCombat = this.realTime;
+      this.d.rig.addTrauma(0.05);
+    }
+  }
+
+  /** A stinger going down: grit kicked up along it as it unrolls. */
+  private onStinger(e: EventOf<'stinger'>): void {
+    const fx = this.d.effects;
+    const n = Math.max(2, Math.round(5 * fx.scale));
+    for (let k = 0; k < n; k++) {
+      const u = (k / (n - 1) - 0.5) * e.length;
+      fx.puff(e.x + e.ax * u, 0.15, e.z + e.az * u, 0.55, 0.3, 1.1, 0.3, 0, 0.3, 0, 0.6);
+    }
+  }
+
+  /** Tyres burst on a stinger: sparks off the rims, shreds of rubber flung out, a puff of dust; a jolt in your own car. */
+  private onTyresBurst(e: EventOf<'tyresBurst'>): void {
+    const fx = this.d.effects;
+    const scale = fx.scale;
+    fx.sparks(e.x, 0.35, e.z, Math.round((6 + Math.min(10, e.speed * 0.4)) * scale), 3, 6 + e.speed * 0.3, 0, 0);
+    fx.puff(e.x, 0.3, e.z, 0.3, 0.6, 2 + e.speed * 0.05, 0.4);
+    for (let k = Math.round(3 + Math.min(4, e.speed / 6)); k > 0; k--) {
+      const a = Math.random() * Math.PI * 2;
+      const sp = 1.5 + Math.random() * 3;
+      fx.debris.throw(e.x, 0.3, e.z, Math.cos(a) * sp, 2 + Math.random() * 3, Math.sin(a) * sp, 0.12 + Math.random() * 0.14, 0.03, 0.08 + Math.random() * 0.1, 0.05, 0.05, 0.055, 6, 8);
+    }
+    if (!e.own || !this.playing) return;
+    this.d.rig.addTrauma(0.3);
+    this.hitStop.hit(0.04, 0.08);
+  }
+
   private onShot(e: EventOf<'shot'>): void {
     const rocket = e.weapon === 'rocket';
     const power = rocket ? 1.9 : e.weapon === 'shotgun' ? 1.6 : e.weapon === 'smg' ? 0.85 : e.weapon ? 1 : 0.65;
@@ -420,7 +480,7 @@ export class FxDirector {
     if (e.cause === 'vehicle') {
       this.d.rig.addTrauma(0.14);
       this.hitStop.hit(0.04, 0.15);
-    } else if (e.cause === 'shot' || e.cause === 'punch') {
+    } else if (e.cause === 'shot' || e.cause === 'punch' || e.cause === 'taser') {
       this.hitStop.hit(0.045, 0.12);
     }
   }

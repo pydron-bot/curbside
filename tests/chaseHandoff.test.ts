@@ -18,13 +18,16 @@ import {
   ARREST_GAP,
   FORGIVE_SECONDS,
   HELPED_SECONDS,
+  TASED_ARREST_SECONDS,
   TOOK_GETAWAY_STARS,
   chaseHandoff,
   citizensArrest,
   forgivenBump,
+  tasedArrest,
   type Handoff,
 } from '../src/systems/chaseHandoff';
 import { stepCrowdPed } from '../src/systems/crowd';
+import { stun } from '../src/systems/taser';
 import { createDamage, markPlayerHit } from '../src/systems/damage';
 import { collidePedStatic, collidePedVehicle, collideVehicleStatic, collideVehicles } from '../src/systems/physics';
 import { UNITS_BY_STARS, holdsFire } from '../src/systems/police';
@@ -37,6 +40,7 @@ import { random } from './helpers';
 import { SAFEHOUSE } from '../src/game/modes/places';
 import { CHASE_WAIT, CRASH_BY, onOpeningRoad, openingPlan, pickOpeningStop } from '../src/game/opening';
 import type { StagedGetaway } from '../src/game/scenes/chases';
+import { Muggings } from '../src/game/scenes/muggings';
 import { dressCity } from '../src/world/dressing';
 import { generatePickups } from '../src/world/pickups';
 import { placeKickers, placeRamps } from '../src/world/ramps';
@@ -79,6 +83,12 @@ describe('chase handoff: the decision table', () => {
     expect(citizensArrest(10, 10 - HELPED_SECONDS - 0.1, 5)).toBe(false);
     expect(citizensArrest(10, 8, ARREST_GAP + 1)).toBe(false);
     expect(citizensArrest(10, -Infinity, 1)).toBe(false);
+  });
+
+  it("a suspect the player tased, cuffed soon after, is their citizen's arrest", () => {
+    expect(tasedArrest(10, 4)).toBe(true);
+    expect(tasedArrest(10, 10 - TASED_ARREST_SECONDS - 0.1)).toBe(false);
+    expect(tasedArrest(10, -Infinity)).toBe(false);
   });
 
   it('taking a getaway lands on 2 stars, witnessed or not, and never lowers more', () => {
@@ -438,6 +448,93 @@ describe('chase handoff: in the city', () => {
     const o = c.units[0].officers[0];
     w.bus.emit({ type: 'bulletHit', x: o.agent.s.x + 0.3, z: o.agent.s.z, target: 'ped', byPlayer: true });
     expect(c.crime).toBe(true);
+  });
+
+  it("TASER: a foot chase suspect tased gives up where they fall; the cuffs are a CITIZEN'S ARREST on top of the HAVE-A-GO, no heat", () => {
+    const w = world(21);
+    expect(w.life.chases.begin('foot')).toBe(true);
+    const c = w.life.chases.chases[0];
+    const s = c.suspect!;
+    w.run(1);
+    // As Combat.tase does it: the stun, then the knock-down reported.
+    const a = s.agent;
+    expect(stun(a, a.s.x - 3, a.s.z)).toBe(true);
+    w.bus.emit({ type: 'pedDown', x: a.s.x, z: a.s.z, cause: 'taser', byPlayer: true, suspect: a.suspect });
+    expect(w.life.chases.joined.haveAGo).toBe(1);
+    expect(c.surrendered).toBe(true);
+    const arrested = w.run(40, () => w.life.chases.ended.arrested > 0);
+    expect(arrested).toBe(true);
+    expect(c.end).toBe('arrested');
+    expect(w.life.chases.joined.citizensArrest).toBe(1);
+    expect(w.awards).toContain('citizensArrest');
+    expect(w.awards).toContain('haveAGo');
+    expect(w.paid).toContain("CITIZEN'S ARREST");
+    expect(w.heat.wanted.heat).toBe(0);
+    expect(w.shotsAtPlayer).toEqual([]);
+  });
+
+  it("TASER: up again before the officers arrive, a tased suspect kneels for them rather than running; a chase not tased isn't the player's arrest", () => {
+    const w = world(21);
+    expect(w.life.chases.begin('foot')).toBe(true);
+    const c = w.life.chases.chases[0];
+    const s = c.suspect!;
+    // The officers held well back: the stun wears off first.
+    for (const u of c.units) for (const o of u.officers) Object.assign(o.agent.s, { x: s.agent.s.x + 60, z: s.agent.s.z });
+    stun(s.agent, s.agent.s.x - 3, s.agent.s.z);
+    w.bus.emit({ type: 'pedDown', x: s.agent.s.x, z: s.agent.s.z, cause: 'taser', byPlayer: true, suspect: true });
+    const at = { x: s.agent.s.x, z: s.agent.s.z };
+    w.run(5);
+    expect(s.agent.mode).not.toBe('down');
+    expect(s.model.arrested).toBe(true);
+    expect(Math.hypot(s.agent.s.x - at.x, s.agent.s.z - at.z)).toBeLessThan(3);
+
+    // A punch floors one (HAVE-A-GO), but the arrest that follows is the police's own.
+    const v = world(21);
+    expect(v.life.chases.begin('foot')).toBe(true);
+    const d = v.life.chases.chases[0];
+    const t = d.suspect!;
+    v.bus.emit({ type: 'pedDown', x: t.agent.s.x, z: t.agent.s.z, cause: 'punch', byPlayer: true, suspect: true });
+    expect(d.surrendered).toBe(false);
+    expect(d.tasedAt).toBe(-Infinity);
+  });
+
+  it('TASER: a mugger tased drops the bag (no assault); handed back, HAVE-A-GO HERO', () => {
+    const w = world(21);
+    const muggings = w.life.scenes.find((x): x is Muggings => x instanceof Muggings)!;
+    expect(muggings.force()).toBe(true);
+    const m = muggings.muggings[0];
+    expect(w.run(15, () => m.phase === 'run')).toBe(true);
+    const a = m.mugger.agent;
+    expect(a.suspect).toBe(true);
+    w.player.ped.x = a.s.x - 3;
+    w.player.ped.z = a.s.z;
+    stun(a, a.s.x - 3, a.s.z);
+    w.bus.emit({ type: 'pedDown', x: a.s.x, z: a.s.z, cause: 'taser', byPlayer: true, suspect: true });
+    w.step();
+    expect(w.heat.wanted.heat).toBe(0);
+    const bag = muggings.bags.find((b) => b.until > w.life.now)!;
+    expect(bag).toBeDefined();
+    w.player.ped.x = bag.x;
+    w.player.ped.z = bag.z;
+    w.step();
+    expect(w.awards).toContain('haveAGo');
+    expect(w.paid).toContain('HAVE-A-GO HERO');
+  });
+
+  it("TASER: an officer tased is an attack on the chase's police and a crime", () => {
+    const w = world(21);
+    expect(w.life.chases.begin('foot')).toBe(true);
+    const c = w.life.chases.chases[0];
+    const o = c.units[0].officers[0];
+    // Done in plain view, the player beside them.
+    w.player.ped.x = o.agent.s.x - 3;
+    w.player.ped.z = o.agent.s.z;
+    w.step();
+    stun(o.agent, o.agent.s.x - 3, o.agent.s.z);
+    w.bus.emit({ type: 'pedDown', x: o.agent.s.x, z: o.agent.s.z, cause: 'taser', byPlayer: true, cop: true });
+    expect(c.crime).toBe(true);
+    expect(w.heat.wanted.heat).toBeGreaterThan(0);
+    expect(w.life.chases.joined.haveAGo).toBe(0);
   });
 
   it('one bump per chase car is forgiven just after touching the getaway; the next marks the chase', () => {

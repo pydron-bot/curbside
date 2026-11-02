@@ -53,6 +53,11 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
   { id: 'ammo-smg', kind: 'ammo', name: 'SMG DRUM', blurb: '+90 rounds (and the SMG)', price: 400, weapon: 'smg' },
   { id: 'ammo-shotgun', kind: 'ammo', name: 'SHOTGUN SHELLS', blurb: '+12 shells (and the shotgun)', price: 300, weapon: 'shotgun' },
   { id: 'ammo-grenade', kind: 'ammo', name: 'GRENADES', blurb: 'A bag of grenades', price: 500, weapon: 'grenade' },
+  // W3-B: the non-lethal and getaway kit, a crate's worth each (WEAPONS[k].pickupAmmo).
+  { id: 'ammo-horn', kind: 'ammo', name: 'AIR HORN', blurb: '+6 blasts: scatters a crowd, sets off car alarms', price: 200, weapon: 'horn' },
+  { id: 'ammo-taser', kind: 'ammo', name: 'TASER', blurb: '+4 cartridges: drops one person, no harm done', price: 450, weapon: 'taser' },
+  { id: 'ammo-stinger', kind: 'ammo', name: 'STINGERS', blurb: '+2 spike strips: burst the tyres behind you', price: 500, weapon: 'stinger' },
+  { id: 'ammo-smoke', kind: 'ammo', name: 'SMOKE GRENADES', blurb: '+2 canisters: the police lose you in the cloud', price: 600, weapon: 'smoke' },
 ];
 
 export type BuyCheck = 'ok' | 'owned' | 'broke';

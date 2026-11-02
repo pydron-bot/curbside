@@ -717,3 +717,49 @@ The held model swaps in by name; the crate needs a one-line code change:
   the lid (the game rings it pink, `#ff5fb4`); then point
   `PICKUP_MODELS.horn` (`src/render/pickupMesh.ts`) and the `things`
   family's list (`src/render/worldProps.ts`) at it.
+
+## 12. The taser (W3-B, requested 2026-11-02)
+
+The taser weapon is in the game (README → *Driving and combat*, the taser)
+with nothing in the hand and the ammo box standing in for its crate. The
+held model swaps in by name; the crate needs a one-line code change:
+
+- **`weapons.glb` root `taser`** (same grip/`muzzle` contract as the
+  pistol, §1/§8): a stubby yellow-and-black pistol shape ~0.18 m long,
+  a square cartridge on its nose, held one-handed in the pistol's `Aim`
+  pose; `muzzle` at the cartridge's face, where the wires leave (the code
+  guesses 0.17 m ahead, 0.05 m up). ≤ 120 tris. No wires or darts: the
+  game draws those as streaks.
+- **`pickups.glb` root `crate_taser`**: the gun crate with a taser on the
+  lid (the game rings it electric blue, `#7f8cff`); then point
+  `PICKUP_MODELS.taser` (`src/render/pickupMesh.ts`) and the `things`
+  family's list (`src/render/worldProps.ts`) at it.
+
+## 13. The stinger (W3-B, requested 2026-11-02)
+
+The stinger is in the game (README → *Driving and combat*, the stinger).
+The strip on the road is built in code (`src/render/stingerLook.ts`) and
+needs no model; nothing shows in the hand and the ammo box stands in for
+its crate:
+
+- **`weapons.glb` root `stinger`**: the strip folded up, a black block
+  ~0.3 × 0.1 × 0.1 m with yellow hinge blocks, carried in one hand like the
+  grenade (thrown, so no `muzzle`). ≤ 120 tris.
+- **`pickups.glb` root `crate_stinger`**: the gun crate with a folded strip
+  on the lid (the game rings it steel, `#cfd8e6`); then point
+  `PICKUP_MODELS.stinger` (`src/render/pickupMesh.ts`) and the `things`
+  family's list (`src/render/worldProps.ts`) at it.
+
+## 14. The smoke grenade (W3-B, requested 2026-11-02)
+
+The smoke grenade is in the game (README → *Driving and combat*, the smoke
+grenade) with nothing in the hand and the grenade crate standing in for its
+crate. The cloud is particles and needs no model.
+
+- **`weapons.glb` root `smoke_grenade`**: a grey-green cylinder canister
+  ~0.15 m tall with a lever and pull ring on top, held like the grenade
+  (thrown, so no `muzzle`). ≤ 120 tris.
+- **`pickups.glb` root `crate_smoke`**: the grenade crate with a smoke
+  canister on the lid (the game rings it pale grey, `#b8c4cc`); then point
+  `PICKUP_MODELS.smoke` (`src/render/pickupMesh.ts`) and the `things`
+  family's list (`src/render/worldProps.ts`) at it.

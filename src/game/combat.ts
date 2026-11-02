@@ -13,10 +13,17 @@
  * at 0 HP (a knockout, the only thing that scores KNOCKOUT). In a car, a
  * pistol or SMG fires out of either side window at the best target there.
  * The air horn blasts a cone along the aim (systems/airHorn.ts): people
- * scatter, drivers brake; no damage.
+ * scatter, drivers brake; no damage. The taser's darts stun the first
+ * person along the aim (systems/taser.ts), locking on like a gun and
+ * picking out a fleeing suspect first. The stinger is thrown like a
+ * grenade or, in a car, dropped out of the back; it lies across the road
+ * and bursts the tyres of every car that runs over it (systems/stinger.ts).
+ * A smoke grenade is thrown like a grenade and pours a cloud
+ * (systems/smoke.ts) that people cough their way out of and drivers stop
+ * dead in; the police side is systems/police.ts's.
  */
 import type { EventBus } from '../core/events';
-import { VEHICLE_SPECS, isPoliceArchetype } from '../entities/vehicle';
+import { CAR_BODY, VEHICLE_SPECS, isPoliceArchetype } from '../entities/vehicle';
 import {
   cower,
   hurtPed,
@@ -36,7 +43,10 @@ import {
   type BlastKind,
 } from '../systems/damage';
 import { HORN_RANGE, hornClear, hornHit, startle, startleDriverByHorn } from '../systems/airHorn';
+import { TASER_HIT_RADIUS, TASER_RANGE, TASER_SCARE, TASER_SCARE_SECONDS, stun } from '../systems/taser';
+import { SMOKE_RADIUS, SMOKE_THICK, SmokeClouds, brakeInSmoke, cough } from '../systems/smoke';
 import { bodyDistance, bodyOf, carCircles } from '../systems/physics';
+import { DROP_BEHIND, STINGER_LENGTH, Stingers, burstTyres, stingerAcross, stingerTouches, stungDriver, type Stinger, type StingerPlace } from '../systems/stinger';
 import { FIRE_RADIUS, MIN_THROW, Projectiles, clampThrowToWalls, throwTarget, type ProjectileWorld } from '../systems/projectiles';
 import type { Award, Score } from '../systems/score';
 import {
@@ -117,6 +127,8 @@ const ARMED_JOIN = 18;
 const COWER_RANGE = 8;
 const COWER_PACE = 0.56;
 const COWER_SECONDS = 2.2;
+/** At most one cough heard this often, s (a crowd in the smoke isn't a choir). */
+const COUGH_EVERY = 0.45;
 
 export interface CombatDeps {
   bus: EventBus;
@@ -137,6 +149,8 @@ export interface CombatDeps {
   focus(): { x: number; z: number };
   /** Wanted stars: with any, the police count as hostile for lock-on. */
   stars(): number;
+  /** Smoke grenades' clouds, shared with the police (Heat); Combat makes its own if left out. */
+  smoke?: SmokeClouds;
   /** The player's body, for punch, recoil and throw poses (optional: tests leave it out). */
   pose?: { punch(step: number): void; shoot(): void; throw?(): void };
 }
@@ -168,6 +182,10 @@ const PED_HIT_RADIUS = 0.45;
 
 export class Combat {
   readonly projectiles = new Projectiles();
+  /** Stingers down on the road. */
+  readonly stingers = new Stingers();
+  /** Smoke grenades' clouds (systems/smoke.ts). */
+  readonly smoke: SmokeClouds;
   /** Who the gun is locked on to (a ped), while firing. */
   lock: CrowdPed | null = null;
   /** Where a throw would land now (the landing marker), while one is ready; `blocked`: a wall cut it short. */
@@ -177,6 +195,7 @@ export class Combat {
   comboTimer = 0;
   private sinceShot = Infinity;
   private firePlayerTimer = 0;
+  private coughIn = 0;
   private readonly playerLit = new Set<PedAgent>();
   private readonly candidates: Candidate[] = [];
   private candidateCount = 0;
@@ -188,21 +207,27 @@ export class Combat {
   private readonly ray = { x: 0, z: 0, r: 0 };
   private readonly hit: Hit = { kind: 'none', ped: null, v: null };
   private readonly target = { x: 0, z: 0 };
+  private readonly place = { x: 0, z: 0, ax: 1, az: 0 };
   private readonly world: ProjectileWorld;
 
   constructor(private readonly d: CombatDeps) {
+    this.smoke = d.smoke ?? new SmokeClouds();
     this.world = {
       grid: d.grid,
       rocketHits: (x, z, r, byPlayer) => this.rocketHits(x, z, r, byPlayer),
       bottleHits: (x, z, y) => y < 1.3 && this.carAt(x, z, 0.1) !== null,
       explode: (kind, x, z, byPlayer) => this.blast(kind, x, z, byPlayer),
       ignite: (x, z, byPlayer) => d.bus.emit({ type: 'ignite', x, z, radius: FIRE_RADIUS, byPlayer }),
+      lay: (x, z, dirX, dirZ, byPlayer) => this.layStinger(x, z, dirX, dirZ, byPlayer, false),
+      smoke: (x, z, byPlayer) => this.pourSmoke(x, z, byPlayer),
     };
   }
 
   /** Drop everything in flight and any lock (a fresh run, the title). */
   reset(): void {
     this.projectiles.clear();
+    this.stingers.clear();
+    this.smoke.clear();
     this.playerLit.clear();
     this.lock = null;
     this.marker.show = false;
@@ -211,12 +236,15 @@ export class Combat {
     this.sinceShot = Infinity;
   }
 
-  /** One sim step: things in flight, fires, people burning, the combo clock. */
+  /** One sim step: things in flight, fires, people burning, smoke, the combo clock. */
   step(dt: number): void {
     this.comboTimer = Math.max(0, this.comboTimer - dt);
     this.sinceShot += dt;
     this.projectiles.step(dt, this.world);
     this.stepFires(dt);
+    this.stepStingers(dt);
+    this.smoke.step(dt);
+    this.stepSmoke(dt);
   }
 
   // --- Aim ------------------------------------------------------------------
@@ -285,8 +313,9 @@ export class Combat {
     const kind = p.arsenal.current;
     if (!kind || p.driving || !p.ready || !p.arsenal.ready) return false;
     const spec = WEAPONS[kind];
-    if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov', aim);
+    if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov' | 'stinger' | 'smoke', aim);
     if (spec.mode === 'horn') return this.blowHorn(aim);
+    if (spec.mode === 'taser') return this.tase(aim);
     // Spread before this shot's bloom; running sprays more.
     const moving = len2(p.ped.vx, p.ped.vz) > 3.5;
     const spread = p.arsenal.spread * (moving ? RUN_SPREAD : 1);
@@ -365,7 +394,58 @@ export class Combat {
     return true;
   }
 
-  private throwIt(kind: 'grenade' | 'molotov', aim: AimInput): boolean {
+  /**
+   * One pair of taser darts along the lock or the aim (as a pistol's shot
+   * goes): the first person they reach before a wall or a car, within
+   * TASER_RANGE, is stunned and reported as knocked down (pedDown, cause
+   * 'taser': heat, the chases and the muggings read it like any floor).
+   * Reports `taser` first, hit or miss. No gunfire: nobody else panics.
+   */
+  private tase(aim: AimInput): boolean {
+    const p = this.d.player;
+    if (!p.arsenal.tryFire()) return false;
+    this.sinceShot = 0;
+    const { x, z } = p.ped;
+    this.aimDirection(TASER_RANGE, aim.heading, this.dir, 0);
+    const dx = this.dir.x;
+    const dz = this.dir.z;
+    p.ped.heading = Math.atan2(dx, dz);
+    const ox = x + dx * 0.6;
+    const oz = z + dz * 0.6;
+    this.d.pose?.shoot();
+    let best = TASER_RANGE;
+    for (const r of this.d.grid.near(ox + (dx * TASER_RANGE) / 2, oz + (dz * TASER_RANGE) / 2, TASER_RANGE / 2 + 1)) best = Math.min(best, rayRect(ox, oz, dx, dz, r));
+    for (const v of this.d.vehicles) {
+      if (Math.abs(v.sim.x - ox) > TASER_RANGE + 6 || Math.abs(v.sim.z - oz) > TASER_RANGE + 6) continue;
+      const hitRadius = bodyOf(v.sim).radius * 0.9;
+      for (const q of carCircles(v.sim, this.circles)) best = Math.min(best, rayCircle(ox, oz, dx, dz, this.circle(q.x, q.z, hitRadius)));
+    }
+    let target: CrowdPed | null = null;
+    for (const c of this.d.crowd) {
+      if (c.agent.mode === 'down') continue;
+      const t = rayCircle(ox, oz, dx, dz, this.circle(c.agent.s.x, c.agent.s.z, TASER_HIT_RADIUS));
+      if (t < best) {
+        best = t;
+        target = c;
+      }
+    }
+    const toX = ox + dx * best;
+    const toZ = oz + dz * best;
+    this.d.bus.emit({ type: 'taser', x: ox, z: oz, dirX: dx, dirZ: dz, toX, toZ, hit: target !== null, byPlayer: true });
+    if (!target) return true;
+    const a = target.agent;
+    stun(a, x, z);
+    this.d.bus.emit({ type: 'pedDown', x: a.s.x, z: a.s.z, cause: 'taser', byPlayer: true, cop: a.role === 'cop', gang: a.gang, suspect: a.suspect });
+    if (this.lock === target) this.lock = null;
+    // Those close by back away from it (not a gunshot's panic).
+    for (const c of this.d.crowd) {
+      if (c === target) continue;
+      if (len2(c.agent.s.x - a.s.x, c.agent.s.z - a.s.z) < TASER_SCARE) scare(c.agent, a.s.x, a.s.z, TASER_SCARE_SECONDS);
+    }
+    return true;
+  }
+
+  private throwIt(kind: 'grenade' | 'molotov' | 'stinger' | 'smoke', aim: AimInput): boolean {
     const p = this.d.player;
     const { x, z } = p.ped;
     const blocked = this.throwPoint(WEAPONS[kind].range, aim, this.target);
@@ -426,7 +506,8 @@ export class Combat {
     const p = this.d.player;
     const car = p.driving;
     if (!car || !p.alive) return false;
-    let kind = p.arsenal.current;
+    if (p.arsenal.current === 'stinger') return this.dropStinger(car);
+    let kind: WeaponKind | null = p.arsenal.current;
     if (!kind || !WEAPONS[kind].driveBy) {
       kind = p.arsenal.driveByGun();
       if (!kind) return false;
@@ -451,6 +532,88 @@ export class Combat {
     this.firePellets(kind, ox, oz, Math.atan2(this.dir.x, this.dir.z), spread, s.x, s.z);
     this.alarm(s.x, s.z);
     return true;
+  }
+
+  // --- Stingers --------------------------------------------------------------------
+
+  /**
+   * Where a stinger in hand would lie now (the look's preview): thrown, at
+   * the landing marker; in a car, dropped behind it. False if none is held
+   * or the marker's down. Writes into `out`.
+   */
+  stingerAim(out: StingerPlace): boolean {
+    const p = this.d.player;
+    if (p.arsenal.current !== 'stinger' || !p.alive) return false;
+    const car = p.driving;
+    if (car) {
+      this.dropPoint(car);
+      stingerAcross(this.target.x, this.target.z, Math.sin(car.sim.heading), Math.cos(car.sim.heading), out);
+      return true;
+    }
+    if (!this.marker.show) return false;
+    stingerAcross(this.marker.x, this.marker.z, this.marker.x - p.ped.x, this.marker.z - p.ped.z, out);
+    return true;
+  }
+
+  /** FIRE in a car holding a stinger: out of the back it goes, across the road behind. */
+  private dropStinger(car: Vehicle): boolean {
+    const p = this.d.player;
+    if (!p.arsenal.tryFire()) return false;
+    this.dropPoint(car);
+    this.layStinger(this.target.x, this.target.z, Math.sin(car.sim.heading), Math.cos(car.sim.heading), true, true);
+    return true;
+  }
+
+  /** Where a stinger dropped out of `car` lands (into `target`): DROP_BEHIND m behind the back bumper. */
+  private dropPoint(car: Vehicle): void {
+    const s = car.sim;
+    const back = (s.body ?? CAR_BODY).reach + DROP_BEHIND;
+    this.target.x = s.x - Math.sin(s.heading) * back;
+    this.target.z = s.z - Math.cos(s.heading) * back;
+  }
+
+  /** A strip lands at (x, z), thrown or driven along (dirX, dirZ): across the road it goes. */
+  private layStinger(x: number, z: number, dirX: number, dirZ: number, byPlayer: boolean, dropped: boolean): void {
+    const at = stingerAcross(x, z, dirX, dirZ, this.place);
+    this.stingers.lay(at, byPlayer);
+    this.d.bus.emit({ type: 'stinger', x: at.x, z: at.z, ax: at.ax, az: at.az, length: STINGER_LENGTH, byPlayer, dropped });
+  }
+
+  /** Strips age; any car on the ground that runs over one has its tyres burst. */
+  private stepStingers(dt: number): void {
+    const stingers = this.stingers;
+    stingers.step(dt);
+    if (!stingers.active) return;
+    const list = stingers.list;
+    const vehicles = this.d.vehicles;
+    for (let i = 0; i < vehicles.length; i++) {
+      const v = vehicles[i];
+      if (v.damage.wrecked || (v.damage.flat ?? 0) >= 1) continue;
+      for (let j = 0; j < list.length; j++) {
+        const st = list[j];
+        if (st.alive && stingerTouches(st, v.sim, bodyOf(v.sim))) {
+          this.burst(v, st);
+          break;
+        }
+      }
+    }
+  }
+
+  /** `v` ran over `st`: the slew and the flats, traffic stops a moment, and it's reported. */
+  private burst(v: Vehicle, st: Stinger): void {
+    const d = this.d;
+    const s = v.sim;
+    const speed = len2(s.vx, s.vz);
+    burstTyres(s, v.damage, d.rand);
+    this.stingers.bite(st);
+    if (v.ai && !v.pursuit) stungDriver(v.ai, d.rand);
+    const own = v === d.player.driving;
+    const police = isPoliceArchetype(v.archetype) || v.police === true;
+    if (st.byPlayer && !own) markPlayerHit(v.damage, d.now());
+    d.bus.emit({ type: 'tyresBurst', x: s.x, z: s.z, speed, police, chasing: !!v.pursuit, own, byPlayer: st.byPlayer });
+    if (!st.byPlayer || own || !police || !d.playing()) return;
+    d.bus.emit({ type: 'street', what: 'spiked', x: s.x, z: s.z });
+    if (d.player.alive && !d.player.arrested) d.award(d.score.award('spiked'));
   }
 
   // --- Punches --------------------------------------------------------------------
@@ -617,6 +780,36 @@ export class Combat {
         const res = hurtPed(a, blastDamage(dist, b.radius, b.pedDamage), x, z, 6);
         this.resolve(c, res, 'blast', x, z, byPlayer);
       } else if (dist < 30) scare(a, x, z, 4);
+    }
+  }
+
+  /** A smoke grenade's fuse ran down: the cloud pours (and the scanner hears of the player's). */
+  private pourSmoke(x: number, z: number, byPlayer: boolean): void {
+    this.smoke.add(x, z, byPlayer);
+    this.d.bus.emit({ type: 'smoke', x, z, radius: SMOKE_RADIUS, seconds: SMOKE_THICK, byPlayer });
+    if (byPlayer && this.d.playing()) this.d.bus.emit({ type: 'street', what: 'smoke', x, z });
+  }
+
+  /**
+   * People in a thick cloud cough (officers stop, the rest walk out); drivers
+   * in one brake hard and sit there (not the police: systems/police.ts
+   * confuses those; not road ragers, nor the player's). Coughs are heard
+   * one at a time.
+   */
+  private stepSmoke(dt: number): void {
+    this.coughIn -= dt;
+    if (!this.smoke.thick) return;
+    const d = this.d;
+    for (const c of d.crowd) {
+      const a = c.agent;
+      const cloud = this.smoke.at(a.s.x, a.s.z);
+      if (!cloud || !cough(a, cloud.x, cloud.z) || this.coughIn > 0) continue;
+      this.coughIn = COUGH_EVERY;
+      d.bus.emit({ type: 'cough', x: a.s.x, z: a.s.z, cop: a.role === 'cop' });
+    }
+    for (const v of d.vehicles) {
+      if (!v.ai || v.police || v.pursuit || v.damage.wrecked || v === d.player.driving) continue;
+      if (this.smoke.at(v.sim.x, v.sim.z)) brakeInSmoke(v.ai);
     }
   }
 
@@ -840,15 +1033,17 @@ export class Combat {
     return bodyDistance(s, x, z);
   }
 
-  /** Lock-on candidates: every ped on their feet (not within `near` m of the player), hostiles flagged. */
+  /** Lock-on candidates: every ped on their feet (not within `near` m of the player), hostiles (and, tasing, suspects) flagged. */
   private gatherPeds(near = 0): void {
     this.candidateCount = 0;
     const wanted = this.d.stars() > 0;
     const me = this.d.player.ped;
+    // A taser in hand picks out a fleeing suspect (a mugger, a chase's runner) first.
+    const tasing = this.d.player.arsenal.current === 'taser';
     for (const c of this.d.crowd) {
       const a = c.agent;
       if (a.mode === 'down' || (near > 0 && len2(a.s.x - me.x, a.s.z - me.z) < near)) continue;
-      const hostile = a.mode === 'fight' || a.mode === 'shoot' || (a.role === 'cop' && wanted);
+      const hostile = a.mode === 'fight' || a.mode === 'shoot' || (a.role === 'cop' && wanted) || (tasing && a.suspect === true);
       this.push(a.s.x, a.s.z, hostile, c, null);
     }
   }

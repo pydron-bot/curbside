@@ -31,6 +31,7 @@ import {
   type VehicleControls,
 } from './entities/vehicle';
 import { Combat, type AimInput } from './game/combat';
+import { SmokeClouds } from './systems/smoke';
 import { Heat } from './game/heat';
 import { NITRO_DRIFT, NITRO_MIN, NITRO_NEAR_MISS, NITRO_STUNT, Nitro } from './game/nitro';
 import { HeatPresenter } from './game/heatPresenter';
@@ -45,6 +46,8 @@ import { emptySummary, FrameStats, formatFps, formatFrameStats } from './core/fr
 import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
 import { CombatLook } from './render/combatLook';
+import { StingerLook } from './render/stingerLook';
+import { SmokeLook } from './render/smokeLook';
 import { PeoplePose } from './render/peoplePose';
 import { PigeonLook } from './render/pigeonMesh';
 import { createRenderer } from './render/post';
@@ -402,6 +405,9 @@ const award = (a: Award | null) => {
 const nearMissAt = new Map<Vehicle, number>();
 let simTime = 0;
 
+// Smoke grenades' clouds: Combat pours them, the police can't see through them.
+const smoke = new SmokeClouds();
+
 // --- Heat: wanted level, police, arrests, Pay 'n' Spray, traffic reactions ---
 const heatView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 const heat = new Heat({
@@ -428,6 +434,7 @@ const heat = new Heat({
   witnesses: (crime, x, z) => cityLife.witnesses.report(crime, x, z),
   rammedSceneCop: (v) => cityLife.chases.rammed(v),
   adoptCrash: (v, impact) => cityLife.accidents.adopt(v, impact),
+  smoke,
 });
 addHeatLook(look, heat, {
   scene,
@@ -451,9 +458,12 @@ const combat = new Combat({
   playing: () => !attract.active,
   focus: () => ({ x: rig.focusX, z: rig.focusZ }),
   stars: () => heat.wanted.level,
+  smoke,
   pose: playerModel,
 });
 const combatLook = new CombatLook(scene, look, effects, combat, population.crowd, player);
+const stingerLook = new StingerLook(scene, look, combat);
+const smokeLook = new SmokeLook(look, effects, smoke, heat.police.units);
 
 // --- The city's own life (game/cityLife.ts): ambient scenes, parking, dropped guns ---
 const cityLife = new CityLife({
@@ -840,7 +850,7 @@ function simulate(dt: number) {
       prof.end(P_DRIVE);
     }
     prof.begin(P_PHYSICS);
-    const landed = stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt);
+    const landed = stepVehicle(v.sim, controls, VEHICLE_SPECS[v.archetype], dt, v.damage);
     prof.end(P_PHYSICS);
     if (landed > 0) carLanded(v, landed, v === driving);
     if (rideRamps(v.sim, ramps) === 'launch') carJumped(v, v === driving);
@@ -1322,6 +1332,8 @@ function frame(now: number) {
   // Bikes lean and carry their riders; emergency sirens and the ice cream chime.
   streetLife.update(frameSeconds, focus.x, focus.z, !attract.active);
   combatLook.update(frameSeconds * fx.hitStop.scale * slow);
+  stingerLook.update();
+  smokeLook.update(frameSeconds * fx.hitStop.scale * slow);
   stamps.step();
   updateHud(frameSeconds);
   progress.update(frameSeconds);

@@ -630,6 +630,16 @@ export class GameAudio {
         return this.onShot(e);
       case 'airHorn':
         return this.oneShot('horn', e, FALLOFF.gun, e.byPlayer ? 0.9 : 0.7, 0.3, sfx.airHorn, 0.3);
+      case 'taser': {
+        const hit = e.hit;
+        return this.oneShot('gun', e, FALLOFF.punch, e.byPlayer ? 0.85 : 0.7, 0.15, (v) => sfx.taser(v, hit), hit ? 0.15 : 0);
+      }
+      case 'stinger':
+        return this.oneShot('impact', e, FALLOFF.punch, 0.75, 0.15, sfx.stingerDown);
+      case 'tyresBurst': {
+        const speed = e.speed;
+        return this.oneShot('crash', e, FALLOFF.crash, e.own ? 1 : 0.8, 0.2, (v) => sfx.tyresBurst(v, speed), e.byPlayer && !e.own ? 0.3 : 0);
+      }
       case 'bulletHit':
         return this.onBulletHit(e);
       case 'punch':
@@ -658,6 +668,10 @@ export class GameAudio {
         return this.oneShot('punch', e, FALLOFF.punch, 0.8, 0.1, sfx.throwWhoosh);
       case 'ignite':
         return this.oneShot('impact', e, FALLOFF.crash, 0.9, 0.3, sfx.ignite, 0.5);
+      case 'smoke':
+        return this.oneShot('impact', e, FALLOFF.fire, e.byPlayer ? 0.9 : 0.7, 0.2, sfx.smokePop, 0.2);
+      case 'cough':
+        return this.oneShot('body', e, FALLOFF.punch, 0.6, 0.1, (v) => sfx.cough(v, e.cop));
       case 'boost':
         if (!e.on) return;
         return this.oneShot('engine', null, FALLOFF.near, 0.8, 0.1, sfx.boost, 0.3);

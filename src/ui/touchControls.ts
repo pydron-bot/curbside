@@ -53,6 +53,9 @@ const WEAPON_ICON: Record<WeaponKind | 'fists', string> = {
   molotov: ICONS.molotov,
   rocket: ICONS.rocket,
   horn: ICONS.horn,
+  taser: ICONS.taser,
+  stinger: ICONS.stinger,
+  smoke: ICONS.smoke,
 };
 
 /**

@@ -11,6 +11,7 @@ import { createDamage, damageStage, stepDamage } from '../src/systems/damage';
 import { Score } from '../src/systems/score';
 import { WEAPONS, type WeaponKind } from '../src/systems/weapons';
 import { HORN_STALL } from '../src/systems/airHorn';
+import { SMOKE_FADE, SMOKE_FUSE, SMOKE_POUR, SMOKE_THICK } from '../src/systems/smoke';
 import { driverFor } from '../src/systems/traffic';
 import { StaticGrid } from '../src/world/collision';
 import { random } from './helpers';
@@ -570,5 +571,77 @@ describe('air horn', () => {
     w.step(WEAPONS.horn.interval + 0.05);
     expect(w.combat.fire(noAim)).toBe(true);
     expect(w.player.arsenal.current).toBeNull();
+  });
+});
+
+describe('smoke grenade', () => {
+  it('thrown like a grenade, it pours a cloud: people in it cough their way out, drivers stop dead, the police are left to systems/police.ts', () => {
+    const w = setup();
+    w.player.arsenal.pickUp('smoke');
+    expect(w.player.arsenal.current).toBe('smoke');
+    expect(w.player.arsenal.ammo.get('smoke')).toBe(WEAPONS.smoke.pickupAmmo);
+    // Unaimed: a lob of half the range straight ahead (+Z), onto the road at z 10.
+    const inside = ped(1, 10);
+    const outside = ped(0, 25);
+    const cop = ped(-1, 11);
+    cop.agent.role = 'cop';
+    w.crowd.push(inside, outside, cop);
+    const rand = random(5);
+    const driver = car(2, 9, 'sedan');
+    driver.ai = driverFor(driver.sim, rand);
+    driver.sim.vz = 8;
+    const unit = car(-2, 10, 'police');
+    unit.ai = driverFor(unit.sim, rand);
+    unit.police = true;
+    w.vehicles.push(driver, unit);
+    expect(w.combat.fire(noAim)).toBe(true);
+    expect(w.log.find((e) => e.type === 'throw')).toMatchObject({ weapon: 'smoke' });
+    w.step(SMOKE_FUSE + SMOKE_POUR);
+    const pop = w.log.find((e) => e.type === 'smoke');
+    expect(pop).toMatchObject({ type: 'smoke', byPlayer: true, seconds: SMOKE_THICK });
+    expect(w.log.some((e) => e.type === 'street' && e.what === 'smoke')).toBe(true);
+    expect(w.combat.smoke.hides(0, 10)).toBe(true);
+    // Coughing: the walker heads out of it, the officer stands; nobody hurt.
+    expect(inside.agent.cough).toBeGreaterThan(0);
+    expect(inside.agent.mode).toBe('flee');
+    expect(cop.agent.cough).toBeGreaterThan(0);
+    expect(outside.agent.cough).toBe(0);
+    for (const c of [inside, cop]) expect(c.agent.hp).toBe(PED_HP);
+    expect(w.log.some((e) => e.type === 'cough')).toBe(true);
+    // The driver brakes; the police car isn't Combat's to stop.
+    expect(driver.ai.startled).toBeGreaterThan(0);
+    expect(unit.ai.startled).toBe(0);
+    // No blast, no crime-shaped events.
+    expect(w.log.some((e) => e.type === 'explosion' || e.type === 'shot' || e.type === 'pedDown')).toBe(false);
+  });
+
+  it('no effect once the cloud thins', () => {
+    const w = setup();
+    w.player.arsenal.pickUp('smoke');
+    expect(w.combat.fire(noAim)).toBe(true);
+    w.step(SMOKE_FUSE + SMOKE_THICK + 0.1);
+    expect(w.combat.smoke.active).toBe(true);
+    expect(w.combat.smoke.thick).toBe(false);
+    const late = ped(0, 10);
+    const rand = random(6);
+    const driver = car(0, 10, 'sedan');
+    driver.ai = driverFor(driver.sim, rand);
+    w.crowd.push(late);
+    w.vehicles.push(driver);
+    w.step(0.5);
+    expect(late.agent.cough).toBe(0);
+    expect(driver.ai.startled).toBe(0);
+    w.step(SMOKE_FADE);
+    expect(w.combat.smoke.active).toBe(false);
+  });
+
+  it('a fresh run clears the air', () => {
+    const w = setup();
+    w.player.arsenal.pickUp('smoke');
+    w.combat.fire(noAim);
+    w.step(SMOKE_FUSE + 0.1);
+    expect(w.combat.smoke.active).toBe(true);
+    w.combat.reset();
+    expect(w.combat.smoke.active).toBe(false);
   });
 });

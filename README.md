@@ -213,7 +213,7 @@ share sheet mocked.
   score points; anything within 3 s of the last event raises a ×2…×10
   combo. Best score is kept in localStorage (`curbside.best`).
 - **Weapons** (`src/systems/weapons.ts`, `src/world/pickups.ts`): pistol,
-  SMG, shotgun, grenades, molotovs, rockets and the air horn, plus health, armour and
+  SMG, shotgun, grenades, molotovs, rockets, the air horn, the taser, the stinger and smoke grenades, plus health, armour and
   ammo crates on sidewalks (respawn 30 s); hitscan with lock-on and spread
   bloom, tracers, walls stop bullets, cars take damage; drive-bys.
 - **Fighting back** (`src/systems/crowd.ts`): peds are calm (70%),
@@ -396,8 +396,9 @@ survivable, and spread 60% wider at a running target.
 **The player** (`game/player.ts`): body armour (0–100) soaks every hit
 first and is lost on death; health creeps back to 40 at 4/s after 6 s
 unhurt. Crates: health +50, armour +50, ammo (half a clip for each gun
-owned, and 3 blasts for an air horn), weapons (capped: pistol 120, SMG 300,
-shotgun 48, grenades 12, molotovs 10, rockets 8, air horn 12).
+owned, 3 blasts for an air horn, 2 taser cartridges), weapons (capped: pistol 120, SMG 300,
+shotgun 48, grenades 12, molotovs 10, rockets 8, air horn 12, taser 8, stinger 4,
+smoke grenades 6).
 
 **On foot** (`game/combat.ts`, `systems/crowd.ts`, `systems/weapons.ts`).
 Everyone, officers included, has 100 HP: pistol 34 (3 hits), SMG 15 (~7),
@@ -455,6 +456,102 @@ is three pale shock rings down the cone from Effects' pooled fake lights
 (no draw call of its own). Pickups: a pink-ringed crate (the ammo box
 model until `pickups.glb` has a `crate_horn`); in the hand, nothing shows
 until `weapons.glb` has an `air_horn` root.
+
+**The taser** (W3-B, `systems/taser.ts`, `Combat.tase`): held, aimed and
+locked on like a pistol (on foot only; with it in hand the lock-on flags a
+fleeing suspect, a mugger or a chase's runner, as hostile, so it picks
+them out first); a crate is 4 cartridges (8 at most; an ammo crate adds 2),
+one shot every 1.4 s. Each shot is a pair of darts 8 m along the lock or
+the aim that stops at the first person (0.55 m either side of the line),
+car or wall: whoever it reaches is stunned, knocked down where they stand
+(a 0.8 m/s slide) for 4 s with no hit points lost (so never a KNOCKOUT),
+then up: ordinary people provoked (fighters come at you, the calm run),
+officers back on the job. People within 7 m step back for 3 s; it's no
+gunshot, so nobody else panics and no `shot` goes out. It's reported as a
+`taser` event (hit or miss, where the darts stopped) and then an ordinary
+`pedDown` (cause `taser`), so it means what any floor means: a civilian is
+an assault (+0.3, witnesses phone it in), an officer is still a crime
+(`copDown`, +1, and an attack on a city chase's police: the handoff
+rules), and a fleeing suspect is a have-a-go, not an assault. A mugger
+drops the bag (hand it back: HAVE-A-GO HERO, $50); a chase's suspect on foot
+pays HAVE-A-GO HERO and **gives up to you**, armed or not: they kneel once
+they're up (a shoot-out with the officers is over), and when the officers
+cuff them within 30 s it's your **CITIZEN'S ARREST** too ($150,
+`chaseHandoff.tasedArrest`). The look is two thin wires from the taser in
+hand to the darts, shooting out in 0.06 s and crackling blue-white for
+0.8 s (0.25 s on a miss): streaks in the hot particle batch like tracers
+(`Effects.wire`, at most 4 at once), with sparks and a cold flicker on the
+ground from Effects' pooled fake lights, so no draw call and no real
+light. The sound is the cartridge's pop, then ~0.8 s of the current's dry
+ticking over a thin buzz (`sfx.taser`, one gated noise source). Pickups:
+an electric-blue-ringed crate (the ammo box until `pickups.glb` has a
+`crate_taser`); in the hand, nothing shows until `weapons.glb` has a
+`taser` root.
+
+**The stinger** (W3-B, `systems/stinger.ts`, `Combat.throwIt` /
+`dropStinger`): a folding spike strip, thrown like a grenade on foot (16 m
+at most, the landing ring as usual) or, the one throwable that goes out of
+a car, dropped 1.2 m behind the back bumper. A crate is 2 (4 at most). On a
+straight road it squares itself across one carriageway (`ROAD_WIDTH / 2`,
+more if it lands over the middle) and stays on the tarmac; in a junction or
+off the road it lies square to the throw or the drive. At most 3 are down
+(the oldest is pulled up), each for 40 s or 6 cars. Any car whose wheels
+cross it on the ground (one in the air over it is spared) gets its tyres
+burst (`tyresBurst`): a slew (a yaw kick up to 1.4 rad/s and the rear let
+loose, full from 20 m/s), then life on the rims, kept on `DamageState`
+until a respray or another car (`FLAT_*` in `entities/vehicle.ts`: half the
+top speed, less grip and brakes, a pull to one side). Traffic brakes hard
+and sits 1.5–3 s, then limps on; police in a chase limp on and fall
+behind, so it shakes a chase without a shot. A police car's tyres on your
+strip pay **SPIKED** (300) and a scanner line (UNIT DOWN TO ITS RIMS IN …,
+60 s cooldown). Heat: a civilian's tyres are a nuisance, a patrol car's an
+attack on the police, and nothing once you're already wanted (it mustn't
+restart the clock it's there to beat); your own car's tyres are free. The
+look is the one flat prop, built in code (`render/stingerLook.ts`: a black
+hinged strip, yellow hinge blocks, two rows of spikes, drawn above life
+size across like guns in hand), one instanced mesh that draws only while a
+strip is down or flying; it unrolls from the middle in 0.3 s, tumbles
+folded in flight, glints in headlights, and in hand a ghost shows where it
+would lie. Flats scrape rim streaks and sparks (`fxDriving`). The sound is
+the sections slapping out (`sfx`, ~0.45 s) and the burst's double bang,
+hiss and flapping rubber that slows with the car (~1.3 s). Pickups: a
+steel-ringed crate (the ammo box until `pickups.glb` has a
+`crate_stinger`); in the hand, nothing shows until `weapons.glb` has a
+`stinger` root.
+
+**The smoke grenade** (W3-B, `systems/smoke.ts`, `Combat.pourSmoke` /
+`stepSmoke`): thrown like a grenade (20 m at most, the grenade's arc and
+bounce); a crate is 2 (6 at most). It hisses into life 1.2 s after the
+throw and pours a cloud that billows from 2.5 m to 6.5 m across in 1.5 s
+(a road and a pavement either side), thick for 9 s, then thins away over
+2.5 s, which is only the look: a thinning cloud does nothing. At most 2
+clouds at once (another throw replaces the oldest). **Sight**
+(`systems/sight.ts` `sees`, `SmokeView.blocks`): nobody sees into, out of
+or through a thick cloud beyond arm's length (2.5 m), so a police car or
+officer inside one or looking through it loses you and drops into search,
+and the helicopter's spotlight finds nothing but smoke while you're in
+one. **Police cars** that drive into it are confused (`Daze`, one per
+unit in `systems/police.ts`): a third each crawl to a stop, stop dead with
+their hazards blinking, or take a wrong turn at the next junction
+(`wrongWay`, at most 9 m/s, forgotten after 12 s), so a chase visibly
+scatters; a crawl or a stop ends 0.6 s after they're out of it, a wrong
+turn is taken whatever the cloud does. **Officers on foot** (and anyone
+fighting or shooting) stop and cough, no running, no shots; **people**
+cough and walk out of it; **traffic** brakes hard and sits there until
+it's clear (rear-end shunts welcome). The player's cloud puts a scanner
+line out (SMOKE ON THE STREET IN …, 60 s cooldown); it's no crime. The
+look (`render/smokeLook.ts`) is billows from Effects' soft smoke pool in
+the low-resolution pass like every other smoke, scaled by the tier's
+`particleScale` (about 17 live per cloud on low, 26 on medium, 34 on
+high, under the low tier's `smokeMax`), so it adds no draw call while
+anything else smokes and one otherwise; emission stops 1.2 s before the
+cloud stops being thick, so it thins as its effect ends. The budget check
+is `tools/tune/mayhem.mjs --scenario smoke --seconds 12` (two clouds on
+the player on foot). The sound is the cap's pop and ~3 s of gas hiss over
+a low rush (`sfx.smokePop`), and coughs (`sfx.cough`, deeper for an
+officer, one at a time). Pickups: a pale-grey-ringed crate (the grenade
+crate until `pickups.glb` has a `crate_smoke`); in the hand, nothing shows
+until `weapons.glb` has a `smoke_grenade` root.
 
 **Stunts** (`world/ramps.ts`, `systems/stunts.ts`). Ten stunt ramps
 (6 × 3.2 m, 1.6 m lip, matching the `ramp` model in props.glb) on road
@@ -591,7 +688,10 @@ of any police (car, officer, helicopter): knocking someone down +0.3
 (with your own car: `stepCrowdPed` reports the car that hit them, so a
 unit running down its officer beside you isn't on you),
 carjack +0.35, a shot +0.05 (at most +0.5 per 5 s), an air horn blast
-+0.1 (a nuisance: at most +0.2 per 5 s), an explosion you
++0.1 (a nuisance: at most +0.2 per 5 s), tasing someone as knocking them
+down (an officer +1), a civilian's tyres on your stinger as a nuisance
+(a patrol car's as shooting at the police; nothing while you're wanted),
+an explosion you
 caused +0.6 (not your own car going up, even after you bail out of it
 burning: `explosion.ownCar`), clearly ramming a police car
 +0.6 (bumps in a chase don't count, nor does smashing through a roadblock
@@ -900,7 +1000,8 @@ people in).
   facing them) for 5 s. Knock the mugger over and the bag drops (a pulsing
   amber ring, 45 s): walk over it to hand it back (`bagReturned`, the
   victim cheers: HAVE-A-GO HERO, the `haveAGo` award and **$50** through
-  `deps.reward` → `progress.pay`; cash, not CRED). Knocking the mugger
+  `deps.reward` → `progress.pay`; cash, not CRED; the taser floors one
+  too). Knocking the mugger
   down isn't an assault (`PedAgent.suspect` while they run) nor called in
   by passers-by. Ignored,
   they get away (65 m clear, or 35 s).
@@ -1153,7 +1254,11 @@ of the three runs at a time (`incident(life)` in `scenes/chases.ts`).
   - **HAVE-A-GO HERO:** a suspect on the run (or a mugger) carries
     `PedAgent.suspect` (cleared once they give up or are cuffed): flooring
     them isn't an assault, and the first time a chase pays the award (so
-    does throwing the rider off a getaway scooter).
+    does throwing the rider off a getaway scooter). Tased (*Driving and
+    combat*, the taser), a suspect on foot gives up where they fell, armed
+    or not, kneels once up and waits for the officers; their cuffs within
+    30 s are a CITIZEN'S ARREST as well (`Chase.tasedAt`,
+    `chaseHandoff.tasedArrest`).
   Score kinds `takeTheHeat`, `citizensArrest`, `haveAGo` go through
   `CityLifeDeps.award`, each with a street event of the same name.
 - **Street races** (`scenes/streetRaces.ts`, every 90–170 s, then
@@ -1831,7 +1936,9 @@ are `src/game/modes/*Mode.ts`.
   within 45 m of it. TOUGH SKIN (+50 max health, the stand-in for body
   armour: `Player.maxHealth`, the health bar shows the share) $3,000;
   PAY 'N' SPRAY CARD $1,500; PACKAGE SCANNER $2,000; pistol / SMG / shotgun
-  ammo $150 / $400 / $300 (`arsenal.pickUp`). Something you can't afford
+  ammo $150 / $400 / $300, BODY ARMOUR $600, GRENADES $500, and a crate's
+  worth of the W3-B weapons: AIR HORN $200, TASER $450, STINGERS $500,
+  SMOKE GRENADES $600 (`arsenal.pickUp`, drawn as you buy). Something you can't afford
   shakes and flashes the cash red (and a haptic tick).
 - **CHAOS RUN** (title, once the side modes are open; `modes/chaosRun.ts`, `chaosRunMode.ts`): a sports
   car at a random crossing and the same loadout every run (`CHAOS_LOADOUT`:

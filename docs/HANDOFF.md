@@ -115,10 +115,24 @@ shared `coneHit`; a `nuisance` crime that never reaches a star; no held
 model yet, see BLENDER_TODO §11) and the observe palette scrolling on
 touch (its list lacked `data-scroll`; `tests/sheetScroll.test.ts` now
 checks every sheet list).
-**Next:** the iPhone device pass (V2-14) on 0.17.0, then 1.0.0. Wave 3
-candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B five new
-weapons the owner picked (AIR HORN, STINGER, SMOKE GRENADE that confuses
-pursuing cops, TASER, STICKY CHARGE). W3-C four new street scenes
+**0.18.0 "Taser, stinger and smoke"**: three more W3-B weapons, built in
+parallel streams (`claude/w3-taser`, `-stinger`, `-smoke`) and merged.
+The TASER floors one person through `pedDown` (cause `taser`), so the
+muggings and chase handoff read it as a have-a-go (`chaseHandoff.tasedArrest`).
+The STINGER is a thrown or dropped projectile that the world lays
+(`ProjectileWorld.lay`); flats live on `DamageState`; SPIKED. The SMOKE
+GRENADE's `SmokeView` blocks `sees` and police car sight, dazes police
+cars (`Daze`: crawl, hazards, wrong turn) and blanks the helicopter;
+two clouds at most (`mayhem.mjs --scenario smoke`: peak smoke fill 1.46
+vs a car explosion's 5.05 on medium, 47–50 draw calls). Merge note: the
+projectile fuse runs for grenades and smoke, not stingers. Crate odds
+rebalanced to sum to 1 with the three new crates. No held models or
+crates yet (BLENDER_TODO §12–14). Device checks: the taser's wires and the
+stinger's strip legible at 852×340, two smoke clouds' frame rate on the
+iPhone, the smoke confusion split reading as scattered in a real chase.
+**Next:** the iPhone device pass (V2-14) on 0.18.0, then 1.0.0. Wave 3
+candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B's last weapon,
+STICKY CHARGE (AIR HORN, TASER, STINGER and SMOKE GRENADE shipped). W3-C four new street scenes
 the owner picked (QUIET PLEASE march, roadworks, bin day with a tipper
 for Borrowed Blues, delivery rush); W3-D a desktop map editor whose edits ship in the
 game (place things, blocks, roads, districts) with an overlay of what

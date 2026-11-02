@@ -14,7 +14,8 @@
  * (countersteer straightens it) and leave by lifting off; handbrake + throttle
  * from a standstill is a burnout that launches the car when you let go.
  * There's a vertical axis too, for ramps: airborne cars fly ballistic with no
- * grip or steering until they land.
+ * grip or steering until they land. Burst tyres (a stinger, systems/stinger.ts)
+ * cut the top speed, power, brakes and grip and pull the car to one side.
  */
 
 import { len2 } from '../core/len';
@@ -147,6 +148,17 @@ export interface VehicleControls {
   handbrake: boolean;
   /** Nitro: more power and a higher top speed while held (the caller meters the tank). */
   boost?: boolean;
+}
+
+/**
+ * A car's tyres, if any are burst (the stinger: systems/stinger.ts). Kept on
+ * the car's DamageState, so a respray or a fresh car mends them.
+ */
+export interface Tyres {
+  /** 0..1, how far gone: 1 is running on the rims. */
+  flat?: number;
+  /** -1..1: which way the flats drag the nose (+ is a positive yaw rate) and how hard. */
+  pull?: number;
 }
 
 export const SEDAN: VehicleSpec = {
@@ -491,6 +503,19 @@ const DRIFT_YAW = 2.4;
 const AIR_YAW_DAMP = 0.3;
 /** Air drag on a flying car, per s. */
 const AIR_DRAG = 0.02;
+/**
+ * On the rims (Tyres.flat 1): this share off the top speed, the engine's
+ * pull, the brakes, sideways grip and the cornering limit; faster than the
+ * new top speed, the rims scrub this much off, m/s²; and the flats drag the
+ * nose round at up to FLAT_PULL rad/s (the driver has to hold it straight).
+ */
+export const FLAT_TOP = 0.5;
+export const FLAT_ACCEL = 0.45;
+export const FLAT_BRAKE = 0.4;
+export const FLAT_GRIP = 0.5;
+export const FLAT_LAT = 0.4;
+export const FLAT_SCRUB = 7;
+export const FLAT_PULL = 0.45;
 
 export function createVehicleState(x = 0, z = 0, heading = Math.PI): VehicleState {
   return { x, z, heading, vx: 0, vz: 0, yawRate: 0, y: 0, vy: 0, airborne: false, slide: 0, burnout: 0, launchTime: 0 };
@@ -532,12 +557,15 @@ export function terminalSpeed(spec: Pick<VehicleSpec, 'maxSpeed'>, boost = false
 /**
  * Advance the vehicle by `dt` seconds in place. Returns the vertical speed
  * (m/s) of a landing on this step, 0 otherwise, for landing damage and fx.
+ * `tyres`: burst ones handle worse (FLAT_*).
  */
-export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSpec, dt: number): number {
+export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSpec, dt: number, tyres?: Tyres): number {
   if (s.airborne) return stepAir(s, dt);
   const throttle = clamp(c.throttle, -1, 1);
   const steer = clamp(c.steer, -1, 1);
   const boost = c.boost === true && throttle > 0;
+  const flat = tyres?.flat ?? 0;
+  const brakeDecel = spec.brakeDecel * (1 - FLAT_BRAKE * flat);
 
   const fx = Math.sin(s.heading);
   const fz = Math.cos(s.heading);
@@ -560,22 +588,22 @@ export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSp
   if (s.launchTime > 0) s.launchTime = throttle > 0 ? Math.max(0, s.launchTime - dt) : 0;
 
   // --- Longitudinal ---
-  const top = terminalSpeed(spec, boost);
-  const accel = spec.accel * (boost ? BOOST_ACCEL : 1) * (s.launchTime > 0 ? (spec.launch ?? LAUNCH_ACCEL) : 1);
+  const top = terminalSpeed(spec, boost) * (1 - FLAT_TOP * flat);
+  const accel = spec.accel * (boost ? BOOST_ACCEL : 1) * (s.launchTime > 0 ? (spec.launch ?? LAUNCH_ACCEL) : 1) * (1 - FLAT_ACCEL * flat);
   const limit = taperLimit(accel, top, spec.drag);
   if (burning) {
     // The brakes hold the car while the rear wheels spin.
     vF = decay(vF, 14 * dt);
   } else if (throttle > 0) {
     if (vF < -0.5) {
-      vF = decay(vF, spec.brakeDecel * throttle * dt);
+      vF = decay(vF, brakeDecel * throttle * dt);
     } else {
       const headroom = Math.max(0, 1 - vF / limit);
       vF += accel * throttle * headroom * dt;
     }
   } else if (throttle < 0) {
     if (vF > 0.5) {
-      vF = decay(vF, spec.brakeDecel * -throttle * dt);
+      vF = decay(vF, brakeDecel * -throttle * dt);
     } else {
       const headroom = Math.max(0, 1 + vF / spec.maxReverseSpeed);
       vF += spec.reverseAccel * throttle * headroom * dt;
@@ -584,6 +612,8 @@ export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSp
   if (c.handbrake && !burning) vF = decay(vF, spec.handbrakeDecel * dt);
   vF -= vF * spec.drag * dt;
   if (throttle === 0) vF = decay(vF, spec.rollingResistance * dt);
+  // On the rims, going faster than they allow: they scrub it off.
+  if (flat > 0 && Math.abs(vF) > top) vF = decay(vF, Math.min(Math.abs(vF) - top, FLAT_SCRUB * flat * dt));
 
   // --- Drift: the handbrake kicks the rear loose; grip comes back slowly on the
   // throttle (a power slide holds) and quickly off it, or once the car is straight. ---
@@ -596,7 +626,7 @@ export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSp
   }
 
   // --- Lateral grip: bleed off sideways slip ---
-  const grip = c.handbrake ? spec.handbrakeGrip : spec.grip + (spec.driftGrip - spec.grip) * s.slide;
+  const grip = (c.handbrake ? spec.handbrakeGrip : spec.grip + (spec.driftGrip - spec.grip) * s.slide) * (1 - FLAT_GRIP * flat);
   const vL0 = vL;
   vL *= Math.exp(-grip * dt);
   // A power slide carries part of the speed the tyres scrub sideways into forward speed.
@@ -618,7 +648,7 @@ export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSp
     if (c.handbrake) targetYaw *= spec.handbrakeYawBoost;
     // Cornering limit: grip turns the car only as fast as latAccel allows. A
     // loose rear rotates past it (that's the drift), and catches a bit quicker.
-    const cap = (spec.latAccel / Math.max(1, absF)) * (1 + (DRIFT_YAW - 1) * s.slide);
+    const cap = ((spec.latAccel * (1 - FLAT_LAT * flat)) / Math.max(1, absF)) * (1 + (DRIFT_YAW - 1) * s.slide);
     const want = Math.abs(targetYaw);
     if (want > cap) {
       targetYaw = Math.sign(targetYaw) * cap;
@@ -626,6 +656,8 @@ export function stepVehicle(s: VehicleState, c: VehicleControls, spec: VehicleSp
       if (s.slide < 0.5) vF = decay(vF, SCRUB * Math.min(1, want / cap - 1) * dt);
     }
     response *= 1 + 0.4 * s.slide;
+    // Burst tyres drag the nose to one side once it's rolling (the wheel has to hold it).
+    if (flat > 0) targetYaw += (tyres?.pull ?? 0) * FLAT_PULL * flat * lowSpeedFactor * direction;
   }
   s.yawRate += (targetYaw - s.yawRate) * Math.min(1, response * dt);
   s.heading = wrapAngle(s.heading + s.yawRate * dt);

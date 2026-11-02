@@ -18,6 +18,13 @@ export interface DamageState {
   lastPlayerHit: number;
   /** Share of each hit it takes (the BODYWORK perk on the player's car); 1 if left out. */
   taken?: number;
+  /**
+   * Burst tyres (a stinger: systems/stinger.ts; entities/vehicle.ts Tyres,
+   * which stepVehicle reads off this): left out until then, and a fresh
+   * DamageState (a respray, a recycled car) mends them.
+   */
+  flat?: number;
+  pull?: number;
 }
 
 export type DamageStage = 'ok' | 'smoking' | 'burning' | 'wrecked';

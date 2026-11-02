@@ -15,6 +15,17 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.18.0',
+    date: '2026-11-02',
+    title: 'Taser, stinger and smoke',
+    notes: [
+      'New weapon, the TASER: two darts that drop one person for a few seconds without hurting them. Stop a mugger or a fleeing suspect and it is HAVE-A-GO HERO; a tased runner gives up, and when the police cuff them it is your CITIZEN\'S ARREST. Tasing a police officer is still a crime. Look for electric-blue-ringed crates.',
+      'New weapon, the STINGER: a spike strip you throw across the road on foot or drop out of the back of your car. Anything that drives over it bursts its tyres, slews and limps on its rims, police included, so it shakes a chase without a shot (SPIKED). Look for steel-ringed crates.',
+      'New weapon, the SMOKE GRENADE: a thick cloud for about ten seconds that the police cannot see into, out of or through, and nor can the helicopter\'s spotlight. Police cars that drive into it get lost: some crawl to a stop, some stop dead with their hazards on, some take a wrong turn. Officers cough, people walk out of it and traffic brakes hard. Look for pale-grey-ringed crates.',
+      'The shop sells all four new-wave weapons: the AIR HORN, TASER, STINGERS and SMOKE GRENADES.',
+    ],
+  },
+  {
     version: '0.17.0',
     date: '2026-11-02',
     title: 'Air horn',
