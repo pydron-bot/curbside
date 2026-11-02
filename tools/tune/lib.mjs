@@ -8,7 +8,8 @@
  * Playwright isn't a dependency of the game. Run with it on hand, e.g.
  *   npx -y -p playwright@1.63.0 node tools/tune/chaos.mjs 20
  * or set PLAYWRIGHT to a directory that has node_modules/playwright.
- * The dev server must be up (npm run dev); URL overrides the address.
+ * The dev server must be up (npm run dev); URL overrides the address, and
+ * SIM_LOD=off runs every agent every step (systems/simLod.ts) for an A/B.
  */
 import { createRequire } from 'node:module';
 import path from 'node:path';
@@ -63,6 +64,8 @@ export async function openGame() {
   await page.goto(URL);
   await page.waitForFunction(() => window.__ub, null, { timeout: 60000 });
   await page.waitForTimeout(1500);
+  // SIM_LOD=off: everyone thinks every step (A/B against the sim's level of detail).
+  if (process.env.SIM_LOD === 'off') await page.evaluate(() => (window.__ub.simLod.enabled = false));
   return { browser, page };
 }
 

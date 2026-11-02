@@ -80,6 +80,17 @@ export interface AiDriver {
   turnCommitted: boolean;
   /** Seconds stopped at the line, free to go (green, or no lights), waiting to turn left. */
   lineBeat: number;
+  /**
+   * The last decision, for holdAi between an off-screen driver's ticks
+   * (systems/simLod.ts): the speed it wanted, its sideways shift from the
+   * lane line (pulled over, overtaking), and the room it had to stop in
+   * (a red, a give-way, the car ahead), m, measured from (fromX, fromZ).
+   */
+  wantSpeed: number;
+  shift: number;
+  room: number;
+  fromX: number;
+  fromZ: number;
 }
 
 export type Mood = 'calm' | 'panic' | 'rage';
@@ -230,6 +241,11 @@ export function createDriver(ix: number, iz: number, dir: Dir, rand: () => numbe
     overtaking: 0,
     turnCommitted: false,
     lineBeat: 0,
+    wantSpeed: 0,
+    shift: 0,
+    room: Infinity,
+    fromX: 0,
+    fromZ: 0,
   };
 }
 
@@ -244,6 +260,8 @@ export function driverFor(car: VehicleState, rand: () => number): AiDriver {
 const controls: VehicleControls = { throttle: 0, steer: 0, handbrake: false };
 const waypoint = { x: 0, z: 0 };
 const aim = { x: 0, z: 0 };
+/** Heading error to the aim point the last steerToward() chased, rad. */
+let aimDiff = 0;
 
 /** The point the driver is heading for: the entry to (ix, iz), or the exit when turning. */
 function currentWaypoint(ai: AiDriver): { x: number; z: number } {
@@ -308,41 +326,25 @@ export function driveAi(
   }
   const distToWaypoint = len2(target.x - car.x, target.z - car.z);
 
-  // Pure pursuit. On approach, chase a point a little ahead on the lane line
-  // rather than the far waypoint, so a car knocked sideways merges back onto
-  // the road instead of cutting across the pavement into a building corner.
-  let ax = target.x;
-  let az = target.z;
-  if (ai.phase === 'approach') {
-    const v = DIR_VEC[ai.dir];
-    const along = (car.x - target.x) * v.x + (car.z - target.z) * v.z;
-    const ahead = Math.min(0, along + LOOKAHEAD);
-    aim.x = target.x + v.x * ahead;
-    aim.z = target.z + v.z * ahead;
-    if (ai.yielding > 0 || ai.overtaking > 0) {
-      // Pull over (hug the kerb), or pull out into the oncoming lane to pass.
-      // Right of travel is (-v.z, v.x) (rightOf() without its allocation).
-      // Not into road works at the kerb, though: there they slow down in the lane.
-      const shift = ai.overtaking > 0 ? -OVERTAKE_SHIFT : signals?.kerbWorks?.(ai.ix, ai.iz, ai.dir) ? 0 : YIELD_SHIFT;
-      aim.x -= v.z * shift;
-      aim.z += v.x * shift;
-    }
-    ax = aim.x;
-    az = aim.z;
-  }
-  const desired = Math.atan2(ax - car.x, az - car.z);
-  const diff = wrapAngle(desired - car.heading);
-  const steer = Math.max(-1, Math.min(1, -diff * 2.5));
+  // Pull over (hug the kerb), or pull out into the oncoming lane to pass.
+  // Not into road works at the kerb, though: there they slow down in the lane.
+  ai.shift =
+    ai.phase === 'approach' && (ai.yielding > 0 || ai.overtaking > 0)
+      ? ai.overtaking > 0
+        ? -OVERTAKE_SHIFT
+        : signals?.kerbWorks?.(ai.ix, ai.iz, ai.dir)
+          ? 0
+          : YIELD_SHIFT
+      : 0;
+  const steer = steerToward(ai, car, target);
+  const diff = aimDiff;
+  ai.fromX = car.x;
+  ai.fromZ = car.z;
+  ai.room = Infinity;
 
   if (ai.reversing > 0) {
-    // Back out with opposite lock: steering flips in reverse, so this swings
-    // the nose toward the waypoint. Already lined up (nose in a corner)?
-    // Swing a different way each time so the next try takes another line.
     ai.reversing -= dt;
-    controls.throttle = REVERSE_THROTTLE;
-    controls.steer = Math.abs(steer) > 0.3 ? -steer : ai.attempts % 2 ? 0.8 : -0.8;
-    controls.handbrake = false;
-    return controls;
+    return reverseOut(ai, steer);
   }
 
   // Slow for turns (and while about to make one); panic only slows for the sharpest.
@@ -372,6 +374,7 @@ export function driveAi(
       const d = Math.max(0, toLine);
       wantSpeed = d < 0.4 ? 0 : Math.min(wantSpeed, Math.sqrt(2 * SIGNAL_EASE * d), d * 1.2);
       queued = toLine < SIGNAL_QUEUE;
+      ai.room = d;
     }
   }
 
@@ -380,6 +383,7 @@ export function driveAi(
     const d = Math.max(0, distToWaypoint - STOP_SHORT - Math.max(1.7, (car.body ?? CAR_BODY).reach));
     wantSpeed = d < 0.4 ? 0 : Math.min(wantSpeed, Math.sqrt(2 * SIGNAL_EASE * d), d * 1.2);
     queued = true;
+    ai.room = Math.min(ai.room, d);
   }
 
   // Brake for anything in our path (in a hurry: pass it if the other lane is clear).
@@ -421,11 +425,71 @@ export function driveAi(
       ai.blockedByPlayer = 0;
       // Never faster than we could stop from short of it (gap ~2.3 is touching, for two cars).
       wantSpeed = Math.min(wantSpeed, Math.max(0, (gap - safe) * 0.8 + 2), Math.sqrt(2 * FOLLOW_DECEL * Math.max(0, gap - FOLLOW_STOP)));
+      ai.room = Math.min(ai.room, Math.max(0, gap - FOLLOW_STOP));
     }
   }
 
   trackProgress(ai, distToWaypoint, wantSpeed, dt);
 
+  ai.wantSpeed = wantSpeed;
+  return speedTo(wantSpeed, vF, steer);
+}
+
+/**
+ * Between an off-screen driver's ticks (systems/simLod.ts): carry on with
+ * the last decision, still steering for the lane every step and braking
+ * within the room it had (so it stops at the line, or behind the car it
+ * was following, as if it were thinking). Null once it reaches its
+ * waypoint: time to decide where next, now.
+ */
+export function holdAi(ai: AiDriver, car: VehicleState): VehicleControls | null {
+  const target = currentWaypoint(ai);
+  if (len2(target.x - car.x, target.z - car.z) < WAYPOINT_RADIUS) return null;
+  const steer = steerToward(ai, car, target);
+  if (ai.reversing > 0) return reverseOut(ai, steer);
+  let wantSpeed = ai.wantSpeed;
+  if (ai.room < Infinity) {
+    const d = ai.room - len2(car.x - ai.fromX, car.z - ai.fromZ);
+    wantSpeed = d < 0.4 ? 0 : Math.min(wantSpeed, Math.sqrt(2 * SIGNAL_EASE * d), d * 1.2);
+  }
+  return speedTo(wantSpeed, forwardSpeed(car), steer);
+}
+
+/**
+ * Pure pursuit. On approach, chase a point a little ahead on the lane line
+ * (shifted ai.shift to the right) rather than the far waypoint, so a car
+ * knocked sideways merges back onto the road instead of cutting across the
+ * pavement into a building corner. Sets aimDiff.
+ */
+function steerToward(ai: AiDriver, car: VehicleState, target: { x: number; z: number }): number {
+  let ax = target.x;
+  let az = target.z;
+  if (ai.phase === 'approach') {
+    const v = DIR_VEC[ai.dir];
+    const along = (car.x - target.x) * v.x + (car.z - target.z) * v.z;
+    const ahead = Math.min(0, along + LOOKAHEAD);
+    // Right of travel is (-v.z, v.x) (rightOf() without its allocation).
+    ax = target.x + v.x * ahead - v.z * ai.shift;
+    az = target.z + v.z * ahead + v.x * ai.shift;
+  }
+  aimDiff = wrapAngle(Math.atan2(ax - car.x, az - car.z) - car.heading);
+  return Math.max(-1, Math.min(1, -aimDiff * 2.5));
+}
+
+/**
+ * Back out with opposite lock: steering flips in reverse, so this swings
+ * the nose toward the waypoint. Already lined up (nose in a corner)?
+ * Swing a different way each time so the next try takes another line.
+ */
+function reverseOut(ai: AiDriver, steer: number): VehicleControls {
+  controls.throttle = REVERSE_THROTTLE;
+  controls.steer = Math.abs(steer) > 0.3 ? -steer : ai.attempts % 2 ? 0.8 : -0.8;
+  controls.handbrake = false;
+  return controls;
+}
+
+/** Throttle toward `wantSpeed` from `vF`, with `steer`. */
+function speedTo(wantSpeed: number, vF: number, steer: number): VehicleControls {
   let throttle = Math.max(-1, Math.min(1, (wantSpeed - vF) * 0.4));
   // Our physics reverses on brake at a standstill; AI never wants that.
   if (vF < 0.6 && throttle < 0) throttle = 0;
@@ -468,6 +532,29 @@ function trackProgress(ai: AiDriver, dist: number, wantSpeed: number, dt: number
     ai.attempts++;
     ai.progress = NaN;
   }
+}
+
+/**
+ * Must this driver think every step wherever it is (systems/simLod.ts)?
+ * One worked up about the player (panic, rage), in a hurry (a call, the
+ * police), pulling over for a siren, or held up by the player.
+ */
+export function fullRateDriver(ai: AiDriver): boolean {
+  return ai.mood !== 'calm' || ai.urgent || ai.yielding > 0 || ai.blockedByPlayer > 0;
+}
+
+/** Within this of the junction it's heading into, a driver off screen thinks at least at 15 Hz, m (systems/simLod.ts). */
+export const JUNCTION_WATCH = 25;
+
+/**
+ * At or close to a junction (crossing it, or within JUNCTION_WATCH of its
+ * entry): lights, give-way and cross traffic change within a slow tick,
+ * so an off-screen driver here thinks no slower than 15 Hz.
+ */
+export function nearJunction(ai: AiDriver, car: VehicleState): boolean {
+  if (ai.phase === 'turning') return true;
+  const e = entryPoint(ai.ix, ai.iz, ai.dir, waypoint);
+  return Math.abs(e.x - car.x) < JUNCTION_WATCH && Math.abs(e.z - car.z) < JUNCTION_WATCH;
 }
 
 /** Wedged somewhere it can't drive out of: better recycled (when nobody's looking). */

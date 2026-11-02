@@ -86,8 +86,11 @@ drawing); tap a spot to go to the nearest road or pavement there (with the
 car: the nearer lane, facing its traffic, out of the junction), or SAFEHOUSE,
 HOSPITAL, NEON MILE, DOCKS. SCENES: start any city scene near you now (the
 scenes' `force()` / `begin()` / `soon()`; the fire blows up a car 11–24 m
-off and calls the truck; the tow leaves a car for the truck; RAIN CROWD
-turns the rain on; TURF WAR still waits for its holds). SAVE: +1 CRED
+off and calls the truck; the tow leaves a car for the truck; DOGS CHASE A
+RUNNER sets a passer-by running past a dog or two; RAIN CROWD turns the
+rain on; TURF WAR still waits for its holds). The starting is
+`game/sceneStarter.ts` (`SceneStarter.start(id, x, z, heading)`), shared
+with the title's highlights. SAVE: +1 CRED
 level, max perks, reset CRED, +$10,000, unlock all jobs, jump to any story
 job (it becomes the next job; you land by its payphone), tutorial done /
 reset, reset the save, export (share sheet, else clipboard) and import (a
@@ -232,7 +235,8 @@ share sheet mocked.
   *Look* below.
 - **Front door, controls and HUD** (`src/ui/`, see *UI* below): a title
   screen over a live attract mode (the city runs, the camera cruises after
-  traffic) with PLAY, a mode list other systems extend, settings, how to
+  traffic and now and then cuts to a city scene: *Title highlights* under
+  *UI*) with PLAY, a mode list other systems extend, settings, how to
   play, the best score and a small MORE AT DEEEK.ORG link to the hub (title
   only, never the pause menu); the first tap unlocks audio, shaders are warmed
   behind it; a one-time "Add to Home Screen" tip on iPhone Safari. Pause
@@ -442,6 +446,72 @@ headless Chromium (V8) on 2026-10-31 a sim step allocated ~12 KB (from
 ~55) and posing the crowd ~1.1 KB a frame (from ~3.5); what remains is
 mostly V8 number boxing, which JSC on the iPhone doesn't do (it NaN-boxes
 doubles).
+
+**Simulation level of detail** (`systems/simLod.ts`, pure, tested). The
+street's ambient agents think every step only where the player could see or
+reach them: on screen (the visible ground plus 10 m, wider than the draw
+cull) or within 25 m. Off screen within 80 m they tick at 15 Hz, further at
+5 Hz, each on its own round-robin bucket (a clock per agent, `newSimClock`)
+so the work spreads evenly over the steps, and a tick integrates all the
+time owed since the last one, so they cover the same ground; back at the
+full rate the debt is paid at once, 10 m before anyone can see it.
+`SimLod.begin(x, z, view)` once a step, `tier(x, z)`, `due(clock, tier, dt,
+pinned)` → the dt to integrate (0: skip this step), `settle(clock)` to
+think now between ticks.
+
+- **Traffic** (`main.ts driveCar`): a calm driver off screen runs `driveAi`
+  (the obstacle scans) on its tick and `holdAi` between, which keeps the last
+  decision but still steers for the lane every step and brakes within the
+  room it had (the stop line, the car ahead), so it stops where it would
+  have; reaching a waypoint makes it think at once. Within 25 m of a
+  junction, or crossing one, a far driver thinks at 15 Hz, not 5
+  (`nearJunction`: lights and cross traffic). Physics, ramps and every
+  collision stay every step for every vehicle.
+- **Walkers** (`stepCrowdPed` with the owed dt): street people and a scene's
+  people; their car and wall collisions, and the pavement's side-steps
+  (`scenes/pavement.ts`), run on their ticks too. Posing already skips
+  whoever is off screen (`PeoplePose`).
+- **Stray dogs** (`scenes/strayDogs.ts`, `DogPack.stepDog`): the runners and
+  cars are gathered only on a step some dog ticks.
+- **Always every step**: the player's car, police units and officers, road
+  ragers and panicking drivers (`fullRateDriver`: mood, `urgent`, pulling over
+  for a siren, held up by the player), any car a scene is driving (chases,
+  races, call-outs, the bus), anyone fighting, shooting, reeling or on fire,
+  people other systems own (gangs, story characters, fares: `fullRatePed`), a
+  dog on a chase, and anything within 25 m. The scene director, heat, combat
+  and pigeons (per frame, ~0.02 ms) are left as they were.
+
+The schedule is deterministic (a step counter and the order agents were
+made in), so seeded harness runs still repeat, though not with the old
+numbers (agents now draw on the shared random stream in another order).
+`__ub.simLod.enabled = false` runs everything every step, for A/B checks;
+`__ub.simProfile` (`core/sectionTimes.ts`) times the sim by system:
+`start()`, then `summary()` (mean, p95, max JS ms per frame) or `last(i)`.
+Measured 2026-11-01 on the iPhone profile (852×393, 'medium') in headless
+Chromium, rendering stubbed, scenes forced (`fight`, `iceCream`,
+`chaseCar`, `race`, `ambulance`, `dogs` and ten more), LOD on and off in
+alternate blocks of 150 frames (so both sample the same city), median of
+three runs, JS ms per frame, mean (top 1% of frames dropped) / p95, and the
+whole sim step's median:
+
+| | downtown, day | Neon Mile, 23:00 | Neon Mile, 3★ |
+|---|---|---|---|
+| traffic AI | 0.110 / 0.21 → 0.090 / 0.18 | 0.134 / 0.18 → 0.099 / 0.16 | 0.138 / 0.25 → 0.099 / 0.16 |
+| crowd step | 0.062 / 0.12 → 0.037 / 0.08 | 0.070 / 0.12 → 0.040 / 0.08 | 0.096 / 0.14 → 0.051 / 0.10 |
+| crowd collisions | 0.060 / 0.12 → 0.028 / 0.06 | 0.074 / 0.14 → 0.030 / 0.06 | 0.091 / 0.14 → 0.044 / 0.09 |
+| whole sim step (p50) | 0.515 → 0.445 | 0.470 → 0.395 | 0.575 → 0.450 |
+
+Off screen about three quarters of the crowd and over half the moving
+traffic tick slow. Vehicle physics, collisions, posing, scenes, heat and
+pigeons are unchanged within noise. Behaviour, LOD off / on: nothing on
+screen moved more than a stride a frame either way (45 s chasing round at
+up to 32 m/s, and the title's cruise); ambient traffic over 16 seeds ×
+300 s: 482 / 484 AI crashes (71 / 68 more than 80 m off), 114 / 132
+people knocked down, mean speed 5.14 / 5.27 m/s, stopped 40% / 39% of the
+time; scenes forced every 40 s for 240 s (six seeds): ice creams served
+122 / 135, chases ended by arrests and take-downs as before; the people a
+bus stop, a busker and the carts gathered while 70 m off screen stand on
+the same spots either way.
 
 API for other systems:
 
@@ -899,6 +969,9 @@ life.near('ice', x, z)            // within its range of the player (default SCE
 life.clock.start('ice', life.now) // wind the clock (or .defer(kind, now, s): nowhere to put one yet)
 // Holds: 'title' (attract), 'activity' (mission, race, frenzy, fare, Chaos Run), 'wanted', 'tutorial'.
 // LOUD = all four (chases, races, brawls); IN_PLAY = ['title'].
+// life.featured = kind: the title's highlight (game/attractHighlights.ts) lifts every hold for that kind alone;
+// life.lively(kind): d.playing() or featured (use it, not d.playing(), for people gathering to a scene).
+// subject?(out): Scene's optional hook for the highlights: where to look (x, z, vx, vz; cityLife watch()), false when over.
 
 // A service vehicle's call-out (scenes/service.ts): ambulance, fire truck, tow truck, police
 const run = ServiceRun.call(life, { archetype: 'firetruck', paint: '#c3191c', claimRange: 140, emergency: true,
@@ -1293,6 +1366,11 @@ verdict on difficulty; real play (the Diagnostics report's play log) is.
 Playwright isn't a game dependency: run with
 `npx -y -p playwright@1.63.0 node tools/tune/<harness>.mjs …` (or set
 `PLAYWRIGHT` to a directory with it installed), with `npm run dev` up.
+`SIM_LOD=off` runs every agent every step (*Simulation level of detail*):
+since it came in the runs draw randomness in another order, so the figures
+below shift within the bots' noise. 2026-11-01, 20 each, LOD on / off:
+5-star chases, car lost 19 / 20, busted 1 / 0, median end 26 / 24 s; Chaos Run
+medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
 
 - **`chaos.mjs [runs=20] [--bot rammer|weaver|drifter|all] [--seed 1]`**:
   Chaos Runs; score percentiles, medals, how runs ended, points by category.
@@ -1362,7 +1440,7 @@ Playwright isn't a game dependency: run with
   On foot: a parked car peaks at gain 0.2 against the car radio (−14 dB)
   2.5 m off, a shop 0.19 at 3.5 m, the boombox 0.6 at 4 m and still 0.05 at
   26 m; a switch is silent for about 0.5 s.
-- **`mayhem.mjs [--tier medium|low|high|all] [--time day|night|both] [--scenario mayhem|single] [--no-city-fires] [--step 50] [--dpr 3] [--shot dir]`**:
+- **`mayhem.mjs [--tier medium|low|high|all] [--time day|night|both] [--scenario mayhem|single|drive] [--no-city-fires] [--step 50] [--dpr 3] [--shot dir] [--shots 2,17] [--fx auto|off|on] [--fx-scale 0.25]`**:
   heavy mayhem on the iPhone profile (unlike the others it renders: real
   frames stepped by `__ub.stepFrame(ms)`, Rapier loaded, god mode and the
   destruction test on). Blows up four cars and three walls round the
@@ -1371,7 +1449,14 @@ Playwright isn't a game dependency: run with
   particles, the transparent fill projected from the camera (screens of
   overdraw; SwiftShader can't time the GPU), glows and their fill, draw
   calls, fires and rubble. `--dpr 1` is faster and gives the same fill
-  (a share of the screen). Numbers under *Effects and camera*.
+  (a share of the screen). `drive` blows nothing up: a bot drives the
+  nearest car round, handbraking into turns (tyre smoke). Smoke work is
+  the soft particles' fill, or offscreen their fill × scale² × 1.25 plus
+  the composite's tiles; `--fx off|on` forces the low-resolution smoke
+  path off or on, `--fx-scale` tries another scale (dev server only), and
+  `--shots` saves the frames at those seconds (with `--fx auto`, each
+  also from the same frame with smoke at full and at low resolution).
+  JS ms is the median frame. Numbers under *Effects and camera*.
 
 ## Layout
 
@@ -1714,6 +1799,11 @@ the first time it comes into view.
   frames the view. Desktops render into a half-float buffer so the 'high'
   tier can bloom (threshold follows the time of day: only real lights bloom
   by day). Cars' paint and glass alone reflect a PMREM studio environment.
+  On the medium and low tiers heavy smoke is drawn at half resolution and
+  composited back (*Low-resolution smoke* under *Effects and camera*).
+  Bloom is left as it is: phones never bloom (no HDR pipeline), and
+  desktop 'high' runs `UnrealBloomPass` from half resolution (5 mips,
+  linear-sampled taps, 13 passes, ~2.2 screens written).
 
 
 ### People
@@ -1812,16 +1902,42 @@ and every new program is compiled behind the current frame.
   self-lit, hazard paint catches the light, the ramp deck gets chevrons,
   red tips blink, `searchlight`/`siren_*` flash, `frenzy` takes the
   instance tint, `booth_roof` can be cut away.
-- **Families** (`render/propBatch.ts`, `render/worldProps.ts`): several
-  models merged into one geometry; each instance says which model it is
-  and the vertex shader drops every other model's vertices, so a family is
-  one draw call (and one in the shadow pass; the static families' props
-  are in the shadow cache instead, *Look*): `lamps`, `street` (traffic
-  lights, furniture, road works, carts and shelters), `roofs`, `trees`, `landmarks`, `things` (pickups,
-  frenzy tokens, packages, roadblock barriers and cones, knocked-over
-  props in flight) and `debris`. Static instances are bucketed in 32 m
-  cells and the buffers are refilled only when the view crosses a cell;
-  per-frame ones are appended. One program for all of them.
+- **Families** (`render/propBatch.ts`, `render/propChunks.ts`,
+  `render/worldProps.ts`): a family's models are packed one after another
+  into a vertex texture (RGBA32UI, two texels a vertex: position and
+  surface class; normal and colour as half floats), and each prop is drawn
+  as a few *chunks*, instances of a fixed run of vertices (the size picked
+  per family from its models: 126 for `street`, 156 for `roofs`, a whole
+  288 for `lamps`) that the vertex shader pulls from its own model's
+  stretch, dropping the run past the model's end. So a prop runs only its
+  own model (rounded up to whole chunks), and a family is still one draw
+  call (and one in the shadow pass; the static families' props are in
+  the shadow cache instead, *Look*) with no WebGL extension: `lamps`,
+  `street` (traffic lights, furniture, road works, carts and shelters),
+  `roofs`, `trees`, `landmarks`, `things` (pickups, frenzy tokens,
+  packages, roadblock barriers and cones, knocked-over props in flight)
+  and `debris`. Static instances are bucketed in 32 m cells and the
+  buffers (a copy per chunk) are refilled only when the view crosses a
+  cell; per-frame ones are appended. One program for all of them, each
+  family with its own vertex texture. Not `BatchedMesh`: it draws every
+  instance as its own draw (on iOS through `WEBGL_multi_draw`, which
+  Safari has had since 15 but ANGLE's Metal backend runs as a loop of
+  draws; without it, as Firefox is, one WebGL call per prop), and it has
+  no per-instance attributes for the props' phase, road, glow and tint.
+- **Lamp short lists** (`world/streetLamps.ts` `lampsNear`,
+  `render/shaderLib.ts` `lampList` / `UB_LAMP_LIST`): each prop, rubble
+  chunk and flying car part carries the (at most two) street-lamp heads
+  whose light can reach any of it, worked out on the CPU when it's placed
+  (every frame for the moving ones), and lights from those at night
+  instead of `ubStreetLight`'s walk of eight lamps per fragment. Every lamp
+  left out is out of reach, so it's the same light at a quarter of the
+  terms (`tests/lampList.test.ts` checks it against the lattice); lamps
+  stand 16 m apart and never at a corner, so every street prop qualifies,
+  and anything bigger that more lamps reach walks the lattice as before.
+  Same program per family (a per-instance branch, no switch mid-play);
+  rubble uses a `lampList` variant of the city's prop material, one more
+  program compiled at start-up. The fx debris boxes were already on plain
+  Lambert with no lamp light.
 - **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new
@@ -1894,7 +2010,8 @@ and every new program is compiled behind the current frame.
   tagged with the material names the GLB will use, so they light the same
   (`blink_amber` blinks, `ad_panel` / `screen` / `stripe_*` are self-lit,
   `roadwork_sign` / `barrier_orange` catch the light, `paint` takes the
-  tint); a GLB root of the same name replaces its stand-in. Contracts in
+  tint); a GLB root of the same name replaces its stand-in (a heavier real
+  model costs only its own instances, not the family's). Contracts in
   `docs/BLENDER_TODO.md` §10.
 - **Collision**: lamp posts, signal poles, bollards, dumpsters, planters,
   food carts and fruit stands, vending machines, ATMs, bus shelters (back
@@ -1984,6 +2101,16 @@ and every new program is compiled behind the current frame.
   model's, the others dropped early), and 17–88 street instances are in
   view (capacity 1,100), so the scene's submitted triangles rose about 1.6×
   (e.g. 253k → 438k on the plaza).
+  Vertex pulling (iPhone profile, 852×393, medium tier, on foot, seed 7,
+  2026-11-01; whole-frame triangles submitted by day, and the prop
+  families' vertex-shader runs, lit and shadow pass): spawn 190k → 47k
+  triangles (props 475k → 45k vertices), a road-works site 294k → 32k
+  (854k → 68k), a downtown street 125k → 48k (267k → 35k), a plaza 304k →
+  49k (834k → 67k); night the same. Draw calls unchanged (props 6–10 of
+  24–46); programs 22 → 23 (the rubble variant), none compiled after
+  start-up. Screenshots at the same spots, day and night, match to a few
+  stray shadow-edge pixels; rubble and car parts drawn from their lamp
+  lists and forced onto the lattice in the same frame match exactly.
 
 `dressCity(city, pickups, ramps)` → `{ street, landmarks, solids,
 knockables }` is the one call `main.ts` makes before building the
@@ -2135,6 +2262,40 @@ under 0.1 screens even with six fires. Without the living city's fires
 of 1.96: its fires (each wreck and hit wall burns 75 s) add ~20% to the
 mean fill, ~20% more live fire particles and eight glows, but the peak is
 the blasts', as it was before the city.
+
+**Low-resolution smoke** (`render/lowResFx.ts`; the pure plan, cost model
+and switch in `lowResFxPlan.ts`, tested). On tiers with `fxScale` under 1
+(medium and low: 0.5; high draws them with the scene) the soft particles
+(smoke, dust) can render before the scene into a half-size target with no
+MSAA: colour plus their alpha-weighted view depth, depth-tested against
+every building as an instanced box (one depth-only draw). A composite then
+lays them over the scene, one instance per covered tile of a 16×8 grid,
+with `gl_FragDepth` at the smoke's mean depth less 3 m, tested against the
+real depth: crisp building edges, no halo, and cars don't notch it. Each
+frame it projects the particles' quads to tiles and goes offscreen only
+when that saves fill (with hysteresis), so normal driving costs nothing. On
+phones the target is flagged as an XR target so the particles tone-map and
+encode as on the canvas; it needs `EXT_color_buffer_(half_)float`, else
+smoke stays full size. The programs are precompiled with the scene's
+(`Look.precompile`, also after a lost context) and the target follows the
+drawing buffer. `look.lowFx.mode` (`auto`, `off`, `on`) is for tests and
+screenshots. Smoke work is in full-resolution screens of fragment work
+(offscreen: fill × scale² × 1.25 for the depth output, plus the composite's
+tiles); 0.12.0 → 0.12.1, same seed, day, iPhone profile:
+
+| Run, tier | smoke fill → work, peak | mean | frames offscreen | draw calls (peak) |
+|---|---|---|---|---|
+| mayhem, medium | 7.41 → 3.06 | 1.25 → 0.79 | 50% | 60 → 60 |
+| mayhem, low | 2.40 → 1.50 | 0.59 → 0.51 | 20% | 31 → 33 |
+| one car, medium | 5.60 → 2.04 | 0.55 → 0.28 | 85% | 52 → 54 |
+| one car, low | 1.61 → 0.74 | 0.23 → 0.18 | 36% | 29 → 31 |
+| driving (tyre smoke), medium | 0.35 → 0.34 | 0.06 → 0.06 | 0% | 58 → 58 |
+
+Shots of the same frame drawn both ways differ by under 1/255 on average.
+Low stays at half scale: a quarter roughly halves its smoke work again but
+softens the smoke visibly. The occluder boxes ignore breach holes, parapets,
+rooftop kit and trees; the XR-target flag leans on three r186 internals
+(recheck on an upgrade).
 
 API for other systems:
 
@@ -2408,4 +2569,47 @@ haptics.pulse(strength0to1, ms)                          // also fired by crash 
 
 Kinds: `objective`, `enemy`, `police`, `pickup`, `friend`, `shop`, `race`,
 `marker` (each has a default colour).
+
+**Title highlights** (`game/attractHighlights.ts`; when and which is
+`ui/attractShow.ts`, pure and tested; the camera is `ui/titleCamera.ts`).
+Behind the title the camera cruises after traffic (`ui/attract.ts`); after
+10–14 s, then every 15–25 s of cruising, it cuts to something happening:
+a police chase (the getaway; a scooter one in four), a street race (the
+leader, then the winner), a car fire and its truck (framed together as the
+truck comes in), a turf war, an accident and the argument, the ice cream
+van and its queue, a bus pulling in at a stop, a busker and the crowd, a
+mugging (the mugger), stray dogs after a runner. A shuffled round, never the
+same twice running. The scene is started round the camera with the TEST
+menu's `SceneStarter`; `CityLife.featured` lifts its holds (the title, a
+first run's tutorial) and its people gather (`lively`), every other scene
+stays held, so there's one at a time. It's followed through its
+`subject()` until that says it's over (then 3 s more) or for 25–40 s; one
+with nothing to show 8 s after starting, or that won't start, is skipped
+for the next (four refusals in a row: cruise again). Close by and on
+screen the camera glides over; otherwise the city fades out over 0.3 s
+(`.title-fade`, under the menu), the camera jumps and the streets are
+filled round it, and it fades back in over 0.5 s. A caption fades in for
+~4.5 s under the version, top right (`POLICE CHASE` / `NEON MILE`: the
+district). A scene the show moved on from is reset once out of view (or
+after 30 s); the fire, the turf war and the dogs wind down by themselves.
+Highlights start only with the title open (not under Settings or How to
+play). PLAY stops the show, clears `featured` and resets every scene with
+the run (no title actors, no stars).
+**Framing:** what the camera follows sits in the middle of the free area
+right of the menu column, not the screen centre: `TitleScreen.menuRight`
+(`.title-main`'s right edge in px, measured by a ResizeObserver, never per
+frame) → half of it in px (`freeCentreOffsetPx`, capped at 70% of the width)
+→ ground metres through the rig's camera (`groundPerPx`: height, tilt, FOV,
+aspect; exact on the ground line through the look point, checked against the
+projection at 852×393, 852×340, 1280×720 and 1920×1080) taken off the
+camera's x, eased (`TitleFraming`, 2.5/s) as the layout changes or the
+title closes. A gentler look-ahead behind the title (`LEAD_ATTRACT`; FxDirector
+only sets the lead in play) and no lead of the attract camera's own on a
+highlight keep a racer at 30 m/s in that area on a 340 px-high screen; in
+play the rig is as before.
+
+```ts
+__ub.highlights.show.phase / .current   // 'cruise' | 'cue' | 'watch' | 'linger'; the highlight id
+__ub.highlights.show.timing             // SHOW_TIMING: cruise, first, settle, watch, linger, tries (mutable for a test)
+```
 

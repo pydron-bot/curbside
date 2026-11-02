@@ -12,6 +12,7 @@ import { GLOW, GlowSprites } from './glowSprites';
 
 /** Adds faked lights for one frame (muzzle flashes, beacons, ...); `view` is the visible ground. */
 export type GlowSource = (glows: GlowSprites, view: Rect) => void;
+import { LowResFx, type LowResSource } from './lowResFx';
 import { PickupMesh } from './pickupMesh';
 import { PostEffects, mountVignette, precompile } from './post';
 import { getQuality, onQualityChange } from './quality';
@@ -62,6 +63,8 @@ export class Look {
   /** props.glb / pickups.glb models: street furniture, rooftop kit, trees, landmarks, and per-frame `things`. */
   readonly props: WorldProps;
   readonly post: PostEffects;
+  /** Smoke and dust drawn at the tier's fxScale when that saves fill (see useLowResFx). */
+  readonly lowFx: LowResFx;
   /** Every building's dressing (roof, props, shopfronts), in city.buildings order. */
   readonly plans: readonly BuildingPlan[];
   private readonly sunShadow: SunShadow;
@@ -114,6 +117,8 @@ export class Look {
     this.pickups = new PickupMesh(pickups, this.props);
     scene.add(...this.characters.meshes, this.cars.root, this.pickups.mesh, this.contactShadows.mesh, this.glows.mesh);
     this.post = new PostEffects(renderer);
+    this.lowFx = new LowResFx(renderer, city.buildings);
+    scene.add(this.lowFx.composite);
     renderer.info.autoReset = false; // reset once per frame in render()
     mountVignette(overlayParent);
     onQualityChange(() => this.applyTier());
@@ -167,9 +172,31 @@ export class Look {
     this.glows.end();
     this.sunShadow.update(view, this.lighting.toLight);
     if (!this.uploaded) this.uploadCity(camera);
-    // Count the whole frame (shadow pass, scene, bloom), not just the last pass.
+    // Count the whole frame (offscreen smoke, shadow pass, scene, bloom), not just the last pass.
     this.renderer.info.reset();
+    this.lowFx.render(camera);
     this.renderer.render(this.scene, camera);
+  }
+
+  /**
+   * Hand the soft particles (Effects.lowRes) to the offscreen path: on tiers
+   * with fxScale under 1 they're drawn small and composited when that saves
+   * fill. Call before the first frame (the warm-up compiles its programs).
+   */
+  useLowResFx(source: LowResSource): void {
+    this.lowFx.attach(source);
+    this.warmedUp = false;
+  }
+
+  /**
+   * Compile every program now: the scene's for the pass it really draws
+   * into, the cars' depth variants and the offscreen smoke passes. Behind
+   * the title or a pause card, never mid-play.
+   */
+  precompile(camera: Camera): void {
+    precompile(this.renderer, this.scene, camera);
+    this.cars.precompileDepth(this.scene, camera);
+    this.lowFx.precompile(camera);
   }
 
   /**
@@ -200,8 +227,7 @@ export class Look {
    */
   private warmUp(camera: Camera): void {
     this.warmedUp = true;
-    precompile(this.renderer, this.scene, camera);
-    this.cars.precompileDepth(this.scene, camera);
+    this.precompile(camera);
   }
 
   /**

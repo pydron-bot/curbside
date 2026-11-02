@@ -11,7 +11,7 @@ import type { SceneHold } from '../../systems/cityScenes';
 import { BLOCK_SIZE, isCarPark, lotBytes } from '../../world/city';
 import { blockSide } from '../../world/kerbs';
 import type { CrowdPed } from '../population';
-import type { Scene, SceneCtx } from '../cityLife';
+import { watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { secs, labelMembers, type LabelSink } from '../debugLabels';
 import { Gathering } from './gathering';
 import { roomFor, streetBody } from './people';
@@ -121,6 +121,12 @@ export class Buskers implements Scene {
     }
   }
 
+  /** The busker. */
+  subject(out: Subject): boolean {
+    const b = this.buskers[0];
+    return b !== undefined && watch(out, b.ped.agent.s.x, b.ped.agent.s.z);
+  }
+
   /** Debug (__ub): a busker at the spot nearest the player, with a few watching already. */
   force(): boolean {
     const life = this.life;
@@ -182,7 +188,7 @@ export class Buskers implements Scene {
     if (b.beat < was || was === 0) b.ped.model.cheer(4.2);
     if (b.beat >= 4.3 && was < 4.3) b.ped.model.hail(1.5);
     b.crowd.step(dt);
-    if (tick && life.d.playing()) {
+    if (tick && life.lively('busker')) {
       if (roomFor(life, 2)) b.crowd.recruit();
       // Tips: each watcher now and then.
       const rand = life.d.rand;

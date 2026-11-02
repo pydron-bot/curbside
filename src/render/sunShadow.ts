@@ -110,9 +110,9 @@ export class SunShadow {
   private readonly statics: Object3D[] = [];
   private readonly families: PropBatch[] = [];
   private readonly hidden: Object3D[] = [];
-  /** What the static pass walks: the static casters and the families' twins, by reference (never their parent). */
+  /** What the static pass walks: the static casters and the families' cache meshes, by reference (never their parent). */
   private readonly staticRoot = new Object3D();
-  /** What the per-frame pass walks: the scene and the families' moving-prop twins, by reference. */
+  /** What the per-frame pass walks: the scene and the families' moving-prop meshes, by reference. */
   private readonly dynamicRoot = new Object3D();
   /** Draws the cached map; never in the scene, so no material sees a second light. */
   private readonly staticLight = new DirectionalLight();
@@ -263,7 +263,7 @@ export class SunShadow {
     const casters = this.staticRoot.children;
     casters.length = 0;
     for (let i = 0; i < this.statics.length; i++) casters.push(this.statics[i]);
-    for (let i = 0; i < this.families.length; i++) this.families[i].fillShadowTwins(c.ground, casters);
+    for (let i = 0; i < this.families.length; i++) this.families[i].fillShadowStatics(c.ground, casters);
     this.pending = true;
   }
 
@@ -306,7 +306,7 @@ export class SunShadow {
     casters.push(scene);
     for (let i = 0; i < this.families.length; i++) {
       const f = this.families[i];
-      const moving = f.dynamicShadowTwin();
+      const moving = f.movingShadow();
       if (moving) casters.push(moving);
       if (!f.mesh.visible) continue;
       f.mesh.visible = false;

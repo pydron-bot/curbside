@@ -80,6 +80,7 @@ import { Accidents } from './scenes/accidents';
 import { DoubleParking } from './scenes/doubleParking';
 import { len2 } from '../core/len';
 import type { LabelSink } from './debugLabels';
+import type { SimLod } from '../systems/simLod';
 
 /** Scenes work within this distance of the player, m; people and cars they hold are let go beyond SCENE_DROP (out of view). */
 export const SCENE_RANGE = 150;
@@ -144,10 +145,29 @@ export interface CityLifeDeps {
   callIn?(crime: Crime): void;
   /** Hand a scene's officer to the police (the player turned on them): normal heat rules from there. */
   enlist?(officer: CrowdPed): void;
+  /** The sim's level of detail: off screen, stray dogs think less often (without it, every step). */
+  lod?: SimLod;
 }
 
 /** A scene's view of the director. */
 export type SceneCtx = CityLife;
+
+/** Where a camera watching a scene looks (the title's highlights): a point and its velocity. */
+export interface Subject {
+  x: number;
+  z: number;
+  vx: number;
+  vz: number;
+}
+
+/** Write a subject into `out` (for a scene's subject(): `return watch(out, s.x, s.z, s.vx, s.vz)`). */
+export function watch(out: Subject, x: number, z: number, vx = 0, vz = 0): true {
+  out.x = x;
+  out.z = z;
+  out.vx = vx;
+  out.vz = vz;
+  return true;
+}
 
 /**
  * A kind of ambient scene: stepped every sim step, reset for a fresh run.
@@ -163,6 +183,8 @@ export interface Scene {
   reset(): void;
   /** Debug labels (settings.debugLabels, ~5 Hz): what its people and cars are doing. */
   describe?(out: LabelSink): void;
+  /** The title's highlights (game/attractHighlights.ts): what to watch of it into `out`; false with nothing on. */
+  subject?(out: Subject): boolean;
 }
 
 export class CityLife {
@@ -204,6 +226,11 @@ export class CityLife {
   private readonly world: SceneWorld = { playing: false, activity: false, stars: 0, tutorial: false };
   private scanTimer = 0;
   private tidyTimer = 0;
+  /**
+   * The kind the title's show is directing (game/attractHighlights.ts):
+   * nothing holds it off, and its people gather as in play (lively).
+   */
+  featured: string | null = null;
 
   constructor(d: CityLifeDeps) {
     this.d = d;
@@ -345,7 +372,17 @@ export class CityLife {
     w.activity = this.d.activity();
     w.stars = this.d.stars();
     w.tutorial = this.d.tutorial();
+    if (kind === this.featured) {
+      // Directed behind the title: no holds (a first run's tutorial included).
+      w.playing = true;
+      w.activity = w.tutorial = false;
+    }
     return this.clock.due(kind, this.now, running, w);
+  }
+
+  /** Should `kind`'s people come and gather (queues, crowds)? In play, or the title's show is on it. */
+  lively(kind: string): boolean {
+    return this.d.playing() || kind === this.featured;
   }
 
   /** Is (x, z) close enough to the player for `kind` to start there? */

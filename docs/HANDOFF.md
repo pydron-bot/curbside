@@ -42,7 +42,8 @@ independently reviewed and fixed, then merged and play-tested:
 3. **Look:** batched rendering (all people/cars/glows in a few draw calls), sun
    shadows, ACES + grade, shader-drawn roads/buildings, districts, 12-minute
    day/night, street light pools, desktop bloom (`src/render/look.ts`).
-4. **UI:** title over a live attract mode, pause/settings/how-to, rotate card,
+4. **UI:** title over a live attract mode (framed right of the menu, cutting to
+   city-scene highlights: README *Title highlights*), pause/settings/how-to, rotate card,
    touch overhaul (point-to-steer, pedal pad, twin-stick aim), mouse and
    gamepad aim, new HUD, radar with blips/waypoints, haptics (`src/ui/`).
 5. **FX:** particle pools, skid marks, sparks, tracers, muzzle flashes,
@@ -325,10 +326,9 @@ still get the offline shell.
    direction, vendor spot) and `dressing.street.busStops` (wait spot, where
    a bus pulls in, its lane) are used by item 12 (the shelters are now
    the only bus stops; walkers step round a kerb cart's queue). **For the device pass:**
-   whether the stand-ins read from the phone's camera, and the street
-   family's vertex cost (5,976 vertices per instance, was 3,276; every
-   instance runs every model's vertices, dropped early) in a busy downtown
-   view. Not done: scaffolding, a work van, water barriers.
+   whether the stand-ins read from the phone's camera. (The street
+   family's vertex cost is fixed on `claude/perf-props`: each prop now runs
+   only its own model; README *Families*.) Not done: scaffolding, a work van, water barriers.
 
 12. **City people: done 2026-11-01** on `claude/city-people` (README *City
    life*, *People*; built on item 10's base). The bus shelters are the only
