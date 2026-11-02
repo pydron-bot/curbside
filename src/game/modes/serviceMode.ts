@@ -228,7 +228,11 @@ export class ServiceMode implements Mode {
     const { rand, player } = ctx.deps;
     const at = player.position;
     let s: RoadSpot | null = null;
-    for (let i = 0; i < 40 && !s; i++) s = pickParkingSpot(at.x, at.z, CONTRACT_RANGE[0], CONTRACT_RANGE[1], rand, [], this.spot);
+    for (let i = 0; i < 40 && !s; i++) {
+      s = pickParkingSpot(at.x, at.z, CONTRACT_RANGE[0], CONTRACT_RANGE[1], rand, [], this.spot);
+      // Not on top of a car already parked there.
+      if (s && ctx.deps.vehicles.some((o) => Math.abs(o.sim.x - s!.x) < 6 && Math.abs(o.sim.z - s!.z) < 6)) s = null;
+    }
     if (!s) return;
     const k = Math.floor(rand() * CONTRACT_MODELS.length);
     // A little askew at the kerb: it was left, not parked.
@@ -273,7 +277,7 @@ export class ServiceMode implements Mode {
       if (this.goal.stale(tools.winchUp < 1 ? -1 : left * 10000 + pay)) this.goal.text = tools.winchUp < 1 ? 'WINCHING…' : left > 0 ? `TO THE DOCKS YARD ${left} M · $${fmt(pay)}` : `STOP IN THE YARD · $${fmt(pay)}`;
     } else if (c) {
       const left = Math.round(len2(c.car.sim.x - at.x, c.car.sim.z - at.z) / 10) * 10;
-      if (this.goal.stale(-2 - left)) this.goal.text = tool === 'winch' ? `HOOK VEX'S WRECK · ${left} M` : `GET A TOW TRUCK · WRECK ${left} M`;
+      if (this.goal.stale(-1e6 - left)) this.goal.text = tool === 'winch' ? `HOOK VEX'S WRECK · ${left} M` : `GET A TOW TRUCK · WRECK ${left} M`;
     } else if (tool === 'chime' && tools.chime.on) {
       const n = tools.queue.members.length;
       if (this.goal.stale(-1000 - (tools.chime.anchored ? n : 99))) this.goal.text = tools.chime.anchored ? `CHIME ON · QUEUE ${n}` : 'CHIME ON · PARK FOR A QUEUE';

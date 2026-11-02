@@ -92,6 +92,7 @@ export function mountCarButtons(layer: HTMLElement, out: InputSource, haptics?: 
         shownGun = undefined;
         fire.classList.toggle('tool', t !== null);
         if (t) fire.dataset.tool = t;
+        else delete fire.dataset.tool;
         toolLabel.textContent = t ? t.toUpperCase() : '';
         if (t !== 'hose') endAim();
       }

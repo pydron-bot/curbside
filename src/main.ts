@@ -774,9 +774,9 @@ function simulate(dt: number) {
   const driving = player.driving;
   // A race or Chaos Run 3-2-1 holds the car on the line.
   const playerControls = driving && !progress.holdControls ? input.readVehicle(driving.sim, dt) : NO_CONTROLS;
-  // Nitro burns only while held, lit and in the tank.
   // Towing on a borrowed tow truck: held to the tow speed, no nitro.
   if (playerControls !== NO_CONTROLS) cityLife.tools.limit(playerControls);
+  // Nitro burns only while held, lit and in the tank.
   const boosting = nitro.step(dt, driving !== null && playerControls.boost === true && !attract.active, driving ? driving.sim : null);
   // NO_CONTROLS is shared: only the frame's own read gets the boost flag.
   if (playerControls !== NO_CONTROLS) playerControls.boost = boosting;

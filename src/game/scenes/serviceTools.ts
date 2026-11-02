@@ -171,7 +171,7 @@ export class ServiceTools implements Scene {
         this.truck = v;
         this.tool = tool;
       }
-    } else if (!v && this.truck && (p.lastDriven !== this.truck || !this.truck.mesh.root.visible)) this.drop();
+    } else if (!v && this.truck && (p.lastDriven !== this.truck || !this.truck.mesh.root.visible || this.truck.damage.wrecked)) this.drop();
     const t = this.truck;
     const pressed = this.pressed;
     this.pressed = false;
@@ -289,10 +289,8 @@ export class ServiceTools implements Scene {
   private stepChime(t: Vehicle, dt: number, pressed: boolean): void {
     const life = this.life;
     const s = t.sim;
-    if (pressed) {
-      this.chime.press();
-      if (!this.chime.on) this.emit('release', s.x, s.z);
-    }
+    // A second press stops the jingle; a queue lingers a while (Chime.step lets it go).
+    if (pressed) this.chime.press();
     switch (this.chime.step(dt, s.x, s.z, speed(s))) {
       case 'ring':
         this.emit('chime', s.x, s.z);
@@ -366,7 +364,16 @@ export class ServiceTools implements Scene {
       look.wrecked = v.damage.wrecked;
       look.burning = v.damage.burning || (fires?.burningNear(vs.x, vs.z, 4) ?? false);
       look.parked = v.parked === true;
-      look.busy = v.ai !== null || Boolean(v.pursuit) || Boolean(v.scene) || v.police === true || v.exported === true || isBike(v.archetype) || tows?.towing(v) !== null;
+      // An activity's car (a job's) isn't the yard's, bar one left for a tow (Vex's contract).
+      look.busy =
+        v.ai !== null ||
+        Boolean(v.pursuit) ||
+        Boolean(v.scene) ||
+        v.police === true ||
+        v.exported === true ||
+        isBike(v.archetype) ||
+        (tows?.towing(v) ?? null) !== null ||
+        (life.d.keep(v) && v.towable !== true);
       look.reach = vs.body?.reach ?? 2.4;
       look.delivered = this.done.has(v);
       if (!hookable(look)) continue;

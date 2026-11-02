@@ -587,7 +587,7 @@ describe('duty pay (serviceMode)', () => {
     const tools = { hooked: null as Vehicle | null, delivered: null as Vehicle | null, yard: { x: 500, z: 500 }, winchUp: 1, chime: { on: false, anchored: false }, queue: { members: [] } };
     const spawned: Vehicle[] = [];
     const ctx = {
-      deps: { bus, player, input: { lastDevice: 'keyboard' }, look: { time: { hour } }, radar: anything(), audio: anything(), rand: random(5) },
+      deps: { bus, player, vehicles: [], input: { lastDevice: 'keyboard' }, look: { time: { hour } }, radar: anything(), audio: anything(), rand: random(5) },
       live: true,
       freeRoam: true,
       busy: null as string | null,
