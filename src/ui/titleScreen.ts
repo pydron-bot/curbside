@@ -53,6 +53,12 @@ export class TitleScreen implements Panel {
   private readonly modeItems = new Map<string, { el: HTMLElement; item: NavItem }>();
   private readonly playBtn: HTMLButtonElement;
   private hintDevice: InputDevice | null = null;
+  private readonly main: HTMLElement;
+  private readonly fadeEl: HTMLElement;
+  private readonly captionEl: HTMLElement;
+  private fadeShown = 0;
+  /** The menu column's right edge, px from the left of the screen (kept up to date on resize). */
+  menuRight = 0;
 
   constructor(
     parent: HTMLElement,
@@ -64,6 +70,7 @@ export class TitleScreen implements Panel {
     root.className = 'ui-overlay';
     root.hidden = true;
     root.innerHTML = `
+      <div class="title-fade"></div>
       <div class="title-scrim"></div>
       <div class="title-main">
         <h1 class="wordmark" aria-label="Curbside"><span class="wm" data-text="CURBSIDE">CURBSIDE</span><i class="wm-drip"></i></h1>
@@ -75,6 +82,7 @@ export class TitleScreen implements Panel {
       </div>
       <div class="title-hints"></div>
       <div class="title-version">v${VERSION}</div>
+      <div class="title-caption" aria-hidden="true"><b></b><span></span></div>
       <div class="a2hs" hidden>
         <span class="a2hs-icon">${ICONS.share}</span>
         <span class="a2hs-text"><b>Play full screen</b>Tap <span class="inline-icon">${ICONS.share}</span> then <em>Add to Home Screen</em></span>
@@ -88,6 +96,17 @@ export class TitleScreen implements Panel {
     this.hubLink = root.querySelector('.title-hub')!;
     this.hints = root.querySelector('.title-hints')!;
     this.tip = root.querySelector('.a2hs')!;
+    this.main = root.querySelector('.title-main')!;
+    this.fadeEl = root.querySelector('.title-fade')!;
+    this.captionEl = root.querySelector('.title-caption')!;
+    // Measured on layout changes only, never per frame.
+    const measure = () => (this.menuRight = this.root.hidden ? 0 : this.main.getBoundingClientRect().right);
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(measure);
+      ro.observe(root);
+      ro.observe(this.main);
+    }
+    window.addEventListener('resize', measure);
 
     this.playBtn = menuButton('PLAY', { icon: 'play', primary: true, sub: 'Free roam — cause chaos', className: 'title-play' });
     this.modes.append(this.playBtn);
@@ -189,6 +208,31 @@ export class TitleScreen implements Panel {
 
   close(): void {
     this.root.hidden = true;
+  }
+
+  /** Darken the city behind the menu for a cut (0 clear .. 1 black); cheap to call every frame. */
+  setFade(alpha: number): void {
+    const a = Math.round(alpha * 100) / 100;
+    if (a === this.fadeShown) return;
+    this.fadeShown = a;
+    this.fadeEl.style.opacity = String(a);
+  }
+
+  /** A highlight's caption ("POLICE CHASE · NEON MILE") in the free corner, fading in and out. */
+  showCaption(text: string): void {
+    const [what, where = ''] = text.split(' · ');
+    this.captionEl.querySelector('b')!.textContent = what;
+    this.captionEl.querySelector('span')!.textContent = where;
+    this.captionEl.getAnimations?.().forEach((a) => a.cancel());
+    this.captionEl.animate?.(
+      [
+        { opacity: 0, transform: 'translateX(12px)' },
+        { opacity: 1, transform: 'none', offset: 0.1 },
+        { opacity: 1, transform: 'none', offset: 0.82 },
+        { opacity: 0, transform: 'none' },
+      ],
+      { duration: 4600, easing: 'ease-out', fill: 'both' },
+    );
   }
 
   /** Key hints follow the device in use (none on touch). Cheap to call every frame. */

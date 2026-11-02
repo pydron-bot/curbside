@@ -195,7 +195,8 @@ export class FxDirector {
     // During hit-stop the follow slows with the sim, so the view freezes with the action.
     d.rig.timeScale = this.hitStop.scale;
     const driving = playing ? d.player.driving : null;
-    d.rig.setLead(!playing || driving ? LEAD_CAR : LEAD_FOOT);
+    // Behind the title the title camera sets its own (ui/titleCamera.ts LEAD_ATTRACT).
+    if (playing) d.rig.setLead(driving ? LEAD_CAR : LEAD_FOOT);
     let lift = 0;
     if (playing && !driving && d.player.alive) {
       if (d.player.arsenal.current) lift = ARMED_LIFT;

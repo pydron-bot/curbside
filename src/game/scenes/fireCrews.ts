@@ -17,7 +17,7 @@
 import type { VehicleState } from '../../entities/vehicle';
 import { FireBoard, wallFireAt, type Fire } from '../../systems/emergency';
 import type { CrowdPed, Vehicle } from '../population';
-import type { Scene, SceneCtx } from '../cityLife';
+import { watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { ServiceRun, type ServiceSpec } from './service';
 import { len2 } from '../../core/len';
 import { secs, type LabelSink } from '../debugLabels';
@@ -44,6 +44,8 @@ export const HOSE_REACH = 14;
 /** Back at the truck, or given up walking back, after this long, s. */
 const PACK_UP = 8;
 const CREW = 2;
+/** subject(): with the truck within this of its fire, frame them both (fully from 20 m closer), m. */
+const FRAME_TRUCK = 40;
 const FIREFIGHTER = { shirt: '#b8902e', pants: '#2a2a28', hair: '#e2b81c', shoes: '#1a1a1a' };
 
 export const FIRE_TRUCK: ServiceSpec = {
@@ -147,6 +149,18 @@ export class FireCrews implements Scene {
     this.crews.push({ run, fire: f, fireId: f.id, work: 'walk', timer: 0, out: false, men: [null, null], hosing: [false, false] });
     life.emit('fireTruck', run.v.sim.x, run.v.sim.z);
     return true;
+  }
+
+  /** The fire a crew's called to, framed with its truck once it's close; nothing once they're leaving. */
+  subject(out: Subject): boolean {
+    const c = this.crews[0];
+    if (!c || c.run.phase === 'leave' || c.run.phase === 'done' || c.run.phase === 'failed') return false;
+    const f = c.fire;
+    const t = c.run.v.sim;
+    if (!f.alive || f.id !== c.fireId) return watch(out, t.x, t.z, t.vx, t.vz);
+    // The truck coming in: the camera meets it halfway.
+    const k = 0.5 * Math.max(0, Math.min(1, (FRAME_TRUCK - len2(t.x - f.x, t.z - f.z)) / 20));
+    return watch(out, f.x + (t.x - f.x) * k, f.z + (t.z - f.z) * k, t.vx * k, t.vz * k);
   }
 
   describe(out: LabelSink): void {

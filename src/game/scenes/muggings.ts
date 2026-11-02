@@ -15,7 +15,7 @@ import { BLOCKS_PER_SIDE } from '../../world/city';
 import { blockAt, cornerPoint, hurtPed } from '../../systems/crowd';
 import { nextCorner } from '../../systems/streetPeople';
 import type { CrowdPed } from '../population';
-import type { Scene, SceneCtx } from '../cityLife';
+import { watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { secs, type LabelSink } from '../debugLabels';
 import { handBack, roomFor } from './people';
 import { len2 } from '../../core/len';
@@ -126,6 +126,14 @@ export class Muggings implements Scene {
   }
 
   /** Debug (__ub): the nearest two passers-by: one mugs the other. */
+  /** The mugger. */
+  subject(out: Subject): boolean {
+    const m = this.muggings[0];
+    if (!m || !this.life.present(m.mugger)) return false;
+    const s = m.mugger.agent.s;
+    return watch(out, s.x, s.z, s.vx, s.vz);
+  }
+
   force(): boolean {
     const life = this.life;
     let victim: CrowdPed | null = null;

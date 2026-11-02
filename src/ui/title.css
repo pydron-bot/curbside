@@ -431,3 +431,41 @@
     animation: none;
   }
 }
+
+/* --- Attract highlights (titleCamera.ts): the cut's fade over the city, under the menu --- */
+.title-fade {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: rgb(8 5 18);
+  opacity: 0;
+}
+
+/* What the camera cut to, small in the free corner under the version. */
+.title-caption {
+  position: absolute;
+  top: calc(var(--edge-t) + 18px);
+  right: var(--edge-r);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  pointer-events: none;
+  opacity: 0;
+  text-shadow: 0 1px 3px rgb(0 0 0 / 0.9);
+}
+
+.title-caption b {
+  font: italic 900 15px/1 var(--display-font);
+  letter-spacing: 0.04em;
+  color: #fff;
+  border-right: 3px solid var(--neon-pink);
+  padding-right: 7px;
+}
+
+.title-caption span {
+  font: 800 9px/1 var(--hud-font);
+  letter-spacing: 0.2em;
+  color: var(--neon-cyan);
+  padding-right: 10px;
+}

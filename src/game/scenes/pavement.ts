@@ -7,7 +7,8 @@
  * CLEAR to someone a scene holds standing is eased sideways across their
  * way (systems/streetPeople.ts sidestep), so they pass round and carry on
  * to their corner; static collision runs after, so nobody's pushed into a
- * wall. Nothing is started, nothing held: no clock of its own.
+ * wall. Nothing is started, nothing held: no clock of its own (a walker
+ * off screen steps aside on its own tick, systems/simLod.ts).
  */
 import { sidestep } from '../../systems/streetPeople';
 import type { Scene, SceneCtx } from '../cityLife';
@@ -30,10 +31,14 @@ export class Pavement implements Scene {
     const people = this.life.people;
     if (people.length === 0) return;
     const crowd = this.life.d.population.crowd;
-    const max = STEP_SPEED * dt;
     for (let i = 0; i < crowd.length; i++) {
-      const a = crowd[i].agent;
+      const c = crowd[i];
+      const a = c.agent;
       if (a.mode !== 'walk' || a.scene) continue;
+      // Off screen a walker moves on its own tick (systems/simLod.ts): it steps aside then, as far as it walked.
+      const moved = c.lod ? c.lod.dt : dt;
+      if (moved === 0) continue;
+      const max = STEP_SPEED * moved;
       const s = a.s;
       for (let j = 0; j < people.length; j++) {
         const o = people[j].agent;

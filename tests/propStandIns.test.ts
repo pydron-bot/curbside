@@ -42,9 +42,7 @@ describe('box stand-ins for the props props.glb has no model for yet', () => {
     expect(surfs('vending_machine').has(SURF.paint)).toBe(true);
   });
 
-  it('keep the street family light: every model there runs for every instance', () => {
-    let verts = 0;
-    for (const [name, parts] of Object.entries(STAND_INS)) verts += standInGeometry(name, parts).getAttribute('position').count;
-    expect(verts).toBeLessThan(3000);
+  it('stay a few boxes each (a prop runs its own model\'s vertices, every one of them a frame)', () => {
+    for (const [name, parts] of Object.entries(STAND_INS)) expect(standInGeometry(name, parts).getAttribute('position').count, name).toBeLessThan(400);
   });
 });

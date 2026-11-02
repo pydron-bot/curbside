@@ -31,7 +31,7 @@ import {
   type TurfBorder,
 } from '../../systems/turfWar';
 import type { CrowdPed } from '../population';
-import type { Scene, SceneCtx } from '../cityLife';
+import { watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { len2 } from '../../core/len';
 
 /** Starts on a border this far from the player, m; each side walks in from this far along it, m. */
@@ -90,6 +90,12 @@ export class TurfWar implements Scene {
 
   get running(): number {
     return this.flare ? 1 : 0;
+  }
+
+  /** Where the crews meet. */
+  subject(out: Subject): boolean {
+    const f = this.flare;
+    return f !== null && watch(out, f.border.x, f.border.z);
   }
 
   /** Start one now (the debug hook): the next step looks for a border, holds permitting. */

@@ -20,6 +20,7 @@ import type { DamageState } from '../systems/damage';
 import type { PursuitDriver } from '../systems/pursuit';
 import type { WeaponKind } from '../systems/weapons';
 import { isHopeless, spawnAi, type AiDriver, type Obstacle } from '../systems/traffic';
+import { newSimClock, type SimClock } from '../systems/simLod';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type Rect } from '../world/city';
 import { DIRS, MAX_NODE } from '../world/roads';
 import { len2 } from '../core/len';
@@ -62,6 +63,8 @@ export interface Vehicle {
   parked?: boolean;
   /** Left in the road by a city scene (a crash, a getaway): a tow truck may take it (scenes/accidents.ts). */
   towable?: boolean;
+  /** Its driver's tick clock (systems/simLod.ts); without one it thinks every step. */
+  lod?: SimClock;
 }
 
 /** Something that drives a vehicle for a city scene (allocation-free: returns a reused object). */
@@ -77,6 +80,8 @@ export interface CrowdPed {
   gun?: WeaponKind;
   /** On their phone (a witness calling or filming, game/scenes/witnesses.ts): held up in the one-handed aim pose. */
   phone?: boolean;
+  /** Their tick clock (systems/simLod.ts); without one they think every step. */
+  lod?: SimClock;
 }
 
 // --- Tunables -------------------------------------------------------------
@@ -332,7 +337,7 @@ export class Population {
       model.root.visible = true;
       model.setOutfit({ ...BARE, ...(outfit ?? this.randomOutfit(body)) });
     } else model = this.hooks.createPedModel(outfit ?? this.randomOutfit(body), body);
-    const ped = { agent, prev: { ...agent.s }, model };
+    const ped = { agent, prev: { ...agent.s }, model, lod: newSimClock() };
     this.crowd.push(ped);
     return ped;
   }

@@ -35,10 +35,9 @@ function quarters(a: readonly [string, string], b: readonly [string, string], si
 /**
  * Box stand-ins for the street models props.glb doesn't have yet (the
  * contracts are in docs/BLENDER_TODO.md, *Street props, round 2*). Kept to a
- * few boxes each: every model in a family runs through the vertex shader for
- * every instance of that family (propBatch.ts), so the street family's
- * vertex count is what these cost. A real model of the same root name in
- * props.glb replaces its stand-in.
+ * few boxes each: every one in view runs its model's vertices each frame
+ * (propBatch.ts). A real model of the same root name in props.glb replaces
+ * its stand-in.
  */
 export const STAND_INS: Readonly<Record<string, readonly Part[]>> = {
   // Road works.

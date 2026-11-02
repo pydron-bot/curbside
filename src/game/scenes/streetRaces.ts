@@ -28,7 +28,7 @@ import {
 } from '../../systems/trafficScenes';
 import { forwardSpeed, type VehicleArchetype, type VehicleControls } from '../../entities/vehicle';
 import type { SceneDriver, Vehicle } from '../population';
-import { SCENE_DROP, type Scene, type SceneCtx } from '../cityLife';
+import { SCENE_DROP, watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { incident, type Chases } from './chases';
 import { raceRank, racing, type LabelSink } from '../debugLabels';
 
@@ -79,6 +79,8 @@ export interface StreetRace {
 export class StreetRaces implements Scene {
   readonly races: StreetRace[] = [];
   private scan = 0;
+  /** The racer subject() is on. */
+  private watched: Vehicle | null = null;
   private readonly out: VehicleControls = { throttle: 0, steer: 0, handbrake: false, boost: false };
 
   constructor(
@@ -144,6 +146,21 @@ export class StreetRaces implements Scene {
         } else if (out.wants(v.sim.x, v.sim.z)) out.car(v, `RACER ${raceRank(r.racers, i)}/${n}`, 'traffic');
       }
     }
+  }
+
+  /** The leader (kept while it's in the top two, so an overtake doesn't swing the view), then the winner. */
+  subject(out: Subject): boolean {
+    const r = this.races[0];
+    if (!r) return false;
+    let v = r.winner;
+    let kept = -1;
+    for (let i = 0; i < r.racers.length; i++) if (r.racers[i].v === this.watched) kept = i;
+    if (!v && kept >= 0 && !r.racers[kept].done && raceRank(r.racers, kept) <= 2) v = this.watched;
+    for (let i = 0; i < r.racers.length && !v; i++) if (raceRank(r.racers, i) === 1) v = r.racers[i].v;
+    this.watched = v;
+    if (!v) return false;
+    const s = v.sim;
+    return watch(out, s.x, s.z, s.vx, s.vz);
   }
 
   /** Line one up now (tests, __ub): false if there was nowhere to. */
