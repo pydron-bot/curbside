@@ -140,3 +140,48 @@ export function openingDue(save: Pick<SaveData, 'opening'>): boolean {
 export function sideModesOpen(save: Pick<SaveData, 'missions' | 'unlocks'>): boolean {
   return save.missions.includes(SIDE_MODES_AFTER) || save.unlocks.includes(SIDE_MODES_UNLOCK);
 }
+
+/** SIDE_MODES_AFTER's title (systems/missionsData.ts; a test keeps them together), for the unlock list. */
+export const SIDE_MODES_AFTER_TITLE = 'MAKE SOME NOISE';
+/** What opens with it, as the unlock list and the SIDE JOBS OPEN notice name them. */
+export const SIDE_MODES = ['Chaos Run', 'Races', 'Frenzies', 'Exports', 'Taxi fares'] as const;
+
+/**
+ * Has this save been past the cold open? Its flag, or anything only play
+ * after it brings (a passed job, the side modes): REPLAY OPENING clears the
+ * flag, and that shouldn't take a veteran's title back to a newcomer's.
+ */
+export function pastOpening(save: Pick<SaveData, 'opening' | 'missions' | 'unlocks'>): boolean {
+  return save.opening || save.missions.length > 0 || sideModesOpen(save);
+}
+
+/** What the title offers past PLAY and SETTINGS (V2-17: a fresh save sees only those two). */
+export interface TitleOffer {
+  /** CHARACTER and HOW TO PLAY (HOW TO PLAY is in the pause menu all along). */
+  extras: boolean;
+  /** OBSERVE, on the title and in the pause menu: after the cold open, or any time as a testing mode. */
+  observe: boolean;
+  /** CHAOS RUN. */
+  sideModes: boolean;
+}
+
+export function titleOffer(save: Pick<SaveData, 'opening' | 'missions' | 'unlocks'>, testTools: boolean): TitleOffer {
+  const past = pastOpening(save);
+  return { extras: past, observe: past || testTools, sideModes: sideModesOpen(save) };
+}
+
+/** PROGRESS's STILL TO COME: what's locked and what opens it (null once everything is open). */
+export interface StillToCome {
+  rows: Array<{ label: string; value: string }>;
+  chips?: { label: string; items: Array<{ text: string; done: boolean }> };
+}
+
+export function stillToCome(save: Pick<SaveData, 'opening' | 'missions' | 'unlocks'>): StillToCome | null {
+  const rows = pastOpening(save) ? [] : [{ label: 'Observe: watch the city, no player', value: 'AFTER THE GETAWAY' }];
+  const side = sideModesOpen(save);
+  if (rows.length === 0 && side) return null;
+  return {
+    rows,
+    chips: side ? undefined : { label: `AFTER STORY JOB 2, ${SIDE_MODES_AFTER_TITLE}`, items: SIDE_MODES.map((text) => ({ text, done: false })) },
+  };
+}

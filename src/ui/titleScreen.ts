@@ -3,6 +3,7 @@ import { VERSION } from '../core/changelog';
 import './title.css';
 import type { GameAudio } from '../audio/gameAudio';
 import type { InputDevice } from '../core/input';
+import { onSettingsChange } from '../core/settings';
 import { ICONS, type IconName } from './icons';
 import { onInstallAvailable, promptInstall } from './installPrompt';
 import { MenuNav, menuButton, type NavItem, type Panel } from './menu';
@@ -37,7 +38,8 @@ const HUB_URL = 'https://deeek.org/';
  * behind it in attract mode, see attract.ts), PLAY plus any modes other
  * systems add with addMode(), SETTINGS and HOW TO PLAY, the best score and
  * a small link back to the deeek.org hub (here only, never on the pause
- * menu, where a mis-tap would throw away a run).
+ * menu, where a mis-tap would throw away a run). Buttons can be gated
+ * (gateExtras, addEntry's `shown`): a fresh save sees PLAY and SETTINGS only.
  * The first tap, click or key also unlocks audio (iOS needs a gesture) and
  * starts the menu music. On iPhone Safari (not installed) a one-time tip
  * explains Add to Home Screen, the only way to get true full screen there.
@@ -51,6 +53,9 @@ export class TitleScreen implements Panel {
   private readonly hints: HTMLElement;
   private readonly tip: HTMLElement;
   private readonly modeItems = new Map<string, { el: HTMLElement; item: NavItem }>();
+  /** Buttons shown only while their test passes (checked on open and on a settings change). */
+  private readonly gates: Array<{ el: HTMLElement; shown: () => boolean }> = [];
+  private readonly extras: HTMLElement[];
   private readonly playBtn: HTMLButtonElement;
   private hintDevice: InputDevice | null = null;
   private readonly main: HTMLElement;
@@ -116,6 +121,7 @@ export class TitleScreen implements Panel {
     const settings = menuButton('SETTINGS', { icon: 'gear', className: 'small' });
     const howTo = menuButton('HOW TO PLAY', { icon: 'help', className: 'small' });
     row.append(character, settings, howTo);
+    this.extras = [character, howTo];
     this.nav.add({
       el: character,
       activate: () => {
@@ -164,6 +170,8 @@ export class TitleScreen implements Panel {
     root.addEventListener('pointerdown', () => audio.unlock(), { capture: true });
     onTap(root.querySelector<HTMLElement>('.a2hs-close')!, () => this.dismissTip());
     this.tip.hidden = !shouldOfferInstallTip();
+    // Test tools on or off from Settings over the title: OBSERVE comes and goes at once.
+    onSettingsChange(() => this.isOpen && this.refresh());
   }
 
   get isOpen(): boolean {
@@ -188,11 +196,26 @@ export class TitleScreen implements Panel {
    * A button of another system's under PLAY, laid out like a mode (two to a
    * row) but not starting a run: `activate` does what it does (e.g. OBSERVE).
    */
-  addEntry(label: string, sub: string, icon: IconName, className: string, activate: () => void): HTMLButtonElement {
+  addEntry(label: string, sub: string, icon: IconName, className: string, activate: () => void, shown?: () => boolean): HTMLButtonElement {
     const b = menuButton(label, { icon, sub, className: `title-mode ${className}` });
     this.modes.append(b);
     this.nav.add({ el: b, activate: () => this.select(activate) });
+    if (shown) {
+      this.gates.push({ el: b, shown });
+      b.hidden = !shown();
+    }
     return b;
+  }
+
+  /** CHARACTER and HOW TO PLAY show only while `shown()` (not on a fresh save's title). */
+  gateExtras(shown: () => boolean): void {
+    for (const el of this.extras) this.gates.push({ el, shown });
+    if (this.isOpen) this.refresh();
+  }
+
+  /** Show or hide the gated buttons for the save and settings as they are now. */
+  refresh(): void {
+    for (const g of this.gates) g.el.hidden = !g.shown();
   }
 
   /** A line of another system's under the best score (e.g. cash); the hub link stays last. */
@@ -212,6 +235,7 @@ export class TitleScreen implements Panel {
     this.bestEl.hidden = best <= 0;
     this.bestEl.querySelector('b')!.textContent = fmt(best);
     this.setDevice(device);
+    this.refresh();
     this.root.hidden = false;
     this.nav.focusElement(this.playBtn);
     this.nav.showFocus(device !== 'touch');

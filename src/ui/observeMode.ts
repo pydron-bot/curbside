@@ -139,6 +139,8 @@ export interface ObserveDeps {
   setPaused(paused: boolean): void;
   /** The camera jumped or travelled far: fill the streets round it. */
   moved(): void;
+  /** OBSERVE is offered (after the cold open, or with Test tools on: game/opening.ts titleOffer). */
+  offered(): boolean;
 }
 
 /** What the camera rides along with. */
@@ -338,9 +340,9 @@ export class ObserveMode implements Panel {
     for (const [id, label] of SCENES) if (id !== 'rain') this.captions.set(SCENE_KINDS[id], label);
     for (const h of Object.values(HIGHLIGHTS)) this.captions.set(h.kind, h.caption);
 
-    // OBSERVE on the title and in the pause menu.
-    d.frontDoor.title.addEntry('OBSERVE', 'Watch the city', 'eye', 'title-observe', () => this.enterFromTitle());
-    d.frontDoor.pause.addButton('OBSERVE', 'eye', () => this.enterFromRun());
+    // OBSERVE on the title and in the pause menu, once offered (not in the middle of the cold open).
+    d.frontDoor.title.addEntry('OBSERVE', 'Watch the city', 'eye', 'title-observe', () => this.enterFromTitle(), d.offered);
+    d.frontDoor.pause.addButton('OBSERVE', 'eye', () => this.enterFromRun(), d.offered);
     this.listen();
   }
 
