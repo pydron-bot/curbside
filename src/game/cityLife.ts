@@ -16,7 +16,8 @@
  * far and out of view. Nothing new is drawn: the cars and people are the
  * usual batches (the ambulance, fire truck, tow truck, ice cream van, bus,
  * police car and bike are all in vehicles.glb). None of it touches the
- * player's heat or score.
+ * player's heat or score, bar what they join in or wreck (a mugger's bag,
+ * the V2 incidents: deps.reward, award, callIn).
  *
  * main.ts calls step(dt) every sim step (after combat), maintain() with
  * population upkeep, reset() for a fresh run, and steers any car with a
@@ -78,6 +79,12 @@ import { Chases } from './scenes/chases';
 import { StreetRaces } from './scenes/streetRaces';
 import { Accidents } from './scenes/accidents';
 import { DoubleParking } from './scenes/doubleParking';
+import { CashRuns } from './scenes/cashRun';
+import { Kebabs } from './scenes/kebab';
+import { Funerals } from './scenes/funeral';
+import { Hydrants } from './scenes/hydrants';
+import { Congas } from './scenes/conga';
+import { FilmShoots } from './scenes/filmShoot';
 import { len2 } from '../core/len';
 import type { LabelSink } from './debugLabels';
 import type { SimLod } from '../systems/simLod';
@@ -147,7 +154,16 @@ export interface CityLifeDeps {
   enlist?(officer: CrowdPed): void;
   /** The sim's level of detail: off screen, stray dogs think less often (without it, every step). */
   lod?: SimLod;
+  /** Score the player for an incident they joined in or wrecked (the cash van, a film set, a funeral). */
+  award?(kind: IncidentAward): void;
+  /** Throw a bike's rider off (a burst hydrant's spray), as a hard crash does. */
+  throwRider?(v: Vehicle): void;
+  /** Knock over the standing hydrant nearest (x, z) within `range` m (as a car would): where it stood, or null. */
+  knockHydrant?(x: number, z: number, range: number): { x: number; z: number } | null;
 }
+
+/** The score kinds an incident pays out. */
+export type IncidentAward = 'cashGrab' | 'wrapped' | 'noRespect';
 
 /** A scene's view of the director. */
 export type SceneCtx = CityLife;
@@ -257,6 +273,13 @@ export class CityLife {
     this.races = this.add(new StreetRaces(this, this.chases));
     this.accidents = this.add(new Accidents(this));
     this.doubleParking = this.add(new DoubleParking(this));
+    // The V2 incidents.
+    this.add(new CashRuns(this));
+    this.add(new Kebabs(this, fights));
+    this.add(new Funerals(this));
+    this.add(new Hydrants(this));
+    this.add(new Congas(this, fights));
+    this.add(new FilmShoots(this));
     this.add(new Pavement(this), 'pavement');
   }
 

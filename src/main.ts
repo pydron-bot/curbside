@@ -114,6 +114,7 @@ import { StreetLife } from './game/streetLife';
 import { CityLife } from './game/cityLife';
 import { TUTORIAL_DONE } from './game/tutorial';
 import { CityLifeLook } from './render/cityLifeLook';
+import { incidentsLook } from './render/incidentsLook';
 import { CityMood } from './game/cityMood';
 import { atmosphereLook } from './render/atmosphereLook';
 import { peopleLook } from './render/peopleLook';
@@ -466,6 +467,14 @@ const cityLife = new CityLife({
   reward: (cash, label) => progress.pay(cash, 'street', label),
   callIn: (crime) => heat.called(crime),
   enlist: (officer) => heat.police.strays.push(officer),
+  award: (kind) => award(score.award(kind)),
+  throwRider: (v) => throwRider(v, 8),
+  knockHydrant: (x, z, range) => {
+    const k = look.props.loaded ? knockables.nearest('hydrant', x, z, range) : null;
+    if (!k || !knockables.knock(k)) return null;
+    knockProp(k, null);
+    return k;
+  },
 });
 maintainCity = (seed) => cityLife.maintain(seed);
 const cityLook = new CityLifeLook(cityLife, effects, look.props);
@@ -477,6 +486,7 @@ cityLook.add(towLook(cityLife));
 cityLook.add(alarmLook(cityLife));
 cityLook.add(new RaceLook(cityLife.races));
 cityLook.add(new RoadsideLook(cityLife.accidents, cityLife.doubleParking));
+cityLook.add(incidentsLook(cityLife));
 const cityView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 // Everyone's place, pose and clip each frame (and the player ducking into cars, cheering wins).
 const people = new PeoplePose({
@@ -1011,12 +1021,12 @@ function driveCar(v: Vehicle, dt: number): VehicleControls {
   return (v.scene ? v.scene.drive(v, obstacles, step) : null) ?? heat.drive(v, obstacles, step);
 }
 
-/** A car knocked street furniture flying: it's gone from its spot, a copy tumbles away, and the hit is heard. */
-function knockProp(k: KnockableItem, car: Vehicle['sim']) {
+/** A car (or a scene: null) knocked street furniture flying: it's gone from its spot, a copy tumbles away, and the hit is heard. */
+function knockProp(k: KnockableItem, car: Vehicle['sim'] | null) {
   look.props.knock(k.id);
-  knockFx.hit(k.kind, k.x, k.z, car.vx, car.vz);
-  const impact = Math.min(7, Math.max(3, speed(car) * 0.3));
-  events.emit({ type: 'crash', x: k.x, z: k.z, impact, against: 'static', involvesPlayer: player.driving !== null && player.driving.sim === car });
+  knockFx.hit(k.kind, k.x, k.z, car?.vx ?? 0, car?.vz ?? 0);
+  const impact = car ? Math.min(7, Math.max(3, speed(car) * 0.3)) : 3;
+  events.emit({ type: 'crash', x: k.x, z: k.z, impact, against: 'static', involvesPlayer: car !== null && player.driving !== null && player.driving.sim === car, prop: k.kind });
 }
 
 /** Off a bike in a hard crash: knocked flat this long (the player), s; hurt by this much per m/s of impact. */
