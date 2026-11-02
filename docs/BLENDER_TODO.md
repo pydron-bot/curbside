@@ -717,3 +717,20 @@ The held model swaps in by name; the crate needs a one-line code change:
   the lid (the game rings it pink, `#ff5fb4`); then point
   `PICKUP_MODELS.horn` (`src/render/pickupMesh.ts`) and the `things`
   family's list (`src/render/worldProps.ts`) at it.
+
+## 14. The taser (W3-B, requested 2026-11-02)
+
+The taser weapon is in the game (README → *Driving and combat*, the taser)
+with nothing in the hand and the ammo box standing in for its crate. The
+held model swaps in by name; the crate needs a one-line code change:
+
+- **`weapons.glb` root `taser`** (same grip/`muzzle` contract as the
+  pistol, §1/§8): a stubby yellow-and-black pistol shape ~0.18 m long,
+  a square cartridge on its nose, held one-handed in the pistol's `Aim`
+  pose; `muzzle` at the cartridge's face, where the wires leave (the code
+  guesses 0.17 m ahead, 0.05 m up). ≤ 120 tris. No wires or darts: the
+  game draws those as streaks.
+- **`pickups.glb` root `crate_taser`**: the gun crate with a taser on the
+  lid (the game rings it electric blue, `#7f8cff`); then point
+  `PICKUP_MODELS.taser` (`src/render/pickupMesh.ts`) and the `things`
+  family's list (`src/render/worldProps.ts`) at it.
