@@ -12,6 +12,8 @@
  * fly. Punches chain jab, jab, hook: the hook knocks down. People go down
  * at 0 HP (a knockout, the only thing that scores KNOCKOUT). In a car, a
  * pistol or SMG fires out of either side window at the best target there.
+ * The air horn blasts a cone along the aim (systems/airHorn.ts): people
+ * scatter, drivers brake; no damage.
  */
 import type { EventBus } from '../core/events';
 import { VEHICLE_SPECS, isPoliceArchetype } from '../entities/vehicle';
@@ -33,6 +35,7 @@ import {
   markPlayerHit,
   type BlastKind,
 } from '../systems/damage';
+import { HORN_RANGE, hornClear, hornHit, startle, startleDriverByHorn } from '../systems/airHorn';
 import { bodyDistance, bodyOf, carCircles } from '../systems/physics';
 import { FIRE_RADIUS, MIN_THROW, Projectiles, clampThrowToWalls, throwTarget, type ProjectileWorld } from '../systems/projectiles';
 import type { Award, Score } from '../systems/score';
@@ -231,8 +234,8 @@ export class Combat {
       this.marker.show = false;
       return;
     }
-    // Lock-on: guns and launchers, while firing (and a moment after).
-    if (spec.mode !== 'throw' && (firing || this.sinceShot < LOCK_LINGER)) {
+    // Lock-on: guns and launchers, while firing (and a moment after); the horn's cone needs none.
+    if (spec.mode !== 'throw' && spec.mode !== 'horn' && (firing || this.sinceShot < LOCK_LINGER)) {
       const near = minAim(spec.mode);
       if (!this.lockValid(spec.range * 1.2, aim.heading, near)) this.lock = firing ? this.acquireLock(spec.range, aim.heading, near) : null;
     } else this.lock = null;
@@ -283,6 +286,7 @@ export class Combat {
     if (!kind || p.driving || !p.ready || !p.arsenal.ready) return false;
     const spec = WEAPONS[kind];
     if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov', aim);
+    if (spec.mode === 'horn') return this.blowHorn(aim);
     // Spread before this shot's bloom; running sprays more.
     const moving = len2(p.ped.vx, p.ped.vz) > 3.5;
     const spread = p.arsenal.spread * (moving ? RUN_SPREAD : 1);
@@ -324,6 +328,41 @@ export class Combat {
     for (let i = 0; i < this.candidateCount; i++) targets.push(this.candidates[i]);
     if (aimHeading !== null) autoAim(p.x, p.z, aimHeading, targets, range, 0.26, out);
     else autoAim(p.x, p.z, p.heading, targets, range, undefined, out);
+  }
+
+  /**
+   * One air horn blast along the aim (else the facing): everyone in the cone
+   * with no wall between is startled, drivers in it brake and stall. Reports
+   * `airHorn` (the alarms, heat, the scanner and the rest listen).
+   */
+  private blowHorn(aim: AimInput): boolean {
+    const p = this.d.player;
+    if (!p.arsenal.tryFire()) return false;
+    const heading = aim.heading ?? p.ped.heading;
+    p.ped.heading = heading;
+    const dx = Math.sin(heading);
+    const dz = Math.cos(heading);
+    const ox = p.ped.x + dx * 0.4;
+    const oz = p.ped.z + dz * 0.4;
+    this.d.pose?.shoot();
+    const walls = this.d.grid.near(ox + dx * HORN_RANGE * 0.5, oz + dz * HORN_RANGE * 0.5, HORN_RANGE * 0.5 + 2);
+    let startled = 0;
+    for (const c of this.d.crowd) {
+      const a = c.agent;
+      const along = hornHit(ox, oz, dx, dz, a.s.x, a.s.z, PED_HIT_RADIUS);
+      if (along < 0 || !hornClear(walls, ox, oz, a.s.x, a.s.z, PED_HIT_RADIUS)) continue;
+      if (startle(a, ox, oz, along) !== 'none') startled++;
+    }
+    let stalled = 0;
+    for (const v of this.d.vehicles) {
+      const s = v.sim;
+      if (!v.ai || v.police || v.pursuit || v.damage.wrecked || v === p.driving) continue;
+      if (hornHit(ox, oz, dx, dz, s.x, s.z, s.body?.halfWidth ?? 1) < 0 || !hornClear(walls, ox, oz, s.x, s.z, s.body?.halfWidth ?? 1)) continue;
+      startleDriverByHorn(v.ai, this.d.rand);
+      stalled++;
+    }
+    this.d.bus.emit({ type: 'airHorn', x: ox, z: oz, dirX: dx, dirZ: dz, reach: HORN_RANGE, byPlayer: true, startled, stalled });
+    return true;
   }
 
   private throwIt(kind: 'grenade' | 'molotov', aim: AimInput): boolean {
