@@ -1,517 +1,472 @@
 # Curbside V2 — plan
 
-_Written 2026-11-02 against 0.13.0. It came out of a brainstorm: three
-designers (hook & systems, story & world, presentation & reach), a critical
-judge who checked their claims against the code, one rebuttal round, and a
-final verdict. Owner's constraints: a **wider public release**, **build on**
-the Graveyard Shift story and comic British tone, **offline only** (static
-hosting, no backend), **two weeks**._
+_Written 2026-11-02 against 0.13.0, second draft. The first draft (towing as
+the main verb) was rejected: "I don't want to play a tow truck simulator."
+This one starts from what the owner said they enjoy:_
 
-## The short version
+> - "I have been liking how the city has been coming alive with all things
+>   that can happen. The random incidents make it really fun to just watch.
+>   That and causing mayhem."
+> - Reference game: GTA 2.
+> - The Graveyard Shift is fine as a side story, not the main story.
+> - Towing is fine as a side mission.
 
-> **Curbside is the top-down city game where you don't steal cars, you tow
-> them.** You're the newest hire on a night tow crew. The hook is your tool
-> and your weapon, the paint on the kerb decides whether a tow is a job or a
-> crime, and every night ends with a parking ticket made of your crimes that
-> you can send to a friend as a challenge.
+_Process: three brainstormers (living city & mayhem, story & player, player's
+advocate & reach), a critical judge scoring owner fit first, a rebuttal
+round, and a final verdict giving three directions to choose from.
+Constraints: wider public release, offline only, two weeks._
 
-Today the first 30 seconds show a `STEAL A CAR` pointer (`tutorial.ts:31`),
-a payphone and the tagline `STEAL · DRIFT · CAUSE CHAOS`
-(`titleScreen.ts:77`). That is GTA 2's opening, and a stranger closes the
-tab thinking "clone". The game already has the answer: the tow crew premise,
-the AI tow trucks that hook, winch and drag cars (`scenes/tows.ts`,
-`systems/emergency.ts` `towPose()`/`winch()`), the tow-truck GLB with its
-boom and hook, a Parking Commissioner villain. It just never lets the player
-do the thing the story is about. V2 does.
+**Status: waiting on the owner's choice of direction.** The detailed plan
+below is for the recommended direction, A. Several items (V2-01, V2-02,
+V2-05, V2-08, V2-09, V2-14, V2-17) are needed whichever direction is picked.
 
-## Your four questions
+## What's wrong today
 
-### What's the hook for other players?
+The owner's two favourite things never happen together. Every loud incident
+(chases, races, fights, muggings, turf flare-ups, accidents, tows) is held
+while the player is wanted or in a mode (`LOUD` in
+`systems/cityScenes.ts:46`), and a police chase breaks off the moment the
+player has a star (`scenes/chases.ts:437`). So the city goes quiet exactly
+when the mayhem starts. And apart from the $50 mugging bag and stepping into
+a turf war, the player can't join or profit from an incident: they are
+scenery.
 
-The **hook itself**, as a verb. In any tow truck, one context button reads
-HOOK: the truck lines itself up and winches the car up. Drag it, DROP it at
-the yard, or let go at speed and **FLING** it into a police cordon. It's
-easy to grasp, physical and funny, and a car whipping round a junction on a
-chain is the five-second clip someone posts.
+## Three directions
 
-Wrapped round it: a **six-minute Night Shift** (22:00 to dawn) sized for a
-bus ride, a **daily seeded night** everyone plays, and a **Penalty Charge
-Notice** share image whose link drops a friend into the same night. With no
-backend, the link is the leaderboard. The living city (chases, wrecks, fires,
-turf wars) is what makes each night chaotic; it no longer has to be the pitch.
+### A · HAVE-A-GO: the city doesn't stop for you (recommended)
 
-### How do we differ from GTA 2?
+> Every chase, race, fire and punch-up in this city happens whether you're
+> there or not, and now your mayhem can crash straight into them.
 
-What stays: top-down camera, wanted stars, carjacking, a sandbox city.
-Strangers will see that, and that's fine if the first minute is about
-something else. V2 differs in four ways you play, not just in paint:
+**Ten minutes of play.** You're 2 stars hot down Neon Mile. A street race is
+coming the other way, because incidents no longer stop when you're wanted.
+Your pursuing patrol clips a racer and both spin into a fire crew's hose.
+Next block, a police chase screams past; you drag the getaway driver out and
+**TAKE THE HEAT** stamps across the screen, and the chase's patrol cars are
+now after you. Later you ram a different getaway into the kerb in front of a
+patrol: **CITIZEN'S ARREST**, cash, and the cops wave you through. You shunt
+a cab at a junction; in the mirror the driver gets out shouting, a patrol
+pulls up, a tow truck arrives (**DOMINO ×3**). A scanner ping says something
+has kicked off in Cobble Row, so you go and look. Between all that, Doreen's
+payphone rings with a story job, and every job asks for mayhem, not stealth.
 
-1. **Different verb.** In GTA 2 a car is something you sit in. Here you
-   also carry one behind you, and drop, deliver or throw it.
-2. **Different law.** GTA's rule is "any crime gives a star". Curbside's
-   rule is painted on the street: hook a car off tonight's **red kerb** and
-   it's a legal tow (no heat, a council fee); hook one anywhere else and
-   it's theft (a witness phones it in, stars come, the yard pays ×3). Every
-   hook is a risk/reward choice you can see on the ground.
-3. **Different session.** A bounded night with a job queue, an opponent who
-   does your job instead of shooting at you (Clamp's orange truck), and a
-   dawn tally, instead of a sandbox you wander.
-4. **Different voice and villain.** A small-scale comic British civic farce
-   instead of anonymous gangs, in the cold open, the area cards
-   (`RUSTWATER DOCKS · LOADING ONLY. NO WAITING. NO HOPE.`), Tuna's
-   dispatch calls and the ticket.
+**Main story: KEEP IT LOUD.** You fitted car alarms for twenty years; half the
+alarms in Cobble Row are yours. Mayor Prudence Lull, chasing the national
+*Quietest City* award, passes a Quiet Streets Act that bans car alarms,
+chimes, buskers and kebab vans after ten. You're sacked the same night. The
+kerbside traders (Doreen from the ice cream van, Lionel the busker, the kebab
+shop) hire you to keep the city loud. Chapter 1 is six jobs, ending with the
+award judges' coach touring a city you've made go off all at once.
 
-**Pruning matters as much.** Kill frenzies (`KNOCK DOWN 15`) are GTA 2's
-most recognisable mechanic under another name, and taxi is Crazy Taxi. V2
-hides frenzies, taxi, packages, exports and races from **fresh** saves until
-after the first Shift, so a newcomer sees one game, not a GTA checklist.
-Saves with progress (yours, your friends') keep everything.
+**Why the owner:** watching and mayhem become the same act, and the villain's
+goal is to switch off the thing the owner likes most. It plays like GTA 2
+(payphones, stars, carjacking).
+**Why a stranger:** within 15 seconds of PLAY a getaway car crashes at your
+bus stop and the only prompt is GET IN.
+**Biggest risk:** performance with scene cars and 5-star police at once, never
+measured on the iPhone; the handoff must never leave an orphaned siren car.
 
-### How does the name relate to the game?
+### B · THE MENACE: your rampage is the story
 
-**CURBSIDE becomes the villain's paperwork, and the kerb becomes the playing
-field.** In the fiction it's Commissioner Clamp's council scheme, the
-*Council Unit for the Regulation of Bays, Streets, Impounds, Drives and
-Enforcement*. It's stencilled on his orange trucks, heads every Penalty
-Charge Notice, and the first thing that happens to you is a CURBSIDE truck
-towing your car. Mechanically, the kerb is the rule set (red = legal tow).
+> The city needs a villain, and every bit of chaos you cause makes you a more
+> famous one.
 
-**Curb vs kerb:** keep the CURBSIDE wordmark with a C. It's the URL, the
-installed app name and the search term. Everything in the world says
-"kerb". The mismatch becomes one joke, used once each:
+Mostly you cause the biggest chaos you can, with better toys: steal the fire
+truck from a fire and the action button is a hose; steal the ice cream van and
+its chime pulls a queue wherever you park. Named stamps (BARBECUE SEASON for
+three chained explosions) and bystanders lifting phones to film. The payphone
+rings again only once you're infamous enough, and story jobs are set-piece
+rampages. **Story:** you arrive on the night coach for your fifteenth driving
+test; four minutes later a crashed getaway, a photographer and a kerb make you
+THE CURBSIDE MENACE in the tabloids. A "concerned citizen" on the payphone
+feeds you targets, and turns out to be Mayor Lull, who needs a menace to pass
+her Quiet Streets Act. **Biggest risk:** the city goes back to being backdrop;
+it's the most GTA 2-like and least Curbside's own.
 
-> **VEX:** It's 'kerb'. With a K. They spelt it wrong so it'd fit on the side of the trucks.
-> **CLAMP:** CURBSIDE is spelt with a C. The acronym requires it. Complaints may be made in writing.
+### C · TURF: the crews fight over the city, and you pick sides
 
-### What's the player's backstory?
+> Four street crews are at war in the city's own turf flare-ups, and every
+> punch you throw in one moves a border.
 
-**Registered Keeper 000001.** You fell asleep in your own car (a faded
-mustard compact) on a double yellow in Glass Heights. At 21:04 one of
-Clamp's CURBSIDE trucks towed it with you inside. When the winch tilted it
-you rolled out onto the kerb, and the truck drove off with your car, and
-your phone in the glovebox. You're the scheme's first victim, which is why a
-payphone is the only line that can reach you. Vex, who watched from across
-the street, rings it, hands you her spare truck and offers you a job doing
-to the city what was just done to you. Release fee: $5,000.
+You work for crews and fight in their flare-ups. Win for the VIPERS and your
+respect rises, a VIPERS lad walks up with a job, and after an evening the
+radar tint shows the border moved a block. **Story:** WITNESS PROTECTION.
+You testified against a VIPERS boy and were hidden in Maple Flats as "Robin,
+who sells conservatories". The VIPERS are run by his gran, Nana Viper, from a
+mobility scooter. **Biggest risk:** closest to a GTA 2 recreation (crew
+respect and per-crew jobs), the largest build (only the VIPERS exist as a
+crew today), and its payoff shows only after an hour of play.
 
-It's a grievance anyone with a parking ticket gets, it fits on one card, it
-works for either body ("keeper", "occupant"), and it ties you to the crew
-and the villain from the first second instead of chapter 2. It's **played**,
-not read: control from second 2. Getting your car back is the long thread;
-V2 only teases it (`VEHICLE 000001 · IMPOUNDED · $5,000` on the pause card)
-and chapter 3 pays it off in V2.1.
+### Mix and match
+
+Directions differ in gameplay **and** story, but the two halves can be
+swapped: A's gameplay with B's Menace story is a real option, since both use
+the same engine work.
+
+## Answers to the owner's questions (direction A)
+
+**The hook.** "Every chase, race, fire and punch-up in this city is happening
+whether you're there or not. Drive into one." You're wanted and the city keeps
+going: your pursuers pile into a street race, you steal a getaway mid-chase
+and inherit its cops, your own fender-bender becomes a scene you watch in
+the mirror.
+
+**Versus GTA 2.** Kept on purpose: top-down camera, carjacking, wanted stars
+with roadblocks, SWAT and the helicopter, payphone jobs, guns, mayhem for its
+own sake. Different: GTA 2's city is a backdrop of pedestrians and traffic;
+Curbside's runs 20+ simulated incidents with their own crews and outcomes,
+and in V2 they keep running through your pursuits and can be joined in a
+second. Nothing is copied: names, city, characters, missions and UI are
+original.
+
+**The name.** Keep CURBSIDE, with **KEEP IT LOUD** as V2's subtitle. Lull's
+American consultant wrote "curbside nuisances" into the Quiet Streets Act,
+nobody fixed the spelling, and the kerb traders wear it as a badge: "We're
+the Curbside." One joke, not a running gag.
+
+**The player.** An alarm fitter, never named or gendered (the traders call
+you "Alarms"). Sacked the night the Act passes, you're waiting for the night
+bus with your toolbox when a getaway crashes at your shelter with the door
+open. You get in. That cold open is job 1; lose the heat and the payphone
+rings: Doreen needs someone with nothing to lose. Your trade ties into the
+mayhem: every crash, bullet and blast sets off "your" alarms through the
+existing `AlarmBoard`.
+
+**The Graveyard Shift and towing.** The 13 written jobs become the **Night
+Shift** side story: same ids and lines (saves untouched), ringing only after
+dark from the docks-yard phone with a moon badge. The completion page splits
+MAIN (the 30% weight) from NIGHT SHIFT. The main story touches it once: Lull
+has hired Vex's crew to tow the traders' vans, and you take Doreen's van back
+off Vex's truck. **Towing is a side job:** steal any tow truck and the action
+button winches; hook a real accident wreck, haul it to the docks yard and get
+paid by condition. Vex rings after dark with tow work. Towing is never a
+main-story verb.
 
 ## Pillars
 
-1. **One verb: the hook.** Hook, drag, drop, fling, with one context button
-   and an auto line-up. Every V2 item teaches the hook, gives it a reason,
-   or shares its result. Anything else is out.
-2. **The kerb is the law.** Red kerb = legal tow, anything else = theft,
-   painted in the existing ground shader. The name, the risk/reward and the
-   look are one thing.
-3. **One night, one ticket.** The six-minute Night Shift is the session. It
-   ends in a Penalty Charge Notice that is the result screen, the share
-   image and (with a link) the leaderboard. One mode, one daily, one artefact.
-4. **Thirty seconds to the premise, on a real phone.** A live cold open, a
-   pruned front door, copy that names the tow, and a launch gated on a
-   device pass, a soak and a watched blind playtest.
+1. **The city doesn't stop for you.** Incidents keep living while you're
+   wanted or in most modes, and turn up on your route.
+2. **Every incident has a way in.** Watch it, or in a second steal, end or
+   wreck it, with no menu or phone call.
+3. **Your mess becomes the city's problem.** What you smash, shoot and shunt
+   starts scenes the city's own crews play out.
+4. **Mayhem drives the story.** No main job fails you for getting stars; the
+   villain wants the city quiet.
+5. **The first 15 seconds are an incident**, and a stranger on a phone is
+   causing mayhem in it before any menu.
+6. **Phones first.** Under 150 draw calls on the iPhone, instanced batches,
+   no runtime lights, no per-frame allocation, measured on a real device
+   mid-plan, not at the end.
 
-## Scope
+## Scope (direction A)
 
-| # | Item | Area | Size | Priority |
+| # | Item | Size | Priority | Any direction? |
 |---|---|---|---|---|
-| V2-01 | Launch gate: device pass, load budgets, TAP TO PLAY, blind playtest | tech | M | must |
-| V2-02 | **The Hook**: auto line-up, drag, drop, FLING, sound and feel | feature | L | must |
-| V2-03 | **Kerb Law** and kerb paint | feature | M | must |
-| V2-04 | Cold open *Removed With Occupant* | story | M | must |
-| V2-05 | WRONG NUMBER becomes the tow tutorial | story | M | must |
-| V2-06 | **NIGHT SHIFT** mode | feature | L | must |
-| V2-07 | One Clamp rival and the SNATCH | feature | S | should |
-| V2-08 | Tuna on dispatch | story | S | should |
-| V2-09 | **TONIGHT'S SHIFT** daily and challenge links | feature | M | must |
-| V2-10 | **The Penalty Charge Notice** share card | presentation | M | must |
-| V2-11 | Final district names and council area cards | story | S | should |
-| V2-12 | Prune the front door; old saves stay whole | prune | S | must |
-| V2-13 | Storefront copy that sells the tow | presentation | S | must |
-| V2-14 | itch.io build, hero shots, gated launch | tech | S | should |
-| V2-15 | Tail whip (swing on the hooked car) | feature | M | stretch |
+| V2-01 | In-view meter: how much of the city the player sees | S | must | yes |
+| V2-02 | The city doesn't stop: hold split and route-ahead placement | M | must | yes |
+| V2-03 | Chase handoff: TAKE THE HEAT, CITIZEN'S ARREST | L | must | |
+| V2-04 | Stamp HUD and named mayhem | S | must | |
+| V2-05 | Incident-aware missions: a `scene` action and a `mayhem` step | S | must | yes |
+| V2-06 | KEEP IT LOUD chapter 1 (6 jobs) and the main/side split | L | must | |
+| V2-07 | Live cold open; side modes hidden for new players | M | must | |
+| V2-08 | Night Shift side story | S | must | yes |
+| V2-09 | Tow side job: the winch | M | must | yes |
+| V2-10 | Your Mess, Their Problem | M | should | |
+| V2-11 | Scanner pings | M | should | |
+| V2-12 | RACE CRASHER and VAN NICKED | M | should | |
+| V2-13 | Two new incidents: cash-in-transit van, kebab chucking-out time | M | should | |
+| V2-14 | Launch gate: device pass, tier probe, blind playtest | M | must | yes |
+| V2-15 | Quiet Wardens in free roam after the finale | M | stretch | |
+| V2-16 | Best-moment picture on WASTED/BUSTED (owner-gated) | S | stretch | |
+| V2-17 | Prune for newcomers; ship as a minor version | S | must | yes |
 
-Cut order if week 2 slips: V2-07, V2-11, V2-14 (V2-15 is already a stretch).
+### V2-01 · In-view meter
 
-### V2-01 · Launch gate
+- **What:** an allocation-free "seconds in view" counter per incident kind in
+  `CityLife` (using `inView()` and each scene's `subject()`), in the session
+  log and on `window.__ub`. `tools/tune/inview.mjs` drives 20 scripted
+  minutes of free roam plus a 2-star pursuit and reports in-view seconds,
+  incidents seen per kind, and incidents that started and ended unseen.
+- **Why:** it decides whether week 1 goes on placement or new incidents, and
+  turns "the city comes alive" into a number that should go up.
+- **Done when:** the harness prints a per-kind table; the baseline is in
+  HANDOFF before V2-02; a test shows the counter doesn't allocate per frame.
 
-- **What:** (a) Days 1–2: the iPhone 15 Pro real-device pass (HANDOFF to-do
-  #2) end to end as a **baseline**: draw calls, fps, thermals, overlaps at
-  852×340. (b) Smoke test under 4G throttling (CDP
-  `Network.emulateNetworkConditions`) with time-to-title and
-  time-to-first-control budgets that fail CI. (c) A single TAP TO PLAY on
-  first visit, which also unlocks audio. (d) Day 10: a watched blind
-  playtest, 3–5 people on their own phones, with a script (time to first
-  hook, first confusion, quit point). (e) Days 11–12: a second device pass
-  with V2 in, plus a 15-minute Shift soak.
-- **Builds on:** `render/quality.ts`, `DynamicResolution`, the perf overlay
-  and `frameStats`, the 0.12 performance reports, `tools/smoke.mjs` iPhone
-  and offline profiles, `tutorial.ts` first-run state.
-- **Done when:** baseline and post-V2 numbers are in HANDOFF; under 150 draw
-  calls (target under 90) in a Shift with an incident, a rival and a hooked
-  car in view; the soak holds; load budgets are enforced; playtest notes
-  exist and the median stranger hooks a car in under 90 s. **No public post
-  before all of this.**
+### V2-02 · The city doesn't stop
 
-### V2-02 · The Hook
+- **What:** a new `BUSY` hold set (title, tutorial, and activity only for timed
+  race modes and missions that ask for it) for races, fights, muggings, turf,
+  accidents and tows, with a per-star rate multiplier: fewer while wanted,
+  never zero. `LOUD` stays for title and tutorial. A `routeAhead` placement
+  that picks a lane-graph spot 60–150 m ahead of the player's velocity,
+  off-screen, at most once per 45 s and only while wanted. Mode audit: race
+  modes keep the hold; free roam, taxi and frenzies don't; Chaos Run is an
+  open question.
+- **Builds on:** `systems/cityScenes.ts`, every `clock.define` in `scenes/*`,
+  `fireCrews.ts:96` (fires already run while wanted, so the pattern is
+  proven), `simLod`, the lane graph, police pursuit.
+- **Done when:** tests cover hold rules per kind and star level and
+  route-ahead placement; the V2-01 harness shows an incident in view at least
+  every 60–90 s of driving and at least one during a 2-star pursuit; the
+  iPhone `medium` profile stays under 150 draw calls in a 5-star soak.
 
-- **What:** In any tow truck, below about 3 m/s with a hookable car within
-  6 m and 60° of the truck's axis, the door button reads **HOOK**. A tap
-  sets `holdControls` and the existing `pullIn()` drives the truck to the
-  spot from `tows.ts` `lineUp()`, nose or tail; after at most 1.5 s it hooks
-  anyway, then winches over `WINCH_SECONDS`, carried by `towPose()`. Loaded:
-  throttle ×0.8, top speed −20%. The button then reads **DROP**, or
-  **FLING** above 8 m/s: the car goes back to the sim with the truck's
-  velocity plus a clamped sideways kick.
-  - **Eligibility** (pure `hookRig.ts`, tested): unoccupied; reach ≤
-    `MAX_REACH` 3.3 (no buses, fire engines, SWAT or garbage trucks); not
-    burning; police cars only when abandoned, and always illegal.
-  - **Physics:** `Vehicle.towedBy` / `flungBy` / `flungUntil`. The `main.ts`
-    pair loop skips truck/towed pairs, and the flung car vs its own truck for
-    0.3 s. `involvesPlayer` becomes `isPlayers(a) || isPlayers(b)`, so a
-    flung car's hits score FLING and raise heat. **Fallback decided in
-    advance:** if carried-car contacts jitter on the phone, ghost the
-    carried car and make FLING the only collision path.
-  - **Feel:** new `hook`/`unhook`/`fling` events (added compatibly, new
-    `GameAudio` cases): synthesised winch whine, chain clank, tension
-    rattle, whip crack on FLING. Amber beacon via `look.addGlowSource`.
-    60 ms hit-stop and camera kick on FLING. First-hook feed line:
-    `IT'S NOT STOLEN · IT'S IN TRANSIT`.
-  - An optional `towing` field on the mission `deliver` step plus
-    `MissionView.hooked(tag)`, for m1 and chapter 3.
-- **Done when:** unit tests cover eligibility, line-up, end choice, release
-  clamp and the deliver field; on the iPhone profile at 852×340 a touch
-  player stops near a car, taps HOOK and has it lifted within 4 s with no
-  steering; DROP and FLING work from the same button; a flung car hitting a
-  police car scores and raises heat; no self-collision; allocation-free over
-  60 s of towing; the smoke test runs hook → drop through `__ub`.
+### V2-03 · Chase handoff
 
-### V2-03 · Kerb Law and kerb paint
+- **What:** a pure `chaseHandoff({stars, playerInGetaway, playerNear,
+  crimeOnThisChase})` → `continue | takeHeat | turnedOn | breakOff`, called
+  first in `stepChase`. `PoliceForce.adopt(v, aboard)` (a public wrapper on
+  the private `addUnit`, `police.ts:440`) turns chase cars within ~80 m into
+  the player's pursuit, within the tier's unit cap. A `tookGetaway` crime with
+  a heat floor of 2 (modelled on `copCarStolen`). A `suspect` flag so knocking
+  down chase suspects and muggers isn't assault. One forgiven bump per chase
+  unit within 3 s of touching the getaway. New score kinds and street events
+  `takeTheHeat` and `citizensArrest` with `GameAudio` cases; the $50 mugging
+  bag gets a HAVE-A-GO HERO stamp.
+- **Why:** the chase you were watching becomes your mayhem. It also fixes
+  today's oddity where cops who saw you attack them simply drive off.
+- **Done when:** a decision-table test covers every branch; a scene test has
+  the player carjack the getaway and asserts heat ≥ 2, the former chase cars
+  in `police.units`, no car left with sirens and no scene, and no chase
+  running; a second test rams the getaway next to a patrol and asserts an
+  arrest with the player at 0 stars.
 
-- **What:** The ground shader's kerb term gets two `ubBand` terms: double
-  yellows along kerbside road edges (not car-park bays), and a **red** band
-  in tonight's tow-away district, chosen by a uniform that exists from boot
-  (no mid-play compile). Pure `kerbLaw(x, z, redDistrict)` → `'legal' |
-  'illegal'`, tested. Legal tow: small council fee and a feed line. Illegal
-  tow (or any police car): `WITNESS CALLING IT IN…` through
-  `systems/witnesses.ts`, stars on success, ×3 yard payout. One KERB LAW
-  card in Vex's voice on the first hook. Red kerbs are painted in free roam
-  too (district from the date seed). Amber beacons on the Graveyard and
-  Clamp trucks; three new tokens (hi-vis yellow, cone orange, PCN cream) on
-  V2 surfaces only.
-- **Done when:** a **day-1 readability spike** passes your sign-off: night
-  screenshots at 852×393 and 1280×720 where red reads as distinct from
-  yellow without a glow (if not, widen or brighten through the lamp-pool
-  term, never a glow strip); `kerbLaw` tested at district edges; red-kerb
-  hooks give no stars, yellow ones raise a witness; the shader cost on the
-  `low` tier is within budget.
+### V2-04 · Stamp HUD and named mayhem
 
-### V2-04 · Cold open: *Removed With Occupant*
+- **What:** one big centred stamp (pooled, no per-frame allocation), synced
+  with the `fxDirector` hit-stop: one at a time, at most one every 4 s, bigger
+  wins. A pure detector over score awards and street events: 3+ chained
+  explosions, a pile-up within 3 s, 3 cop cars wrecked in one pursuit, a bus
+  through a queue. About 12 original names. Bystanders in view switch to the
+  witnesses' film pose. Off in Chaos Run.
+- **Done when:** detector tests (windows, cooldown, priority); smoke
+  screenshots at 852×340 show no overlap with stars, radar or activity card.
 
-- **What:** Fresh saves only. TAP TO PLAY at 21:00 near the Glass Heights
-  payphone. A mustard compact with an orange CURBSIDE truck already lined
-  up; you start at its door in the `down` state and play `getup` (input
-  buffered, control by about 1.5 s) while the car winches up. A
-  non-blocking PCN stamp (DOM overlay, any input dismisses it). At t≈3 the
-  truck drives off with your car and retires out of sight; at t≈5 the
-  payphone rings and the pointer says ANSWER. New `Tows.forceHooked(car,
-  paint)` (today's `force()` drives in from 110 m, which is too slow); a
-  pure, tested `game/coldOpen.ts` sequences the beats. SKIP chip; auto-skip
-  for any save with progress; an ARCHIVE replay entry.
-- **Done when:** tap to first accepted input ≤ 2 s on the iPhone profile
-  (smoke test); car gone within 15 s; payphone ringing by about 6 s; walking
-  away still gets the ring; saves with progress never see it.
+### V2-05 · Incident-aware missions
 
-### V2-05 · WRONG NUMBER becomes the tow tutorial
+- **What:** a `{do: 'scene'}` mission action that starts a scene round a
+  point through `SceneStarter`, marks it featured, re-rolls once, then gives
+  up quietly (no step ever depends on it). Featured scenes also survive the
+  `wanted` hold (`cityLife.ts:375`); featured is reset on mission end,
+  WASTED, BUSTED and quit. A `{kind: 'mayhem'; points; near?}` step fed by
+  score awards. A flag so job 1 can start without a payphone.
+- **Done when:** tests for the mayhem step, a featured scene surviving the
+  activity hold at 3 stars, and featured cleared after WASTED.
 
-- **What:** Rewrite m1 (keeping its jokes and the 3-line limit): Vex's call
-  → get in the Graveyard-blue tow truck round the corner (TRUCK blip) →
-  deliver a car off the red kerb to the yard bay (legal, paid) → deliver
-  one off a yellow line (illegal, witness, 1 star) → lose the heat. FLING
-  pointer is optional, shown when towing fast with stars. New pointers HOOK
-  IT / DROP AT THE YARD / FLING replace STEAL A CAR on fresh saves only.
-  After m1 the truck is parked at the yard and the safehouse; if wrecked, a
-  spare spawns out of view within 80 m (*"That was my good one. Spare's at
-  the kerb."*). No fail state in m1. About four line retcons (WRONG NUMBER,
-  FINE PRINT, NO PARKING) in `missionsData.ts` and `STORY.md` together.
-- **Done when:** cold open → m1 passed in under 7 minutes in a playtest;
-  mission and line-length tests pass; REPEAT JOB m1 works; a save that
-  passed m1 never sees the new pointers.
+### V2-06 · KEEP IT LOUD chapter 1
 
-### V2-06 · NIGHT SHIFT
+- **What:** six jobs, `arc: 'main'`, ids `s1`–`s6`:
+  1. **WRONG STOP** — the cold open: get in, lose the heat.
+  2. **MAKE SOME NOISE** — 2,500 points of mayhem in Cobble Row.
+  3. **QUIET PLEASE** — flatten two hostile wardens, pick up Lionel, get him to the Mile.
+  4. **NINETY-NINE PROBLEMS** — take Doreen's van back off a Graveyard Shift tow truck, unscratched.
+  5. **RIBBON CUTTING** — wreck the Mayor's limo.
+  6. **QUIETEST CITY** — 5,000 points of mayhem near the judges' coach, with a race, a fire and a turf flare-up started along its route.
 
-- **What:** The one new mode. Start in the Graveyard truck at the docks
-  yard at 22:00; `look.time` speed set so dawn comes in 6 real minutes (a
-  constant). The sim `rand` at `main.ts:190` becomes reseedable and is
-  reseeded at shift start. Pure, tested `shift.ts` builds a 12-job queue from
-  the seed: 7 badly parked cars (`Population.parkCar`, no new draw calls),
-  3 pre-wrecked, 2 abandoned in a lane; a refill rule keeps at least 3 open
-  jobs within 300 m. Payout = `exportPayout` (base × condition) × kerb-law
-  multiplier; delivery at the yard bay uses the existing export crane-away,
-  with Vex standing at the bay. One new `SceneHold` kind, `otherActivity`:
-  accidents and fires keep running in a Shift, and their towables join the
-  queue with a 1.5× tip; every other scene stays held. Radar shows the 3
-  nearest jobs. Ends at dawn, or early on WASTED/BUSTED with a partial
-  tally (Chaos Run's respawn-then-results path). A spare truck costs 20
-  game-minutes. TALLY card from the Chaos results card: haul, impounds,
-  legal vs illegal, best fling. CRED is awarded per shift on the existing
-  curve. The title leads with NIGHT SHIFT after m1.
-- **Done when:** `shift.ts` tests (same seed → same queue, refill, payouts,
-  tally, every end condition); no 45-s stretch without a job within 300 m
-  in a 6-minute run; draw calls within the V2-01 target; missions, races
-  and Chaos Run unchanged (existing tests green).
+  New badges for DOREEN, LIONEL and MAYOR LULL. Completion: 30% to MAIN,
+  NIGHT SHIFT separate. Chapter 2 outlined in `STORY.md` only.
+- **Done when:** placement tests pass; all six completed on desktop and the
+  iPhone; no step fails on gaining stars; old saves keep m1–m13 progress
+  (migration test); the completion page shows both bars.
 
-### V2-07 · One Clamp rival and the SNATCH (should)
+### V2-07 · Live cold open
 
-- **What:** In a Shift, `Tows` gets a rival option in the existing single
-  tow slot (free because ambient tows are held): Clamp orange, only picks
-  queued jobs, slow first dispatch. Hook a car off the rival's boom while
-  it's towing → `drop(t)`, a SNATCH score, a feed line and a camera kick.
-  Ramming the truck or KOing its driver already ends its tow. Three snatches
-  earn a Clamp line on the TALLY. The rival never hooks your truck.
-- **Done when:** one orange truck works the queue and can take a job before
-  you; SNATCH scores and the rival leaves; a first-time player beats the
-  rival's count in 4 of 5 seeded nights.
+- **What:** PLAY drops the title camera onto a bus pulling into a shelter,
+  with the player standing at it. A forced chase's getaway crashes at the kerb
+  within 10 s; the prompt is GET IN, leading into TAKE THE HEAT. Fallback: a
+  pre-crashed getaway plus 2 stars if the chase can't start. Runs once;
+  Settings gets REPLAY OPENING. Replaces the three tutorial pointers. Chaos
+  Run, frenzies, races, exports and taxi stay off the title until `s2` is
+  passed.
+- **Done when:** the smoke test asserts the player is in a car within 20 s of
+  PLAY at 1280×720, 852×393 and 852×340, including the fallback with chases
+  forced off; a second run doesn't replay it; side modes are absent for a
+  fresh save.
 
-### V2-08 · Tuna on dispatch (should)
+### V2-08 · Night Shift side story
 
-- **What:** Pure `game/dispatch.ts`: about 40 lines by job type (parked,
-  wreck, abandoned, fire out, red kerb, rival on our job, snatch, truck
-  wrecked, dawn in two minutes) with `{colour} {model} {district}` slots
-  from `colourName()`, `CAR_NAMES` and `districtAt`. Seeded rotation, 8–12 s
-  minimum gap, silent at 4+ stars and during dialogue cards. Uses the radio
-  toast slot (`ui/radioToast.ts`); no new voice.
-- **Done when:** tests cover rotation, rate limit, silence rules and length
-  at 852×340; in a smoke-run Shift no two lines within 8 s and none overlaps
-  the score feed.
+- **What:** `arc: 'night'` on m1–m13 (ids unchanged). Night jobs ring only
+  after dark from the docks-yard phone with a moon badge; the two arcs never
+  ring the same phone at once. A new Vex opener links them. Fix chapter 1's
+  placeholder district text in `missionsData.ts`.
+- **Done when:** tests show night jobs only at night and no shared ringing
+  phone; a grep test finds no "arts quarter", "suburbs" or "old town";
+  existing saves keep their progress.
 
-### V2-09 · TONIGHT'S SHIFT and challenge links
+### V2-09 · Tow side job
 
-- **What:** Pure `daily.ts`: local date → seed and spec (red district,
-  weather, job queue, rival timing, bounty car). Runs the Night Shift with
-  perks off, like the other scored modes. Pure `challengeLink.ts`:
-  `#n=MAJOR.YYYYMMDD.HAUL.CARS.INITIALS.CHECKSUM`, sanitised, round-trip and
-  tamper tests. Opening a link shows a landing card (*OFFENDER DRK IMPOUNDED
-  $14,320 (7 VEHICLES) ON 2 NOV. BEAT IT.*) with one button into that night,
-  then clears the hash. A link from another major warns "Issued under
-  different bylaws" and still plays. The save gets a sanitised `nights`
-  field (per-date best, streak). All copy says "same night", never "same
-  replay": the sim isn't lockstep-deterministic.
-- **Done when:** a date always gives the same spec within a major; links
-  round-trip and reject tampering; a link opened offline in the installed
-  PWA shows the landing card and starts that night (smoke test); the
-  streak survives a save round-trip.
+- **What:** an action button on the tow truck (the fire button's slot on
+  touch). The winch hooks the nearest towable within a few metres (accident
+  wrecks, dumped getaways); the hooked car follows softly and the truck is
+  speed-capped. Deliver to the docks yard for pay by condition, with a small
+  streak. Vex phones after dark with a tow contract. A guard stops the AI
+  service runs claiming the player's stolen truck.
+- **Done when:** tests for hook range, speed cap, pay table and the guard; on
+  the iPhone a wreck can be towed to the yard without clipping kerbs.
 
-### V2-10 · The Penalty Charge Notice
+### V2-10 · Your Mess, Their Problem (should)
 
-- **What:** At the dawn (or WASTED/BUSTED) freeze, a one-shot flag copies the
-  GL canvas into a reused 1080-px canvas right after that frame's
-  `look.render` (no extra render; `snapshotView` gains an optional reused
-  `out` canvas). `ui/ticketCard.ts` composes a 1080×1350 portrait (and a
-  1200×630 variant) on canvas 2D when the TALLY opens and calls `toBlob`
-  then, so SHARE can call `navigator.share({files})` inside the tap.
-  Fallbacks as in `ui/bugReport.ts`: clipboard, then download. Layout: the
-  frozen frame (or a SITE PLAN drawn from the radar's block data if capture
-  failed), the CURBSIDE header, itemised offences in Clamp's voice, the fine
-  = the haul, one *Tarmouth Gazette* headline on the stub, a barcode and the
-  link. Pure `offences.ts` ranks lines from a preallocated per-shift tally;
-  about 40 offence lines and 20 headlines, tested for length.
-- **Done when:** no frame spike at the freeze on the iPhone profile; SHARE on
-  iOS Safari opens the share sheet with a PNG in one tap; desktop Firefox
-  falls back to download; a forced null capture draws the SITE PLAN;
-  **you sign off every offence and headline line** for out-of-context reading.
+- **What:** `accidents.ts` adopts a player-caused crash: the other car's
+  driver gets out arguing, then a patrol and a tow arrive. The player's car is
+  never held; at most one adopted accident at a time, none on a busy street.
+  Gunfire sets off alarms, a witness calls it in and a patrol comes. A
+  `root: 'player' | 'city'` flag and a depth counter through `SceneStarter`;
+  a DOMINO ×N label (capped at 4) that pays only when the root is the player.
+- **Done when:** tests for the adopt rules and depth cap; in the owner's
+  20-minute session at least one of their own crashes becomes a visible scene.
 
-### V2-11 · Final district names and council area cards (should)
+### V2-11 · Scanner pings (should)
 
-- **What:** MAPLE FLATS → **PRIVET END**; sweep chapter 1's "arts quarter /
-  suburbs / old town" and chapter 2's "Maple Flats". The area card's empty
-  sub line gets council restrictions:
-  - GLASS HEIGHTS · NO STOPPING AT ANY TIME
-  - COBBLE ROW · PAY AND DISPLAY. MOSTLY PAY.
-  - RUSTWATER DOCKS · LOADING ONLY. NO WAITING. NO HOPE.
-  - PRIVET END · RESIDENTS' PERMITS ONLY
-  - NEON MILE keeps VIPERS TURF; tonight's red district adds `· RED KERBS TONIGHT`.
+- **What:** a pure `ScannerFeed`: street event → a short dispatcher line with
+  priority and cooldown, shown as a subtitle plus a radar ping (at most two)
+  that lasts until the incident ends. While you're wanted it names your car's
+  colour and district. A synthesised CITY SCANNER radio station is stretch.
+- **Done when:** tests per event kind, cooldowns and 5-star rate limiting; a
+  smoke screenshot at 852×340 shows it clear of the HUD; a Settings toggle.
 
-  Title small print: *A GREATER TARMOUTH BOROUGH COUNCIL INITIATIVE*
-  (subject to a name check). A STORY.md *World* section makes
-  kerb-vs-CURBSIDE canon.
-- **Done when:** no placeholder district text remains (grep + test); every
-  crossing shows its line and fits at 852×340.
+### V2-12 · RACE CRASHER and VAN NICKED (should)
 
-### V2-12 · Prune the front door; old saves stay whole
+Pull onto a street race's line to join (no rubber-banding); win and the race
+car is yours. Drive off in the ice cream van while there's a queue and the
+queue chases you on foot. A scene test per hook.
 
-- **What:** Fresh saves: taxi, frenzies, packages, exports and races are
-  hidden from the title and radar until the first Shift (or chapter 1 job
-  3), each unlocking with one feed card. Chaos Run unlocks after the first
-  Shift. Any save with progress unlocks everything and skips the cold open
-  and new pointers. Reweight completion to include Shifts without a sharp
-  drop for veterans. Public-release content pass: retire `KNOCK DOWN 15`
-  (`fz-brawl`); rename the *Kerb Crawler* song (`stations.ts:381`, UK slang
-  for soliciting) to *Kerb Appeal*; review frenzy titles and other lines
-  that read badly out of context.
-- **Done when:** a fresh save's title shows only story/free roam, NIGHT SHIFT
-  (after m1) and TONIGHT'S SHIFT; a real pre-V2 save loads with every mode
-  and no cold open (migration test); the two strings are gone.
+### V2-13 · Two new incidents (should)
 
-### V2-13 · Storefront copy
+A daytime **cash-in-transit van** on its rounds that spills a cash pickup when
+wrecked, and **kebab chucking-out time** at 2 a.m. in Neon Mile and Cobble
+Row (a stumbling crowd, one shouted argument, a taxi queue). Each gets an
+attract-show highlight, a street event and a `GameAudio` case. Existing
+batches only; no draw-call increase on the iPhone profile.
 
-- **What:** Tagline **HOOK IT · TOW IT · CONTEST THE FINE**. New og/twitter
-  description: *"They towed your car with you asleep in it. Join the
-  Graveyard Shift, a night tow crew, and take the city back one kerb at a
-  time. Plays in your browser and on your phone."* Six council-sign attract
-  captions; a 150-word itch/Reddit blurb leading with the cold open and
-  Tonight's Shift; a new `og.jpg` (a car on the hook under sodium light, a
-  PCN stub in the corner). Ships with the hook, not before; never mentions
-  unbuilt features.
+### V2-14 · Launch gate
 
-### V2-14 · itch.io build and gated launch (should)
+An iPhone 15 Pro pass on the `medium` profile after V2-02 lands, including a
+5-star soak with scene cars (HANDOFF so far records one device run, with the
+desktop tier forced). A boot-time tier probe. A time-to-first-drive figure in
+the session log. Three strangers play blind for 10 minutes; fix the top three
+things they trip on. Numbers and notes go in HANDOFF.
 
-- **What:** `npm run build:itch` (relative base, PWA off, install/update
-  prompts suppressed in an iframe, a fullscreen button) with an itch smoke
-  variant in `ci.yml`. A dev-only `__ub.stage(name)` sets up three hero shots
-  (HOOK on a red kerb at 22:00; FLING into a cordon at 2 stars; REMOVED WITH
-  OCCUPANT) through the scene starter, so re-shoots are repeatable. You
-  record 4–6 GIFs on a desktop GPU plus one iPhone screen recording (about
-  an hour). The store page tells iPhone players to use deeek.org, because
-  saves don't cross origins. Posts (r/WebGames, r/threejs, r/IndieDev) carry
-  a Tonight's Shift link and wait for V2-01's gate; they can slip past day
-  14 without blocking the release.
+### V2-15 · Quiet Wardens (stretch)
 
-### V2-15 · Tail whip (stretch)
+After the finale, two hi-vis wardens now and then walk up to a busker, an ice
+cream queue or a food cart, only in the player's view, lecture for ~15 s, then
+act. Flatten them and the busker plays louder and the queue cheers. At most
+one at a time, every 3–5 minutes. The villain becomes something to wreck,
+never something that switches incidents off behind your back.
 
-A pure, tested heading-lag spring (≤ 35°) on `towPose`'s output that grows
-with speed, yaw rate and handbrake, plus a SWING score for hits while
-carried. Only if carried-car contacts proved stable on the device in V2-02,
-and behind a flag.
+### V2-16 · Best-moment picture (stretch, owner-gated)
+
+Capture the life's best stamped moment during a hit-stop and show it, with a
+caption, on WASTED/BUSTED, shareable via the bug-report share path. Built only
+if a 10-minute static mock is something the owner would send a friend.
+
+### V2-17 · Prune for newcomers
+
+Remove the three-pointer tutorial in favour of the cold open; side modes
+become an unlock list; ship as a minor version with player-facing changelog
+notes. A fresh save shows PLAY and Settings only.
 
 ## Schedule
 
 | Days | Milestone | Items | Exit criteria |
 |---|---|---|---|
-| 1–2 | **M0 Foundations and gates** | Baseline device pass + 15-min soak (you); agree the event and tally schema (hook/unhook/fling, `towedBy`/`flungBy`, Shift tally) because V2-02/06/08/10 all depend on it; reseedable sim `rand` with a test; red-kerb readability spike; start `hookRig.ts`. In parallel: content review, district rename and area cards, first drafts of offence, dispatch, cold-open and m1 lines; 4G load budgets in the smoke test. | Baseline numbers recorded; schema merged; `rand.seed` tested; red-kerb screenshots approved or fallback chosen; `hookRig` tests green; load budgets reported. |
-| 2–5 | **M1 The verb** | V2-02 (a) line-up, winch, drag, DROP, loaded handling, pair-loop skip; (b) FLING, attribution, score and heat, `towing` field; tow sounds and feel in the same PR. In parallel: V2-03 kerb law and witnesses; V2-04 `forceHooked` and cold open. **Day 5: you play hook, drag and fling on your iPhone. If it isn't fun, day 6 goes on feel before the Shift is built on it.** | One-button hook/drag/drop/fling on the phone; flung car scores and raises heat; no self-collision; allocation-free; kerb law works; cold open plays in 15 s; your day-5 check passes. |
-| 5–9 | **M2 The night** | V2-06 Shift; V2-05 m1 rewrite. In parallel: V2-09 daily and links; V2-08 dispatch; V2-12 gating and save migration. V2-07 rival once the queue exists (first to cut). | Full Shift and Tonight's Shift on the iPhone profile within budget; no 45-s job drought; WASTED gives a partial tally; fresh save goes cold open → m1 → Shift; old saves load with everything; existing tests green. |
-| 8–10 | **M3 The ticket and the storefront** | V2-10 PCN; V2-13 copy and og image; V2-14 itch build and hero shots. **Day 10: blind playtest, 3–5 newcomers.** | SHARE on iOS opens the sheet with the PCN; links round-trip offline; copy merged; itch smoke green; playtest notes recorded. |
-| 11–14 | **M4 Tune, gate, ship** | Fix the top 3–5 playtest findings; second device pass + 15-min Shift soak (you); V2-15 only if all green; version, changelog, smoke test, push to main; GIFs and itch page; launch posts only once all gates pass. | All `must` items done; device pass and soak pass; smoke test green on every profile; deployed to deeek.org/curbside. |
-
-Parallel worktrees all wire through `main.ts` and the pair loop, so the
-day-1 schema PR and one owner for `main.ts` wiring per milestone keep merges
-sane. Pure logic goes in modules with tests, as `CLAUDE.md` requires.
+| 1 | **M0 Choose and measure** | The owner picks a direction (nothing story-specific is written before that). V2-01 baseline. Direction-free work starts: V2-05, V2-08. | Choice recorded in HANDOFF; baseline logged. |
+| 1–5 | **M1 The city doesn't stop** | Parallel workstreams: City (V2-02), Chase (V2-03 decision table, `adopt`), Story (V2-05 landed, s1–s3 drafted), Side (V2-08), Presentation (V2-04). | The owner plays 20 minutes on the iPhone and says yes to: did a race, fight or accident get in the way of my chase? Did I steal a getaway and inherit its cops? Did a stamp land? In-view numbers up on the baseline. |
+| 5–8 | **M2 First session and device gate** | V2-07 cold open; V2-03 finished; s1–s3 playable; V2-14 device pass and 5-star soak; V2-09 winch prototype. | Smoke test passes at all three sizes including the fallback; under 150 draw calls in the 5-star soak; s1–s3 complete on the phone. |
+| 8–12 | **M3 Story and side job** | s4–s6 and the coach finale; V2-09 with Vex's call; V2-10; V2-11; V2-12 and V2-13 as capacity allows. | Chapter 1 completes on desktop and iPhone; a wreck towed to the yard on the phone; `npm test` and `npm run build` green. |
+| 12–14 | **M4 Playtest and ship** | V2-14 blind playtests and top-3 fixes; V2-17 and the changelog; stretch items only if green. | Three strangers reach a stolen car within 20 s and play 10 minutes unprompted; the owner signs off a 20-minute session; pushed to main with the smoke test passing. |
 
 ## Not in V2
 
-| Idea | Why not now |
+| Idea | Why not |
 |---|---|
-| The impound yard as a persistent base, collection book, upgrades | A 10th-hour feature in a release about the first 30 seconds; needs recycling exemptions, docks sim load and save migration. Only a "rare car impounded" line on the TALLY survives. Revisit in V2.1 with Shift play logs. |
-| Tuna's in-run mod picks | A generic roguelite bolt-on on a verb that isn't tuned yet. |
-| Bylaw difficulty ladder | No first-session value; depends on the open five-star tuning (BACKLOG). |
-| **Chapter 3** (Mayor Bunting, *Tough on Kerbs*) | Strangers never reach job 14. Plan it as **V2.1's headline**: four of six jobs as tow jobs using V2's `towing` deliver field, plus the "get Vehicle 000001 back" payoff. |
-| *Tarmouth Gazette* as a second share image | Dilutes the PCN; one headline on the stub survives. |
-| Story cameos in free roam (Clamp as lollipop man, etc.) | Gated on story progress, so strangers never see them; arrive with chapter 3. Only Vex at the yard bay survives. |
-| Packages as Clamp's files | Reskins a collectible V2 hides from newcomers; half-day filler for V2.1. |
-| Photo mode | Free camera exposes chunk culling and the roof cap; the PCN covers sharing. |
-| Night-bus radio: DJ, parody ads, babble voice | 150–200 lines and an untested voice; only the dispatch idea survives (V2-08). |
-| Instant replay / clip export | Sim state freeze/restore and MediaRecorder on iOS would eat the two weeks. |
-| A separate 2:00 Chaos Run daily | Would rehearse the GTA-2 loop daily; its link format ships inside V2-09. |
-| Wheel-clamp cold open | A clamp teaches the wrong verb and needs Blender work; a tow reuses `Tows`. |
-| Hooking occupied cars, big vehicles, rivals hooking you, warden clamping | Each adds a failure state or new physics on an unproven verb; V2.1 at the earliest. |
-| Stencilled road words, bay numbers, full UI token refresh, mid-run stamps, automated trailer rig | Shader cost on phones, half-styled screens, extra renders mid-play, no GPU in the agent sessions. |
-| Lazy GLB loading, a driving assist, colour-safe radar shapes | Lazy loading risks a mid-play shader compile; assist muddies scored modes; colour-safe radar is worth doing, just not on this path. |
-| Tarmouth-Ohio twinning lore, CRED retune, exports→impound migration | Lore strangers don't need; no Shift data to retune against; no first-session value. |
+| Daily seeded run and challenge links | Not asked for; traffic isn't deterministic, and scores can't be verified without a server. |
+| A tabloid/newspaper theme | All three brainstormers converged on it with no sign the owner wants it. At most it survives as the owner-gated picture (V2-16). |
+| Turf map and crew respect | That's direction C; only the VIPERS exist as a crew, and the payoff is invisible in a first session. A candidate for the following fortnight. |
+| District CRACKDOWN/LAWLESS states | Retunes scene rates and patrols, and only pays off after an hour. Revisit after the launch gate. |
+| Photo mode, trailer tooling, store GIF production | A free camera fights shadows and culling; the rest is marketing tooling, not game. |
+| DJs, idents, parody ads, news bulletins | Too much writing for synthesised audio that may read as noise; only the scanner pings ship. |
+| Ambulance, bus and police duty jobs; fire hose; ice cream chime | Four sub-mechanics is too many. The winch ships because towing was asked for; hose and chime are next. |
+| WATCH mode (a free-flying camera to incidents) | The scanner pings serve "just watching" more cheaply for now. |
+| Film/"in frame" mission steps, a news-crew protagonist | A passive verb fenced with star penalties: the towing mistake again. |
+| Funeral procession, stag conga, film shoot, hydrant geyser | Two new incidents are enough; more depends on the in-view numbers. |
+| End-of-life replay reel | Fiddly, and duplicates the picture's job. |
 
 ## Risks
 
-- **The verb isn't fun.** Everything rests on the hook → the day-5 phone
-  check; day 6 goes on feel if it fails.
-- **Carried-car contacts jitter or tunnel** → the ghosting fallback is
-  decided in advance; FLING stays the collision path; SWING stays a stretch.
-- **Auto line-up fails in tight spots or feels like the game is driving** →
-  the 1.5 s hook-anyway timeout, instant release on cancel, a generous snap.
-- **Red kerb doesn't read at night** → day-1 screenshot go/no-go.
-- **The baseline device pass finds problems that eat week 2** → it runs on
-  days 1–2; cut order V2-07, V2-11, V2-14.
-- **Draw calls in a busy Shift** → queued jobs are parked instances, the
-  rival reuses the tow slot, only accidents and fires bypass the hold;
-  target under 90.
-- **Merge contention** through `main.ts` → schema PR first, one wiring owner.
-- **Old saves** → a migration test on a real pre-V2 save.
-- **Daily fairness** → "same night", not "same replay"; the link carries the
-  major; spec tests frozen within a major.
-- **iOS share-with-files needs a direct tap** → `toBlob` at TALLY open; a
-  first-class download/clipboard fallback.
-- **Content read out of context** → your sign-off on offence and headline
-  lines; the two renames before launch.
-- **A bad first Reddit impression can't be undone** → no public post before
-  the device pass, the soak and the blind playtest. 2.0 can deploy to
-  deeek.org before the posts go out.
+- **Performance:** scene cars plus 5-star police with the hold lifted has
+  never been measured on the iPhone `medium` tier → per-tier scene budget,
+  sim level of detail, and the device soak in M2, not at the end.
+- **Chase handoff bookkeeping:** an adopted car left with its siren on and no
+  scene → the scene test asserts no orphans; officers never shoot a player
+  with no stars.
+- **Route-ahead feels scripted** → capped at once per 45 s, only while wanted,
+  tuned from the in-view numbers.
+- **TAKE THE HEAT must be readable** → stars arrive with the stamp and a siren
+  whoop; the forgiven-bump rule is tuned on touch.
+- **Story timing** if the direction choice slips → V2-02, V2-05 and V2-08 are
+  direction-free and start day 1.
+- **The people cap (24) starving story scenes** → the `scene` action fails
+  soft and no step depends on it.
+- **Tow physics at player speed** → tuned on the phone in M2 before Vex's call
+  is written.
+- **HUD crowding at 852×340** with stamps, scanner, stars, radar and activity
+  card → smoke screenshots at every milestone.
 
-## Open questions for you
+## Open questions
 
-1. **Version:** 2.0.0 (matches "V2" and the link's major) or 1.0.0 as the
-   public release? `package.json` is 0.13.0.
-2. **City name:** is *Tarmouth* / *Greater Tarmouth Borough Council* OK after
-   a quick real-place and trademark check, or should the city stay unnamed?
-3. **Pruning:** hide taxi, frenzies, packages, exports and races from fresh
-   saves until the first Shift? Retire KNOCK DOWN 15 outright, or rename it?
-4. **Cold open:** automatic on a fresh save (SKIP chip, control within 2 s),
-   or opt-in from the title?
-5. **Your time:** two iPhone sessions (about 2 h on days 1–2, about 2 h on
-   days 11–12), and 3–5 people who've never seen the game for day 10?
-6. **Currency:** stays $, with at most one joke about it in the PCN small print?
-7. **Shift length:** start at 6 minutes and let the playtest move it (likely 4–8)?
-8. **Initials on share links:** typed by the player (up to three), optional,
-   or blank by default?
-9. **Launch timing:** posts wait for the gates even if that's after day 14,
-   or is there a date to hit?
-10. **Chaos Run:** on the title after the first Shift as practice, or hidden
-    until later?
+1. **Which direction:** A (Have-a-Go + Keep It Loud), B (The Menace) or
+   C (Turf + Nana Viper)? Or A's gameplay with B's story?
+2. **Backstory (if A):** is the alarm fitter sacked by a Quiet Streets Act a
+   story you'd enjoy?
+3. **Chaos Run:** keep its empty streets (a fair timed score), or let the
+   living city run through it too?
+4. **TAKE THE HEAT:** land on 2 stars, or 1 or 3?
+5. **Night Shift:** ring only at night, or any time from the docks-yard phone?
+6. **Picture of your best moment:** would you send one to a friend? A quick
+   mock decides V2-16.
+7. **Hiding side modes** from brand-new players until the second story job:
+   OK?
+8. **Version:** ship as 0.14.0, or is this the 1.0 you post to Reddit and itch?
 
-## Sample script
+## Sample script (direction A)
 
 ```
-COLD OPEN (21:04, Glass Heights; live, control from second 2)
-[PCN stamp, non-blocking]
-PENALTY CHARGE NOTICE 000001 · CURBSIDE · COMMISSIONER CLAMP
-Vehicle removed from double yellow, 21:04. Occupant found asleep. Occupant tipped onto kerb.
-Vehicle and contents (1 phone) held at the Council impound. Release fee: $5,000.
+COLD OPEN (no card; the only prompt over the live crash)
+GET IN · LOSE THE HEAT
+[TAKE THE HEAT stamps; two patrol cars swing in behind you]
 
-[The payphone rings. WRONG NUMBER, rewritten]
-VEX: Saw that. Clamp's lot towed your car with you asleep in it. Rude. Even by my standards.
-VEX: Name's Vex. I run the Graveyard Shift. Towing, mostly. The 'mostly' pays better.
-VEX: My truck's round the corner, keys in. Hook something off a red kerb and bring it to the yard.
+JOB 1 OUTRO, the nearest payphone
+DOREEN: You're the alarm fitter. Lost your job tonight, I heard. I lost my chimes.
+DOREEN: Lull's banned anything louder than a sigh. Fancy keeping this city loud? It pays.
+DOREEN: Badly. But in ice cream.
 
-FIRST HOOK
-FEED: IT'S NOT STOLEN · IT'S IN TRANSIT
-VEX (KERB LAW card): Red kerb, the council pays us to tow it. Anywhere else it's theft. Pick your crimes.
-FEED (illegal hook): WITNESS CALLING IT IN…
+BACKSTORY BEAT (radio card, first drive after job 1)
+MAYOR LULL: Mayor Lull. From midnight, car alarms are illegal. So are chimes. And buskers. And joy.
+MAYOR LULL: Alarm fitters, please hand in your alarms. Quietly.
 
-TRUCK WRECKED
-VEX: That was my good one. Spare's at the kerb.
+JOB 2: MAKE SOME NOISE
+DOREEN: Twenty years you wired Cobble Row. Every alarm on that street is yours. Remind them.
+OBJECTIVE: MAKE COBBLE ROW LOUD · 0 / 2,500
+DOREEN (pass): Heard that from the docks. The council's lodged a complaint. Lovely.
 
-NIGHT SHIFT, Tuna on dispatch
-TUNA: Blue estate, Cobble Row, parked like a crime. Go and be the law. Sort of.
-TUNA: Red sedan, Glass Heights, nose in a lamp post. Owner's gone. Lamp post's fine.
-TUNA: Orange truck's on our job in Neon Mile. Snatch it off his hook. Politely.
-TUNA: Sun's up in two minutes. Anything not on the yard by then is a hobby.
+JOB 3: QUIET PLEASE
+LIONEL: Two wardens have nicked my hat. My hat is my livelihood. And my hat.
+OBJECTIVE: FLATTEN THE WARDENS · GET LIONEL TO THE MILE
+LIONEL (in car): I'd pay you, but it's in the hat, and the hat's evidence.
 
-RETCONS
-VEX (FINE PRINT): Someone's towed MY tow truck. Signed 'Commissioner Clamp'. Same as your ticket, kid.
-CLAMP (NO PARKING): Registered Keeper 000001. I have read your file. It is thick. Good evening.
+JOB 4: NINETY-NINE PROBLEMS (the Graveyard Shift cameo)
+DOREEN: They're towing my van. Council contract. Some night crew in blue.
+VEX: Nothing personal. Council pays by the van. You pay in compliments.
+OBJECTIVE: TAKE THE VAN BACK · DON'T SCRATCH IT
 
-DAWN TALLY, after three snatches
-CLAMP: Good evening. This is a formal complaint. It has been filed. Under 'you'.
+JOB 6: QUIETEST CITY (finale)
+MAYOR LULL: The award judges tour our streets tonight. They will see nothing. That's the point.
+DOREEN: Coach leaves Glass Heights at nine. Make sure they see everything.
+OBJECTIVE: GIVE THE JUDGES A SHOW · 0 / 5,000
+MAYOR LULL (outro): Quietest City has gone to a village with one goat. The goat was louder than you lot, apparently.
 
-THE PCN
-OFFENCE 4a: REMOVAL OF A VEHICLE WITHOUT THE CORRECT FORM ×7
-OFFENCE 9: VEHICLE DEPLOYED AS PROJECTILE AT POLICE CORDON
-OFFENCE 19: FAILED TO GIVE WAY TO 6 POLICE VEHICLES. ALSO RAMMED THEM.
-STUB: POLICE "TIRED" AS 7 CARS VANISH FROM COBBLE ROW
+NIGHT SHIFT OPENER (after dark, docks-yard phone, moon badge)
+VEX: Heard you've a day job now. Cute. The night's still mine, and wrecks need hooking.
 
-CHALLENGE LANDING CARD (#n=2.20261102.14320.7.DRK.k3f)
-OFFENDER DRK IMPOUNDED $14,320 (7 VEHICLES) ON 2 NOV. BEAT IT.
+STAMPS: TAKE THE HEAT · CITIZEN'S ARREST · HAVE-A-GO HERO · RACE CRASHER · BARBECUE SEASON · DOMINO ×3
 ```
