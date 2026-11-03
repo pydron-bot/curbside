@@ -20,7 +20,7 @@ import {
 import { BREACH_FRAGMENT_GLSL, BREACH_VERTEX_GLSL, breachUniforms } from '../render/breachScars';
 import { UB_COMMON, UB_LAMP_LIST, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from '../render/shaderLib';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, type City, type Rect } from './city';
-import { AWNING_DEPTH, AWNING_HEIGHT, planBuildings, type BuildingPlan, type RoofProp } from './buildingPlans';
+import { AWNING_DEPTH, AWNING_HEIGHT, planBuildings, type BuildingPlan, type RoofNeon, type RoofProp, type Side } from './buildingPlans';
 import { DISTRICTS, DISTRICT_STYLES, ROOF_TYPES, type District, type RoofType } from './districts';
 import { LAMP_ARM, LAMP_HEIGHT, generateStreetLamps } from './streetLamps';
 
@@ -137,6 +137,7 @@ export function createCityMesh(city: City, plans: readonly BuildingPlan[] = plan
     ]);
     addRoofProps(c, plan, color, m);
     addShopfronts(c, b, plan, m);
+    if (plan.roofNeon) addRoofNeon(c, b, plan.roofNeon, m);
   });
 
   for (const lamp of generateStreetLamps()) addLamp(chunkFor(lamp.x, lamp.z), lamp, m);
@@ -293,6 +294,84 @@ function addShopfronts(c: ChunkBuilder, b: Rect, plan: BuildingPlan, m: Matrix4)
   }
 }
 
+/** Neon glow (aGlow) of a rooftop tube and sign; negative flickers (propMaterial). */
+const ROOF_TUBE_GLOW = 0.8;
+const ROOF_SIGN_GLOW = 0.7;
+/** Tube thickness, m: thick enough to read as a line from the camera above. */
+const TUBE = 0.2;
+/** Halos along a lit edge come in pieces about this long (the glow sprite is round). */
+const HALO_PIECE = 7;
+/** A roof sign: how tall it is and how far it leans back from upright (its top reaches SIGN_REACH in). */
+const SIGN_HEIGHT = 1.5;
+const SIGN_LEAN = 0.95;
+
+/** Rooftop neon (BuildingPlan.roofNeon): tubes on the street edges and corners, a leaning sign, halos on the roof. */
+function addRoofNeon(c: ChunkBuilder, b: Rect & { height: number }, n: RoofNeon, m: Matrix4): void {
+  const color = new Color();
+  const glow = n.flicker ? -ROOF_TUBE_GLOW : ROOF_TUBE_GLOW;
+  const top = b.height + 0.08;
+  for (let side = 0 as Side; side < 4; side = (side + 1) as Side) {
+    if (!(n.edges & (1 << side))) continue;
+    const [ox, oz] = OUTWARD[side];
+    const alongX = side === 0 || side === 2;
+    const face = side === 0 ? b.minZ : side === 1 ? b.maxX : side === 2 ? b.maxZ : b.minX;
+    const lo = alongX ? b.minX : b.minZ;
+    const hi = alongX ? b.maxX : b.maxZ;
+    const len = hi - lo + TUBE;
+    const ex = alongX ? (lo + hi) / 2 : face + (ox * TUBE) / 2;
+    const ez = alongX ? face + (oz * TUBE) / 2 : (lo + hi) / 2;
+    m.makeScale(alongX ? len : TUBE, TUBE, alongX ? TUBE : len).setPosition(ex, top, ez);
+    c.add('boxes', m, color.set(n.colour), [glow]);
+    // The halo on the roof and over the street, in round pieces along the edge.
+    const pieces = Math.max(1, Math.round((hi - lo) / HALO_PIECE));
+    const step = (hi - lo) / pieces;
+    for (let k = 0; k < pieces; k++) {
+      const at = lo + step * (k + 0.5);
+      m.makeScale(alongX ? step * 1.4 : 3, 1, alongX ? 3 : step * 1.4).setPosition(alongX ? at : face, top + 0.1, alongX ? face : at);
+      c.add('glows', m, color.set(n.colour).multiplyScalar(0.2));
+    }
+  }
+  if (n.corners) {
+    // Down each corner where two lit edges meet, from the roof to over the awnings.
+    const corners: Array<[number, number, number, number]> = [
+      [0, 1, b.maxX, b.minZ],
+      [1, 2, b.maxX, b.maxZ],
+      [2, 3, b.minX, b.maxZ],
+      [3, 0, b.minX, b.minZ],
+    ];
+    const from = AWNING_HEIGHT + 0.6;
+    for (const [s1, s2, x, z] of corners) {
+      if (!(n.edges & (1 << s1)) || !(n.edges & (1 << s2)) || b.height - from < 2) continue;
+      const dx = x === b.maxX ? TUBE / 2 : -TUBE / 2;
+      const dz = z === b.maxZ ? TUBE / 2 : -TUBE / 2;
+      m.makeScale(TUBE, b.height - from, TUBE).setPosition(x + dx, from, z + dz);
+      c.add('boxes', m, color.set(n.colour), [glow]);
+      m.makeScale(3.2, 1, 3.2).setPosition(x + dx * 8, 0.05, z + dz * 8);
+      c.add('glows', m, color.set(n.colour).multiplyScalar(0.25));
+    }
+  }
+  if (n.sign) {
+    // A lit panel leaning back over the roof from its street edge: a glowing rectangle from above.
+    const s = n.sign;
+    const alongX = s.side === 0 || s.side === 2;
+    const mid = (s.from + s.to) / 2;
+    const width = s.to - s.from;
+    const inset = 0.35;
+    const bx = alongX ? mid : s.side === 1 ? b.maxX - inset : b.minX + inset;
+    const bz = alongX ? (s.side === 0 ? b.minZ + inset : b.maxZ - inset) : mid;
+    // Tip the top inward: about X for the north and south edges, about Z for east and west.
+    const angle = s.side === 0 || s.side === 1 ? SIGN_LEAN : -SIGN_LEAN;
+    const q = new Quaternion().setFromAxisAngle(new Vector3(alongX ? 1 : 0, 0, alongX ? 0 : 1), angle);
+    m.compose(new Vector3(bx, b.height, bz), q, new Vector3(alongX ? width : 0.12, SIGN_HEIGHT, alongX ? 0.12 : width));
+    c.add('boxes', m, color.set(s.colour), [n.flicker ? -ROOF_SIGN_GLOW : ROOF_SIGN_GLOW]);
+    const reach = Math.sin(SIGN_LEAN) * SIGN_HEIGHT;
+    const gx = alongX ? mid : s.side === 1 ? b.maxX - inset - reach / 2 : b.minX + inset + reach / 2;
+    const gz = alongX ? (s.side === 0 ? b.minZ + inset + reach / 2 : b.maxZ - inset - reach / 2) : mid;
+    m.makeScale(alongX ? width + 3 : 4.5, 1, alongX ? 4.5 : width + 3).setPosition(gx, b.height + 0.1, gz);
+    c.add('glows', m, color.set(s.colour).multiplyScalar(0.28));
+  }
+}
+
 /** A street lamp's stand-in (post, arm, head) and its night halo (kept with the model too). */
 function addLamp(c: ChunkBuilder, lamp: { x: number; z: number; dx: number; dz: number }, m: Matrix4): void {
   const color = new Color(LAMP_POST);
@@ -433,7 +512,14 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
     shader.fragmentShader = after(
       shader.fragmentShader,
       '#include <emissivemap_fragment>',
-      `totalEmissiveRadiance += vColor.rgb * vGlow * (0.12 + uNight)
+      `// Negative glow: a tired tube that stutters now and then (rooftop neon), seeded per 32 m cell.
+      float glowK = abs(vGlow);
+      if (vGlow < 0.0) {
+        float seed = fract(sin(dot(floor(vPropWorld.xz / 32.0), vec2(12.9898, 78.233))) * 43758.5453);
+        float burst = step(0.88, fract(uTime * 0.23 + seed * 7.0));
+        glowK *= 1.0 - burst * 0.8 * step(0.45, fract(uTime * 11.0 + seed * 3.0));
+      }
+      totalEmissiveRadiance += vColor.rgb * glowK * (0.12 + uNight)
         + diffuseColor.rgb * ${listed ? 'ubListedLight' : 'ubStreetLight'}(vPropWorld, normalize(vPropNormal));`,
     );
   };

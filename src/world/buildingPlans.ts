@@ -48,6 +48,26 @@ export interface BuildingPlan {
   /** Bit per side (1 << side) that has a ground-floor shop band. */
   shopSides: number;
   shopfronts: Shopfront[];
+  /** Neon on the roof, seen from the camera above (null: none). */
+  roofNeon: RoofNeon | null;
+}
+
+/**
+ * Rooftop neon, for the title's neon city from above: tubes along the
+ * street-facing roof edges, sometimes down the street corners too, and
+ * sometimes a lit sign leaning back on one roof edge (it reads as a glowing
+ * panel from above). Lit at night, plain colour by day.
+ */
+export interface RoofNeon {
+  colour: string;
+  /** Bit per side (1 << side) with a tube along its roof edge: the street sides. */
+  edges: number;
+  /** Tubes down the corners where two lit edges meet. */
+  corners: boolean;
+  /** A sign on this side's roof edge (null: none), in its own colour. */
+  sign: { side: Side; from: number; to: number; colour: string } | null;
+  /** Stutters now and then, like a tired tube. */
+  flicker: boolean;
 }
 
 /** Awnings hang this high and stick out this far over the sidewalk, m. */
@@ -58,6 +78,18 @@ const STREET_GAP = 2;
 /** Clear band inside the parapet that props keep off, m. */
 const PARAPET_CLEAR = 0.9;
 const NEON_COLOURS = ['#ff2d95', '#22e4ff', '#b14bff', '#ffd21f', '#ff5a1f', '#3dff8b'];
+
+/** A roof sign leans back over the roof this far in from its edge, m (cityMesh draws it to fit). */
+export const SIGN_REACH = 2;
+
+/** Rooftop neon by district: odds of lit edges, then of a sign and corner tubes, and the colours (the title's pink and cyan lead). */
+const ROOF_NEON: Readonly<Record<District, { edges: number; sign: number; corners: number; colours: readonly string[] }>> = {
+  arts: { edges: 0.55, sign: 0.45, corners: 0.4, colours: ['#ff2d95', '#22e4ff', '#b14bff', '#ff2d95', '#22e4ff', '#ffd21f', '#3dff8b'] },
+  downtown: { edges: 0.32, sign: 0.35, corners: 0.3, colours: ['#22e4ff', '#b14bff', '#ff2d95', '#22e4ff', '#5a7bff'] },
+  oldtown: { edges: 0.12, sign: 0.5, corners: 0.1, colours: ['#ff2d95', '#ffd21f', '#ff5a1f', '#22e4ff'] },
+  residential: { edges: 0.04, sign: 0.3, corners: 0, colours: ['#ff2d95', '#22e4ff'] },
+  industrial: { edges: 0.05, sign: 0.4, corners: 0, colours: ['#ff5a1f', '#ffd21f', '#22e4ff'] },
+};
 
 const PROP_WEIGHTS: Readonly<Record<District, ReadonlyArray<readonly [PropKind, number]>>> = {
   downtown: [
@@ -146,7 +178,52 @@ export function planBuilding(b: Building, citySeed: number): BuildingPlan {
   if (!helipad) placeProps(b, roof, rand, props);
 
   const { shopSides, shopfronts } = planShops(b, rand);
-  return { roof, seed, props, shopSides, shopfronts };
+  return { roof, seed, props, shopSides, shopfronts, roofNeon: planRoofNeon(b, citySeed, props) };
+}
+
+/** Rooftop neon (its own stream, so adding it moved nothing else in the city). Taller buildings light up more often. */
+export function planRoofNeon(b: Building, citySeed: number, props: readonly Rect[] = []): RoofNeon | null {
+  const rand = buildingStream(b, citySeed, 0x6e30);
+  const odds = ROOF_NEON[b.district];
+  const street = streetSides(b);
+  if (!street.some(Boolean)) return null;
+  if (rand() >= odds.edges * (0.55 + 0.45 * Math.min(1, b.height / 10))) return null;
+  const colour = odds.colours[Math.floor(rand() * odds.colours.length)];
+  let edges = 0;
+  street.forEach((on, side) => {
+    if (on) edges |= 1 << side;
+  });
+  const corners = rand() < odds.corners;
+  let sign: RoofNeon['sign'] = null;
+  if (rand() < odds.sign) {
+    const sides = ([0, 1, 2, 3] as Side[]).filter((s) => street[s]);
+    const side = sides[Math.floor(rand() * sides.length)];
+    const alongX = side === 0 || side === 2;
+    const lo = (alongX ? b.minX : b.minZ) + 1;
+    const hi = (alongX ? b.maxX : b.maxZ) - 1;
+    const width = Math.min(hi - lo, 4 + rand() * 4);
+    const from = lo + rand() * (hi - lo - width);
+    const signColour = odds.colours[Math.floor(rand() * odds.colours.length)];
+    // It leans back over the roof up to SIGN_REACH in: keep it off the rooftop kit.
+    const at = (s: number, a: number, b2: number): Rect =>
+      alongX
+        ? { minX: a, maxX: b2, minZ: s === 0 ? b.minZ : b.maxZ - SIGN_REACH, maxZ: s === 0 ? b.minZ + SIGN_REACH : b.maxZ }
+        : { minZ: a, maxZ: b2, minX: s === 3 ? b.minX : b.maxX - SIGN_REACH, maxX: s === 3 ? b.minX + SIGN_REACH : b.maxX };
+    const foot = at(side, from, from + width);
+    if (width >= 2.5 && !props.some((p) => overlaps(p, foot, 0.2))) sign = { side, from, to: from + width, colour: signColour };
+  }
+  return { colour, edges, corners, sign, flicker: rand() < 0.18 };
+}
+
+/** Which faces front the street (by Side): within STREET_GAP of the block's sidewalk edge. */
+function streetSides(b: Rect): boolean[] {
+  const interior = interiorAt((b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2);
+  return [
+    b.minZ - interior.minZ < STREET_GAP,
+    interior.maxX - b.maxX < STREET_GAP,
+    interior.maxZ - b.maxZ < STREET_GAP,
+    b.minX - interior.minX < STREET_GAP,
+  ];
 }
 
 function placeProps(b: Building, roof: RoofType, rand: () => number, out: RoofProp[]): void {
@@ -195,13 +272,7 @@ function interiorAt(x: number, z: number): Rect {
  */
 function planShops(b: Building, rand: () => number): { shopSides: number; shopfronts: Shopfront[] } {
   const style = DISTRICT_STYLES[b.district];
-  const interior = interiorAt((b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2);
-  const street: boolean[] = [
-    b.minZ - interior.minZ < STREET_GAP,
-    interior.maxX - b.maxX < STREET_GAP,
-    interior.maxZ - b.maxZ < STREET_GAP,
-    b.minX - interior.minX < STREET_GAP,
-  ];
+  const street = streetSides(b);
   let shopSides = 0;
   const shopfronts: Shopfront[] = [];
   if (rand() >= style.shops) return { shopSides, shopfronts };

@@ -16,18 +16,21 @@ import { getDevice, getQuality, onQualityChange } from './quality';
 import './look.css';
 
 /**
- * The game's tone curve: ACES Filmic, then a light grade — a little more
- * saturation in mid-tones and highlights (ACES greys out saturated paint and
- * neon) but a little less in the darks (night reads blue-grey, not as
- * glowing red roofs), slightly cool shadows and warm highlights. Installed as three's CustomToneMapping, so it
+ * The game's tone curve: ACES Filmic, then the Curbside grade, after the
+ * title's neon: more saturation in mid-tones and highlights (ACES greys out
+ * saturated paint and neon) but a little less in the darks (night reads
+ * violet-blue, not as glowing red roofs), violet-indigo shadows, rose-warm
+ * highlights and a touch of the logo's pink in the upper mids (fading out
+ * before white, so daylight stays daylight). Installed as three's CustomToneMapping, so it
  * runs inside the materials on phones and in the output pass on desktops:
  * no extra full-screen pass anywhere. Must be patched before anything compiles.
  */
 const GRADE = /* glsl */ `vec3 CustomToneMapping( vec3 color ) {
 	vec3 c = ACESFilmicToneMapping( color );
 	float l = dot( c, vec3( 0.2126, 0.7152, 0.0722 ) );
-	c = max( mix( vec3( l ), c, mix( 0.88, 1.16, smoothstep( 0.015, 0.12, l ) ) ), 0.0 );
-	c *= mix( vec3( 0.95, 0.99, 1.06 ), vec3( 1.03, 1.0, 0.95 ), smoothstep( 0.02, 0.45, l ) );
+	c = max( mix( vec3( l ), c, mix( 0.9, 1.24, smoothstep( 0.015, 0.12, l ) ) ), 0.0 );
+	c *= mix( vec3( 0.97, 0.92, 1.12 ), vec3( 1.04, 0.99, 0.95 ), smoothstep( 0.03, 0.5, l ) );
+	c += vec3( 0.02, -0.006, 0.014 ) * smoothstep( 0.08, 0.3, l ) * ( 1.0 - smoothstep( 0.55, 0.9, l ) );
 	return saturate( c );
 }`;
 const CUSTOM_STUB = 'vec3 CustomToneMapping( vec3 color ) { return color; }';
