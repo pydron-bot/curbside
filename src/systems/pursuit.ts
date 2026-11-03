@@ -19,8 +19,7 @@
  * like traffic does. Pure logic, no three.js.
  */
 import { forwardSpeed, speed, wrapAngle, type VehicleControls, type VehicleState } from '../entities/vehicle';
-import { BLOCK_SIZE } from '../world/city';
-import { DIR_VEC, canLeave, reverse, turnLeft, turnRight, type Dir } from '../world/roads';
+import { turnToward, type Dir } from '../world/roads';
 import { driveAi, rerouteAi, type AiDriver, type Obstacle } from './traffic';
 import { len2 } from '../core/len';
 
@@ -145,29 +144,11 @@ export function interceptPoint(car: VehicleState, t: PursuitTarget, out: Point):
 
 /**
  * At intersection (ix, iz), arriving heading `dir`: which way to go toward
- * (tx, tz). Straight, left or right, whichever leaves the fewest blocks to
- * go, nudged toward the direction the goal actually lies (so a goal behind
- * us turns us off rather than carrying on away). U-turns only at a dead end.
+ * (tx, tz) (roads.ts turnToward, keeping the road rules). U-turns only at a
+ * dead end.
  */
 export function routeToward(ix: number, iz: number, dir: Dir, tx: number, tz: number): Dir {
-  const gx = tx / BLOCK_SIZE;
-  const gz = tz / BLOCK_SIZE;
-  const ux = gx - ix;
-  const uz = gz - iz;
-  const len = len2(ux, uz) || 1;
-  let best: Dir = reverse(dir);
-  let bestScore = Infinity;
-  for (let k = 0; k < 3; k++) {
-    const d = k === 0 ? dir : k === 1 ? turnLeft(dir) : turnRight(dir);
-    if (!canLeave(ix, iz, d)) continue;
-    const v = DIR_VEC[d];
-    const score = Math.abs(gx - (ix + v.x)) + Math.abs(gz - (iz + v.z)) - 0.6 * ((v.x * ux + v.z * uz) / len) - (d === dir ? 0.01 : 0);
-    if (score < bestScore) {
-      bestScore = score;
-      best = d;
-    }
-  }
-  return best;
+  return turnToward(ix, iz, dir, tx, tz);
 }
 
 /**

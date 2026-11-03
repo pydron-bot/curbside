@@ -8,7 +8,7 @@
  */
 import { VEHICLE_HEALTH } from '../../entities/vehicle';
 import { createDamage } from '../../systems/damage';
-import { DIRS, MAX_NODE, dirHeading, lanePoint } from '../../world/roads';
+import { DIRS, MAX_NODE, canLeave, dirHeading, lanePoint } from '../../world/roads';
 import type { GlowSprites } from '../../render/glowSprites';
 import type { ProgressProps } from '../../render/progressLook';
 import type { ResultsCard, ResultsData } from '../../ui/progressScreens';
@@ -96,6 +96,8 @@ export class ChaosRunMode implements Mode {
       const ix = Math.floor(rand() * (2 * lim + 1)) - lim;
       const iz = Math.floor(rand() * (2 * lim + 1)) - lim;
       const d = DIRS[Math.floor(rand() * 4)];
+      // Not on a closed road or facing the wrong way down a one-way (map edits).
+      if (!canLeave(ix, iz, d)) continue;
       const p = lanePoint(ix, iz, d, 12);
       spot = { x: p.x, z: p.z, heading: dirHeading(d) };
       // Not on top of another car.

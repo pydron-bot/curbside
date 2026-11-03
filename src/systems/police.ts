@@ -16,6 +16,7 @@
  * No three.js: presentation (sirens, light bars, radar, helicopter) reads
  * the state each frame.
  */
+import { roadRules } from '../world/roadRules';
 import type { BodyKind } from '../game/bodies';
 import type { Outfit } from '../render/characterModel';
 import { VEHICLE_HEALTH, speed, type VehicleArchetype, type VehicleControls, type VehicleState } from '../entities/vehicle';
@@ -954,6 +955,10 @@ export function roadblockSpot(px: number, pz: number, vx: number, vz: number, vi
     const x = alongX ? mid : line;
     const z = alongX ? line : mid;
     if (inView(x, z, view, 12)) continue;
+    // Not on a road the map closed (its barriers are there already).
+    const k = Math.floor(mid / BLOCK_SIZE);
+    const l = Math.round(line / BLOCK_SIZE);
+    if (alongX ? roadRules().isClosed(k, l, k + 1, l) : roadRules().isClosed(l, k, l, k + 1)) continue;
     const dirX = alongX ? sign : 0;
     const dirZ = alongX ? 0 : sign;
     // Across the road (heading along the perpendicular), staggered a little.

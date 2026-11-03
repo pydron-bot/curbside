@@ -4,6 +4,8 @@
  * (ix, iz) at world (ix·BLOCK_SIZE, iz·BLOCK_SIZE). Traffic drives on the right.
  */
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, CORE_BLOCKS, ROAD_WIDTH } from './city';
+import { roadRules } from './roadRules';
+import { len2 } from '../core/len';
 
 export type Dir = 0 | 1 | 2 | 3; // N (-Z), E (+X), S (+Z), W (-X)
 export const DIRS: readonly Dir[] = [0, 1, 2, 3];
@@ -57,10 +59,20 @@ export function nodeValid(ix: number, iz: number): boolean {
   return Math.abs(ix) <= MAX_NODE && Math.abs(iz) <= MAX_NODE;
 }
 
-/** Can a car leave node (ix, iz) heading d? */
-export function canLeave(ix: number, iz: number, d: Dir): boolean {
+/** Is there a road leaving node (ix, iz) heading d (the map's edge only, whatever the road rules say)? */
+export function roadExists(ix: number, iz: number, d: Dir): boolean {
   const v = DIR_VEC[d];
   return nodeValid(ix + v.x, iz + v.z);
+}
+
+/**
+ * Can a car leave node (ix, iz) heading d? Not off the map, not into a
+ * closed road, not the wrong way down a one-way (the map edits' rules,
+ * world/roadRules.ts): every router asks this, so traffic keeps the rules.
+ */
+export function canLeave(ix: number, iz: number, d: Dir): boolean {
+  const v = DIR_VEC[d];
+  return nodeValid(ix + v.x, iz + v.z) && roadRules().allows(ix, iz, d);
 }
 
 type Point = { x: number; z: number };
@@ -102,4 +114,32 @@ export function chooseTurn(ix: number, iz: number, d: Dir, rand: () => number): 
     if ((r -= w) <= 0) return o;
   }
   return valid[valid.length - 1][0];
+}
+
+/**
+ * At node (ix, iz), arriving heading `dir`: which way to go toward (tx, tz)
+ * (world m). Straight, left or right, whichever leaves the fewest blocks to
+ * go, nudged toward the direction the goal actually lies (so a goal behind
+ * us turns us off rather than carrying on away). U-turns only at a dead end.
+ * `leave` is the rule (canLeave; the map checks pass their own rules).
+ */
+export function turnToward(ix: number, iz: number, dir: Dir, tx: number, tz: number, leave: (ix: number, iz: number, d: Dir) => boolean = canLeave): Dir {
+  const gx = tx / BLOCK_SIZE;
+  const gz = tz / BLOCK_SIZE;
+  const ux = gx - ix;
+  const uz = gz - iz;
+  const len = len2(ux, uz) || 1;
+  let best: Dir = reverse(dir);
+  let bestScore = Infinity;
+  for (let k = 0; k < 3; k++) {
+    const d = k === 0 ? dir : k === 1 ? turnLeft(dir) : turnRight(dir);
+    if (!leave(ix, iz, d)) continue;
+    const v = DIR_VEC[d];
+    const score = Math.abs(gx - (ix + v.x)) + Math.abs(gz - (iz + v.z)) - 0.6 * ((v.x * ux + v.z * uz) / len) - (d === dir ? 0.01 : 0);
+    if (score < bestScore) {
+      bestScore = score;
+      best = d;
+    }
+  }
+  return best;
 }

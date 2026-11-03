@@ -17,7 +17,7 @@
 import { CORE_OFFSET, core, isCarPark, lotBytes, type Block, type City } from './city';
 import { keyedStream } from './random';
 import { KERB_LINE, WALK_LINE, blockSide, type BlockSide, type Placer } from './kerbs';
-import { dirHeading, laneKey, type Dir } from './roads';
+import { canLeave, dirHeading, laneKey, type Dir } from './roads';
 import type { Roadworks } from './roadworks';
 import { len2 } from '../core/len';
 import type { District } from './districts';
@@ -105,6 +105,8 @@ export function placeBusStops(city: City, placer: Placer, works: readonly Roadwo
   const stops: BusStop[] = [];
   const tryStop = (s: BlockSide, t: number): boolean => {
     if (closed.has(laneKey(s.ix, s.iz, s.dir))) return false;
+    // No stop on a closed road or in a one-way's empty lane: no bus comes (map edits).
+    if (!canLeave(s.fromX, s.fromZ, s.dir)) return false;
     const along = (d: number) => s.at(t + d, SHELTER_LINE);
     const ends = [along(-1.3), along(0), along(1.3)];
     if (!ends.every((p) => placer.clear(p.x, p.z, 0.7))) return false;
