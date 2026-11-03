@@ -5,6 +5,7 @@
  * cyan, downtown's cyan, warm lamplight elsewhere). A handful of particles
  * at a time; nothing allocates per frame.
  */
+import { look } from './lookLive';
 import type { Rect } from '../world/city';
 import type { SteamVent } from '../world/steamVents';
 import type { Effects } from './effects';
@@ -37,7 +38,7 @@ export class SteamLook {
   update(dt: number, view: Rect): void {
     const night = worldUniforms.uNight.value;
     if (night < 0.1 || dt <= 0) return;
-    const chance = (dt / EVERY) * getQuality().particleScale * night;
+    const chance = (dt / EVERY) * getQuality().particleScale * night * look.steam;
     for (let i = 0; i < this.vents.length; i++) {
       const v = this.vents[i];
       if (!inView(view, v.x, v.z, 6) || Math.random() >= chance) continue;

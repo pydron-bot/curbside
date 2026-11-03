@@ -15,6 +15,17 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.27.0',
+    date: '2026-11-03',
+    title: 'Look book',
+    notes: [
+      'TEST → LOOK: a slim panel down the edge of the screen with about fifty sliders over the look (sky and light by time of day, the colour grade, neon and night, the daytime effects), applied live while you play and kept on this device.',
+      'Each slider shows how far it is from the shipped look, with a reset per slider and RESET ALL; the clock can be held at any hour while you tune.',
+      'EXPORT downloads look.json, to hand over and ship as the game\'s look.',
+      'The panel folds to a tab on the edge, and moves to the other side of the screen.',
+    ],
+  },
+  {
     version: '0.26.0',
     date: '2026-11-03',
     title: 'Day out',

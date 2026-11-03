@@ -18,6 +18,7 @@ import {
   type IUniform,
 } from 'three';
 import type { Rect } from '../world/city';
+import { shaderLookGlsl } from './lookTuning';
 import { SIGNAL_GLSL } from '../world/signals';
 import { uploadRange } from './glowSprites';
 import { VERTS_PER_ROW, chunkSize, chunksOf } from './propChunks';
@@ -535,7 +536,8 @@ const ROOF_CUT = /* glsl */ `
 const SWAY_DECLS = /* glsl */ `
 uniform float uSway;
 uniform float uTime;
-uniform float uWetness;`;
+uniform float uWetness;
+${shaderLookGlsl()}`;
 const SWAY = /* glsl */ `
   if (uSway > 0.5) {
     vec2 tp = instanceMatrix[3].xz;
@@ -544,9 +546,10 @@ const SWAY = /* glsl */ `
     float bend = (0.35 + 0.65 * sin(uTime * 1.25 + ph) * 0.8 + 0.2 * sin(uTime * 2.7 + ph * 1.9)) * gust * (1.0 + 0.7 * uWetness);
     float hgt = max(pPos.y - 1.0, 0.0);
     vec3 windL = normalize(transpose(mat3(instanceMatrix)) * vec3(0.8, 0.0, 0.6));
+    bend *= LK_SWAY;
     transformed += windL * (hgt * hgt * 0.011 * bend);
     transformed.y -= hgt * hgt * 0.0012 * abs(bend);
-    if (pLeaf > 0.5) transformed += vec3(sin(uTime * 6.3 + pPos.x * 3.1 + ph), 0.0, cos(uTime * 5.7 + pPos.z * 2.9 + ph)) * 0.035 * gust;
+    if (pLeaf > 0.5) transformed += vec3(sin(uTime * 6.3 + pPos.x * 3.1 + ph), 0.0, cos(uTime * 5.7 + pPos.z * 2.9 + ph)) * 0.035 * gust * LK_SWAY;
   }`;
 
 /** Leaves: the models' green vertices (canopies and fronds; trunks are brown). */
@@ -573,7 +576,7 @@ const DAPPLE = /* glsl */ `void main() {
     float h10 = fract(sin(dot(di + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
     float h01 = fract(sin(dot(di + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
     float h11 = fract(sin(dot(di + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
-    if (mix(mix(h00, h10, df.x), mix(h01, h11, df.x), df.y) > 0.6) discard;
+    if (mix(mix(h00, h10, df.x), mix(h01, h11, df.x), df.y) > 1.0 - 0.4 * LK_DAPPLE) discard;
   }`;
 
 function patchDepth(
@@ -585,6 +588,7 @@ function patchDepth(
   shader.uniforms.uSway = sway;
   shader.uniforms.uTime = worldUniforms.uTime;
   shader.uniforms.uWetness = worldUniforms.uWetness;
+  shader.uniforms.uLook = worldUniforms.uLook;
   shader.vertexShader = after(shader.vertexShader, '#include <common>', `${PULL_DECLS}${SWAY_DECLS}
     varying vec3 vDapWorld;
     varying float vDapLeaf;`);
@@ -599,6 +603,7 @@ function patchDepth(
   shader.uniforms.uSunDir = worldUniforms.uSunDir;
   shader.fragmentShader = after(shader.fragmentShader, '#include <common>', `uniform float uSway;
     uniform vec3 uSunDir;
+    ${shaderLookGlsl()}
     varying vec3 vDapWorld;
     varying float vDapLeaf;`);
   shader.fragmentShader = replace(shader.fragmentShader, 'void main() {', DAPPLE);
@@ -632,6 +637,7 @@ function propMaterial(verts: IUniform<DataTexture>, sway: IUniform<number>): Mes
       uniform float uWetness;
       uniform float uTime;
       uniform float uNight;
+      ${shaderLookGlsl()}
       uniform float uSignalTime;
       uniform vec3 uFocus;
       varying vec3 vPropColor;

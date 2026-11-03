@@ -13,6 +13,7 @@
  */
 import { Color, Vector3, Vector4, type IUniform } from 'three';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT } from '../world/city';
+import { SHADER_LOOK_FLOATS, shaderLookGlsl } from './lookTuning';
 import { LAMP_ARM, LAMP_HEIGHT, LAMP_OFFSET, LAMP_REACH2, LAMP_SPACING, lampsNear } from '../world/streetLamps';
 
 export const worldUniforms = {
@@ -40,6 +41,8 @@ export const worldUniforms = {
   uMist: { value: 0 },
   /** The last two explosions' flashes (x, z, strength fading from 1, unused), lighting walls and road (Effects sets them). */
   uBlasts: { value: [new Vector4(), new Vector4()] },
+  /** The LOOK panel's shader sliders (lookTuning SHADER_LOOK): each the distance from the code's value, read through LK_* macros. */
+  uLook: { value: new Float32Array(SHADER_LOOK_FLOATS) },
 } satisfies Record<string, IUniform>;
 
 /** Add the shared world uniforms to a shader being compiled. */
@@ -63,7 +66,7 @@ uniform vec4 uBlasts[2];
 uniform vec3 uSunDir;
 uniform vec4 uFlyer;
 uniform float uMist;
-
+${shaderLookGlsl()}
 const float UB_HALF = ${f(HALF_EXTENT)};
 const float UB_BLOCK = ${f(BLOCK_SIZE)};
 const float UB_BLOCKS = ${f(BLOCKS_PER_SIDE)};
@@ -115,7 +118,7 @@ float ubMist(vec2 xz, float y, float dw) {
   if (uMist < 0.01) return 0.0;
   vec2 q = xz * 0.03 + uTime * vec2(0.021, 0.008);
   float n = smoothstep(0.35, 0.7, ubFbm(q));
-  return uMist * dw * (0.15 + 0.85 * n) * (1.0 - smoothstep(0.0, 5.0, y));
+  return min(uMist * dw * (0.15 + 0.85 * n), 1.0) * (1.0 - smoothstep(0.0, 5.0, y));
 }
 
 /** The mist's colour: pale, warmed by the dawn sky. */
@@ -127,9 +130,9 @@ float ubCloudShade(vec2 xz) {
   float day = 1.0 - uNight;
   if (day < 0.02) return 1.0;
   vec2 p = (xz + uTime * vec2(3.6, 1.3)) * 0.026;
-  float cover = 0.6 + 0.05 * sin(uTime * 0.013);
+  float cover = 0.6 + 0.2 * (1.0 - LK_COVER) + 0.05 * sin(uTime * 0.013);
   float c = smoothstep(cover, cover + 0.08, ubFbm(p));
-  float shade = 1.0 - 0.28 * c * day * (1.0 - 0.8 * uWetness);
+  float shade = 1.0 - min(0.28 * LK_CLOUD, 0.9) * c * day * (1.0 - 0.8 * uWetness);
   if (uFlyer.w > 0.5) {
     // A plane's or blimp's shadow sliding over (render/flyovers.ts): along = its heading, across = to its side.
     vec2 d = xz - uFlyer.xy;
@@ -150,7 +153,7 @@ float ubCloudShade(vec2 xz) {
       float body = length(vec2(across / 4.6, along / 17.0));
       m = max(1.0 - smoothstep(0.92, 1.05, body), (1.0 - smoothstep(0.9, 1.2, ax)) * (1.0 - smoothstep(2.5, 3.0, abs(along))));
     }
-    shade *= 1.0 - 0.46 * m * day;
+    shade *= 1.0 - min(0.46 * LK_FLYER, 0.95) * m * day;
   }
   return shade;
 }
@@ -163,7 +166,7 @@ float ubGlint(vec3 wp, vec3 n, float sharp) {
   if (uNight > 0.98) return 0.0;
   vec3 v = normalize(cameraPosition - wp);
   float s = max(dot(reflect(-uSunDir, n), v), 0.0);
-  return pow(s, sharp) * (1.0 - uNight);
+  return pow(s, sharp) * (1.0 - uNight) * LK_GLINT;
 }
 /** 1 inside [a, b], anti-aliased over width w. */
 float ubBand(float x, float a, float b, float w) {

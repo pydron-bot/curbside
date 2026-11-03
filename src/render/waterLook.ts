@@ -11,6 +11,7 @@ import type { Rect } from '../world/city';
 import { sprinklerAngle, sprinklerOn, type Fountain, type Sprinkler } from '../world/parkWater';
 import type { Effects } from './effects';
 import { FLAG, FRAME, RAMP } from './fxParticles';
+import { look } from './lookLive';
 import { inView } from './neonReflect';
 import { getQuality } from './quality';
 import { worldUniforms } from './shaderLib';
@@ -45,8 +46,8 @@ export class WaterLook {
     const scale = getQuality().particleScale;
     const night = worldUniforms.uNight.value;
     const t = worldUniforms.uTime.value;
-    this.plumeDebt += dt * PLUME * scale;
-    this.rimDebt += dt * RIM * scale;
+    this.plumeDebt += dt * PLUME * scale * look.fountains;
+    this.rimDebt += dt * RIM * scale * look.fountains;
     const plume = Math.floor(this.plumeDebt);
     const rim = Math.floor(this.rimDebt);
     this.plumeDebt -= plume;
@@ -72,7 +73,7 @@ export class WaterLook {
     }
     // Sprinklers by day, while it's dry.
     if (night > 0.35 || worldUniforms.uRain.value > 0.1) return;
-    this.sprinklerDebt += dt * SPRINKLER * scale;
+    this.sprinklerDebt += dt * SPRINKLER * scale * look.sprinklers;
     const n = Math.floor(this.sprinklerDebt);
     this.sprinklerDebt -= n;
     for (const s of this.sprinklers) {

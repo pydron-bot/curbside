@@ -8,6 +8,7 @@
  * cast down the sun's ray onto the quay and the water. No draw call while
  * none is in view; no shadow pass of their own.
  */
+import { look as tuned } from './lookLive';
 import {
   BufferAttribute,
   BufferGeometry,
@@ -105,6 +106,7 @@ export class GullLook {
       const lean = 1 / Math.max(sun.y, 0.35);
       const g = this.pose;
       const m = 6;
+      const size = tuned.gullSize;
       for (const spec of this.gulls) {
         if (n >= CAPACITY) break;
         gullPose(spec, t, g);
@@ -112,12 +114,12 @@ export class GullLook {
         const sx = g.x - sun.x * lean * g.y;
         const sz = g.z - sun.z * lean * g.y;
         if (sx > view.minX - m && sx < view.maxX + m && sz > view.minZ - m && sz < view.maxZ + m) {
-          look.contactShadows.add(sx, sz, g.heading, 1.3, 0.35, 0.5, 0.3 * day);
+          look.contactShadows.add(sx, sz, g.heading, 1.3 * size, 0.35 * size, 0.5, 0.3 * day);
         }
         if (g.x < view.minX - m || g.x > view.maxX + m || g.z < view.minZ - m || g.z > view.maxZ + m) continue;
         e.set(0, g.heading, g.bank);
         q.setFromEuler(e);
-        this.mesh.setMatrixAt(n, m4.compose(p.set(g.x, g.y, g.z), q, s.setScalar(SIZE)));
+        this.mesh.setMatrixAt(n, m4.compose(p.set(g.x, g.y, g.z), q, s.setScalar(SIZE * size)));
         const beat = Math.sin(g.flap * Math.PI * 2);
         this.wing.array[n * 2] = g.gliding ? GLIDE_IN : 0.12 + 0.6 * beat;
         this.wing.array[n * 2 + 1] = g.gliding ? GLIDE_OUT : -0.1 + 0.35 * Math.sin(g.flap * Math.PI * 2 - 0.7);

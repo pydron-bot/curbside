@@ -61,7 +61,7 @@ export class SceneLighting {
     setExposure(s.exposure * look.exposure);
     worldUniforms.uNight.value = s.night;
     worldUniforms.uLate.value = lateness(s.hour);
-    worldUniforms.uMist.value = morningMist(s.hour);
+    worldUniforms.uMist.value = morningMist(s.hour) * look.mist;
     worldUniforms.uSkyTint.value.setRGB(s.skyColor[0], s.skyColor[1], s.skyColor[2], SRGBColorSpace);
     return s;
   }

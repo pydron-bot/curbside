@@ -199,12 +199,12 @@ export class PostEffects {
    * threshold; by day sunlit white paint and pale roofs reach ~2.5, so the
    * threshold sits above them and only real glows (fire, blinking beacons)
    * bleed. At night the threshold drops so windows, neon, lamps and
-   * headlights glow.
+   * headlights glow. `strength`: the LOOK panel's DESKTOP BLOOM.
    */
-  setNight(night: number): void {
+  setNight(night: number, strength = 1): void {
     if (!this.bloom) return;
     this.bloom.threshold = 3.2 + (0.8 - 3.2) * night;
-    this.bloom.strength = 0.35 + 0.35 * night;
+    this.bloom.strength = (0.35 + 0.35 * night) * strength;
   }
 
   /** True when the half-float pipeline (and so bloom) is available. */

@@ -1,6 +1,6 @@
 {
   "name": "curbside",
-  "version": "0.26.0",
+  "version": "0.27.0",
   "private": true,
   "description": "Top-down open-world crime/driving game for the browser (PWA, three.js).",
   "type": "module",

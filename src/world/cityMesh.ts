@@ -19,6 +19,7 @@ import {
   type Material,
 } from 'three';
 import { BREACH_FRAGMENT_GLSL, BREACH_VERTEX_GLSL, breachUniforms } from '../render/breachScars';
+import { shaderLookGlsl } from '../render/lookTuning';
 import { UB_COMMON, UB_LAMP_LIST, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from '../render/shaderLib';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, type City, type Rect } from './city';
 import { AWNING_DEPTH, AWNING_HEIGHT, planBuildings, NEON_ANIM, type BuildingPlan, type NeonAnim, type RoofNeon, type RoofProp, type Side } from './buildingPlans';
@@ -732,10 +733,11 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
       if (painted > 0.5) {
         vec3 ad = billboard(vPropLocal, vPropScale, vColor.rgb, vPropSeed);
         float day = 1.0 - smoothstep(0.25, 0.75, uNight);
-        diffuseColor.rgb = mix(diffuseColor.rgb, ad * ubCloudShade(vPropWorld.xz), day);
+        // BILLBOARDS BY DAY: how much of the advert shows over the sign, and above 100% how bright.
+        diffuseColor.rgb = mix(diffuseColor.rgb, ad * max(LK_BILLBOARD, 1.0) * ubCloudShade(vPropWorld.xz), day * min(LK_BILLBOARD, 1.0));
         glowK *= 1.0 - day;
       }
-      totalEmissiveRadiance += neon * glowK * (0.12 + uNight)
+      totalEmissiveRadiance += neon * glowK * LK_NEON * (0.12 + uNight)
         + diffuseColor.rgb * ${listed ? 'ubListedLight' : 'ubStreetLight'}(vPropWorld, normalize(vPropNormal));`,
     );
   };
@@ -746,7 +748,7 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
 /** Additive light pools and halos, faded in with the night. */
 function glowMaterial(): ShaderMaterial {
   return new ShaderMaterial({
-    uniforms: { uNight: worldUniforms.uNight },
+    uniforms: { uNight: worldUniforms.uNight, uLook: worldUniforms.uLook },
     vertexShader: /* glsl */ `
       varying vec2 vUv;
       varying vec3 vTint;
@@ -757,12 +759,13 @@ function glowMaterial(): ShaderMaterial {
       }`,
     fragmentShader: /* glsl */ `
       uniform float uNight;
+      ${shaderLookGlsl()}
       varying vec2 vUv;
       varying vec3 vTint;
       void main() {
         float d = length(vUv - 0.5) * 2.0;
         float a = max(1.0 - d, 0.0);
-        gl_FragColor = vec4(vTint * (a * a * uNight), 1.0);
+        gl_FragColor = vec4(vTint * (a * a * uNight * LK_HALOS), 1.0);
       }`,
     blending: AdditiveBlending,
     transparent: true,
@@ -850,7 +853,7 @@ function buildingMaterial(): MeshLambertMaterial {
       if (vBreachMask != 0u && abs(vBN.y) < 0.5) breachSurface(diffuseColor.rgb, bGlow, bNormal, vWorldB, bpx);
       #endif
       diffuseColor.rgb *= ubCloudShade(vWorldB.xz);
-      float bMistW = (abs(vInfo.w - ${DISTRICTS.indexOf('oldtown')}.0) < 0.5 || abs(vInfo.w - ${DISTRICTS.indexOf('residential')}.0) < 0.5) ? 1.0 : 0.2;
+      float bMistW = (abs(vInfo.w - ${DISTRICTS.indexOf('oldtown')}.0) < 0.5 || abs(vInfo.w - ${DISTRICTS.indexOf('residential')}.0) < 0.5) ? 1.0 : min(0.2 * LK_MIST_SPREAD, 1.0);
       float bMist = ubMist(vWorldB.xz, vWorldB.y, bMistW);
       diffuseColor.rgb = mix(diffuseColor.rgb, ubMistColour(), bMist * 0.42);
       bGlow += ubMistColour() * bMist * 0.06;`,
@@ -958,7 +961,7 @@ void wallSurface(inout vec3 col, inout vec3 glow, vec3 l, float px) {
     level = 0.8;
   }
   col = mix(col, glass, win);
-  glow += win * lit * lamp * level * uNight * 0.75;
+  glow += win * lit * lamp * level * uNight * 0.75 * LK_WINDOWS;
 
   // Ground floor.
   if (shop && y < base) {
@@ -1143,7 +1146,7 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     }
     float inset = smoothstep(0.9, 1.1, e);
     mural = mix(mural, vec3(dot(mural, vec3(0.2126, 0.7152, 0.0722))), 0.3) * (0.82 + 0.18 * ubNoise(sp * 0.7));
-    c = mix(c, mural, inset * 0.42); // sun-faded, the roof showing through
+    c = mix(c, mural, min(inset * 0.42 * LK_ART, 1.0)); // sun-faded, the roof showing through
   } else if (flatRoof && abs(vInfo.w - ${DISTRICTS.indexOf('downtown')}.0) < 0.5 && fract(seed * 13.7) < 0.12 && e > 1.0) {
     // Downtown: a company's logo on the roof, a ring round a chevron, in cool colours.
     float r = min(hs.x, hs.y) * 0.62;
@@ -1152,8 +1155,8 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     vec2 q = rp / r;
     float chev = step(abs(q.y + abs(q.x) * 0.9 - 0.15), 0.16) * step(abs(q.x), 0.55);
     vec3 logoA = fract(seed * 3.7) < 0.5 ? bSrgb(0.18, 0.83, 0.9) : bSrgb(0.54, 0.36, 1.0);
-    c = mix(c, logoA, ring * 0.6);
-    c = mix(c, bSrgb(0.95, 0.95, 0.97), chev * 0.6);
+    c = mix(c, logoA, min(ring * 0.6 * LK_ART, 1.0));
+    c = mix(c, bSrgb(0.95, 0.95, 0.97), min(chev * 0.6 * LK_ART, 1.0));
   } else if (abs(vInfo.w - ${DISTRICTS.indexOf('industrial')}.0) < 0.5 && abs(type - ${ROOF.terracotta}) > 0.5 && type < ${ROOF.helipad} - 0.5 && fract(seed * 13.7) < 0.35 && e > 1.2) {
     // The docks: a big yellow bay number painted on the shed roof, and a border line.
     int n = 10 + int(fract(seed * 91.3) * 89.0);
@@ -1161,7 +1164,7 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     vec2 q = vec2(longX ? rp.x : rp.y, longX ? -rp.y : rp.x) / sz;
     float digits = sevenSeg(q - vec2(-1.15, -1.0), n / 10) + sevenSeg(q - vec2(0.15, -1.0), n - (n / 10) * 10);
     float border = ubBand(e, 1.2, 1.45, px);
-    c = mix(c, bSrgb(0.9, 0.74, 0.2), min(1.0, digits + border) * 0.6);
+    c = mix(c, bSrgb(0.9, 0.74, 0.2), min(min(1.0, digits + border) * 0.6 * LK_ART, 1.0));
   }
   if (type < ${ROOF.helipad} - 0.5) c *= 0.88 + 0.14 * smoothstep(0.25, 0.75, ubFbm(sp * 0.16)); // water stains
   if (abs(type - ${ROOF.terracotta}) > 0.5) {

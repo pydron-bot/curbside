@@ -131,9 +131,10 @@ export class Look {
       const t = worldUniforms.uTime.value;
       for (const s of lights) {
         const h = searchlightHeading(s, t);
-        const k = 0.3 * night;
+        const k = 0.3 * night * look.searchlights;
         g.addFlat(s.x + Math.sin(h) * SEARCH_REACH * 0.5, s.y + 2, s.z + Math.cos(h) * SEARCH_REACH * 0.5, h, 16, SEARCH_REACH, 0.55 * k, 0.62 * k, 0.75 * k, GLOW.search);
-        g.addFlat(s.x, s.y + 0.6, s.z, 0, 2.4, 2.4, 1.2 * night, 1.25 * night, 1.35 * night, GLOW.disc);
+        const f = night * look.searchlights;
+        g.addFlat(s.x, s.y + 0.6, s.z, 0, 2.4, 2.4, 1.2 * f, 1.25 * f, 1.35 * f, GLOW.disc);
       }
     });
     // Neon in the wet road at night (render/neonReflect.ts).
@@ -142,7 +143,7 @@ export class Look {
     this.addGlowSource((g, view) => {
       const night = worldUniforms.uNight.value;
       if (night < 0.05) return;
-      const k = night * (0.13 + 0.25 * worldUniforms.uWetness.value);
+      const k = night * (0.13 + 0.25 * worldUniforms.uWetness.value) * look.neonReflect;
       const e = g.eye;
       for (let o = 0; o < neon.length; o += SOURCE_STRIDE) {
         if (!inView(view, neon[o], neon[o + 1], 8)) continue;
@@ -192,7 +193,7 @@ export class Look {
     fog.far += this.fogPush;
     this.sunShadow.setStrength(Math.min(1, sky.shadowStrength * look.shadowDarkness));
     this.cars.envIntensity = sky.envIntensity;
-    this.post.setNight(sky.night);
+    this.post.setNight(sky.night, look.bloom);
     this.city.update(sky.night);
   }
 

@@ -24,6 +24,7 @@ import { VEHICLE_SPECS, type VehicleArchetype } from '../entities/vehicle';
 import type { Rect } from '../world/city';
 import { createCarMesh, placeholderCarGeometry, type CarMesh } from './carMesh';
 import { pickUnderglow, trailLength } from './carNeon';
+import { look } from './lookLive';
 import type { ContactShadows } from './contactShadows';
 import { BEAM_LAMP, GLOW, uploadRange, type GlowSprites } from './glowSprites';
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from './shaderLib';
@@ -243,7 +244,7 @@ export class CarBatch {
           for (let k = 1; k < SIREN_SLOTS; k++) if (this.sirenD2[k] > this.sirenD2[worst]) worst = k;
           if (d2 < this.sirenD2[worst]) {
             this.sirenD2[worst] = d2;
-            sirens[worst].set(x, z, 1, 0);
+            sirens[worst].set(x, z, look.sirenWash, 0);
           }
         }
       }
@@ -306,7 +307,7 @@ export class CarBatch {
 
   /** Neon under the body: faint by day, bright at night, a slow breath. */
   private addUnderglow(glows: GlowSprites, hex: number, d: CarDims, x: number, z: number, sin: number, cos: number, heading: number, mid: number, night: number, time: number): void {
-    const k = (0.3 + 0.7 * night) * 0.9 * (1 + 0.08 * Math.sin(time * 2.6 + x * 0.1));
+    const k = (0.3 + 0.7 * night) * 0.9 * (1 + 0.08 * Math.sin(time * 2.6 + x * 0.1)) * look.underglow;
     const r = (((hex >> 16) & 255) / 255) ** 2.2 * k;
     const g = (((hex >> 8) & 255) / 255) ** 2.2 * k;
     const b = ((hex & 255) / 255) ** 2.2 * k;
@@ -327,25 +328,27 @@ export class CarBatch {
     beams: number,
     time: number,
   ): void {
+    // The LOOK panel's HEADLIGHTS: beams, flares and tail lights (not the light they cast).
+    const hl = look.headlights;
     if (beams > 0.01) {
       // Beam on the road ahead, and flares at the lamps themselves. The cone's
       // lamps sit at ±BEAM_LAMP of its half-width, so its width puts them on this model's.
       const reach = 13;
       const width = Math.min(10, Math.max(4.5, (2 * d.lampX) / BEAM_LAMP));
-      glows.addFlat(x + sin * (d.front + reach / 2 - 0.3), 0.07, z + cos * (d.front + reach / 2 - 0.3), heading, width, reach, 0.34 * beams, 0.29 * beams, 0.2 * beams, GLOW.cone);
+      glows.addFlat(x + sin * (d.front + reach / 2 - 0.3), 0.07, z + cos * (d.front + reach / 2 - 0.3), heading, width, reach, 0.34 * beams * hl, 0.29 * beams * hl, 0.2 * beams * hl, GLOW.cone);
       for (let side = -1; side <= 1; side += 2) {
         const lx = x + sin * (d.front - 0.1) + cos * side * d.lampX;
         const lz = z + cos * (d.front - 0.1) - sin * side * d.lampX;
-        glows.addFlat(lx, 0.8, lz, heading, 1.1, 1.1, 0.9 * beams, 0.8 * beams, 0.6 * beams, GLOW.disc);
+        glows.addFlat(lx, 0.8, lz, heading, 1.1, 1.1, 0.9 * beams * hl, 0.8 * beams * hl, 0.6 * beams * hl, GLOW.disc);
       }
     }
-    const tail = 0.55 * beams + 1.5 * rec.brake;
+    const tail = (0.55 * beams + 1.5 * rec.brake) * hl;
     if (tail > 0.02) {
       glows.addFlat(x - sin * (d.rear + 0.2), 0.75, z - cos * (d.rear + 0.2), heading, d.halfWidth * 2.3, 0.9, tail, 0.06 * tail, 0.04 * tail, GLOW.bar);
       // At speed, a light trail streaming off them (carNeon.ts).
       const trail = beams > 0.05 ? trailLength(rec.speed) : 0;
       if (trail > 0) {
-        const k = 0.22 * beams * tail;
+        const k = 0.22 * beams * tail * look.underglow;
         glows.addFlat(x - sin * (d.rear + trail / 2), 0.72, z - cos * (d.rear + trail / 2), heading + Math.PI, d.halfWidth * 1.7, trail, k, 0.02 * k, 0.06 * k, GLOW.beam);
       }
       // At night, their red smeared on the damp road behind (ground.ts's sheen).

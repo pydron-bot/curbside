@@ -70,35 +70,30 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
-**Where the look work stands (2026-11-03, later session):** `main` =
-**0.26.0 "Day out", live** (from branch `claude/daytime-2`): the rest of the
-daytime list (swaying trees with dappled light, fountains and sprinklers,
-morning mist, painted billboards, seagulls at the docks) and the 0.25
-street art toned down at the owner's request (README → *Look → Neon city
-→ Day out*). The gulls are a low-poly model built in code after a
-reference picture the owner sent (`render/gullMesh.ts`; if a Blender gull
-is wanted later, the same contract: nose +Z, wings bending at shoulder
-and wrist). Screenshot harnesses: `tools/look/` (README there).
+**Where the look work stands (2026-11-03, LOOK panel session):** `main` =
+**0.26.0 "Day out", live**. Branch `claude/look-panel` = **0.27.0 "Look
+book"**, not deployed (the owner asked to hold it until they say so): the
+LOOK tuning panel, TEST → LOOK (README → *Look → Tuning*). All four slider
+groups agreed with the owner are in: sky and light by part of the day, the
+colour grade, neon and night, daytime (about fifty sliders); clock hold;
+saved locally; distance from shipped, reset per slider, RESET ALL; EXPORT
+downloads `look.json`.
 
-**TODO, next up (agreed with the owner; start here in the next session):
-a LOOK tuning panel.** The
-owner wants to adjust the look themselves rather than ask for each
-change, the way the map editor works through `city.json`:
-- A LOOK tab in the TEST menu, on **both phone and desktop**, as a slim
-  collapsible side panel so the view stays visible while tuning (phones
-  have no bloom, so neon and night look different from desktop).
-- **Simple sliders** ("night brightness", "sunset pinkness", "neon
-  strength", "cloud shadow darkness", "mist", ...), not raw keyframes,
-  with a hold-the-clock-at-this-hour control; saved locally, each slider
-  showing its distance from the shipped value, reset per slider and RESET
-  ALL; EXPORT downloads `look.json`, which the owner hands over to be
-  committed as the shipped look (a layer over the code defaults, like
-  `src/world/maps/city.json`).
-- Order agreed: the sky/lighting keyframes (`timeOfDay.ts` KEYS) and the
-  grade (`post.ts` GRADE, now GLSL literals) first, then the neon/night
-  strengths, then the daytime effects. Shader literals become shared
-  uniforms (no recompiles); build-time values (district palettes) apply
-  on a reload. Sliders change strength and colour, not shape or placement.
+**When the owner hands over a `look.json`:** commit it as
+`src/render/look.json` as it is (the test `look.json → the shipped file
+parses cleanly and is canonical` checks it; if they edited it by hand,
+re-serialise with `serialiseLookFile(parseLookFile(...))`), bump the
+version and ship. Sliders measure their distance from it from then on.
+If they want a constant tuned that has no slider: add a spec to
+`LOOK_SPECS` (pure, tests check ranges), read `look.<key>` where the
+constant is (JS), or add it to `SHADER_LOOK` and use its `LK_*` macro in
+GLSL (no recompiles; keep `uLook` within its 16 floats).
+
+The 0.26.0 gulls are a low-poly model built in code after a reference
+picture the owner sent (`render/gullMesh.ts`; if a Blender gull is wanted
+later, the same contract: nose +Z, wings bending at shoulder and wrist).
+Screenshot harnesses: `tools/look/` (README there; `panel.mjs` and
+`sliders.mjs` for the LOOK panel).
 
 **Unconfirmed on a real phone (ask the owner):** lamp streaks / neon
 reflections strength, cloud shadow darkness, whether sun glints read, the

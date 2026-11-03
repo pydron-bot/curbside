@@ -108,7 +108,8 @@ nearest clear lane). WORLD: dawn / noon / golden hour / dusk / midnight,
 freeze the clock, rain on / off / auto (at once, not over the ramp), slow
 motion 0.25× / 0.5× / 1× (it scales the sim's time like a hit-stop, people,
 pigeons and combat effects with it; the camera and audio keep real time),
-LABELS (`settings.debugLabels`). MAP: the whole city (the radar's
+LABELS (`settings.debugLabels`). LOOK: opens the look tuning panel over
+live play (*Look → Tuning* below). MAP: the whole city (the radar's
 drawing); tap a spot to go to the nearest road or pavement there (with the
 car: the nearer lane, facing its traffic, out of the junction), or SAFEHOUSE,
 HOSPITAL, NEON MILE, DOCKS. SCENES: start any city scene near you now (the
@@ -2829,6 +2830,49 @@ the first time it comes into view.
     pink health bar, a cyan healthy-car ring. *Settings → Extras → Neon
     filter* (`screenFilter`, off by default): the title's edge light and
     scanlines as a CSS layer (`mountNeonFilter`).
+- **Tuning (the LOOK panel, 0.27.0).** TEST → LOOK opens a slim panel
+  down one edge of live play (`ui/lookPanel.ts`; folds to a tab, ⇆ swaps
+  sides): about fifty plain-named sliders in four groups (sky and light by
+  part of the day, the colour grade, neon and night, daytime), a clock that
+  holds at any hour (a cheat, like FREEZE; the sliders aren't), each slider's
+  distance from the shipped look with a reset, RESET ALL, and EXPORT
+  (downloads and copies `look.json`). The sliders are
+  `render/lookTuning.ts` (pure, tested: specs, clamping, the store, the
+  file); three layers: the code's constants (every slider 100% or 0°), the
+  shipped `src/render/look.json` over them (bundled, canonical: only what
+  differs, in panel order), and the owner's values over that in
+  localStorage (`curbside.look`, applied only while Settings → Test tools is
+  on). **To ship a look:** commit the exported file as `src/render/look.json`.
+  `render/lookLive.ts` holds the live `look` that readers read at use time,
+  and rebuilds what's made from it when a slider moves:
+  - *Sky*: `timeOfDay.tuneKeys` (pure, tested) applies the sky sliders to a
+    copy of KEYS, each tagged with its band (night, dawn, day, golden,
+    sunset, dusk): brightness scales a band's exposure, light and fill its
+    sun/moon and hemisphere, warmth/colour scale its colours' distance from
+    grey, hues turn them; `sampleSky` reads the tuned keys.
+  - *Grade*: the GRADE's numbers are uniforms carried in three's own
+    `toneMappingExposure`, patched from a float to a `vec4[4]`
+    (`post.ts` GRADE_UNIFORM: exposure, dark/bright saturation, pink mids,
+    contrast, shadow and highlight tints). The renderer already uploads it
+    to every tone-mapped program, the desktop output pass included, so no
+    material changes and nothing recompiles. Write exposure with
+    `setExposure`, never `renderer.toneMappingExposure`.
+  - *World shaders*: `shaderLib` `uLook` (vec4[4], in `worldUniforms`), one
+    slot per shader slider (`lookTuning` SHADER_LOOK), read through `LK_*`
+    macros: neon, halos, windows, wet sheen, cloud shadow and cover, flyer
+    shadows, glints, tree sway, dapple, rainbow, mist spread, street art,
+    billboards. A slot holds the distance from the code's value, so a
+    material that misses the uniform draws the shipped look.
+  - *Everything else* is JS read each frame: lamp colour and brightness
+    (`uLampColor`), headlights, underglow and trails, siren wash
+    (`uSirens` strength), neon and signal reflections, searchlights, steam,
+    fountains and sprinklers (drop rates), mist thickness (`uMist`), gull
+    size, desktop bloom, shadow darkness, car shine.
+  Sliders change strength and colour, never shape or placement (build-time
+  values such as district palettes aren't on it). Check harnesses:
+  `tools/look/panel.mjs` (the panel on phone and desktop) and
+  `tools/look/sliders.mjs` (each slider at its ends against frame noise, and
+  no program compiled while tuning).
 - **Phones vs desktop.** Phones render straight to the canvas: no
   full-screen passes, glow comes from additive sprites, a CSS vignette
   frames the view. Desktops render into a half-float buffer so the 'high'

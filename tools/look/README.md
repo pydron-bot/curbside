@@ -21,6 +21,14 @@ NODE_PATH=$(npm root -g) node tools/look/spot.mjs out/x desktop arts:150:-448:22
   Note: the free camera at yaw 0 faces the other way from play, so roof
   numbers read upside down there.
 - `anim.mjs <prefix> x z`: 16 frames at a spot at 22:00, for a GIF.
+- `panel.mjs <prefix> <phone|desktop> [x:z:hour]`: TEST → LOOK through the
+  menus, the panel open, a few sliders moved, the grade group, folded;
+  prints the exported look.json.
+- `sliders.mjs <outdir> <phone|desktop> [key ...]`: every LOOK slider (or
+  the keys given) at its low and high end where it shows, as the mean
+  pixel change against the frame-to-frame noise (`FLAT` = no visible
+  change), and the program count before and after (it must not grow).
+  Don't edit `src/` while it runs: the dev server reloads the page.
 - `sheet.py <dir> <phone|desktop> <out.png>`: a 3×3 contact sheet of a
   `views.mjs` set.
 

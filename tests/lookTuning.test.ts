@@ -13,6 +13,10 @@ import {
   parseLookFile,
   sanitiseLook,
   serialiseLookFile,
+  SHADER_LOOK,
+  SHADER_LOOK_FLOATS,
+  shaderLookGlsl,
+  writeShaderLook,
   type LookValues,
 } from '../src/render/lookTuning';
 import { GRADE_BASE, GRADE_UNIFORM, getExposure, setExposure, writeGrade } from '../src/render/post';
@@ -220,5 +224,29 @@ describe('grade uniform', () => {
     setExposure(1.3);
     expect(getExposure()).toBeCloseTo(1.3);
     expect(GRADE_UNIFORM[0]).toBeCloseTo(1.3);
+  });
+});
+
+describe('shader sliders (uLook)', () => {
+  it('fit the uniform, each a real slider once', () => {
+    expect(SHADER_LOOK.length).toBeLessThanOrEqual(SHADER_LOOK_FLOATS);
+    const keys = SHADER_LOOK.map(([k]) => k);
+    expect(new Set(keys).size).toBe(keys.length);
+    for (const k of keys) expect(LOOK_SPECS.some((s) => s.key === k)).toBe(true);
+  });
+
+  it('are all zero at the code look, so an unset uniform is the shipped look', () => {
+    expect([...writeShaderLook(CODE_LOOK, new Float32Array(SHADER_LOOK_FLOATS))].every((v) => v === 0)).toBe(true);
+    const out = writeShaderLook({ ...CODE_LOOK, neon: 1.5, treeSway: 0 }, new Float32Array(SHADER_LOOK_FLOATS));
+    expect(out[SHADER_LOOK.findIndex(([k]) => k === 'neon')]).toBeCloseTo(0.5);
+    expect(out[SHADER_LOOK.findIndex(([k]) => k === 'treeSway')]).toBeCloseTo(-1);
+  });
+
+  it('declare the uniform and a macro per slider', () => {
+    const glsl = shaderLookGlsl();
+    expect(glsl).toContain(`uniform vec4 uLook[${SHADER_LOOK_FLOATS / 4}];`);
+    expect(glsl).toContain('#define LK_NEON (1.0 + uLook[0].x)');
+    expect(glsl).toContain('#define LK_COVER (1.0 + uLook[1].y)');
+    for (const [, name] of SHADER_LOOK) expect(glsl).toMatch(new RegExp(`#define ${name} `));
   });
 });

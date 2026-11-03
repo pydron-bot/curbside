@@ -164,6 +164,7 @@ import { ObserveMode } from './ui/observeMode';
 import { MapEditor } from './ui/mapEditor';
 import { LookPanel } from './ui/lookPanel';
 import { lookTuning } from './render/lookLive';
+import { LOOK_SPECS } from './render/lookTuning';
 import { editorLookAt } from './game/mapEditorState';
 import { districtOf } from './world/districts';
 import { parseMapEdits } from './world/mapEdits';
@@ -1964,6 +1965,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   /** TEST → LOOK: the panel (open(), close()) and the live look (set(key, v), resetAll(), look). */
   lookPanel,
   lookTuning,
+  lookSpecs: LOOK_SPECS,
   /** Park water (render/waterLook.ts): fountains, sprinklers, and the look that sprays them. */
   parkWater,
   waterLook,

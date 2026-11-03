@@ -308,7 +308,7 @@ vec4 roadPaint(vec2 w, float a, float b, bool horizontal, float px, float segId)
   bool styled = ubHash(vec2(segId, sign(a) * 3.0 + 17.0)) < 0.26;
   if (styled && gDistrict >= 0.0 && inBox > 0.0 && stop < 0.5 && yellowCover < 0.5) {
     float k = floor((b + 7.6) / 1.2);
-    float fade = 0.62 * wear;
+    float fade = min(0.62 * wear * LK_ART, 1.0);
     vec3 col;
     float cover = zebra;
     if (abs(gDistrict - ${DISTRICTS.indexOf('arts')}.0) < 0.5) {
@@ -422,7 +422,7 @@ vec3 lot(vec2 w, vec2 lp, float kind, float seed, float px, inout vec3 glow) {
         + ubLine(abs(cq.x - (11.4 - 5.8)), lw, px) * step(cq.y, 2.45)
         + ubLine(abs(length(vec2(cq.x - 10.2, cp.y)) - 6.75), lw, px) * step(cq.x, 10.2) * step(cq.y, 6.6);
       surf = mix(surf, srgb(0.86, 0.86, 0.82), min(1.0, lines) * court);
-      c = mix(c, surf, apron);
+      c = mix(c, surf, apron * min(LK_ART, 1.0));
     }
     return c;
   }
@@ -451,7 +451,7 @@ vec3 lot(vec2 w, vec2 lp, float kind, float seed, float px, inout vec3 glow) {
       float band = smoothstep(0.0, 0.15, bt) * (1.0 - smoothstep(0.9, 1.0, bt));
       vec3 bow = clamp(abs(fract(max(0.78 * (1.0 - bt * 1.15), 0.0) + vec3(0.0, 0.6667, 0.3333)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
       float shimmer = 0.75 + 0.25 * sin(uTime * 1.7 + rr * 3.0);
-      glow += bow * band * side * shimmer * day * (1.0 - uWetness) * 0.26 * smoothstep(0.8, 0.97, ubCloudShade(w));
+      glow += bow * band * side * shimmer * day * (1.0 - uWetness) * 0.26 * LK_RAINBOW * smoothstep(0.8, 0.97, ubCloudShade(w));
     }
     return c;
   }
@@ -505,7 +505,7 @@ float gMistWeight(vec2 w) {
   for (int k = 0; k < 4; k++) {
     vec2 c = clamp(c0 + vec2(float(k & 1), float(k >> 1)), vec2(0.0), vec2(UB_BLOCKS - 1.0));
     float d = texelFetch(uBlocks, ivec2(c), 0).g * 255.0;
-    m[k] = (abs(d - ${DISTRICTS.indexOf('oldtown')}.0) < 0.5 || abs(d - ${DISTRICTS.indexOf('residential')}.0) < 0.5) ? 1.0 : 0.2;
+    m[k] = (abs(d - ${DISTRICTS.indexOf('oldtown')}.0) < 0.5 || abs(d - ${DISTRICTS.indexOf('residential')}.0) < 0.5) ? 1.0 : min(0.2 * LK_MIST_SPREAD, 1.0);
   }
   return mix(mix(m[0], m[1], f.x), mix(m[2], m[3], f.x), f.y);
 }
@@ -555,7 +555,7 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
     if (uNight > 0.01) {
       float damp = smoothstep(0.42, 0.78, ubFbm(w * 0.22 + 7.0));
       float gutterBias = 1.0 - 0.5 * smoothstep(0.8, 4.0, kerb);
-      gSheen = uNight * (0.3 + 0.7 * damp) * gutterBias;
+      gSheen = uNight * (0.3 + 0.7 * damp) * gutterBias * LK_WET;
       c *= 1.0 - 0.2 * uNight;
     }
   } else if (max(q.x, q.y) > G_LOT) {

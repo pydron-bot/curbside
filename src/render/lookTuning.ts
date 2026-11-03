@@ -120,6 +120,43 @@ export const LOOK_SPECS = [
 ] as const satisfies readonly LookSpec[];
 
 export type LookKey = (typeof LOOK_SPECS)[number]['key'];
+
+/**
+ * Sliders the world's shaders read (shaderLib `uLook`, vec4[4]): each slot
+ * holds the value minus the code's (so an all-zero uniform is the code's
+ * look), read in GLSL through its macro, e.g. LK_NEON = 1.0 + uLook[0].x.
+ */
+export const SHADER_LOOK: ReadonlyArray<readonly [LookKey, string]> = [
+  ['neon', 'LK_NEON'],
+  ['neonHalos', 'LK_HALOS'],
+  ['windows', 'LK_WINDOWS'],
+  ['wetSheen', 'LK_WET'],
+  ['cloudShadow', 'LK_CLOUD'],
+  ['cloudCover', 'LK_COVER'],
+  ['flyerShadow', 'LK_FLYER'],
+  ['glints', 'LK_GLINT'],
+  ['dapple', 'LK_DAPPLE'],
+  ['rainbow', 'LK_RAINBOW'],
+  ['mistSpread', 'LK_MIST_SPREAD'],
+  ['streetArt', 'LK_ART'],
+  ['billboards', 'LK_BILLBOARD'],
+  ['treeSway', 'LK_SWAY'],
+];
+/** Floats in `uLook`. */
+export const SHADER_LOOK_FLOATS = 16;
+
+/** Fill `out` (shaderLib uLook) from `v`: each slot the slider's distance from the code's value. */
+export function writeShaderLook(v: Readonly<Record<LookKey, number>>, out: Float32Array): Float32Array {
+  SHADER_LOOK.forEach(([key], i) => (out[i] = v[key] - lookSpec(key).def));
+  return out;
+}
+
+/** GLSL: the uLook declaration and a macro per slider (1.0 at the code's look). */
+export function shaderLookGlsl(): string {
+  const swz = 'xyzw';
+  const lines = SHADER_LOOK.map(([key, name], i) => `#define ${name} (${lookSpec(key).def.toFixed(1)} + uLook[${i >> 2}].${swz[i & 3]})`);
+  return `uniform vec4 uLook[${SHADER_LOOK_FLOATS / 4}];\n${lines.join('\n')}\n`;
+}
 export type LookValues = Record<LookKey, number>;
 
 const SPEC = new Map<string, LookSpec>(LOOK_SPECS.map((s) => [s.key, s]));

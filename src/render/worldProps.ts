@@ -1,3 +1,4 @@
+import { look } from './lookLive';
 import { glintOf, type Glint } from './neonReflect';
 import { Color, type Object3D } from 'three';
 import type { BuildingPlan, RoofProp } from '../world/buildingPlans';
@@ -256,7 +257,7 @@ export class WorldProps {
         const e = glows.eye;
         glintOf(x + fx * 0.45, z + fz * 0.45, LENS_Y[k], e.x, e.y, e.z, this.glint);
         const s = this.glint.length;
-        const q = (0.3 + 0.35 * worldUniforms.uWetness.value) * night;
+        const q = (0.3 + 0.35 * worldUniforms.uWetness.value) * night * look.neonReflect;
         glows.addFlat(this.glint.x + Math.sin(this.glint.heading) * s * 0.5, 0.05, this.glint.z + Math.cos(this.glint.heading) * s * 0.5, this.glint.heading, 1.3, s, r * q, g * q, b * q, GLOW.beam);
       }
     }
