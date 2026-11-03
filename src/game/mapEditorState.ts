@@ -326,6 +326,13 @@ export const SCALE_MIN = 0.25;
 export const SCALE_MAX = 12;
 /** Street props (as dots) from this zoom in, px per m. */
 export const PROPS_FROM_SCALE = 1.6;
+/** Street-level groups (hundreds of hydrants and carts) that draw and pick only from PROPS_FROM_SCALE, like the props. */
+export const DETAIL_GROUPS: ReadonlySet<AnchorGroup> = new Set<AnchorGroup>(['hydrant', 'vendor']);
+
+/** Is anchor `a` on the map at this zoom? Detail groups only zoomed in, unless `keep` holds them (a dependent, a problem, the selection). */
+export function anchorShown(a: Anchor, scale: number, keep?: ReadonlySet<string>): boolean {
+  return scale >= PROPS_FROM_SCALE || !DETAIL_GROUPS.has(a.group) || (keep?.has(a.id) ?? false);
+}
 /** Anchor labels from this zoom in, px per m. */
 export const LABELS_FROM_SCALE = 2.2;
 

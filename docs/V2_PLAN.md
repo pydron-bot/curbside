@@ -620,6 +620,12 @@ districts), desktop first, and the edits **ship in the game**.
   once, and moved the cold open to a shelter 66 m from the safehouse
   (was 100 m); blocks, buildings and every hand-placed spot are
   unchanged.
+- **Built (2026-11-03, `claude/w3-map`):** format v2 (roads, spots, props,
+  building heights) applied in the game (closures and one-ways through the
+  road graph, moved/removed spots, added/removed props, barriers), the
+  checks (`checkMapEdits`), and the desktop editor with the dependency
+  overlay (TEST → MAP → MAP EDITOR; EXPORT, VIEW IN 3D). Waiting on: the
+  iPhone check of the cold open's new street, then a release.
 
 ## Schedule
 

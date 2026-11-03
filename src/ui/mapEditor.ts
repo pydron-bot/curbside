@@ -63,6 +63,7 @@ import {
   type RoadMode,
   type Selection,
   restoreGameMap,
+  anchorShown,
 } from '../game/mapEditorState';
 import { BLOCK_SIZE, CORE_OFFSET, SIDEWALK, WORLD_LIMIT } from '../world/city';
 import { DISTRICTS, DISTRICT_NAMES, type District } from '../world/districts';
@@ -721,7 +722,7 @@ export class MapEditor implements Panel {
     // A press on the selected spot or added prop drags it; anywhere else pans.
     if (e.button === 0 && !this.placing && this.preview && this.selection) {
       const w = toWorld(this.view, sx, sy);
-      const hit = pickAt(w, this.preview.anchors, this.preview.props, this.view.scale);
+      const hit = pickAt(w, this.preview.anchors.filter((a) => anchorShown(a, this.view.scale)), this.preview.props, this.view.scale);
       if (hit && sameSelection(hit, this.selection) && this.draggable(hit)) {
         this.drag = { mode: 'move', id: e.pointerId, x: sx, y: sy, moved: false, at: w };
         return;
@@ -788,7 +789,7 @@ export class MapEditor implements Panel {
       return;
     }
     // Removed spots can be picked too (to put them back).
-    const hit = pickAt(w, [...p.anchors, ...p.removed], p.props, this.view.scale);
+    const hit = pickAt(w, [...p.anchors.filter((a) => anchorShown(a, this.view.scale)), ...p.removed], p.props, this.view.scale);
     this.d.audio.ui('click');
     this.select(hit);
   }
@@ -1228,7 +1229,10 @@ export class MapEditor implements Panel {
       }
     };
     for (const a of p.removed) icon(a, a.points[0], true);
+    const keep = new Set([...depIds, ...bad]);
+    if (selAnchor) keep.add(selAnchor.id);
     for (const a of p.anchors) {
+      if (!anchorShown(a, s, keep)) continue;
       const drag = dragging && selAnchor === a;
       a.points.forEach((q, i) => icon(a, drag && i === 0 ? dragging : q, false));
     }

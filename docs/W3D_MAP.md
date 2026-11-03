@@ -152,22 +152,32 @@ Still not local: hidden packages are shuffled over every block, so any
 block edit moves them (and saves record them by index; the same decision
 W3-A needs).
 
-## Next
+## Status and next (2026-11-03)
 
-1. ~~Per-block dressing streams~~ (done, above). Check the cold open's new
-   street on the iPhone.
-2. **The editor shell** (desktop, an EDIT entry with Test tools on, on
-   observe mode's free camera): pick a block, set its kind, district and
-   variant from a side panel; undo/redo over `withBlockEdit`; local edits in
-   `localStorage`; EXPORT writes the canonical file; the diff list with
-   revert. Rebuilding: the whole city at first (43 ms to generate at 16),
-   then only the touched block's chunk, now that edits are local.
-3. **The overlay**: draw `dependentsOf` for the pick and list it in the
-   panel; run `checkAnchors` on every edit and turn breakages red.
-4. **More in the file** (version 2+): building height and style, an empty
-   lot, then props, ramps, payphones and spawn points (by anchor id), then
-   roads (closures and one-way streets) last, as the plan says.
-5. **The rest of the inventory** (scene spots, test spots, packages).
+Built and integrated on `claude/w3-map` (the engine and editor branches
+merged): every version 2 section plays in the game, the editor edits all
+of it, and the overlay shows dependents and problems (`checkMapEdits`,
+through the editor's `problemsFor`). Checked end to end headless: local
+edits (a road closed on DOWNTOWN DASH, a one-way, a bench) show in
+CHANGES with the race in red; VIEW IN 3D reloads on them, with the
+closure's 12 barriers and the bench in the dressing and 0 of 1,525 car
+samples on the closed road over 60 s. Smoke: 102 checks OK.
+
+Integration notes: the editor's preview restores the running game's
+district paint *and* road rules (`restoreGameMap`; both are module state
+`generateCity` installs); hydrants and food carts (hundreds) draw and pick
+only zoomed in (`anchorShown`), unless they're a dependent, a problem or
+the selection.
+
+Still open:
+- **On the iPhone:** the cold open's new shelter (66 m from the safehouse).
+- **Hidden packages** move with any block edit (saved by index): the
+  owner's decision, shared with W3-A.
+- **Not editable yet:** building style beyond the district repaint, an
+  empty-lot kind, adding new spots (a new payphone or ramp), story spots
+  (jobs are data in `missionsData.ts`).
+- **Later:** rebuild the 3D city in place (per 256 m chunk) instead of
+  VIEW IN 3D's reload; click-to-cycle through stacked icons.
 
 ## Roads, spots and props in the game (2026-11-03, branch `claude/w3d-engine`)
 

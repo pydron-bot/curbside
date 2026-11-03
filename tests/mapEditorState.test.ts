@@ -20,6 +20,8 @@ import {
   moveSpot,
   panBy,
   pickAt,
+  anchorShown,
+  PROPS_FROM_SCALE,
   placeProp,
   propsOnMap,
   removeProp,
@@ -199,6 +201,22 @@ describe('the view', () => {
     expect(v.cx).toBeCloseTo(cx - 30 / v.scale);
     zoomAt(v, 0, 0, 1e6);
     expect(v.scale).toBe(12);
+  });
+});
+
+describe('detail anchors', () => {
+  it('draws hydrants and carts only zoomed in, unless they are a dependent, a problem or the selection', () => {
+    const p = buildPreview(SHIPPED_MAP, inputs, SHIPPED_MAP);
+    const hydrant = p.anchors.find((a) => a.group === 'hydrant')!;
+    const cart = p.anchors.find((a) => a.group === 'vendor')!;
+    const phone = p.anchors.find((a) => a.group === 'payphone')!;
+    expect(anchorShown(hydrant, 1)).toBe(false);
+    expect(anchorShown(cart, 1)).toBe(false);
+    expect(anchorShown(phone, 1)).toBe(true);
+    expect(anchorShown(hydrant, PROPS_FROM_SCALE)).toBe(true);
+    expect(anchorShown(hydrant, 1, new Set([hydrant.id]))).toBe(true);
+    // Zoomed out, the map shows the hand-placed things, not hundreds of hydrants.
+    expect(p.anchors.filter((a) => anchorShown(a, 1)).length).toBeLessThan(250);
   });
 });
 
