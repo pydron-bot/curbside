@@ -54,6 +54,7 @@ Pushing to `main` deploys to https://deeek.org/curbside/ via
 pull requests run `ci.yml` (tests, types, GLB contracts, smoke test). Before
 pushing to main run the smoke test: `npx -y -p playwright@1.63.0 node
 tools/smoke.mjs` (desktop 1280×720, iPhone 15 Pro landscape 852×393 and
-852×340, offline PWA); for a closer look, `window.__ub` exposes the game
+852×340, offline PWA; about 6 min, the 3D view drawn at 0.35×, `--scale 1`
+for sharp screenshots); for a closer look, `window.__ub` exposes the game
 (`startGame()`, `fastForward(seconds)`, state). Tuning harnesses are in
 `tools/tune/` (README *Tuning harnesses*).

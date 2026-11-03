@@ -38,9 +38,16 @@ best-moment picture on WASTED (a forced stamp, then death: the photo and
 caption inside the view, clear of WASTED's title, numbers and timer, the
 pause button, corners and thumbs; SHARE gives the mocked share sheet a
 JPEG, a refused share saves it, the respawn frees it); then
-installability and an offline boot from the service worker. ~20 min
-locally (software rendering); `--only desktop|852x393|852x340|pwa` runs one
-profile. CI (`.github/workflows/ci.yml`) runs the four profiles as parallel
+installability and an offline boot from the service worker. About 6 min
+locally: the canvas is drawn at 0.35× its pixel ratio (`--scale`, the
+page's `?renderScale=`), since software rendering costs by the pixel and
+draw calls, tiers and the HUD are the same at any scale (checked with
+seeded frames at 1× and 0.35×: identical calls and triangles); it was
+~18 min at full size. `--scale 1` for sharp screenshots of the 3D view;
+`--only desktop|852x393|852x340|pwa` runs one profile; `--jobs 2` builds
+once and runs two profiles at a time (5.6 min against 6.2 on a 4-core
+machine: they share the cores, so it pays only on a bigger one). Each
+profile's time is in the output. CI (`.github/workflows/ci.yml`) runs the four profiles as parallel
 jobs, beside the unit tests, types and GLB contracts, on every branch and
 pull request; Pages (`pages.yml`) runs the tests and contracts before deploying
 main.
