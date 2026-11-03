@@ -215,8 +215,10 @@ describe('detail anchors', () => {
     expect(anchorShown(phone, 1)).toBe(true);
     expect(anchorShown(hydrant, PROPS_FROM_SCALE)).toBe(true);
     expect(anchorShown(hydrant, 1, new Set([hydrant.id]))).toBe(true);
-    // Zoomed out, the map shows the hand-placed things, not hundreds of hydrants.
-    expect(p.anchors.filter((a) => anchorShown(a, 1)).length).toBeLessThan(250);
+    // Zoomed out, the map shows the hand-placed things, not hundreds of hydrants and carts.
+    const detail = p.anchors.filter((a) => a.group === 'hydrant' || a.group === 'vendor').length;
+    expect(detail).toBeGreaterThan(100);
+    expect(p.anchors.filter((a) => anchorShown(a, 1)).length).toBe(p.anchors.length - detail);
   });
 });
 
