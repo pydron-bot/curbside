@@ -50,6 +50,8 @@ export interface BuildingPlan {
   shopfronts: Shopfront[];
   /** Neon on the roof, seen from the camera above (null: none). */
   roofNeon: RoofNeon | null;
+  /** A swimming pool on the roof (the water's rect; null: none). */
+  roofPool: Rect | null;
 }
 
 /**
@@ -73,7 +75,7 @@ export interface RoofNeon {
 }
 
 /** How a neon sign moves: steady, cycling colour, chase lights running along it, or lighting up along its length and going out. */
-export const NEON_ANIM = { steady: 0, cycle: 1, chase: 2, sweep: 3 } as const;
+export const NEON_ANIM = { steady: 0, cycle: 1, chase: 2, sweep: 3, water: 4 } as const;
 export type NeonAnim = (typeof NEON_ANIM)[keyof typeof NEON_ANIM];
 
 /** Awnings hang this high and stick out this far over the sidewalk, m. */
@@ -184,7 +186,46 @@ export function planBuilding(b: Building, citySeed: number): BuildingPlan {
   if (!helipad) placeProps(b, roof, rand, props);
 
   const { shopSides, shopfronts } = planShops(b, rand);
-  return { roof, seed, props, shopSides, shopfronts, roofNeon: planRoofNeon(b, citySeed, props) };
+  const roofNeon = planRoofNeon(b, citySeed, props);
+  const pitched2 = roof === 'terracotta' || helipad || roof === 'garden';
+  return { roof, seed, props, shopSides, shopfronts, roofNeon, roofPool: pitched2 ? null : planRoofPool(b, citySeed, props, roofNeon) };
+}
+
+/** Rooftop pools by district (flat roofs only): odds, before the room to fit one. */
+const POOL_ODDS: Readonly<Record<District, number>> = { downtown: 0.16, residential: 0.2, arts: 0.08, oldtown: 0.04, industrial: 0 };
+/** A pool keeps this clear of the roof's edge (and the deck round it). */
+const POOL_EDGE = 1.4;
+
+/** A pool on a flat roof (its own stream): a few tries to fit it clear of the rooftop kit and the roof sign. */
+export function planRoofPool(b: Building, citySeed: number, props: readonly Rect[], neon: RoofNeon | null): Rect | null {
+  const rand = buildingStream(b, citySeed, 0x9001);
+  if (rand() >= POOL_ODDS[b.district]) return null;
+  const iw = b.maxX - b.minX - 2 * POOL_EDGE;
+  const id = b.maxZ - b.minZ - 2 * POOL_EDGE;
+  const signFoot: Rect | null = neon?.sign
+    ? (() => {
+        const s = neon.sign!;
+        const alongX = s.side === 0 || s.side === 2;
+        return alongX
+          ? { minX: s.from, maxX: s.to, minZ: s.side === 0 ? b.minZ : b.maxZ - SIGN_REACH, maxZ: s.side === 0 ? b.minZ + SIGN_REACH : b.maxZ }
+          : { minZ: s.from, maxZ: s.to, minX: s.side === 3 ? b.minX : b.maxX - SIGN_REACH, maxX: s.side === 3 ? b.minX + SIGN_REACH : b.maxX };
+      })()
+    : null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const w = 3.5 + rand() * 2.5;
+    const d = 2.4 + rand() * 1.6;
+    // Long side along the roof's longer side.
+    const [pw, pd] = iw >= id ? [w, d] : [d, w];
+    if (pw > iw || pd > id) return null;
+    const x = b.minX + POOL_EDGE + rand() * (iw - pw);
+    const z = b.minZ + POOL_EDGE + rand() * (id - pd);
+    const pool: Rect = { minX: x, minZ: z, maxX: x + pw, maxZ: z + pd };
+    // Deck and loungers round it need a metre clear.
+    if (props.some((p) => overlaps(p, pool, 1.0))) continue;
+    if (signFoot && overlaps(signFoot, pool, 1.0)) continue;
+    return pool;
+  }
+  return null;
 }
 
 /** Rooftop neon (its own stream, so adding it moved nothing else in the city). Taller buildings light up more often. */

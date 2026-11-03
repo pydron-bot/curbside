@@ -142,6 +142,7 @@ export function createCityMesh(city: City, plans: readonly BuildingPlan[] = plan
     addRoofProps(c, plan, color, m);
     addShopfronts(c, b, plan, m);
     if (plan.roofNeon) addRoofNeon(c, b, plan.roofNeon, m);
+    if (plan.roofPool) addRoofPool(c, b, plan.roofPool, m);
   });
 
   for (const lamp of generateStreetLamps()) addLamp(chunkFor(lamp.x, lamp.z), lamp, m);
@@ -394,6 +395,29 @@ function addRoofNeon(c: ChunkBuilder, b: Rect & { height: number }, n: RoofNeon,
   }
 }
 
+/** A rooftop pool (BuildingPlan.roofPool): a white deck, the water (NEON_ANIM.water: caustics by day, lit at night), two loungers. */
+function addRoofPool(c: ChunkBuilder, b: Rect & { height: number }, p: Rect, m: Matrix4): void {
+  const color = new Color();
+  const w = p.maxX - p.minX;
+  const d = p.maxZ - p.minZ;
+  const cx = (p.minX + p.maxX) / 2;
+  const cz = (p.minZ + p.maxZ) / 2;
+  const top = b.height;
+  c.add('boxes', m.makeScale(w + 1.2, 0.1, d + 1.2).setPosition(cx, top, cz), color.set('#f1ece2'), [0]);
+  c.add('boxes', m.makeScale(w, 0.06, d).setPosition(cx, top + 0.1, cz), color.set('#2bc8de'), [neonGlow(0.55, NEON_ANIM.water, false)]);
+  // Loungers along the long side, on the deck.
+  const alongX = w >= d;
+  for (let k = 0; k < 2; k++) {
+    const t = (k + 0.5) / 2;
+    const lx = alongX ? p.minX + w * t : p.maxX + 0.45;
+    const lz = alongX ? p.maxZ + 0.45 : p.minZ + d * t;
+    c.add('boxes', m.makeScale(alongX ? 0.6 : 1.7, 0.18, alongX ? 1.7 : 0.6).setPosition(lx, top + 0.1, lz), color.set(k ? '#ff8fb8' : '#ffffff'), [0]);
+  }
+  // A turquoise glow over the water at night.
+  m.makeScale(w + 3, 1, d + 3).setPosition(cx, top + 0.25, cz);
+  c.add('glows', m, color.set('#2bc8de').multiplyScalar(0.3));
+}
+
 /** String-light bulbs: this far apart along a string, this big, and this bright at night (aGlow). */
 const BULB_GAP = 1.6;
 const BULB = 0.17;
@@ -593,7 +617,14 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
         glowK *= 1.0 - burst * 0.8 * step(0.45, fract(uTime * 11.0 + seed * 3.0));
       }
       float along = vPropWorld.x + vPropWorld.z;
-      if (anim > 0.5 && anim < 1.5) {
+      if (anim > 3.5) {
+        // Pool water: rippling caustics by day; the base glow is its underwater lights at night.
+        vec2 cw = vPropWorld.xz * 1.7;
+        float c1 = sin(cw.x * 2.1 + uTime * 1.7 + sin(cw.y * 1.3 + uTime));
+        float c2 = sin(cw.y * 2.4 - uTime * 1.3 + sin(cw.x * 1.7 - uTime * 0.8));
+        float caustic = pow(1.0 - abs(c1 * c2), 6.0);
+        totalEmissiveRadiance += vec3(0.55, 0.95, 1.0) * caustic * (0.35 * (1.0 - uNight) + 0.15 * uNight);
+      } else if (anim > 0.5 && anim < 1.5) {
         // Colour cycle: the hue turns through its channel rotations.
         float t = fract(uTime * 0.11 + seed) * 3.0;
         neon = t < 1.0 ? mix(vColor.rgb, vColor.gbr, smoothstep(0.6, 1.0, t))
@@ -602,7 +633,7 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
       } else if (anim > 1.5 && anim < 2.5) {
         // Chase lights: bright bands running along the tube.
         glowK *= 0.3 + 0.7 * step(0.5, fract(along * 1.1 - uTime * 1.6 + seed));
-      } else if (anim > 2.5) {
+      } else if (anim > 2.5 && anim < 3.5) {
         // Sweep: lights up along its length, holds, goes out, starts again.
         float t = fract(uTime * 0.22 + seed) * 1.5;
         float at = fract(along * 0.11);

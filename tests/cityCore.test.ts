@@ -80,7 +80,8 @@ describe('the core city (today’s 16 × 16) at any size', () => {
     // Roofs and shopfronts: keyed by where each building stands (W3-D), so the core's hold at any size.
     // Without the rooftop neon (0.22.0), which has its own stream and its own pin below: nothing else moved.
     const plans = planBuildings(city).filter((_p, i) => centre(city.buildings[i]));
-    expect.soft(hash(plans.map(({ roofNeon: _n, ...rest }) => rest))).toBe('be684bc5');
+    expect.soft(hash(plans.map(({ roofNeon: _n, roofPool: _p, ...rest }) => rest))).toBe('be684bc5');
+    expect.soft(hash(plans.map((p) => p.roofPool))).toBe('bf2f98e2');
     expect.soft(hash(plans.map((p) => p.roofNeon))).toBe('fede67f1');
   });
 });
