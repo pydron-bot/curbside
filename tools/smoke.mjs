@@ -16,7 +16,9 @@
  * score feed, and the police scanner's subtitle clear of all that, the
  * radio's card and the thumbs, on foot and in a car. OBSERVE, from the pause
  * menu and from the title: no HUD, under the budget at the widest zoom, and
- * back out to the paused run or the title. The best-moment picture: a
+ * back out to the paused run or the title. On desktop, the map editor: a
+ * block edit, CHANGES, EXPORT's file, undo, and the districts left as
+ * they were. The best-moment picture: a
  * stamp, then WASTED shows its photo and caption clear of WASTED and the
  * controls, and SHARE hands the (mocked) share sheet a JPEG. Catches the wiring crashes
  * `npm test` can't.
@@ -459,6 +461,63 @@ async function observeCheck(page, label) {
   check(!out.active && out.title && !out.paused, `${label}: EXIT goes back to the title`);
 }
 
+/**
+ * The map editor (desktop): open it on a run (paused), repaint a block,
+ * CHANGES lists it, EXPORT's text is a clean map file, Ctrl+Z undoes it,
+ * and closing leaves the game's districts as they were (the preview
+ * repaints them for the whole game while it builds).
+ */
+async function mapEditorCheck(page, label) {
+  const before = await page.evaluate(async () => {
+    const u = window.__ub;
+    localStorage.removeItem('curbside.map.local');
+    if (u.observe?.active) u.observe.exit();
+    u.startGame();
+    u.fastForward(1);
+    const districts = u.mapEditor.districts();
+    u.mapEditor.open();
+    const ed = u.mapEditor.editor;
+    // A downtown block made a park in Neon Mile.
+    ed.select({ kind: 'block', bx: 7, bz: 7 }, true);
+    return { districts, open: ed.isOpen, paused: u.paused };
+  });
+  check(before.open && before.paused, `${label}: MAP EDITOR opens and pauses the run`);
+  await page.locator('#mapeditor [data-act="kind"][data-arg="park"]').click({ timeout: 30000 });
+  await page.locator('#mapeditor [data-act="district"][data-arg="arts"]').click({ timeout: 30000 });
+  await page.locator('#mapeditor [data-act="export"]').click({ timeout: 30000 });
+  const edited = await page.evaluate(() => {
+    const u = window.__ub;
+    const ed = u.mapEditor.editor;
+    const parsed = u.mapEditor.parse(document.querySelector('#mapeditor .me-export').value);
+    return {
+      changes: [...document.querySelectorAll('#mapeditor .me-changes-list .me-item')].map((el) => el.textContent),
+      problems: ed.problems.length,
+      parsed: { problems: parsed.problems, blocks: parsed.edits.blocks },
+      saved: !!localStorage.getItem('curbside.map.local'),
+    };
+  });
+  const block = edited.parsed.blocks[0];
+  check(
+    edited.changes.length === 1 && edited.changes[0].startsWith('Block 7,7: park, district arts') && edited.saved,
+    `${label}: the block edit is in CHANGES and saved locally (${edited.changes.join('; ')})`,
+  );
+  check(
+    edited.parsed.problems.length === 0 && edited.parsed.blocks.length === 1 && block.kind === 'park' && block.district === 'arts',
+    `${label}: EXPORT writes a clean map file (${JSON.stringify(edited.parsed)})`,
+  );
+  await page.keyboard.press('Control+z');
+  await page.keyboard.press('Escape'); // the selection
+  await page.keyboard.press('Escape'); // the editor
+  const after = await page.evaluate(() => {
+    const u = window.__ub;
+    const r = { open: u.mapEditor.editor.isOpen, paused: u.paused, districts: u.mapEditor.districts(), saved: localStorage.getItem('curbside.map.local') };
+    u.setPaused(false);
+    return r;
+  });
+  check(!after.open && after.paused && after.saved === null, `${label}: Ctrl+Z undoes it (no local edits left) and Esc closes the editor to the paused run`);
+  check(after.districts === before.districts, `${label}: closing the map editor leaves the game's districts as they were`);
+}
+
 /** What the best-moment card must stay clear of on WASTED: its title, numbers and timer, the pause button, the corners' HUD and the thumbs. */
 const MOMENT_CLEAR_OF = ['.wasted-title', '.wasted-stats', '.wasted-timer', '.hud-pause', '#radar', '#score', '#wanted', '.tbtn', '.stick-base', '.aim-base', '.pedal-pad'];
 
@@ -633,6 +692,7 @@ try {
       // The phones: the Chaos Run's card and stars up too (stamps stay on there).
       if (label.startsWith('iphone')) await stampCheck(page, label, true);
       await observeCheck(page, label);
+      if (label.startsWith('desktop')) await mapEditorCheck(page, label);
       await momentCheck(page, label);
     } catch (e) {
       check(false, `${label}: ${e.message.split('\n')[0]}`);
