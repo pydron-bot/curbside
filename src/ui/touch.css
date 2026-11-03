@@ -311,6 +311,49 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
   right: calc(var(--edge-r) + 4px);
 }
 
+/* BOOM (DETONATE): only while a sticky charge is out. On foot above the
+   swap button (clear of ENTER above FIRE); in a car beside EXIT, over the
+   pedal pad. A slow blink, like the charge's own light. */
+.btn-detonate {
+  --accent: #ff3b2f;
+  right: calc(var(--edge-r) + 106px);
+  bottom: calc(var(--edge-b) + 74px);
+  width: 56px;
+  height: 56px;
+  padding: 8px 9px 7px;
+  visibility: hidden;
+}
+
+.btn-detonate svg {
+  width: 24px;
+  height: 24px;
+}
+
+.btn-detonate.live {
+  visibility: visible;
+  animation: detonate-blink 1s steps(1, end) infinite;
+}
+
+.btn-detonate.live.pressed {
+  animation: none;
+}
+
+@keyframes detonate-blink {
+  0%,
+  50% {
+    border-color: #ff3b2f;
+  }
+  51%,
+  100% {
+    border-color: rgb(255 255 255 / 0.55);
+  }
+}
+
+.touch-layer[data-mode='car'] .btn-detonate {
+  right: calc(var(--edge-r) + 76px);
+  bottom: calc(var(--edge-b) + var(--pad-h) + 12px);
+}
+
 /* --- Pedal pad: one element, pedals inside are hit-tested in JS --- */
 .pedal-pad {
   position: fixed;
@@ -412,6 +455,15 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
   left: calc(var(--edge-l) + 4px);
 }
 
+.touch-layer[data-hand='left'] .btn-detonate {
+  right: auto;
+  left: calc(var(--edge-l) + 106px);
+}
+
+.touch-layer[data-hand='left'][data-mode='car'] .btn-detonate {
+  left: calc(var(--edge-l) + 76px);
+}
+
 .touch-layer[data-hand='left'] .pedal-gas {
   right: auto;
   left: 0;
@@ -478,9 +530,25 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
     width: 20px;
     height: 20px;
   }
+
+  .btn-detonate {
+    width: 52px;
+    height: 52px;
+    bottom: calc(var(--edge-b) + 70px);
+    padding: 7px 8px 6px;
+  }
+
+  .btn-detonate svg {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .btn-detonate.live {
+    animation: none;
+  }
+
   .touch-layer[data-mode='foot'] .btn-door.available::after {
     animation: none;
     transform: scale(1.12);

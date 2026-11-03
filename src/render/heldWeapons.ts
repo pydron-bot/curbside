@@ -1,4 +1,5 @@
 import {
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -21,7 +22,7 @@ import { after } from './shaderLib';
 import { loadWeaponsModel } from './weaponsModel';
 
 /** Every weapon that can be in a hand, and its root in weapons.glb. */
-const HELD: readonly WeaponKind[] = ['pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket', 'horn', 'taser', 'stinger', 'smoke'];
+const HELD: readonly WeaponKind[] = ['pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket', 'horn', 'taser', 'stinger', 'smoke', 'charge'];
 const ROOT: Record<WeaponKind, string> = {
   pistol: 'pistol',
   smg: 'smg',
@@ -34,13 +35,36 @@ const ROOT: Record<WeaponKind, string> = {
   // The strip folded up, held in the fist like a grenade.
   stinger: 'stinger',
   smoke: 'smoke_grenade',
+  charge: 'sticky_charge',
 };
 /** Grip → muzzle along the barrel, m, until the GLB's `muzzle` extras arrive. */
-const MUZZLE_GUESS: Record<WeaponKind, number> = { pistol: 0.2, smg: 0.38, shotgun: 0.73, grenade: 0, molotov: 0, rocket: 0.76, horn: 0.2, taser: 0.15, stinger: 0, smoke: 0 };
+const MUZZLE_GUESS: Record<WeaponKind, number> = { pistol: 0.2, smg: 0.38, shotgun: 0.73, grenade: 0, molotov: 0, rocket: 0.76, horn: 0.2, taser: 0.15, stinger: 0, smoke: 0, charge: 0 };
 /** The bore's height above the grip, m (the `_muzzle` / `_barrel` node's, once weapons.glb is in). */
-const MUZZLE_HEIGHT_GUESS: Record<WeaponKind, number> = { pistol: 0.05, smg: 0.07, shotgun: 0.07, grenade: 0, molotov: 0, rocket: 0.11, horn: 0.06, taser: 0.05, stinger: 0, smoke: 0 };
+const MUZZLE_HEIGHT_GUESS: Record<WeaponKind, number> = { pistol: 0.05, smg: 0.07, shotgun: 0.07, grenade: 0, molotov: 0, rocket: 0.11, horn: 0.06, taser: 0.05, stinger: 0, smoke: 0, charge: 0 };
 /** Shots start this far ahead of the shooter (combat.ts), m: how a shot is matched to who fired it. */
 const SHOT_LEAD = 0.6;
+
+/**
+ * Built here until weapons.glb has the root (BLENDER_TODO §15): the sticky
+ * charge, a dark brick with a red detonator box on top, about life size.
+ */
+const STAND_INS: Partial<Record<WeaponKind, () => BufferGeometry[]>> = {
+  charge: () => [
+    tint(new BoxGeometry(0.16, 0.07, 0.11).translate(0, 0.035, 0.02), 0.09, 0.1, 0.1),
+    tint(new BoxGeometry(0.06, 0.035, 0.05).translate(0.03, 0.085, 0.02), 0.85, 0.08, 0.05),
+  ],
+};
+
+/** One colour on every vertex, the attributes a weapons.glb part has (position, normal, colour). */
+function tint(geo: BufferGeometry, r: number, g: number, b: number): BufferGeometry {
+  const flat = geo.index ? geo.toNonIndexed() : geo;
+  flat.deleteAttribute('uv');
+  const n = flat.getAttribute('position').count;
+  const rgb = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) rgb.set([r, g, b], i * 3);
+  flat.setAttribute('color', new BufferAttribute(rgb, 3));
+  return flat;
+}
 const SHOOTER_MATCH = 0.9;
 
 const hand = new Matrix4();
@@ -179,7 +203,13 @@ export class HeldWeapons {
     const colour = new Color();
     for (const kind of HELD) {
       const root = scene.getObjectByName(ROOT[kind]);
-      if (!root) continue;
+      if (!root) {
+        for (const geo of STAND_INS[kind]?.() ?? []) {
+          geo.setAttribute('aWeapon', new BufferAttribute(new Float32Array(geo.getAttribute('position').count).fill(HELD.indexOf(kind)), 1));
+          parts.push(geo);
+        }
+        continue;
+      }
       const m = root.userData?.muzzle;
       if (typeof m === 'number') this.muzzle[kind] = m;
       // The extra is only the distance; the barrel sits above the grip.

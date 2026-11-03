@@ -17,6 +17,7 @@ import { corePavement } from '../game/modes/places';
 import { BLOCK_SIZE, ROAD_WIDTH, SIDEWALK } from '../world/city';
 import { DIR_VEC, dirHeading, type Dir } from '../world/roads';
 import { NIGHT_PHONE, type MissionDef } from './missions';
+import { LULL_LIMO_PAINT } from './charges';
 import { GETAWAY_TAG, OPENING_JOB } from '../game/opening';
 
 type Point = { x: number; z: number };
@@ -276,7 +277,7 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
       intro: [
         { who: LULL, text: "Mayor Lull. Today I open our first Silent Zone, in Glass Heights. Please don't clap." },
         { who: DOREEN, text: "She cuts her ribbon, then she's off in that limo. I want it in bits." },
-        { who: LIONEL, text: 'Take these. I call them fireworks. The council calls them evidence.' },
+        { who: LIONEL, text: 'Take these. Fireworks. The sticky ones go off when you say. The council calls them evidence.' },
       ],
       outro: [
         { who: LULL, text: 'Mayor Lull. The Silent Zone is closed for repairs. As is my limo. Quietly.' },
@@ -291,7 +292,9 @@ export function buildMissions(docks: Point & { heading?: number; halfWidth?: num
           // Parked at the ribbon until you're close (or it's hit), then off into traffic.
           start: [
             { do: 'give', weapon: 'grenade' },
-            { do: 'spawnCar', tag: 'lulllimo', archetype: 'limo', paint: '#ece6da', ...ribbon, drive: true, wait: 50 },
+            // W3-B: two sticky charges, in hand; passing puts them in the shop (modes/shop.ts CHARGE_JOB).
+            { do: 'give', weapon: 'charge' },
+            { do: 'spawnCar', tag: 'lulllimo', archetype: 'limo', paint: LULL_LIMO_PAINT, ...ribbon, drive: true, wait: 50 },
           ],
         },
       ],

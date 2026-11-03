@@ -32,7 +32,9 @@ export type StampId =
   | 'haveAGo'
   // Gatecrashing (V2-12), read off their awards.
   | 'raceCrasher'
-  | 'vanNicked';
+  | 'vanNicked'
+  // The sticky charge (W3-B), read off its chargeBlast.
+  | 'partingGift';
 
 /** Ink: mayhem (hot red), the have-a-go moments (blue), the police (white on blue). */
 export type StampTone = 'mayhem' | 'hero' | 'law';
@@ -65,6 +67,7 @@ export const STAMPS: Readonly<Record<StampId, StampDef>> = {
   haveAGo: { label: 'HAVE-A-GO HERO', sub: 'BAG HANDED BACK', weight: 5, tone: 'hero' },
   raceCrasher: { label: 'RACE CRASHER', sub: "THEIR CAR'S YOURS", weight: 6, tone: 'mayhem' },
   vanNicked: { label: 'VAN NICKED', sub: 'THE QUEUE WANTS A WORD', weight: 4, tone: 'mayhem' },
+  partingGift: { label: 'PARTING GIFT', sub: "IT'S THE THOUGHT THAT COUNTS", weight: 7, tone: 'mayhem' },
 };
 
 export const STAMP_IDS = Object.keys(STAMPS) as StampId[];
@@ -243,6 +246,10 @@ export class StampDetector {
           this.pandas = 0;
           this.fiveStars = false;
         }
+        break;
+      case 'chargeBlast':
+        // A charge going up on a car someone else was driving, from afar, or on the cash van or the Mayor's limo (systems/charges.ts).
+        if (e.gift && e.byPlayer) found = heavier(found, 'partingGift');
         break;
       case 'stunt':
         if (e.points >= FLYER_POINTS) found = heavier(found, 'frequentFlyer');

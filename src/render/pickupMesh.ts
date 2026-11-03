@@ -16,6 +16,8 @@ const COLORS: Record<PickupKind, string> = {
   taser: '#7f8cff',
   stinger: '#cfd8e6',
   smoke: '#b8c4cc',
+  // Never a crate (shop only, after RIBBON CUTTING); the colour is the charge's blink.
+  charge: '#ff3b2f',
   health: '#5be36a',
   armour: '#3fd2ff',
   ammo: '#ffd23f',
@@ -61,6 +63,8 @@ export const PICKUP_MODELS: Readonly<Record<PickupKind, string>> = {
   taser: 'crate_taser',
   stinger: 'crate_stinger',
   smoke: 'crate_smoke',
+  // No crate: the sticky charge is a story reward and a shop item, never in the street.
+  charge: 'crate_grenade',
   health: 'health_kit',
   armour: 'armour',
   ammo: 'ammo_box',

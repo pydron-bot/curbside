@@ -160,6 +160,11 @@ export class FrontDoor {
     this.pop(panel);
   }
 
+  /** A menu or panel is up and takes the input (anything on the stack: the title, pause, a sheet, the TEST menu, a card). */
+  get menuUp(): boolean {
+    return this.stack.length > 0;
+  }
+
   /** The pause menu is showing (not the context-lost notice or the rotate pause). */
   get pauseMenuOpen(): boolean {
     return this.pause.menuOpen;

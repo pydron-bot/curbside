@@ -304,6 +304,42 @@ export function smokePop(v: Voice): void {
 }
 
 /**
+ * A sticky charge (W3-B) slapping onto a car or the road: a wet thud, then
+ * two short arming beeps. `armed` false: a dud click (MAX_CHARGES are out).
+ */
+export function chargeStick(v: Voice, armed: boolean): void {
+  const t = v.t;
+  if (!armed) {
+    noiseHit(v, v.bank.white, t, 'bandpass', 2400, 3, 0.5, 0.001, 0.008);
+    const o = v.osc('square', 220, t, t + 0.16);
+    const g = v.gain();
+    v.chain(o, g, v.input);
+    perc(g.gain, t + 0.01, 0.12, 0.002, 0.06);
+    return;
+  }
+  noiseHit(v, v.bank.brown, t, 'lowpass', 700, 0.8, 0.7, 0.002, 0.05);
+  thump(v, t, 140, 70, 0.06, 0.45, 0.04);
+  for (const at of [t + 0.16, t + 0.3]) {
+    const o = v.osc('square', 1760, at, at + 0.08);
+    const g = v.gain();
+    v.chain(o, g, v.input);
+    perc(g.gain, at, 0.09, 0.002, 0.03);
+  }
+}
+
+/** DETONATE: the plunger's clack and a rising beep, just before the bangs. */
+export function detonator(v: Voice): void {
+  const t = v.t;
+  noiseHit(v, v.bank.white, t, 'bandpass', 1600, 2, 0.9, 0.001, 0.012);
+  thump(v, t, 120, 60, 0.04, 0.4, 0.03);
+  const o = v.osc('square', 1200, t + 0.02, t + 0.14);
+  sweep(o.frequency, t + 0.02, 1200, 2600, 0.1);
+  const g = v.gain();
+  v.chain(o, g, v.input);
+  perc(g.gain, t + 0.02, 0.1, 0.002, 0.04);
+}
+
+/**
  * Someone coughing in the smoke: two or three dry barks of breathy noise
  * through a throaty band, pitched lower for an officer (`deep`).
  */

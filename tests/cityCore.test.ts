@@ -49,6 +49,7 @@ describe('the core city (today’s 16 × 16) at any size', () => {
 
   it('has the same hand-placed spots', () => {
     const docks = placeDocks(city);
+    // The mission data is hashed whole: re-pinned for W3-B's sticky charge (s5 gives two, Lionel's line mentions them; same spots).
     expect.soft(
       hash({
         safehouse: SAFEHOUSE,
@@ -60,7 +61,7 @@ describe('the core city (today’s 16 × 16) at any size', () => {
         hospital: placeHospital(city),
         missions: buildMissions(docks, SAFEHOUSE),
       }),
-    ).toBe('e1cf2535');
+    ).toBe('9af78634');
     expect.soft(hash(placeHangouts())).toBe('446c0e20');
   });
 

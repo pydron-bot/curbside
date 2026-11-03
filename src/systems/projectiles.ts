@@ -5,7 +5,9 @@
  * the wall they hit: systems/stinger.ts), rockets (a slow, visible flight
  * in a straight line that blows up on the first thing it touches) and
  * smoke grenades (thrown and bounced like a grenade; at the end of their
- * fuse they pour a cloud, systems/smoke.ts). Plus the fire patches molotovs
+ * fuse they pour a cloud, systems/smoke.ts) and sticky charges (thrown
+ * like a grenade; they stick to the first car they touch, or lie where they
+ * land or against the wall they hit: systems/charges.ts). Plus the fire patches molotovs
  * leave. Pure simulation in fixed pools (nothing allocated while playing);
  * the game resolves what explosions and fires do through ProjectileWorld,
  * the renderer reads the pools.
@@ -15,7 +17,7 @@ import { SMOKE_FUSE } from './smoke';
 import { rayRect } from './weapons';
 import { len2 } from '../core/len';
 
-export type ProjectileKind = 'grenade' | 'molotov' | 'stinger' | 'rocket' | 'smoke';
+export type ProjectileKind = 'grenade' | 'molotov' | 'stinger' | 'rocket' | 'smoke' | 'charge';
 
 export interface Projectile {
   kind: ProjectileKind;
@@ -68,6 +70,10 @@ export interface ProjectileWorld {
   lay(x: number, z: number, dirX: number, dirZ: number, byPlayer: boolean): void;
   /** A smoke grenade's fuse ran down at (x, z): the cloud pours (optional: no smoke, no cloud). */
   smoke?(x: number, z: number, byPlayer: boolean): void;
+  /** A sticky charge at (x, y, z) in flight: true if it touched a car and stuck to it (optional: no charges, nothing sticks). */
+  stickCharge?(x: number, y: number, z: number, byPlayer: boolean): boolean;
+  /** A sticky charge came down at (x, z) (or against a wall) without touching a car: it lies there. */
+  layCharge?(x: number, z: number, byPlayer: boolean): void;
 }
 
 /** Gravity on thrown things, m/s² (a little heavy, so arcs read from above). */
@@ -175,8 +181,8 @@ export class Projectiles {
     for (let i = 0; i < MAX_FIRES; i++) this.fires.push({ alive: false, x: 0, z: 0, radius: 0, age: 0, life: 0, byPlayer: false });
   }
 
-  /** Throw a grenade, molotov, stinger or smoke grenade from (x, z) to land on (tx, tz). */
-  throw(kind: 'grenade' | 'molotov' | 'stinger' | 'smoke', x: number, z: number, tx: number, tz: number, byPlayer: boolean): Projectile | null {
+  /** Throw a grenade, molotov, stinger, smoke grenade or sticky charge from (x, z) to land on (tx, tz). */
+  throw(kind: 'grenade' | 'molotov' | 'stinger' | 'smoke' | 'charge', x: number, z: number, tx: number, tz: number, byPlayer: boolean): Projectile | null {
     const p = this.take();
     if (!p) return null;
     throwVelocity(x, z, tx, tz, scratchThrow);
@@ -216,6 +222,13 @@ export class Projectiles {
     f.life = life;
     f.byPlayer = byPlayer;
     return f;
+  }
+
+  /** How many of `kind` are in flight. */
+  flying(kind: ProjectileKind): number {
+    let n = 0;
+    for (const p of this.list) if (p.alive && p.kind === kind) n++;
+    return n;
   }
 
   /** Any projectile in flight or fire burning? */
@@ -263,6 +276,7 @@ export class Projectiles {
   private stepThrown(p: Projectile, dt: number, world: ProjectileWorld): void {
     const molotov = p.kind === 'molotov';
     const stinger = p.kind === 'stinger';
+    const charge = p.kind === 'charge';
     p.vy -= THROW_GRAVITY * dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
@@ -276,6 +290,7 @@ export class Projectiles {
     if (wall) {
       if (molotov) return this.burst(p, world);
       if (stinger) return this.land(p, scratchPos.x, scratchPos.z, world);
+      if (charge) return this.layCharge(p, scratchPos.x, scratchPos.z, world);
       p.x = scratchPos.x;
       p.z = scratchPos.z;
       const vn = p.vx * wall.nx + p.vz * wall.nz;
@@ -285,10 +300,15 @@ export class Projectiles {
       }
     }
     if (molotov && world.bottleHits(p.x, p.z, p.y)) return this.burst(p, world);
+    if (charge && world.stickCharge?.(p.x, p.y, p.z, p.byPlayer)) {
+      p.alive = false;
+      return;
+    }
     // The ground.
     if (p.y <= GRENADE_RADIUS) {
       if (molotov) return this.burst(p, world);
       if (stinger) return this.land(p, p.x, p.z, world);
+      if (charge) return this.layCharge(p, p.x, p.z, world);
       p.y = GRENADE_RADIUS;
       if (p.vy < -1.5) {
         p.vy = -p.vy * BOUNCE;
@@ -320,6 +340,12 @@ export class Projectiles {
   private land(p: Projectile, x: number, z: number, world: ProjectileWorld): void {
     p.alive = false;
     world.lay(x, z, p.vx, p.vz, p.byPlayer);
+  }
+
+  /** A sticky charge down at (x, z) on no car: it lies there (the world lays it), the projectile's done. */
+  private layCharge(p: Projectile, x: number, z: number, world: ProjectileWorld): void {
+    p.alive = false;
+    world.layCharge?.(x, z, p.byPlayer);
   }
 
   private take(): Projectile | null {

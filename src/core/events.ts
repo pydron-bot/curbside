@@ -88,8 +88,21 @@ export type GameEvent =
    * 'rocket' is a rocket leaving the launcher. driveBy: out of a car window.
    */
   | { type: 'shot'; x: number; z: number; dirX: number; dirZ: number; weapon: WeaponKind | null; byPlayer: boolean; driveBy?: boolean }
-  /** A grenade, molotov, stinger or smoke grenade was thrown from (x, z) toward (toX, toZ). */
-  | { type: 'throw'; x: number; z: number; toX: number; toZ: number; weapon: 'grenade' | 'molotov' | 'stinger' | 'smoke'; byPlayer: boolean }
+  /** A grenade, molotov, stinger, smoke grenade or sticky charge was thrown from (x, z) toward (toX, toZ). */
+  | { type: 'throw'; x: number; z: number; toX: number; toZ: number; weapon: 'grenade' | 'molotov' | 'stinger' | 'smoke' | 'charge'; byPlayer: boolean }
+  /**
+   * A sticky charge (W3-B, systems/charges.ts) `stuck` to a car or `laid` on
+   * the road at (x, z); `full`: a throw refused, MAX_CHARGES are out already.
+   */
+  | { type: 'charge'; what: 'stuck' | 'laid' | 'full'; x: number; z: number; byPlayer: boolean }
+  /** DETONATE set `count` charges off; (x, z) is the player (the detonator's click). */
+  | { type: 'detonate'; x: number; z: number; count: number }
+  /**
+   * One charge went up at (x, z): `onCar` its car's explosion follows (an
+   * `explosion`, source 'vehicle'), else a grenade's. `gift`: it earns
+   * PARTING GIFT (systems/charges.ts partingGift).
+   */
+  | { type: 'chargeBlast'; x: number; z: number; onCar: boolean; gift: boolean; byPlayer: boolean }
   /** A smoke grenade (W3-B) started pouring at (x, z): a cloud of up to `radius` m, thick for `seconds` (systems/smoke.ts). */
   | { type: 'smoke'; x: number; z: number; radius: number; seconds: number; byPlayer: boolean }
   /** Someone in the smoke started coughing at (x, z) (an officer: `cop`). */
