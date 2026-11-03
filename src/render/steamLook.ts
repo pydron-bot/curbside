@@ -5,10 +5,10 @@
  * cyan, downtown's cyan, warm lamplight elsewhere). A handful of particles
  * at a time; nothing allocates per frame.
  */
-import { look } from './lookLive';
 import type { Rect } from '../world/city';
 import type { SteamVent } from '../world/steamVents';
 import type { Effects } from './effects';
+import { look } from './lookLive';
 import { inView } from './neonReflect';
 import { getQuality } from './quality';
 import { worldUniforms } from './shaderLib';

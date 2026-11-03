@@ -8,7 +8,6 @@
  * cast down the sun's ray onto the quay and the water. No draw call while
  * none is in view; no shadow pass of their own.
  */
-import { look as tuned } from './lookLive';
 import {
   BufferAttribute,
   BufferGeometry,
@@ -23,6 +22,7 @@ import {
   Vector3,
   type Scene,
 } from 'three';
+import { look as tuned } from './lookLive';
 import { gullPose, planGulls, type GullPose, type GullSpec } from '../systems/gulls';
 import type { Rect } from '../world/city';
 import { uploadRange } from './glowSprites';

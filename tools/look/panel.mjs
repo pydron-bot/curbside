@@ -64,6 +64,21 @@ await page.evaluate(() => (document.querySelector('.lookp-body').scrollTop = 1e4
 await shot('4-grade');
 await page.locator('.lookp-tab').click();
 await shot('5-folded');
+// Unfold; the night group at night, then the daytime group at noon.
+await page.locator('.lookp-tab').click();
+await page.locator('.lookp-gh', { hasText: 'SKY & LIGHT' }).click();
+await page.locator('.lookp-gh', { hasText: 'COLOUR GRADE' }).click();
+await page.locator('.lookp-gh', { hasText: 'NEON & NIGHT' }).click();
+await move('NEON STRENGTH', 1.6);
+await move('STREET LAMP COLOUR', 0.5);
+await page.evaluate(() => (document.querySelector('.lookp-body').scrollTop = 0));
+await shot('6-night');
+await page.locator('.lookp-gh', { hasText: 'NEON & NIGHT' }).click();
+await page.locator('.lookp-gh', { hasText: 'DAYTIME' }).click();
+await page.locator('.lookp-chip', { hasText: 'NOON' }).click();
+await move('CLOUD COVER', 1.8);
+await move('CLOUD SHADOW DARKNESS', 1.5);
+await shot('7-day');
 console.log('look', await page.evaluate(() => window.__ub.lookTuning.exportFile()));
 console.log('stored', await page.evaluate(() => localStorage.getItem('curbside.look')));
 await browser.close();

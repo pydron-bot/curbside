@@ -1,4 +1,3 @@
-import { look } from './lookLive';
 import { glintOf, type Glint } from './neonReflect';
 import { Color, type Object3D } from 'three';
 import type { BuildingPlan, RoofProp } from '../world/buildingPlans';
@@ -8,6 +7,7 @@ import type { Rect } from '../world/city';
 import type { Landmarks } from '../world/landmarkProps';
 import type { StreetProps } from '../world/streetProps';
 import { GLOW, type GlowSprites } from './glowSprites';
+import { look } from './lookLive';
 import { PropBatch, propUniforms } from './propBatch';
 import { PropModels } from './propModels';
 import { addStandIns } from './propStandIns';
