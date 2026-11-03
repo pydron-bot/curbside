@@ -22,7 +22,7 @@ import { SIGNAL_GLSL } from '../world/signals';
 import { uploadRange } from './glowSprites';
 import { VERTS_PER_ROW, chunkSize, chunksOf } from './propChunks';
 import { SURF, type PropModels } from './propModels';
-import { UB_COMMON, UB_LAMP_LIST, UB_STREET_LIGHT, after, lampList, replace, useWorldUniforms } from './shaderLib';
+import { UB_COMMON, UB_LAMP_LIST, UB_STREET_LIGHT, after, lampList, replace, useWorldUniforms, worldUniforms } from './shaderLib';
 
 /** Floats per static prop: matrix (16), aProp (4), aTint (3), aLamps (4). */
 const STRIDE = 27;
@@ -126,7 +126,7 @@ export class PropBatch {
     kinds: readonly string[],
     /** Props in view at most (the instance buffers hold this many props' worth of chunks). */
     readonly capacity: number,
-    opts: { shadows?: boolean; receiveShadows?: boolean } = {},
+    opts: { shadows?: boolean; receiveShadows?: boolean; sway?: boolean } = {},
   ) {
     this.kinds = kinds;
     kinds.forEach((k, i) => this.index.set(k, i));
@@ -136,7 +136,8 @@ export class PropBatch {
     this.kChunks = new Int32Array(n);
     this.kRadius = new Float32Array(n);
     this.kReach = new Float32Array(n);
-    this.mesh = new InstancedMesh(new BufferGeometry(), propMaterial(this.verts), 1);
+    const sway: IUniform<number> = { value: opts.sway ? 1 : 0 };
+    this.mesh = new InstancedMesh(new BufferGeometry(), propMaterial(this.verts, sway), 1);
     this.mesh.name = `props_${name}`;
     this.allocate(1);
     this.mesh.count = 0;
@@ -144,7 +145,7 @@ export class PropBatch {
     this.mesh.castShadow = opts.shadows ?? true;
     this.mesh.receiveShadow = opts.receiveShadows ?? true;
     const depth = new MeshDepthMaterial({ depthPacking: RGBADepthPacking });
-    depth.onBeforeCompile = (shader) => patchDepth(shader, this.verts);
+    depth.onBeforeCompile = (shader) => patchDepth(shader, this.verts, sway);
     depth.customProgramCacheKey = () => 'curbside-propfamily-pull-depth';
     this.mesh.customDepthMaterial = depth;
   }
@@ -524,11 +525,83 @@ const ROOF_CUT = /* glsl */ `
     return;
   }`;
 
-function patchDepth(shader: { vertexShader: string; uniforms: Record<string, IUniform> }, verts: IUniform<DataTexture>): void {
+/**
+ * Trees in the wind (a family made with `sway`; uniform 0 elsewhere, so one
+ * program still serves every family): the whole model bends downwind, more
+ * the higher a vertex is (quadratic, so trunks curve and canopies swing),
+ * in gusts that roll across the city; leaves (green vertices) flutter on top.
+ * The wind blows the same way in the world whichever way a tree is turned.
+ */
+const SWAY_DECLS = /* glsl */ `
+uniform float uSway;
+uniform float uTime;
+uniform float uWetness;`;
+const SWAY = /* glsl */ `
+  if (uSway > 0.5) {
+    vec2 tp = instanceMatrix[3].xz;
+    float ph = tp.x * 0.045 + tp.y * 0.03;
+    float gust = 0.55 + 0.45 * sin(uTime * 0.21 - ph * 0.35) * sin(uTime * 0.13 + ph * 0.2);
+    float bend = (0.35 + 0.65 * sin(uTime * 1.25 + ph) * 0.8 + 0.2 * sin(uTime * 2.7 + ph * 1.9)) * gust * (1.0 + 0.7 * uWetness);
+    float hgt = max(pPos.y - 1.0, 0.0);
+    vec3 windL = normalize(transpose(mat3(instanceMatrix)) * vec3(0.8, 0.0, 0.6));
+    transformed += windL * (hgt * hgt * 0.011 * bend);
+    transformed.y -= hgt * hgt * 0.0012 * abs(bend);
+    if (pLeaf > 0.5) transformed += vec3(sin(uTime * 6.3 + pPos.x * 3.1 + ph), 0.0, cos(uTime * 5.7 + pPos.z * 2.9 + ph)) * 0.035 * gust;
+  }`;
+
+/** Leaves: the models' green vertices (canopies and fronds; trunks are brown). */
+const LEAF = /* glsl */ `
+  uvec4 tl = texelFetch(uPropVerts, pt + ivec2(1, 0), 0);
+  vec2 lc0 = unpackHalf2x16(tl.y);
+  vec2 lc1 = unpackHalf2x16(tl.z);
+  float pLeaf = step(lc0.y * 1.08, lc1.x) * step(0.02, lc1.x);`;
+
+/**
+ * Dappled shade: the canopies' shadow (sun or moon) gets holes where the
+ * light gets through the leaves, a noise on the ground followed back up the
+ * light's ray (so it lines up through every layer of a canopy) that moves
+ * with the sway, so pools of light flicker on the grass under a tree.
+ */
+const DAPPLE = /* glsl */ `void main() {
+  if (uSway > 0.5 && vDapLeaf > 0.5) {
+    // Down the light's ray to the ground, so the holes line up through every layer of leaves.
+    vec2 dq = (vDapWorld.xz - uSunDir.xz / max(uSunDir.y, 0.25) * vDapWorld.y) * 1.3;
+    vec2 di = floor(dq);
+    vec2 df = fract(dq);
+    df = df * df * (3.0 - 2.0 * df);
+    float h00 = fract(sin(dot(di, vec2(127.1, 311.7))) * 43758.5453);
+    float h10 = fract(sin(dot(di + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+    float h01 = fract(sin(dot(di + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+    float h11 = fract(sin(dot(di + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+    if (mix(mix(h00, h10, df.x), mix(h01, h11, df.x), df.y) > 0.6) discard;
+  }`;
+
+function patchDepth(
+  shader: { vertexShader: string; fragmentShader: string; uniforms: Record<string, IUniform> },
+  verts: IUniform<DataTexture>,
+  sway: IUniform<number>,
+): void {
   shader.uniforms.uPropVerts = verts;
-  shader.vertexShader = after(shader.vertexShader, '#include <common>', PULL_DECLS);
-  shader.vertexShader = replace(shader.vertexShader, 'void main() {', PULL);
-  shader.vertexShader = replace(shader.vertexShader, '#include <begin_vertex>', 'vec3 transformed = pPos;');
+  shader.uniforms.uSway = sway;
+  shader.uniforms.uTime = worldUniforms.uTime;
+  shader.uniforms.uWetness = worldUniforms.uWetness;
+  shader.vertexShader = after(shader.vertexShader, '#include <common>', `${PULL_DECLS}${SWAY_DECLS}
+    varying vec3 vDapWorld;
+    varying float vDapLeaf;`);
+  shader.vertexShader = replace(shader.vertexShader, 'void main() {', PULL + LEAF);
+  shader.vertexShader = replace(
+    shader.vertexShader,
+    '#include <begin_vertex>',
+    `vec3 transformed = pPos;${SWAY}
+    vDapWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
+    vDapLeaf = pLeaf;`,
+  );
+  shader.uniforms.uSunDir = worldUniforms.uSunDir;
+  shader.fragmentShader = after(shader.fragmentShader, '#include <common>', `uniform float uSway;
+    uniform vec3 uSunDir;
+    varying vec3 vDapWorld;
+    varying float vDapLeaf;`);
+  shader.fragmentShader = replace(shader.fragmentShader, 'void main() {', DAPPLE);
 }
 
 /**
@@ -539,10 +612,11 @@ function patchDepth(shader: { vertexShader: string; uniforms: Record<string, IUn
  * strobes flashing, a ramp deck painted with chevrons. One program for
  * every family (each its own vertex texture).
  */
-function propMaterial(verts: IUniform<DataTexture>): MeshLambertMaterial {
+function propMaterial(verts: IUniform<DataTexture>, sway: IUniform<number>): MeshLambertMaterial {
   const mat = new MeshLambertMaterial();
   mat.onBeforeCompile = (shader) => {
     useWorldUniforms(shader);
+    shader.uniforms.uSway = sway;
     shader.uniforms.uSignalTime = propUniforms.uSignalTime;
     shader.uniforms.uFocus = propUniforms.uFocus;
     shader.uniforms.uPropVerts = verts;
@@ -554,6 +628,8 @@ function propMaterial(verts: IUniform<DataTexture>): MeshLambertMaterial {
       vec3 pColor;
       attribute vec3 aTint;
       attribute vec4 aLamps;
+      uniform float uSway;
+      uniform float uWetness;
       uniform float uTime;
       uniform float uNight;
       uniform float uSignalTime;
@@ -567,9 +643,9 @@ function propMaterial(verts: IUniform<DataTexture>): MeshLambertMaterial {
       flat varying vec4 vPropLamps;
       ${SIGNAL_GLSL}`,
     );
-    shader.vertexShader = replace(shader.vertexShader, 'void main() {', PULL + PULL_LIT + ROOF_CUT);
+    shader.vertexShader = replace(shader.vertexShader, 'void main() {', PULL + PULL_LIT + LEAF + ROOF_CUT);
     shader.vertexShader = replace(shader.vertexShader, '#include <beginnormal_vertex>', 'vec3 objectNormal = pNormal;');
-    shader.vertexShader = replace(shader.vertexShader, '#include <begin_vertex>', 'vec3 transformed = pPos;');
+    shader.vertexShader = replace(shader.vertexShader, '#include <begin_vertex>', `vec3 transformed = pPos;${SWAY}`);
     shader.vertexShader = after(
       shader.vertexShader,
       '#include <project_vertex>',

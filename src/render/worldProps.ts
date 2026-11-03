@@ -107,7 +107,7 @@ export class WorldProps {
     1100,
   );
   readonly roofs = new PropBatch('roofs', ['ac_unit', 'vent', 'water_tank', 'satellite_dish', 'rooftop_door', 'antenna'], 1400);
-  readonly trees = new PropBatch('trees', ['tree_round', 'tree_tall', 'palm'], 400, { receiveShadows: false });
+  readonly trees = new PropBatch('trees', ['tree_round', 'tree_tall', 'palm'], 400, { receiveShadows: false, sway: true });
   readonly landmarks = new PropBatch('landmarks', ['spray_booth', 'export_bay', 'police_sign', 'safehouse_door', 'start_gantry', 'ramp', 'kicker'], 96);
   /** Dynamic: refilled every frame by whoever draws pickups, packages, gems and roadblocks. */
   readonly things = new PropBatch(
