@@ -2775,6 +2775,21 @@ the first time it comes into view.
     - *WASTED / BUSTED*: the logo's gradient fill, offset neon outline and
       chromatic ghost, a VHS glitch on landing and every 4.2 s, tape
       scanlines; still with reduced motion.
+  - *Sunny side (0.25.0)*, the daytime:
+    - *Cloud shadows* (`shaderLib` `ubCloudShade`): drifting noise patches
+      ~30-50 m multiply the base colour of ground, buildings, cars, props and
+      people by day (emissive stays bright); off at night, mostly off in rain.
+    - *Rooftop pools* (`BuildingPlan.roofPool`, own stream, tested): flat
+      roofs downtown, residential, arts; deck, loungers and water
+      (`NEON_ANIM.water`: caustics by day, underwater lights at night).
+    - *Sun glints* (`ubGlint`, `uSunDir`): car paint and glass, metal roof
+      panels and skylights, pool ripples; walls get none (vertical glass
+      can't send a high sun up to a camera above).
+    - *Street art by district*: crossings (`ground.ts` `gDistrict` from the
+      block texture), roof murals (arts), logos (downtown), seven-segment bay
+      numbers (docks), basketball courts in half the parks.
+    - *Flyovers* (`render/flyovers.ts`, path tested): a plane or blimp every
+      70-140 s by day, drawn as a shadow in `ubCloudShade` from `uFlyer`.
   - *HUD*: a pink-cyan-violet radar rim, violet-navy map streets, a hot
     pink health bar, a cyan healthy-car ring. *Settings → Extras → Neon
     filter* (`screenFilter`, off by default): the title's edge light and

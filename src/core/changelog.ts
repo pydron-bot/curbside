@@ -15,6 +15,19 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.25.0',
+    date: '2026-11-03',
+    title: 'Sunny side',
+    notes: [
+      'Cloud shadows drift across the city on sunny days.',
+      'Rooftop pools: turquoise water with sunlight rippling on it, and underwater lights at night.',
+      'The sun glints off cars as they turn, off metal roofs and skylights, and off the pools.',
+      'Each part of town paints its crossings its own way: rainbow in the arts quarter, white and cyan downtown, hazard stripes at the docks, brick red in the old town, pastel blue in the suburbs.',
+      'Seen from above: murals on arts-quarter roofs, company logos on downtown\'s, giant bay numbers on the docks\' sheds, and basketball courts in the parks.',
+      'Now and then a plane or a blimp passes over, its shadow sweeping across the streets.',
+    ],
+  },
+  {
     version: '0.24.0',
     date: '2026-11-03',
     title: 'After hours',

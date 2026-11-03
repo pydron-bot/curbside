@@ -70,6 +70,14 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
+**0.25.0 "Sunny side" (2026-11-03, branch `claude/daytime-1`):** cloud
+shadows, rooftop pools, sun glints, street art by district (crossings, roof
+murals/logos/bay numbers, park courts), plane and blimp shadow flyovers
+(README → *Look → Neon city → Sunny side*). Still to come from the daytime
+list: swaying trees, park fountains and sprinklers, morning mist, painted
+billboards, seagulls at the docks. **For the device pass:** are cloud
+shadows too dark on the phone; do the glints read.
+
 **0.24.0 "After hours" (2026-11-03, branch `claude/neon-city-3`, stacked on
 `claude/neon-city-2` / 0.23.0; not merged, at the owner's request):** living
 windows, rain ripples/spray/wet paint, midnight fireworks downtown,
