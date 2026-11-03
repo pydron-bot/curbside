@@ -243,6 +243,7 @@ export class FxDirector {
     this.weather.step(realDt);
     const rain = this.weather.rain;
     worldUniforms.uWetness.value = this.weather.wetness;
+    worldUniforms.uRain.value = rain;
     d.look.exposureBoost = (1 + this.flash) * (1 - 0.1 * rain);
     d.audio?.setRain(playing ? rain : rain * 0.5);
     d.renderer.getDrawingBufferSize(this.size);

@@ -24,6 +24,8 @@ export const worldUniforms = {
   uLate: { value: 0 },
   /** 0 dry .. 1 soaked: darker surfaces and puddles (rain hook). */
   uWetness: { value: 0 },
+  /** How hard it's raining now, 0..1 (ripples in the puddles; wetness lags it). */
+  uRain: { value: 0 },
   /** Street lamp colour (linear). */
   uLampColor: { value: new Color('#ffb866') },
   /** Sky colour (linear), for faked reflections in glass and puddles. */
@@ -45,6 +47,7 @@ uniform float uTime;
 uniform float uNight;
 uniform float uLate;
 uniform float uWetness;
+uniform float uRain;
 uniform vec3 uLampColor;
 uniform vec3 uSkyTint;
 uniform vec4 uSirens[4];

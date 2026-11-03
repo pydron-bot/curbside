@@ -9,6 +9,7 @@
  * (fxCarBody.ts). The decision logic (skidAmount, driftTint, isGrass) is
  * pure and unit-tested.
  */
+import { worldUniforms } from './shaderLib';
 import { VEHICLE_SPECS, forwardSpeed, lateralSpeed, speed, type VehicleArchetype, type VehicleControls } from '../entities/vehicle';
 import type { Vehicle } from '../game/population';
 import { damageStage } from '../systems/damage';
@@ -210,6 +211,8 @@ interface CarFx {
   smokeDebt: number;
   fireDebt: number;
   dustDebt: number;
+  /** Spray thrown up off a wet road, owed. */
+  sprayDebt: number;
   /** Accel along the car (from the body's velocity tracking), m/s². */
   accel: number;
   svF: number;
@@ -354,6 +357,21 @@ export class DrivingFx {
           }
         }
       }
+      // Wet road: spray off the rear tyres, more the faster and wetter (worldUniforms.uWetness).
+      const wet = worldUniforms.uWetness.value;
+      if (wet > 0.15 && sp > 6) {
+        rec.sprayDebt += dt * Math.min(26, (sp - 6) * 1.1) * wet * scale;
+        while (rec.sprayDebt >= 1) {
+          rec.sprayDebt -= 1;
+          const side = Math.random() < 0.5;
+          const i = this.fx.puff(side ? lx : qx, 0.25, side ? lz : qz, 0.6, 0.35, 1.6 + sp * 0.05, 0.32, -s.vx * 0.22, 0.8, -s.vz * 0.22, 0.6);
+          if (i >= 0) {
+            this.fx.soft.r[i] = 0.62;
+            this.fx.soft.g[i] = 0.67;
+            this.fx.soft.b[i] = 0.74;
+          }
+        }
+      } else rec.sprayDebt = 0;
       if (flat > 0 && !streak && sp > 6 && Math.random() < dt * RIM_SPARKS * scale) {
         const side = Math.random() < 0.5;
         this.fx.sparks(side ? lx : qx, 0.15, side ? lz : qz, 2, 2, 5, -s.vx / sp, -s.vz / sp);
@@ -491,7 +509,7 @@ export class DrivingFx {
   private record(v: Vehicle): CarFx {
     let rec = this.cars.get(v);
     if (!rec) {
-      rec = { body: new CarBody(), left: new SkidTrail(), right: new SkidTrail(), smokeDebt: 0, fireDebt: 0, dustDebt: 0, accel: 0, svF: 0, rim: -1 };
+      rec = { body: new CarBody(), left: new SkidTrail(), right: new SkidTrail(), smokeDebt: 0, fireDebt: 0, dustDebt: 0, sprayDebt: 0, accel: 0, svF: 0, rim: -1 };
       this.cars.set(v, rec);
     }
     return rec;

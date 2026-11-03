@@ -430,6 +430,7 @@ function carMaterial(): MeshStandardMaterial {
       attribute float aSiren;
       uniform float uTime;
       uniform float uNight;
+      uniform float uWetness;
       varying vec3 vCarColor;
       varying vec3 vCarEmissive;
       varying vec3 vCarSurf;
@@ -470,6 +471,12 @@ function carMaterial(): MeshStandardMaterial {
       else if (kind == 5) surf = vec3(0.5, 0.3, 0.35);
       else if (kind == 6) { surf = vec3(0.25, 0.0, 0.6); emis = vec3(0.1, 0.3, 1.0) * aSiren * blink * 4.0; }
       else if (kind == 7) { surf = vec3(0.25, 0.0, 0.6); emis = vec3(1.0, 0.08, 0.05) * aSiren * (1.0 - blink) * 4.0; }
+      // Wet: glossier and a touch darker, paint and glass reflecting more (not the tyres).
+      if (kind != 4) {
+        surf.x *= 1.0 - 0.55 * uWetness;
+        surf.z *= 1.0 + 0.6 * uWetness;
+        col *= 1.0 - 0.12 * uWetness;
+      }
       vCarColor = mix(col, vec3(0.012, 0.011, 0.01), charred);
       vCarEmissive = emis * (1.0 - charred);
       vCarSurf = mix(surf, vec3(0.95, 0.0, 0.03), charred);

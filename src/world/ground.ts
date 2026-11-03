@@ -491,6 +491,15 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
     float puddle = smoothstep(0.74 - 0.12 * uWetness, 0.82 - 0.12 * uWetness, ubFbm(w * 0.35 + 20.0)) * uWetness * gutter;
     c *= 1.0 - 0.35 * uWetness - 0.45 * puddle;
     glow += puddle * (uSkyTint * 0.02 * (1.0 - uNight) + vec3(0.1, 0.12, 0.16) * 0.06 * uNight);
+    // Raindrops ringing out across the puddles: one ripple per 0.9 m cell, each on its own beat.
+    if (uRain > 0.02 && puddle > 0.01) {
+      vec2 cell = floor(w / 0.9);
+      vec2 at = (cell + 0.25 + 0.5 * vec2(ubHash(cell), ubHash(cell + 7.0))) * 0.9;
+      float t = fract(uTime * 0.9 + ubHash(cell + 3.0));
+      float ring = 1.0 - smoothstep(0.0, 0.035, abs(length(w - at) - t * 0.42));
+      float ripple = ring * (1.0 - t) * step(ubHash(cell + 11.0), uRain);
+      glow += puddle * ripple * (uSkyTint * 0.06 * (1.0 - uNight) + (vec3(0.25, 0.3, 0.4) * 0.2 + uLampColor * 0.08) * uNight);
+    }
   }
   return c;
 }
