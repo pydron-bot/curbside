@@ -63,6 +63,9 @@ export interface Rgb {
 
 const CHARCOAL: Rgb = { r: 0.05, g: 0.045, b: 0.04 };
 
+/** Blasts whose flash lights the walls at once (shaderLib uBlasts). */
+const BLAST_SLOTS = 2;
+
 /**
  * Every particle effect in the game, in a handful of draw calls:
  *  - hot: fire, sparks, embers, flashes, tracers, speed streaks (light-like:
@@ -81,6 +84,10 @@ const CHARCOAL: Rgb = { r: 0.05, g: 0.045, b: 0.04 };
  */
 export class Effects {
   readonly hot: ParticlePool;
+  /** The last blasts' flashes on the walls (x, z, strength): shaderLib uBlasts. */
+  private readonly blastX = new Float32Array(BLAST_SLOTS);
+  private readonly blastZ = new Float32Array(BLAST_SLOTS);
+  private readonly blastK = new Float32Array(BLAST_SLOTS);
   readonly soft: ParticlePool;
   readonly decals = new GroundDecals();
   readonly debris = new Debris(128);
@@ -273,7 +280,15 @@ export class Effects {
       this.light(x, 0.12, z, 2.5, 12, 2.1 * glow, 1.25 * glow, 0.5 * glow, 0.34, GLOW.disc);
       this.light(x, 0.1, z, 1.5, 9.5, 1.9 * glow, 1.15 * glow, 0.55 * glow, 0.38, GLOW.ring);
       this.light(x, 0.1, z, 1, 11.5, 0.5 * glow, 0.36 * glow, 0.24 * glow, 0.45, GLOW.ring);
+      // The shockwave proper: a crisp, hot-white ring racing out past the blast radius.
+      this.light(x, 0.14, z, 2, 21, 1.7 * glow, 1.5 * glow, 1.25 * glow, 0.3, GLOW.ring);
     }
+    // A flash on the walls and road round it (shaderLib uBlasts): into the dimmest slot.
+    let slot = 0;
+    for (let k = 1; k < BLAST_SLOTS; k++) if (this.blastK[k] < this.blastK[slot]) slot = k;
+    this.blastX[slot] = x;
+    this.blastZ[slot] = z;
+    this.blastK[slot] = Math.max(this.blastK[slot], glow);
     // A brief white pop high over the car (draws over its roof); once per chain, or they stack to white.
     if (this.recentBooms < 1.5) this.flare(x, 2.8, z, 4.6, 0.12, 2, 1.7, 1.2);
 
@@ -833,6 +848,13 @@ export class Effects {
     amb.g = 1 - 0.7 * night;
     amb.b = 1 - 0.6 * night;
     this.recentBooms = Math.max(0, this.recentBooms - dt * 4);
+    // Blast flashes on the walls fade in a fifth of a second.
+    const blasts = worldUniforms.uBlasts.value;
+    for (let k = 0; k < BLAST_SLOTS; k++) {
+      this.blastK[k] *= Math.exp(-dt / 0.2);
+      if (this.blastK[k] < 0.01) this.blastK[k] = 0;
+      blasts[k].set(this.blastX[k], this.blastZ[k], this.blastK[k], 0);
+    }
     this.hot.step(dt);
     this.soft.step(dt);
     this.debris.update(dt);

@@ -32,6 +32,8 @@ export const worldUniforms = {
   uSkyTint: { value: new Color('#bcd2ff') },
   /** Up to four police light bars near the view (x, z, strength 0..1, unused), washing walls and road (CarBatch sets them). */
   uSirens: { value: [new Vector4(), new Vector4(), new Vector4(), new Vector4()] },
+  /** The last two explosions' flashes (x, z, strength fading from 1, unused), lighting walls and road (Effects sets them). */
+  uBlasts: { value: [new Vector4(), new Vector4()] },
 } satisfies Record<string, IUniform>;
 
 /** Add the shared world uniforms to a shader being compiled. */
@@ -51,6 +53,7 @@ uniform float uRain;
 uniform vec3 uLampColor;
 uniform vec3 uSkyTint;
 uniform vec4 uSirens[4];
+uniform vec4 uBlasts[2];
 
 const float UB_HALF = ${f(HALF_EXTENT)};
 const float UB_BLOCK = ${f(BLOCK_SIZE)};
@@ -140,6 +143,21 @@ vec3 ubSirenWash(vec3 wp, vec3 n) {
     sum += ndl * reach * reach * s.z * (14.0 / (d2 + 10.0));
   }
   return col * sum * strobe * (0.3 + 0.7 * uNight);
+}
+
+/** An explosion's flash on what's round it (uBlasts): hot orange-white, out to about 30 m, gone in a fifth of a second. */
+vec3 ubBlastFlash(vec3 wp, vec3 n) {
+  float sum = 0.0;
+  for (int i = 0; i < 2; i++) {
+    vec4 b = uBlasts[i];
+    if (b.z <= 0.0) continue;
+    vec3 L = vec3(b.x, 2.2, b.y) - wp;
+    float d2 = dot(L, L);
+    float ndl = max(dot(n, L) * inversesqrt(d2 + 1e-4), 0.0);
+    float reach = max(1.0 - d2 / 900.0, 0.0);
+    sum += ndl * reach * b.z * (40.0 / (d2 + 12.0));
+  }
+  return vec3(1.0, 0.62, 0.3) * sum;
 }
 
 /** Irradiance from nearby street lamps at world position wp with unit normal n (0 by day). */
