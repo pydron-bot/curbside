@@ -35,7 +35,8 @@ import {
   moveSpot,
   nodePoint,
   panBy,
-  pickAt,
+  picksAt,
+  nextPick,
   placeProp,
   removeProp,
   removeSpot,
@@ -141,6 +142,8 @@ export class MapEditor implements Panel {
   private placing: StreetPropKind | null = null;
   private drag: Drag | null = null;
   private hover: Point | null = null;
+  /** Where the last click landed, world m (a click again there steps through the stack). */
+  private lastClick: Point | null = null;
   private readonly view: MapView = { cx: 0, cz: 0, scale: 1, width: 1, height: 1 };
   private fitted = false;
   private dpr = 1;
@@ -722,8 +725,9 @@ export class MapEditor implements Panel {
     // A press on the selected spot or added prop drags it; anywhere else pans.
     if (e.button === 0 && !this.placing && this.preview && this.selection) {
       const w = toWorld(this.view, sx, sy);
-      const hit = pickAt(w, this.preview.anchors.filter((a) => anchorShown(a, this.view.scale)), this.preview.props, this.view.scale);
-      if (hit && sameSelection(hit, this.selection) && this.draggable(hit)) {
+      const sel = this.selection;
+      const stack = picksAt(w, this.preview.anchors.filter((a) => anchorShown(a, this.view.scale)), this.preview.props, this.view.scale);
+      if (stack.some((x) => sameSelection(x, sel)) && this.draggable(sel)) {
         this.drag = { mode: 'move', id: e.pointerId, x: sx, y: sy, moved: false, at: w };
         return;
       }
@@ -788,10 +792,16 @@ export class MapEditor implements Panel {
       this.redraw();
       return;
     }
-    // Removed spots can be picked too (to put them back).
-    const hit = pickAt(w, [...p.anchors.filter((a) => anchorShown(a, this.view.scale)), ...p.removed], p.props, this.view.scale);
+    // Removed spots can be picked too (to put them back). A click again where the last one landed steps through what's stacked there.
+    const stack = picksAt(w, [...p.anchors.filter((a) => anchorShown(a, this.view.scale)), ...p.removed], p.props, this.view.scale);
+    const last = this.lastClick;
+    const again = last !== null && Math.hypot(w.x - last.x, w.z - last.z) * this.view.scale <= CLICK_SLOP * 2;
+    this.lastClick = w;
+    const hit = again ? nextPick(stack, this.selection) : (stack[0] ?? null);
     this.d.audio.ui('click');
     this.select(hit);
+    const n = stack.findIndex((x) => sameSelection(x, hit));
+    if (stack.length > 1 && n >= 0) this.say(`${n + 1} OF ${stack.length} HERE · CLICK AGAIN FOR THE NEXT`);
   }
 
   private wheel(e: WheelEvent): void {

@@ -20,6 +20,8 @@ import {
   moveSpot,
   panBy,
   pickAt,
+  picksAt,
+  nextPick,
   anchorShown,
   PROPS_FROM_SCALE,
   placeProp,
@@ -238,6 +240,20 @@ describe('picking', () => {
     const blk = pickAt({ x: 160, z: 160 }, [], [], 1);
     expect(blk?.kind).toBe('block');
     expect(selectionCentre(blk!, [])).toEqual({ x: 160, z: 160 });
+  });
+  it('clicking again steps through what is stacked at a point, round to the top', () => {
+    // The safehouse's door has a story job's spot on it, and both stand on a block.
+    const safe = p.anchors.find((a) => a.id === 'safehouse')!.points[0];
+    const stack = picksAt(safe, p.anchors, p.props, 2);
+    expect(stack[0]).toEqual({ kind: 'anchor', id: 'safehouse' });
+    expect(stack.length).toBeGreaterThan(2);
+    expect(stack.at(-1)?.kind).toBe('block');
+    expect(nextPick(stack, null)).toEqual(stack[0]);
+    expect(nextPick(stack, stack[0])).toEqual(stack[1]);
+    expect(nextPick(stack, stack.at(-1)!)).toEqual(stack[0]);
+    // Something not in the stack: the top.
+    expect(nextPick(stack, { kind: 'junction', ix: 9, iz: 9 })).toEqual(stack[0]);
+    expect(nextPick([], stack[0])).toBeNull();
   });
 });
 

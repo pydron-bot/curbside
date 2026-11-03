@@ -378,45 +378,51 @@ export type Selection =
 export const HIT_PX = 9;
 
 /**
- * What's at world point p: an anchor's icon (a spot the map edits first), then (zoomed in) a street prop,
- * then the road (junction or segment), then the block. `scale` is the
- * view's px per m (hits are in screen px).
+ * Everything at world point p, nearest first: anchors' icons (a spot the map
+ * edits first), then (zoomed in) street props, then the road (junction or
+ * segment) or the block under them. `scale` is the view's px per m (hits
+ * are in screen px). Clicking again in the same place steps down this
+ * list (nextPick), so stacked icons can all be reached.
  */
-export function pickAt(p: Point, anchors: readonly Anchor[], props: readonly PropRef[], scale: number): Selection | null {
+export function picksAt(p: Point, anchors: readonly Anchor[], props: readonly PropRef[], scale: number): Selection[] {
   const reach = HIT_PX / scale;
-  let best: Selection | null = null;
-  // Ties go to the first listed (strict <): the safehouse before a job's spot at its door.
-  let bestD = reach * reach + 1e-9;
-  for (const a of anchors) {
+  const out: Selection[] = [];
+  const near: Array<{ d: number; i: number; sel: Selection }> = [];
+  anchors.forEach((a, i) => {
     // A spot the map can edit wins over a job's spot drawn on top of it (the safehouse's door has a job on it).
     const weight = spotRule(a.id).movable ? 0.25 : 1;
-    for (const q of a.points) {
-      const d = ((q.x - p.x) ** 2 + (q.z - p.z) ** 2) * weight;
-      if (d < bestD) {
-        bestD = d;
-        best = { kind: 'anchor', id: a.id };
-      }
-    }
-  }
-  if (best) return best;
+    let d = Infinity;
+    for (const q of a.points) d = Math.min(d, ((q.x - p.x) ** 2 + (q.z - p.z) ** 2) * weight);
+    if (d < reach * reach + 1e-9) near.push({ d, i, sel: { kind: 'anchor', id: a.id } });
+  });
+  // Ties go to the first listed: the safehouse before a job's spot at its door.
+  near.sort((x, y) => x.d - y.d || x.i - y.i);
+  out.push(...near.map((n) => n.sel));
   if (scale >= PROPS_FROM_SCALE) {
-    const near = Math.min(reach, 2.5) ** 2;
-    let bestProp: PropRef | null = null;
-    let d0 = near;
-    for (const q of props) {
-      const d = (q.x - p.x) ** 2 + (q.z - p.z) ** 2;
-      if (d <= d0) {
-        d0 = d;
-        bestProp = q;
-      }
-    }
-    if (bestProp) return { kind: 'prop', prop: bestProp };
+    const r2 = Math.min(reach, 2.5) ** 2;
+    const hits = props.map((q) => ({ q, d: (q.x - p.x) ** 2 + (q.z - p.z) ** 2 })).filter((h) => h.d <= r2);
+    hits.sort((x, y) => x.d - y.d);
+    for (const h of hits) out.push({ kind: 'prop', prop: h.q });
   }
   const r = roadAt(p.x, p.z);
-  if (r?.kind === 'junction') return { kind: 'junction', ix: r.ix, iz: r.iz };
-  if (r?.kind === 'segment') return { kind: 'segment', a: r.a, b: r.b };
-  const b = blockAt(p.x, p.z);
-  return b ? { kind: 'block', bx: b.bx, bz: b.bz } : null;
+  if (r?.kind === 'junction') out.push({ kind: 'junction', ix: r.ix, iz: r.iz });
+  else if (r?.kind === 'segment') out.push({ kind: 'segment', a: r.a, b: r.b });
+  else {
+    const b = blockAt(p.x, p.z);
+    if (b) out.push({ kind: 'block', bx: b.bx, bz: b.bz });
+  }
+  return out;
+}
+
+/** What's at world point p: the top of picksAt's list. */
+export function pickAt(p: Point, anchors: readonly Anchor[], props: readonly PropRef[], scale: number): Selection | null {
+  return picksAt(p, anchors, props, scale)[0] ?? null;
+}
+
+/** A click again where the last one landed: the next thing down the stack after `current` (round to the top), else the top. */
+export function nextPick(stack: readonly Selection[], current: Selection | null): Selection | null {
+  const i = current ? stack.findIndex((s) => sameSelection(s, current)) : -1;
+  return stack.length === 0 ? null : stack[(i + 1) % stack.length];
 }
 
 /** The place a selection stands for in dependentsOf (blocks, roads and junctions; an anchor is not a place). */
