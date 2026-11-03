@@ -48,7 +48,7 @@ export class GlowSprites {
   /** Quad area added this frame, m² (the fill estimate). */
   private areaNow = 0;
 
-  constructor(private readonly capacity = 384) {
+  constructor(private readonly capacity = 512) {
     const geo = new PlaneGeometry(1, 1);
     this.colour = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(DynamicDrawUsage);
     this.shape = new InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(DynamicDrawUsage);

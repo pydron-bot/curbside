@@ -23,6 +23,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { VEHICLE_SPECS, type VehicleArchetype } from '../entities/vehicle';
 import type { Rect } from '../world/city';
 import { createCarMesh, placeholderCarGeometry, type CarMesh } from './carMesh';
+import { pickUnderglow, trailLength } from './carNeon';
 import type { ContactShadows } from './contactShadows';
 import { BEAM_LAMP, GLOW, uploadRange, type GlowSprites } from './glowSprites';
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from './shaderLib';
@@ -81,6 +82,8 @@ export class CarBatch {
   /** The same meshes as a list, for allocation-free iteration every frame. */
   private readonly meshList: ArchetypeMesh[] = [];
   private readonly records: CarRecord[] = [];
+  /** Rolls taken so far (roll()). */
+  private rolls = 0;
   /** Cars shown, and drawn, at the last flush (diagnostics). */
   live = 0;
   drawn = 0;
@@ -150,6 +153,7 @@ export class CarBatch {
   /** A new car (its root goes in the scene; place it like any object). */
   create(archetype: VehicleArchetype, paint: ColorRepresentation): CarMesh {
     const car = createCarMesh(archetype, new Color(paint));
+    car.underglow = pickUnderglow(archetype, this.roll(), this.roll());
     this.records.push({ car, x: 0, z: 0, speed: 0, brake: 0, idle: LIGHTS_LINGER, tracked: false });
     return car;
   }
@@ -158,6 +162,15 @@ export class CarBatch {
   restyle(car: CarMesh, archetype: VehicleArchetype, paint: ColorRepresentation): void {
     car.archetype = archetype;
     car.paint.set(paint);
+    car.underglow = pickUnderglow(archetype, this.roll(), this.roll());
+  }
+
+  /** A uniform roll in [0, 1) for the cars' looks: a hashed counter, so a session's cars repeat run to run. */
+  private roll(): number {
+    let h = (this.rolls++ * 0x9e3779b1) >>> 0;
+    h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+    h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
   }
 
   /**
@@ -230,6 +243,7 @@ export class CarBatch {
       const lift = Math.max(0, e[13]);
       shadows.add(x + sin * mid, z + cos * mid, heading, d.halfWidth * 0.98, (d.front + d.rear) / 2, 0.45 + lift * 0.25, 0.62 / (1 + lift * 0.35));
       this.addLights(glows, car, rec, d, x, z, sin, cos, heading, night * lights, time);
+      if (car.underglow >= 0 && !car.charred) this.addUnderglow(glows, car.underglow, d, x, z, sin, cos, heading, mid, night, time);
     }
     for (let k = 0; k < list.length; k++) {
       const am = list[k];
@@ -266,6 +280,16 @@ export class CarBatch {
     rec.tracked = true;
   }
 
+  /** Neon under the body: faint by day, bright at night, a slow breath. */
+  private addUnderglow(glows: GlowSprites, hex: number, d: CarDims, x: number, z: number, sin: number, cos: number, heading: number, mid: number, night: number, time: number): void {
+    const k = (0.3 + 0.7 * night) * 0.9 * (1 + 0.08 * Math.sin(time * 2.6 + x * 0.1));
+    const r = (((hex >> 16) & 255) / 255) ** 2.2 * k;
+    const g = (((hex >> 8) & 255) / 255) ** 2.2 * k;
+    const b = ((hex & 255) / 255) ** 2.2 * k;
+    // An oval pool well past the body's outline: the body hides the middle, the rim shows round it.
+    glows.addFlat(x + sin * mid, 0.05, z + cos * mid, heading, d.halfWidth * 2 + 3, d.front + d.rear + 3, r, g, b, GLOW.disc);
+  }
+
   private addLights(
     glows: GlowSprites,
     car: CarMesh,
@@ -294,6 +318,18 @@ export class CarBatch {
     const tail = 0.55 * beams + 1.5 * rec.brake;
     if (tail > 0.02) {
       glows.addFlat(x - sin * (d.rear + 0.2), 0.75, z - cos * (d.rear + 0.2), heading, d.halfWidth * 2.3, 0.9, tail, 0.06 * tail, 0.04 * tail, GLOW.bar);
+      // At speed, a light trail streaming off them (carNeon.ts).
+      const trail = beams > 0.05 ? trailLength(rec.speed) : 0;
+      if (trail > 0) {
+        const k = 0.22 * beams * tail;
+        glows.addFlat(x - sin * (d.rear + trail / 2), 0.72, z - cos * (d.rear + trail / 2), heading + Math.PI, d.halfWidth * 1.7, trail, k, 0.02 * k, 0.06 * k, GLOW.beam);
+      }
+      // At night, their red smeared on the damp road behind (ground.ts's sheen).
+      const wet = tail * beams;
+      if (wet > 0.02) {
+        const len = 2.6 + 1.6 * rec.brake;
+        glows.addFlat(x - sin * (d.rear + len / 2), 0.06, z - cos * (d.rear + len / 2), heading + Math.PI, d.halfWidth * 1.9, len, 0.22 * wet, 0.015 * wet, 0.04 * wet, GLOW.beam);
+      }
     }
     if (car.siren && !car.charred) {
       const phase = (time * 2.5) % 1;

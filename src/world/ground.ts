@@ -68,7 +68,9 @@ export function createGround(city: City): Mesh {
     shader.fragmentShader = after(
       shader.fragmentShader,
       '#include <emissivemap_fragment>',
-      `totalEmissiveRadiance += groundGlow + diffuseColor.rgb * ubStreetLight(vec3(vGroundXZ.x, 0.0, vGroundXZ.y), vec3(0.0, 1.0, 0.0));`,
+      `vec3 groundLamp = ubStreetLight(vec3(vGroundXZ.x, 0.0, vGroundXZ.y), vec3(0.0, 1.0, 0.0));
+      // Damp road: a glossy share of the lamp light on top of the diffuse (gSheen, groundColour).
+      totalEmissiveRadiance += groundGlow + diffuseColor.rgb * groundLamp + gSheen * 0.16 * groundLamp;`,
     );
   };
   mat.customProgramCacheKey = () => 'curbside-ground';
@@ -169,6 +171,8 @@ const float G_LOT = ${f(BLOCK_SIZE / 2 - LOT_EDGE)};
 const float G_KERB = ${f(BLOCK_SIZE / 2 - HALF_ROAD)};
 const float G_CORNER = 2.6;
 const float G_GROUND = ${f(GROUND_SIZE / 2)};
+/** How glossy the road is here at night (damp patches that take the lamps' light): set by groundColour. */
+float gSheen = 0.0;
 
 vec3 srgb(float r, float g, float b) { return pow(vec3(r, g, b), vec3(2.2)); }
 
@@ -399,6 +403,15 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
     }
     // Gutter: a darker, grimier strip along the kerb.
     c *= 0.72 + 0.28 * smoothstep(0.0, 0.45, kerb);
+    // Night damp: a slightly darker road with glossy patches (most along the
+    // gutters) that pick up the lamps, the neon-noir street even when dry.
+    // The rain's own puddles take over as it gets wet.
+    if (uNight > 0.01) {
+      float damp = smoothstep(0.42, 0.78, ubFbm(w * 0.22 + 7.0));
+      float gutterBias = 1.0 - 0.5 * smoothstep(0.8, 4.0, kerb);
+      gSheen = uNight * (0.25 + 0.75 * damp) * gutterBias * (1.0 - 0.6 * uWetness);
+      c *= 1.0 - 0.14 * uNight;
+    }
   } else if (max(q.x, q.y) > G_LOT) {
     c = paving(w, p, blk.a, kerb, px);
     // Kerb lip: a lighter edge with a thin shadow line at the drop.

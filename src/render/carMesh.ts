@@ -19,6 +19,8 @@ export interface CarMesh {
   charred: boolean;
   /** Light bar flashing (police lights). */
   siren: boolean;
+  /** Neon under the body (sRGB hex), or -1: rolled by CarBatch (carNeon.ts). */
+  underglow: number;
 }
 
 /** Surface kinds, per vertex; the car shader looks up paint/glass/lights by these. */
@@ -115,5 +117,5 @@ export function createCarMesh(archetype: VehicleArchetype, paint: Color): CarMes
   const root = new Group();
   const frontWheels = [new Object3D(), new Object3D()];
   root.add(...frontWheels);
-  return { root, frontWheels, archetype, paint, charred: false, siren: false };
+  return { root, frontWheels, archetype, paint, charred: false, siren: false, underglow: -1 };
 }
