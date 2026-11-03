@@ -70,7 +70,9 @@ export function createGround(city: City): Mesh {
       '#include <emissivemap_fragment>',
       `vec3 groundLamp = ubStreetLight(vec3(vGroundXZ.x, 0.0, vGroundXZ.y), vec3(0.0, 1.0, 0.0));
       // Damp road: a glossy share of the lamp light on top of the diffuse (gSheen, groundColour).
-      totalEmissiveRadiance += groundGlow + diffuseColor.rgb * groundLamp + gSheen * 0.16 * groundLamp;`,
+      totalEmissiveRadiance += groundGlow + diffuseColor.rgb * groundLamp + gSheen * 0.3 * groundLamp;
+      // Wet-look streaks of the lamp heads (only where the road is damp; rain makes the whole road a mirror).
+      if (gSheen > 0.0) totalEmissiveRadiance += uLampColor * (gLampGlints(vGroundXZ) * gSheen * (0.55 + 0.6 * uWetness));`,
     );
   };
   mat.customProgramCacheKey = () => 'curbside-ground';
@@ -173,6 +175,56 @@ const float G_CORNER = 2.6;
 const float G_GROUND = ${f(GROUND_SIZE / 2)};
 /** How glossy the road is here at night (damp patches that take the lamps' light): set by groundColour. */
 float gSheen = 0.0;
+
+/**
+ * One lamp head's reflection in a damp road: the head mirrored under the
+ * ground, seen from the camera, lands a little toward the camera's nadir from
+ * the lamp; it's smeared along that line (toward the viewer) into a streak.
+ */
+float gGlint(vec2 wp, vec2 lamp) {
+  float t = cameraPosition.y / (cameraPosition.y + UB_LAMP_H);
+  vec2 at = cameraPosition.xz + (lamp - cameraPosition.xz) * t;
+  vec2 toward = cameraPosition.xz - at;
+  float len = length(toward);
+  vec2 u = len > 0.01 ? toward / len : vec2(0.0, 1.0);
+  vec2 d = wp - at;
+  float along = dot(d, u);
+  float across = d.x * u.y - d.y * u.x;
+  // Longer toward the viewer than away, thin across.
+  float a = along > 0.0 ? along / 3.6 : along / 1.3;
+  return exp(-a * a - (across * across) / 0.16);
+}
+
+/** The lamp heads' streaks on the damp road at wp (the same eight heads ubStreetLight walks). */
+float gLampGlints(vec2 wp) {
+  vec2 g = wp + UB_HALF;
+  vec2 cell = floor(g / UB_BLOCK);
+  vec2 local = g - cell * UB_BLOCK;
+  vec2 line = floor(g / UB_BLOCK + 0.5);
+  vec2 origin = cell * UB_BLOCK - UB_HALF;
+  float sum = 0.0;
+  if (cell.y >= 0.0 && cell.y < UB_BLOCKS) {
+    float za = origin.y + UB_LAMP_SPACING * clamp(floor(local.y / UB_LAMP_SPACING), 1.0, 2.0);
+    for (int s = 0; s < 2; s++) {
+      float side = s == 0 ? -1.0 : 1.0;
+      float col = line.x - (s == 0 ? 1.0 : 0.0);
+      if (col < 0.0 || col >= UB_BLOCKS) continue;
+      float lx = line.x * UB_BLOCK - UB_HALF + side * UB_LAMP_OFF;
+      sum += gGlint(wp, vec2(lx, za)) + gGlint(wp, vec2(lx, za + UB_LAMP_SPACING)) + gGlint(wp, vec2(lx, za - UB_LAMP_SPACING));
+    }
+  }
+  if (cell.x >= 0.0 && cell.x < UB_BLOCKS) {
+    float xa = origin.x + UB_LAMP_SPACING * clamp(floor(local.x / UB_LAMP_SPACING), 1.0, 2.0);
+    for (int s = 0; s < 2; s++) {
+      float side = s == 0 ? -1.0 : 1.0;
+      float row = line.y - (s == 0 ? 1.0 : 0.0);
+      if (row < 0.0 || row >= UB_BLOCKS) continue;
+      float lz = line.y * UB_BLOCK - UB_HALF + side * UB_LAMP_OFF;
+      sum += gGlint(wp, vec2(xa, lz)) + gGlint(wp, vec2(xa + UB_LAMP_SPACING, lz)) + gGlint(wp, vec2(xa - UB_LAMP_SPACING, lz));
+    }
+  }
+  return sum;
+}
 
 vec3 srgb(float r, float g, float b) { return pow(vec3(r, g, b), vec3(2.2)); }
 
@@ -409,8 +461,8 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
     if (uNight > 0.01) {
       float damp = smoothstep(0.42, 0.78, ubFbm(w * 0.22 + 7.0));
       float gutterBias = 1.0 - 0.5 * smoothstep(0.8, 4.0, kerb);
-      gSheen = uNight * (0.25 + 0.75 * damp) * gutterBias * (1.0 - 0.6 * uWetness);
-      c *= 1.0 - 0.14 * uNight;
+      gSheen = uNight * (0.3 + 0.7 * damp) * gutterBias;
+      c *= 1.0 - 0.2 * uNight;
     }
   } else if (max(q.x, q.y) > G_LOT) {
     c = paving(w, p, blk.a, kerb, px);

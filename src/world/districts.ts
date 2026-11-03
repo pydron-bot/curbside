@@ -49,9 +49,9 @@ export interface DistrictStyle {
 export const MAX_HEIGHT = 12;
 
 export const DISTRICT_STYLES: Readonly<Record<District, DistrictStyle>> = {
-  // Glass and steel: cool blues and teals, the tallest blocks, helipads.
+  // Glass and steel with a Miami deco edge: cool blues, aqua, periwinkle and lilac, the tallest blocks, helipads.
   downtown: {
-    walls: ['#5d7894', '#4f8a96', '#7f96ad', '#a9b8c6', '#3e5a78', '#6c7f8f', '#8aa7b8', '#c4cbd3'],
+    walls: ['#5d7894', '#4f8a96', '#7f96ad', '#9fd0d6', '#4a6f9a', '#8ba6d8', '#8aa7b8', '#c9bfe0'],
     roofs: [
       ['membrane', 3],
       ['gravel', 3],
@@ -88,7 +88,7 @@ export const DISTRICT_STYLES: Readonly<Record<District, DistrictStyle>> = {
   },
   // Painted render in loud colours, bars and clubs: neon at night.
   arts: {
-    walls: ['#c2457a', '#e07a3b', '#3aa6a0', '#7a4fc0', '#e0b33a', '#2f8fd0', '#d9d0c3', '#4bb06a'],
+    walls: ['#c2457a', '#e07a3b', '#3aa6a0', '#7a4fc0', '#e0b33a', '#2f8fd0', '#f2a6c8', '#4bb06a'],
     roofs: [
       ['tar', 3],
       ['membrane', 2],
