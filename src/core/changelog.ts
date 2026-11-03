@@ -15,6 +15,19 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.24.0',
+    date: '2026-11-03',
+    title: 'After hours',
+    notes: [
+      'The city goes to bed: windows go dark one by one as the night wears on, TVs flicker blue in some, and flats in the arts quarter glow pink and cyan.',
+      'Better rain: drops ripple across the puddles, cars throw spray off their tyres, and wet cars gleam.',
+      'Fireworks over downtown at midnight, their colours lighting up the streets below.',
+      'Explosions send a bright shockwave racing across the ground and flash the walls around them.',
+      'When you\'re wanted, red and blue light pulses at the edges of the screen, faster with every star.',
+      'WASTED and BUSTED now glow in the title screen\'s neon, with a VHS glitch.',
+    ],
+  },
+  {
     version: '0.23.0',
     date: '2026-11-03',
     title: 'Neon nights',

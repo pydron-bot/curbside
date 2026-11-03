@@ -70,6 +70,14 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
+**0.24.0 "After hours" (2026-11-03, branch `claude/neon-city-3`, stacked on
+`claude/neon-city-2` / 0.23.0; not merged, at the owner's request):** living
+windows, rain ripples/spray/wet paint, midnight fireworks downtown,
+explosion shockwave and wall flash, wanted-level edge glow, neon
+WASTED/BUSTED (README → *Look → Neon city → After hours*). **For the device
+pass:** is the wanted edge glow at five stars too much on a phone; are the
+VHS glitches distracting on the death screen.
+
 **0.23.0 "Neon nights" (2026-11-03, branch `claude/neon-city-2`, stacked on
 `claude/glint-junctions` / 0.22.1; not merged, at the owner's request):**
 coloured neon/signal reflections in the wet road, police light wash on

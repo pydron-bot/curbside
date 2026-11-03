@@ -2755,6 +2755,26 @@ the first time it comes into view.
       a grate in a lane on about a quarter of road segments; at night the
       vents in view breathe soft particles (`Effects.emitSteam`) tinted by
       district, scaled by the tier's particle budget.
+  - *After hours (0.24.0)*:
+    - *Living windows* (building shader): `uLate` (`sceneLighting.lateness`,
+      tested: 0 until 20:00, 1 by 04:00) gives each lit window a bedtime;
+      one in eight flickers cold blue (a TV); some arts flats glow pink or
+      cyan.
+    - *Rain*: `uRain` (now; wetness lags it) rings ripples across the
+      puddles (ground shader); moving cars throw spray off their rear tyres
+      on a wet road (`fxDriving`); wet cars are glossier and darker (car
+      shader, not the tyres).
+    - *Fireworks* (`render/fireworks.ts`, `fireworksLevel` tested): 23:30 to
+      00:45, shells over the part of downtown in view, below the camera
+      (`Effects.firework`), with a flash in the air and on the road.
+    - *Explosions*: a crisp shockwave ring out to 21 m, and the last two
+      blasts (`uBlasts`, set and faded by `Effects`) flash the walls and
+      road orange-white (`ubBlastFlash`).
+    - *Wanted edge glow* (`wantedHud` `.w-edge`, CSS): red and blue at the
+      screen's edges, faster and stronger per star, halved while searching.
+    - *WASTED / BUSTED*: the logo's gradient fill, offset neon outline and
+      chromatic ghost, a VHS glitch on landing and every 4.2 s, tape
+      scanlines; still with reduced motion.
   - *HUD*: a pink-cyan-violet radar rim, violet-navy map streets, a hot
     pink health bar, a cyan healthy-car ring. *Settings → Extras → Neon
     filter* (`screenFilter`, off by default): the title's edge light and
