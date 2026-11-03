@@ -11,7 +11,7 @@
  *   analytically from the lamp layout in world/streetLamps.ts. Ground, walls,
  *   cars and people all pick it up at night with no real lights at all.
  */
-import { Color, Vector4, type IUniform } from 'three';
+import { Color, Vector3, Vector4, type IUniform } from 'three';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT } from '../world/city';
 import { LAMP_ARM, LAMP_HEIGHT, LAMP_OFFSET, LAMP_REACH2, LAMP_SPACING, lampsNear } from '../world/streetLamps';
 
@@ -32,6 +32,8 @@ export const worldUniforms = {
   uSkyTint: { value: new Color('#bcd2ff') },
   /** Up to four police light bars near the view (x, z, strength 0..1, unused), washing walls and road (CarBatch sets them). */
   uSirens: { value: [new Vector4(), new Vector4(), new Vector4(), new Vector4()] },
+  /** Toward the sun (sceneLighting sets it; the moon's at night, when glints are off). */
+  uSunDir: { value: new Vector3(0, 1, 0) },
   /** The last two explosions' flashes (x, z, strength fading from 1, unused), lighting walls and road (Effects sets them). */
   uBlasts: { value: [new Vector4(), new Vector4()] },
 } satisfies Record<string, IUniform>;
@@ -54,6 +56,7 @@ uniform vec3 uLampColor;
 uniform vec3 uSkyTint;
 uniform vec4 uSirens[4];
 uniform vec4 uBlasts[2];
+uniform vec3 uSunDir;
 
 const float UB_HALF = ${f(HALF_EXTENT)};
 const float UB_BLOCK = ${f(BLOCK_SIZE)};
@@ -104,6 +107,17 @@ float ubCloudShade(vec2 xz) {
   float cover = 0.6 + 0.05 * sin(uTime * 0.013);
   float c = smoothstep(cover, cover + 0.08, ubFbm(p));
   return 1.0 - 0.28 * c * day * (1.0 - 0.8 * uWetness);
+}
+/**
+ * A glint of the sun off a shiny surface at wp with normal n, as the camera
+ * sees it: a tight highlight where the reflection points at the eye (cars'
+ * windscreens as they turn, glass towers), by day only. sharp ~40..300.
+ */
+float ubGlint(vec3 wp, vec3 n, float sharp) {
+  if (uNight > 0.98) return 0.0;
+  vec3 v = normalize(cameraPosition - wp);
+  float s = max(dot(reflect(-uSunDir, n), v), 0.0);
+  return pow(s, sharp) * (1.0 - uNight);
 }
 /** 1 inside [a, b], anti-aliased over width w. */
 float ubBand(float x, float a, float b, float w) {

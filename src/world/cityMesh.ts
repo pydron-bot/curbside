@@ -624,6 +624,8 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
         float c2 = sin(cw.y * 2.4 - uTime * 1.3 + sin(cw.x * 1.7 - uTime * 0.8));
         float caustic = pow(1.0 - abs(c1 * c2), 6.0);
         totalEmissiveRadiance += vec3(0.55, 0.95, 1.0) * caustic * (0.35 * (1.0 - uNight) + 0.15 * uNight);
+        // And the sun sparkling where the ripples tilt it toward the eye.
+        totalEmissiveRadiance += vec3(1.0, 0.97, 0.9) * ubGlint(vPropWorld, normalize(vec3(c1 * 0.18, 1.0, c2 * 0.18)), 70.0) * 2.5;
       } else if (anim > 0.5 && anim < 1.5) {
         // Colour cycle: the hue turns through its channel rotations.
         float t = fract(uTime * 0.11 + seed) * 3.0;
@@ -927,6 +929,10 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     float sky = ubLine(f.x, 0.17, px / 6.0) * ubLine(f.y, 0.22, px / 4.0) * step(0.45, ubHash(cell + seed * 40.0)) * step(1.5, e);
     c = mix(c, bSrgb(0.62, 0.72, 0.78), sky);
     glow += sky * vec3(0.9, 0.95, 1.0) * 0.18 * uNight;
+    // The sun glinting off the panels (each 6 m panel a touch off true) and the skylights, seen from above.
+    float ph = ubHash(cell + seed * 17.0);
+    vec3 panel = normalize(nW + vec3(ph - 0.5, 0.0, fract(ph * 7.3) - 0.5) * 0.35);
+    glow += vec3(1.0, 0.96, 0.88) * (ubGlint(vWorldB, panel, 40.0) * 0.7 + sky * ubGlint(vWorldB, normalize(vec3(ph - 0.5, 4.0, fract(ph * 3.7) - 0.5)), 90.0) * 2.0);
   } else if (type < ${ROOF.garden} + 0.5) {
     // Roof garden: a timber deck down the middle, rows of raised planter
     // beds either side (shrubs, some in flower), pale gravel between.

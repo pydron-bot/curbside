@@ -500,7 +500,8 @@ function carMaterial(): MeshStandardMaterial {
     shader.fragmentShader = after(
       shader.fragmentShader,
       '#include <emissivemap_fragment>',
-      'totalEmissiveRadiance = vCarEmissive + diffuseColor.rgb * ubStreetLight(vCarWorld, normalize(vCarNormal));',
+      // Sun glints flicking across paint and glass as the car turns (not the tyres: little reflection).
+      'totalEmissiveRadiance = vCarEmissive + diffuseColor.rgb * ubStreetLight(vCarWorld, normalize(vCarNormal)) + vec3(1.0, 0.97, 0.9) * ubGlint(vCarWorld, normalize(vCarNormal), 60.0) * 3.5 * vCarSurf.z * (1.0 - vCarSurf.x);',
     );
     shader.fragmentShader = after(
       shader.fragmentShader,

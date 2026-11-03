@@ -50,6 +50,7 @@ export class SceneLighting {
   apply(hour: number): SkyState {
     const s = sampleSky(hour, this.sky);
     this.toLight.set(s.lightDir[0], s.lightDir[1], s.lightDir[2]);
+    worldUniforms.uSunDir.value.copy(this.toLight);
     this.sun.color.setRGB(s.lightColor[0], s.lightColor[1], s.lightColor[2], SRGBColorSpace);
     this.sun.intensity = s.lightIntensity;
     this.hemi.color.setRGB(s.skyColor[0], s.skyColor[1], s.skyColor[2], SRGBColorSpace);
