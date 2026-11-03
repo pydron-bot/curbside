@@ -49,6 +49,7 @@ import { CombatLook } from './render/combatLook';
 import { StingerLook } from './render/stingerLook';
 import { ChargeLook } from './render/chargeLook';
 import { SteamLook } from './render/steamLook';
+import { GullLook } from './render/gullMesh';
 import { WaterLook } from './render/waterLook';
 import { Fireworks } from './render/fireworks';
 import { planSteamVents } from './world/steamVents';
@@ -241,6 +242,8 @@ scene.add(new RampMesh(ramps, look).mesh);
 const stunts = new StuntTracker();
 /** Pigeon flocks on plazas, parks and pavements that scatter at cars, runners and gunfire (one draw call). */
 const pigeons = new PigeonLook(scene, look, city, collision, events, mulberry32((Date.now() ^ 0x5eed) >>> 0));
+/** Seagulls wheeling over the docks' shore by day (one draw call while any is in view). */
+const gulls = new GullLook(scene, look, city.seed);
 /** Traffic lights: their clock runs with the sim; traffic stops on red, the lenses show it. */
 const signals = new TrafficSignals();
 look.props.signals = signals;
@@ -1936,6 +1939,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   /** Park water (render/waterLook.ts): fountains, sprinklers, and the look that sprays them. */
   parkWater,
   waterLook,
+  gulls,
   player,
   playerModel,
   people,
