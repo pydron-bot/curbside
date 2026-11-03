@@ -2805,6 +2805,19 @@ and every new program is compiled behind the current frame.
   hand-placed spots are written in core blocks (`core()`,
   `corePavement`). `tests/cityCore.test.ts` pins the core's fingerprint at
   any size. A trial size saves under `curbside.save.city24`.
+- **Map edits** (`world/mapEdits.ts`, `game/mapAnchors.ts`, W3-D
+  groundwork; `docs/W3D_MAP.md`): the owner's edits to the generated city
+  live in `src/world/maps/city.json` (bundled; empty today), read by
+  `parseMapEdits` (never throws, reports what it drops) and applied by
+  `generateCity(seed, edits)`: a block's kind (buildings, park, plaza, car
+  park), a district repaint (same footprints, the new district for
+  `districtOf`/`districtAt` everywhere) and a variant reroll, in core
+  blocks. An edited block is rebuilt from its own stream, so other blocks
+  don't move. `collectAnchors` lists everything tied to a place (spots,
+  jobs' spawns and routes, races, hangouts, ramps, bus stops);
+  `dependentsOf` says what relies on a block, road segment or junction and
+  `checkAnchors` what an edit breaks. `tests/mapAnchors.test.ts` runs the
+  checks on the committed map.
 - **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new

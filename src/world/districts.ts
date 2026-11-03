@@ -7,6 +7,7 @@
  * you are from a glance at the roofs and pavements.
  */
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, CORE_BLOCKS, CORE_OFFSET } from './city';
+import { blockEditKey } from './mapEdits';
 import { len2 } from '../core/len';
 
 export type District = 'downtown' | 'oldtown' | 'arts' | 'industrial' | 'residential';
@@ -140,6 +141,15 @@ export const DISTRICT_STYLES: Readonly<Record<District, DistrictStyle>> = {
   },
 };
 
+/** Map edits' district repaints by core block (blockEditKey), installed by generateCity; empty for the generated city. */
+const painted = new Map<number, District>();
+
+/** Install the repaints from a map's block edits (world/mapEdits.ts), replacing the last ones. */
+export function paintDistricts(edits: ReadonlyArray<{ at: readonly [number, number]; district?: District }>): void {
+  painted.clear();
+  for (const e of edits) if (e.district) painted.set(blockEditKey(e.at[0], e.at[1]), e.district);
+}
+
 /** Downtown: blocks within this many blocks of the centre. */
 const DOWNTOWN_RADIUS = 3.1;
 
@@ -155,6 +165,10 @@ export function districtOf(bx: number, bz: number): District {
   // constants aren't ready at load.)
   const cx = bx - CORE_OFFSET;
   const cz = bz - CORE_OFFSET;
+  if (painted.size > 0) {
+    const p = painted.get(blockEditKey(cx, cz));
+    if (p) return p;
+  }
   const centre = (CORE_BLOCKS - 1) / 2;
   const dx = cx - centre;
   const dz = cz - centre;

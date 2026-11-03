@@ -13,7 +13,8 @@
  * first from the same stream, the ring after from its own. Hand-placed spots
  * are written in core blocks (`core()`) so they stay put.
  */
-import { buildingHeight, districtOf, type District } from './districts';
+import { buildingHeight, districtOf, paintDistricts, type District } from './districts';
+import { NO_EDITS, blockEditKey, blockSeed, type BlockEdit, type MapEdits } from './mapEdits';
 import { mulberry32 } from './random';
 import { len2 } from '../core/len';
 
@@ -82,6 +83,8 @@ export interface Block {
   district: District;
   /** Buildable interior (inside the sidewalk). */
   interior: Rect;
+  /** A plaza the map edits made a car park (true) or an open plaza (false); else the lot byte decides (lotBytes). */
+  carPark?: boolean;
 }
 
 export interface City {
@@ -99,7 +102,11 @@ export interface City {
  */
 export function lotBytes(city: City): Uint8Array {
   const rand = mulberry32(city.seed ^ 0x9e3779b9);
-  return Uint8Array.from(city.blocks, () => Math.floor(rand() * 256));
+  // An edited plaza keeps its byte's look and moves it across the 128 line.
+  return Uint8Array.from(city.blocks, (b) => {
+    const byte = Math.floor(rand() * 256);
+    return b.carPark === undefined ? byte : b.carPark ? byte & 0x7f : byte | 0x80;
+  });
 }
 
 /** Is the block (index into city.blocks) a car park rather than an open plaza? */
@@ -115,24 +122,41 @@ export function blockInterior(bx: number, bz: number): Rect {
   return { minX: x0 + inset, minZ: z0 + inset, maxX: x0 + BLOCK_SIZE - inset, maxZ: z0 + BLOCK_SIZE - inset };
 }
 
-export function generateCity(seed = 1337): City {
+/**
+ * The city from its seed, with the owner's map edits (W3-D, world/mapEdits.ts)
+ * on top. An edited block is rebuilt from a stream of its own, after its
+ * generated content has been drawn and thrown away, so every other block
+ * comes out exactly as it would unedited. District repaints are installed
+ * for districtOf (and so districtAt everywhere) as a side effect: the last
+ * city generated is the one the game plays.
+ */
+export function generateCity(seed = 1337, edits: MapEdits = NO_EDITS): City {
+  paintDistricts(edits.blocks);
+  const byBlock = new Map<number, BlockEdit>();
+  for (const e of edits.blocks) byBlock.set(blockEditKey(e.at[0], e.at[1]), e);
   const blocks: Block[] = [];
   const buildings: Building[] = [];
   const trees: Tree[] = [];
+  const scrapBuildings: Building[] = [];
+  const scrapTrees: Tree[] = [];
   const addBlock = (bx: number, bz: number, rand: () => number) => {
     const interior = blockInterior(bx, bz);
     const district = districtOf(bx, bz);
 
     const roll = rand();
-    const kind: BlockKind = roll < 0.1 ? 'park' : roll < 0.16 ? 'plaza' : 'buildings';
-    blocks.push({ bx, bz, kind, district, interior });
+    const generated: BlockKind = roll < 0.1 ? 'park' : roll < 0.16 ? 'plaza' : 'buildings';
+    const edit = byBlock.get(blockEditKey(bx - CORE_OFFSET, bz - CORE_OFFSET));
+    const kind = edit?.kind === undefined ? generated : edit.kind === 'carpark' ? 'plaza' : edit.kind;
+    const block: Block = { bx, bz, kind, district, interior };
+    if (edit?.kind === 'carpark' || edit?.kind === 'plaza') block.carPark = edit.kind === 'carpark';
+    blocks.push(block);
 
-    if (kind === 'buildings') {
-      for (const lot of subdivide(interior, rand, 0)) {
-        buildings.push(makeBuilding(lot, district, rand));
-      }
-    } else if (kind === 'park') {
-      plantTrees(interior, rand, trees);
+    if (kind === generated && edit?.variant === undefined) {
+      // As generated (a repaint keeps the footprints and takes the new district's heights and colours).
+      fillBlock(interior, kind, district, rand, buildings, trees);
+    } else {
+      fillBlock(interior, generated, district, rand, scrapBuildings, scrapTrees);
+      fillBlock(interior, kind, district, mulberry32(blockSeed(seed, bx - CORE_OFFSET, bz - CORE_OFFSET, edit?.variant ?? 0)), buildings, trees);
     }
   };
 
@@ -153,6 +177,15 @@ export function generateCity(seed = 1337): City {
     ...boundaryWalls(),
   ];
   return { seed, blocks, buildings, trees, obstacles };
+}
+
+/** A block's buildings or trees (a plaza has neither). */
+function fillBlock(interior: Rect, kind: BlockKind, district: District, rand: () => number, buildings: Building[], trees: Tree[]): void {
+  if (kind === 'buildings') {
+    for (const lot of subdivide(interior, rand, 0)) buildings.push(makeBuilding(lot, district, rand));
+  } else if (kind === 'park') {
+    plantTrees(interior, rand, trees);
+  }
 }
 
 /** Split a lot recursively into building plots, sometimes leaving an alley. */

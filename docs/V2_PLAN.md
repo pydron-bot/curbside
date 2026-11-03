@@ -606,6 +606,16 @@ districts), desktop first, and the edits **ship in the game**.
 - **First step:** an inventory of everything placed by hand or tied to a
   spot (the dependency graph the overlay draws), then the overrides file
   format with load/apply/round-trip tests, before any UI.
+- **Groundwork done (2026-11-03, branch `claude/w3-map`, details in
+  `docs/W3D_MAP.md`):** the overrides file (version 1: block kind, car
+  park, district repaint, variant) with parse/serialize/diff and
+  round-trip tests, applied inside `generateCity` so untouched blocks
+  stay identical; the inventory as code (`game/mapAnchors.ts`: 193
+  anchors, what relies on a block/segment/junction, what an edit
+  breaks), checked against the committed map in `npm test`. Found: one
+  block edit reshuffles 600–2,600 street props city-wide (shared random
+  streams in the dressing), so per-block dressing streams come before
+  chunk rebuilds. The shipped city is unchanged (empty map file).
 
 ## Schedule
 
