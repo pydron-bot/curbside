@@ -18,6 +18,15 @@ import { createSkyState, sampleSky, type SkyState } from './timeOfDay';
  * created once and never added or removed, so lit materials never recompile;
  * everything else that glows is faked (see shaderLib, GlowSprites).
  */
+/** How far into the night an hour is: 0 until 20:00, 1 by 04:00, 0 again from 06:00 (living windows, cityMesh). */
+export function lateness(hour: number): number {
+  const h = ((hour % 24) + 24) % 24;
+  if (h >= 20) return (h - 20) / 8;
+  if (h < 4) return (h + 4) / 8;
+  if (h < 6) return 1 - (h - 4) / 2;
+  return 0;
+}
+
 export class SceneLighting {
   readonly sun = new DirectionalLight('#ffffff', 2);
   readonly hemi = new HemisphereLight('#bcd2ff', '#6b5a48', 0.9);
@@ -52,6 +61,7 @@ export class SceneLighting {
     this.background.copy(this.fog.color);
     this.renderer.toneMappingExposure = s.exposure;
     worldUniforms.uNight.value = s.night;
+    worldUniforms.uLate.value = lateness(s.hour);
     worldUniforms.uSkyTint.value.setRGB(s.skyColor[0], s.skyColor[1], s.skyColor[2], SRGBColorSpace);
     return s;
   }

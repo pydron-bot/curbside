@@ -20,6 +20,8 @@ export const worldUniforms = {
   uTime: { value: 0 },
   /** 0 by day, 1 at night. */
   uNight: { value: 0 },
+  /** How far into the night it is: 0 until 20:00, rising to 1 by 04:00, back to 0 at dawn (windows go out). */
+  uLate: { value: 0 },
   /** 0 dry .. 1 soaked: darker surfaces and puddles (rain hook). */
   uWetness: { value: 0 },
   /** Street lamp colour (linear). */
@@ -41,6 +43,7 @@ const f = (n: number) => n.toFixed(4);
 export const UB_COMMON = /* glsl */ `
 uniform float uTime;
 uniform float uNight;
+uniform float uLate;
 uniform float uWetness;
 uniform vec3 uLampColor;
 uniform vec3 uSkyTint;

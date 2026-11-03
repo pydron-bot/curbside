@@ -810,10 +810,21 @@ void wallSurface(inout vec3 col, inout vec3 glow, vec3 l, float px) {
   // Glass: reflects a little sky by day; some windows lit at night.
   float h = ubHash3(vec3(seed * 977.0 + float(side) * 13.0, fl, ci));
   vec3 glass = uDistGlass[d] * (0.55 + 0.7 * smoothstep(cy - hh, cy + hh, fy)) + uSkyTint * 0.035;
-  float lit = step(h, 0.1 + 0.32 * uNight);
+  // Living windows: each lit one has its own bedtime, and goes out as the night wears on (uLate).
+  float lit = step(h, 0.1 + 0.32 * uNight) * step(uLate * 0.85, fract(h * 57.0));
   vec3 warm = mix(vec3(1.0, 0.56, 0.24), vec3(1.0, 0.8, 0.5), fract(h * 7.0));
   vec3 lamp = fract(h * 13.0) < 0.2 ? vec3(0.5, 0.72, 1.0) : warm;
   float level = 0.35 + 0.65 * fract(h * 31.0);
+  float kind = fract(h * 91.0);
+  if (kind < 0.13) {
+    // Someone watching TV: a cold flicker.
+    lamp = vec3(0.45, 0.62, 1.0);
+    level = 0.45 + 0.35 * sin(uTime * 9.0 + h * 40.0) * sin(uTime * 3.7 + h * 11.0) + 0.2 * step(0.92, fract(uTime * 0.7 + h * 5.0));
+  } else if (kind < 0.3 && abs(style - ${STYLE.arts}) < 0.5) {
+    // The arts quarter's flats: pink or cyan neon inside.
+    lamp = fract(h * 17.0) < 0.5 ? vec3(1.0, 0.18, 0.55) : vec3(0.15, 0.85, 1.0);
+    level = 0.8;
+  }
   col = mix(col, glass, win);
   glow += win * lit * lamp * level * uNight * 0.75;
 
