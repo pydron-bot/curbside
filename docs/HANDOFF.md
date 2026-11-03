@@ -71,8 +71,7 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 ## To do (in priority order)
 
 **Where the look work stands (2026-11-03, later session):** `main` =
-**0.25.0, live**. **0.26.0 "Day out"** is on branch `claude/daytime-2`
-(not merged or deployed: deploy when the owner asks): the rest of the
+**0.26.0 "Day out", live** (from branch `claude/daytime-2`): the rest of the
 daytime list (swaying trees with dappled light, fountains and sprinklers,
 morning mist, painted billboards, seagulls at the docks) and the 0.25
 street art toned down at the owner's request (README → *Look → Neon city
@@ -81,7 +80,8 @@ reference picture the owner sent (`render/gullMesh.ts`; if a Blender gull
 is wanted later, the same contract: nose +Z, wings bending at shoulder
 and wrist). Screenshot harnesses: `tools/look/` (README there).
 
-**Next, agreed with the owner: a LOOK tuning panel, after 0.26.0.** The
+**TODO, next up (agreed with the owner; start here in the next session):
+a LOOK tuning panel.** The
 owner wants to adjust the look themselves rather than ask for each
 change, the way the map editor works through `city.json`:
 - A LOOK tab in the TEST menu, on **both phone and desktop**, as a slim
