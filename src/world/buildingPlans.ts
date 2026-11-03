@@ -64,11 +64,17 @@ export interface RoofNeon {
   edges: number;
   /** Tubes down the corners where two lit edges meet. */
   corners: boolean;
-  /** A sign on this side's roof edge (null: none), in its own colour. */
-  sign: { side: Side; from: number; to: number; colour: string } | null;
+  /** A sign on this side's roof edge (null: none), in its own colour and animation (NEON_ANIM). */
+  sign: { side: Side; from: number; to: number; colour: string; anim: NeonAnim } | null;
   /** Stutters now and then, like a tired tube. */
   flicker: boolean;
+  /** The edge tubes run chase lights (some in the arts quarter). */
+  chase: boolean;
 }
+
+/** How a neon sign moves: steady, cycling colour, chase lights running along it, or lighting up along its length and going out. */
+export const NEON_ANIM = { steady: 0, cycle: 1, chase: 2, sweep: 3 } as const;
+export type NeonAnim = (typeof NEON_ANIM)[keyof typeof NEON_ANIM];
 
 /** Awnings hang this high and stick out this far over the sidewalk, m. */
 export const AWNING_HEIGHT = 2.8;
@@ -210,9 +216,12 @@ export function planRoofNeon(b: Building, citySeed: number, props: readonly Rect
         ? { minX: a, maxX: b2, minZ: s === 0 ? b.minZ : b.maxZ - SIGN_REACH, maxZ: s === 0 ? b.minZ + SIGN_REACH : b.maxZ }
         : { minZ: a, maxZ: b2, minX: s === 3 ? b.minX : b.maxX - SIGN_REACH, maxX: s === 3 ? b.minX + SIGN_REACH : b.maxX };
     const foot = at(side, from, from + width);
-    if (width >= 2.5 && !props.some((p) => overlaps(p, foot, 0.2))) sign = { side, from, to: from + width, colour: signColour };
+    // Most signs move: about one in four burns steady.
+    const anim = Math.min(3, Math.floor(rand() * 4)) as NeonAnim;
+    if (width >= 2.5 && !props.some((p) => overlaps(p, foot, 0.2))) sign = { side, from, to: from + width, colour: signColour, anim };
   }
-  return { colour, edges, corners, sign, flicker: rand() < 0.18 };
+  const flicker = rand() < 0.18;
+  return { colour, edges, corners, sign, flicker, chase: b.district === 'arts' && !flicker && rand() < 0.3 };
 }
 
 /** Which faces front the street (by Side): within STREET_GAP of the block's sidewalk edge. */

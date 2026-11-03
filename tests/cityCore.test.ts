@@ -81,6 +81,6 @@ describe('the core city (today’s 16 × 16) at any size', () => {
     // Without the rooftop neon (0.22.0), which has its own stream and its own pin below: nothing else moved.
     const plans = planBuildings(city).filter((_p, i) => centre(city.buildings[i]));
     expect.soft(hash(plans.map(({ roofNeon: _n, ...rest }) => rest))).toBe('be684bc5');
-    expect.soft(hash(plans.map((p) => p.roofNeon))).toBe('c8c165e9');
+    expect.soft(hash(plans.map((p) => p.roofNeon))).toBe('fede67f1');
   });
 });

@@ -4,6 +4,7 @@ import {
   Color,
   CylinderGeometry,
   Group,
+  Euler,
   IcosahedronGeometry,
   InstancedBufferAttribute,
   InstancedMesh,
@@ -20,9 +21,10 @@ import {
 import { BREACH_FRAGMENT_GLSL, BREACH_VERTEX_GLSL, breachUniforms } from '../render/breachScars';
 import { UB_COMMON, UB_LAMP_LIST, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from '../render/shaderLib';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, type City, type Rect } from './city';
-import { AWNING_DEPTH, AWNING_HEIGHT, planBuildings, type BuildingPlan, type RoofNeon, type RoofProp, type Side } from './buildingPlans';
+import { AWNING_DEPTH, AWNING_HEIGHT, planBuildings, NEON_ANIM, type BuildingPlan, type NeonAnim, type RoofNeon, type RoofProp, type Side } from './buildingPlans';
 import { DISTRICTS, DISTRICT_STYLES, ROOF_TYPES, type District, type RoofType } from './districts';
 import { LAMP_ARM, LAMP_HEIGHT, generateStreetLamps } from './streetLamps';
+import { STRING_PALETTES, planStringLights, spanHeight, type StringSpan } from './stringLights';
 
 /** Blocks per render chunk along each axis (4 → 256 m chunks, 16 chunks). */
 const CHUNK_BLOCKS = 4;
@@ -141,6 +143,7 @@ export function createCityMesh(city: City, plans: readonly BuildingPlan[] = plan
   });
 
   for (const lamp of generateStreetLamps()) addLamp(chunkFor(lamp.x, lamp.z), lamp, m);
+  for (const s of planStringLights(city.seed)) addStringLights(chunkFor((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2), s, m);
 
   for (const t of city.trees) {
     const c = chunkFor(t.x, t.z);
@@ -294,7 +297,16 @@ function addShopfronts(c: ChunkBuilder, b: Rect, plan: BuildingPlan, m: Matrix4)
   }
 }
 
-/** Neon glow (aGlow) of a rooftop tube and sign; negative flickers (propMaterial). */
+/**
+ * aGlow for neon (propMaterial reads it back): the brightness, plus 100 ×
+ * the animation (NEON_ANIM), negative to flicker.
+ */
+function neonGlow(glow: number, anim: NeonAnim, flicker: boolean): number {
+  const g = anim * 100 + glow;
+  return flicker ? -g : g;
+}
+
+/** Neon glow (aGlow) of a rooftop tube and sign; see neonGlow. */
 const ROOF_TUBE_GLOW = 0.8;
 const ROOF_SIGN_GLOW = 0.7;
 /** Tube thickness, m: thick enough to read as a line from the camera above. */
@@ -308,7 +320,7 @@ const SIGN_LEAN = 0.95;
 /** Rooftop neon (BuildingPlan.roofNeon): tubes on the street edges and corners, a leaning sign, halos on the roof. */
 function addRoofNeon(c: ChunkBuilder, b: Rect & { height: number }, n: RoofNeon, m: Matrix4): void {
   const color = new Color();
-  const glow = n.flicker ? -ROOF_TUBE_GLOW : ROOF_TUBE_GLOW;
+  const glow = neonGlow(ROOF_TUBE_GLOW, n.chase ? NEON_ANIM.chase : NEON_ANIM.steady, n.flicker);
   const top = b.height + 0.08;
   for (let side = 0 as Side; side < 4; side = (side + 1) as Side) {
     if (!(n.edges & (1 << side))) continue;
@@ -363,12 +375,60 @@ function addRoofNeon(c: ChunkBuilder, b: Rect & { height: number }, n: RoofNeon,
     const angle = s.side === 0 || s.side === 1 ? SIGN_LEAN : -SIGN_LEAN;
     const q = new Quaternion().setFromAxisAngle(new Vector3(alongX ? 1 : 0, 0, alongX ? 0 : 1), angle);
     m.compose(new Vector3(bx, b.height, bz), q, new Vector3(alongX ? width : 0.12, SIGN_HEIGHT, alongX ? 0.12 : width));
-    c.add('boxes', m, color.set(s.colour), [n.flicker ? -ROOF_SIGN_GLOW : ROOF_SIGN_GLOW]);
+    c.add('boxes', m, color.set(s.colour), [neonGlow(ROOF_SIGN_GLOW, s.anim, n.flicker)]);
     const reach = Math.sin(SIGN_LEAN) * SIGN_HEIGHT;
     const gx = alongX ? mid : s.side === 1 ? b.maxX - inset - reach / 2 : b.minX + inset + reach / 2;
     const gz = alongX ? (s.side === 0 ? b.minZ + inset + reach / 2 : b.maxZ - inset - reach / 2) : mid;
     m.makeScale(alongX ? width + 3 : 4.5, 1, alongX ? 4.5 : width + 3).setPosition(gx, b.height + 0.1, gz);
     c.add('glows', m, color.set(s.colour).multiplyScalar(0.28));
+  }
+}
+
+/** String-light bulbs: this far apart along a string, this big, and this bright at night (aGlow). */
+const BULB_GAP = 1.6;
+const BULB = 0.17;
+const BULB_GLOW = 1.3;
+const WIRE = '#1c1a22';
+
+/** A string of bulbs across a road (world/stringLights.ts): the sagging wire, the bulbs, a halo round every other one. */
+function addStringLights(c: ChunkBuilder, s: StringSpan, m: Matrix4): void {
+  const color = new Color();
+  const dx = s.x1 - s.x0;
+  const dz = s.z1 - s.z0;
+  const len = Math.hypot(dx, dz);
+  const yaw = Math.atan2(dx, dz);
+  const q = new Quaternion();
+  const e = new Euler();
+  const p0 = new Vector3();
+  const p1 = new Vector3();
+  // The wire: four straight pieces following the sag.
+  const pieces = 4;
+  for (let k = 0; k < pieces; k++) {
+    const t0 = k / pieces;
+    const t1 = (k + 1) / pieces;
+    p0.set(s.x0 + dx * t0, spanHeight(s, t0), s.z0 + dz * t0);
+    p1.set(s.x0 + dx * t1, spanHeight(s, t1), s.z0 + dz * t1);
+    const run = p0.distanceTo(p1);
+    const pitch = Math.asin((p1.y - p0.y) / run);
+    // A box along local +Z, centred between the ends: yawed along the string, pitched to the sag.
+    q.setFromEuler(e.set(-pitch, yaw, 0, 'YXZ'));
+    m.compose(p0.clone().add(p1).multiplyScalar(0.5).setY((p0.y + p1.y) / 2 - 0.02), q, new Vector3(0.04, 0.04, run));
+    c.add('boxes', m, color.set(WIRE), [0]);
+  }
+  const palette = STRING_PALETTES[s.palette];
+  const n = Math.max(2, Math.round(len / BULB_GAP));
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    const x = s.x0 + dx * t;
+    const z = s.z0 + dz * t;
+    const y = spanHeight(s, t) - 0.12;
+    const hex = palette[i % palette.length];
+    m.makeScale(BULB, BULB, BULB).setPosition(x, y, z);
+    c.add('boxes', m, color.set(hex), [BULB_GLOW]);
+    if (i % 2 === 0) {
+      m.makeScale(2.2, 1, 2.2).setPosition(x, y - 0.1, z);
+      c.add('glows', m, color.set(hex).multiplyScalar(0.3));
+    }
   }
 }
 
@@ -512,14 +572,33 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
     shader.fragmentShader = after(
       shader.fragmentShader,
       '#include <emissivemap_fragment>',
-      `// Negative glow: a tired tube that stutters now and then (rooftop neon), seeded per 32 m cell.
-      float glowK = abs(vGlow);
+      `// Neon (cityMesh neonGlow): |aGlow| = 100 × animation + brightness; negative stutters now and then. Seeded per 32 m cell.
+      float glowAbs = abs(vGlow);
+      float anim = floor(glowAbs / 100.0);
+      float glowK = glowAbs - anim * 100.0;
+      vec3 neon = vColor.rgb;
+      float seed = fract(sin(dot(floor(vPropWorld.xz / 32.0), vec2(12.9898, 78.233))) * 43758.5453);
       if (vGlow < 0.0) {
-        float seed = fract(sin(dot(floor(vPropWorld.xz / 32.0), vec2(12.9898, 78.233))) * 43758.5453);
         float burst = step(0.88, fract(uTime * 0.23 + seed * 7.0));
         glowK *= 1.0 - burst * 0.8 * step(0.45, fract(uTime * 11.0 + seed * 3.0));
       }
-      totalEmissiveRadiance += vColor.rgb * glowK * (0.12 + uNight)
+      float along = vPropWorld.x + vPropWorld.z;
+      if (anim > 0.5 && anim < 1.5) {
+        // Colour cycle: the hue turns through its channel rotations.
+        float t = fract(uTime * 0.11 + seed) * 3.0;
+        neon = t < 1.0 ? mix(vColor.rgb, vColor.gbr, smoothstep(0.6, 1.0, t))
+          : t < 2.0 ? mix(vColor.gbr, vColor.brg, smoothstep(1.6, 2.0, t))
+          : mix(vColor.brg, vColor.rgb, smoothstep(2.6, 3.0, t));
+      } else if (anim > 1.5 && anim < 2.5) {
+        // Chase lights: bright bands running along the tube.
+        glowK *= 0.3 + 0.7 * step(0.5, fract(along * 1.1 - uTime * 1.6 + seed));
+      } else if (anim > 2.5) {
+        // Sweep: lights up along its length, holds, goes out, starts again.
+        float t = fract(uTime * 0.22 + seed) * 1.5;
+        float at = fract(along * 0.11);
+        glowK *= t < 1.25 && at < t ? 1.0 : 0.12;
+      }
+      totalEmissiveRadiance += neon * glowK * (0.12 + uNight)
         + diffuseColor.rgb * ${listed ? 'ubListedLight' : 'ubStreetLight'}(vPropWorld, normalize(vPropNormal));`,
     );
   };
