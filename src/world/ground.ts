@@ -20,14 +20,15 @@ const GROUND_SIZE = 2 * HALF_EXTENT + 2 * BLOCK_SIZE;
 const AO_SIZE = Math.round((GROUND_SIZE * 1024) / 1152);
 
 /** What a block's lot is drawn as (block data texture, red channel). */
-const LOT_KIND = { buildings: 0, park: 1, plaza: 2, parking: 3 } as const;
+const LOT_KIND = { buildings: 0, park: 1, plaza: 2, parking: 3, lot: 4 } as const;
 
 /**
  * The ground: one big plane whose surface is drawn entirely in the fragment
  * shader from world position — asphalt with grain, cracks, patches and oil,
  * crisp anti-aliased road markings (double centre lines, stop lines, zebra
  * crossings), kerbs with a lip and gutter, district paving, lot interiors
- * (grass parks with paths, plazas with a fountain, car parks with bays), and
+ * (grass parks with paths, plazas with a fountain, car parks with bays, a
+ * map edit's waste ground), and
  * water beyond the city walls. It's a MeshLambertMaterial underneath, so sun
  * light, shadows and fog work as usual; street lamps add their pools at night.
  *
@@ -107,7 +108,7 @@ function blockTexture(city: City): DataTexture {
     data[i] = kind;
     data[i + 1] = DISTRICTS.indexOf(b.district);
     data[i + 2] = r;
-    data[i + 3] = PAVINGS.indexOf(DISTRICT_STYLES[b.district].paving);
+    data[i + 3] = PAVINGS.indexOf(DISTRICT_STYLES[b.style ?? b.district].paving);
   });
   const tex = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
   tex.minFilter = tex.magFilter = NearestFilter;
@@ -453,6 +454,28 @@ vec3 lot(vec2 w, vec2 lp, float kind, float seed, float px, inout vec3 glow) {
       float shimmer = 0.75 + 0.25 * sin(uTime * 1.7 + rr * 3.0);
       glow += bow * band * side * shimmer * day * (1.0 - uWetness) * 0.26 * LK_RAINBOW * smoothstep(0.8, 0.97, ubCloudShade(w));
     }
+    return c;
+  }
+  if (kind > 3.5) {
+    // Waste ground (an empty lot): packed dirt and gravel, scrubby weeds, a
+    // rutted track in from the street, old slab edges and the odd puddle.
+    float n1 = ubFbm(w * 0.18);
+    float n2 = ubNoise(w * 1.3 + seed * 17.0);
+    vec3 dirt = mix(srgb(0.36, 0.3, 0.23), srgb(0.47, 0.41, 0.33), n1);
+    vec3 gravel = srgb(0.52, 0.5, 0.46) * (0.85 + 0.25 * ubHash(floor(w * 4.0)));
+    vec3 c = mix(dirt, gravel, smoothstep(0.55, 0.75, ubFbm(w * 0.09 + 3.0)));
+    float weeds = smoothstep(0.5, 0.72, ubFbm(w * 0.33 + seed * 5.0)) * (0.55 + 0.45 * n2);
+    c = mix(c, srgb(0.27, 0.34, 0.15) * (0.8 + 0.3 * n2), weeds * 0.85);
+    // A slab or two of the building that stood here.
+    vec2 sp = lp - vec2(fract(seed * 5.7) - 0.5, fract(seed * 9.1) - 0.5) * 18.0;
+    float slab = ubLine(abs(sp.x), 9.0, px) * ubLine(abs(sp.y), 6.0, px) * step(0.35, fract(seed * 2.3));
+    c = mix(c, srgb(0.5, 0.49, 0.46) * (0.85 + 0.2 * ubNoise(w * 0.7)), slab * (0.75 - 0.4 * weeds));
+    // Tyre ruts from the gap in the bollards (the south side's middle) to the middle.
+    float track = (ubLine(abs(lp.x) - 1.1, 0.35, px) * step(0.0, lp.y)) * (0.6 + 0.4 * ubNoise(w * 0.9));
+    c = mix(c, srgb(0.3, 0.26, 0.2), track * 0.6);
+    float puddle = smoothstep(0.78, 0.82, ubNoise(w * 0.12 + seed * 3.0)) * (1.0 - weeds);
+    c = mix(c, srgb(0.16, 0.17, 0.18), puddle * 0.7);
+    glow += puddle * uSkyTint * 0.04 * (1.0 - uNight);
     return c;
   }
   // Car park: asphalt with white bays in double rows either side of aisles.

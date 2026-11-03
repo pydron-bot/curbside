@@ -12,7 +12,7 @@ import { GANGS, placeHangouts } from '../src/game/gangs';
 import { createVehicleState } from '../src/entities/vehicle';
 import { routeToward } from '../src/systems/pursuit';
 import { rerouteAi, spawnAi, createDriver } from '../src/systems/traffic';
-import { generateCity, type City } from '../src/world/city';
+import { CORE_OFFSET, generateCity, type City } from '../src/world/city';
 import { dressCity } from '../src/world/dressing';
 import { NO_EDITS, type MapEdits, type PropEdit, type RoadEdit, type SpotEdit } from '../src/world/mapEdits';
 import { generatePickups } from '../src/world/pickups';
@@ -222,6 +222,21 @@ describe('spot edits', () => {
     generateCity(1337, edits({ blocks: [{ at: [3, 4], kind: 'park' }, { at: [9, 9], variant: 3 }] }));
     expect(placePackages(NO_EDITS)).toEqual(before);
     expect(before.map((p) => p.index)).toEqual([...Array(40).keys()]);
+  });
+});
+
+describe('an empty lot', () => {
+  it('has junk and a broken line of bollards, no carts and no buskers’ plaza', () => {
+    const plain = generateCity(1337);
+    const b = plain.blocks.find((x) => x.kind === 'buildings' && x.bx > 4 && x.bz > 4)!;
+    const map = edits({ blocks: [{ at: [b.bx - CORE_OFFSET, b.bz - CORE_OFFSET], kind: 'lot' }] });
+    const { d } = dressed(map);
+    const r = b.interior;
+    const inLot = (p: { x: number; z: number }) => p.x > r.minX && p.x < r.maxX && p.z > r.minZ && p.z < r.maxZ;
+    const junk = d.street.props.filter(inLot).map((p) => p.kind);
+    expect(junk.length).toBeGreaterThan(2);
+    expect(junk.every((k) => ['dumpster', 'traffic_barrel', 'shopping_cart', 'traffic_cone', 'trash_bin'].includes(k))).toBe(true);
+    expect(d.street.vendors.filter((v) => Math.abs(v.x - (r.minX + r.maxX) / 2) < 36 && Math.abs(v.z - (r.minZ + r.maxZ) / 2) < 36 && inLot({ x: v.x, z: v.z }))).toEqual([]);
   });
 });
 

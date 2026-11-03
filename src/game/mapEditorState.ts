@@ -494,10 +494,12 @@ export function blockEditAt(edits: MapEdits, bx: number, bz: number): BlockEdit 
  */
 export function editBlock(edits: MapEdits, bx: number, bz: number, patch: Partial<Omit<BlockEdit, 'at'>>, base: BlockBase): MapEdits {
   const old = blockEditAt(edits, bx, bz);
-  const next: { -readonly [K in keyof Omit<BlockEdit, 'at'>]: BlockEdit[K] } = { kind: old?.kind, district: old?.district, variant: old?.variant, height: old?.height };
+  const next: { -readonly [K in keyof Omit<BlockEdit, 'at'>]: BlockEdit[K] } = { kind: old?.kind, district: old?.district, style: old?.style, variant: old?.variant, height: old?.height };
   for (const k of Object.keys(patch) as Array<keyof typeof patch>) (next as Record<string, unknown>)[k] = patch[k];
   if (next.kind === base.kind) next.kind = undefined;
   if (next.district === base.district) next.district = undefined;
+  // A style the block's own district already has is no style at all.
+  if (next.style === (next.district ?? base.district)) next.style = undefined;
   if (next.height !== undefined) {
     next.height = Math.round(Math.min(HEIGHT_SCALE_MAX, Math.max(HEIGHT_SCALE_MIN, next.height)) * 100) / 100;
     if (Math.abs(next.height - 1) < 0.005) next.height = undefined;
@@ -710,8 +712,9 @@ export function describeChange(c: MapEditChange): string {
 
 export function describeBlock(b: Omit<BlockEdit, 'at'>): string {
   const parts: string[] = [];
-  if (b.kind) parts.push(b.kind === 'carpark' ? 'car park' : b.kind);
+  if (b.kind) parts.push(b.kind === 'carpark' ? 'car park' : b.kind === 'lot' ? 'empty lot' : b.kind);
   if (b.district) parts.push(`district ${b.district}`);
+  if (b.style) parts.push(`${b.style} style`);
   if (b.variant !== undefined) parts.push(`layout ${b.variant}`);
   if (b.height !== undefined) parts.push(`height ×${b.height}`);
   return parts.join(', ') || 'as generated';

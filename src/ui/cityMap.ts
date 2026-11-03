@@ -25,6 +25,8 @@ const LOT = '#2d2a3c';
 const PARK = '#2c5a37';
 const TREE = '#20442a';
 const PLAZA = '#6a6153';
+/** Waste ground (a map-edited empty lot). */
+const WASTE = '#4a4236';
 const OUTSIDE = '#090b10';
 const WALL = '#11131a';
 
@@ -69,7 +71,7 @@ export function renderCityMap(city: City, pxPerM = MAP_PX_PER_M): HTMLCanvasElem
     const r = b.interior;
     ctx.fillStyle = SIDEWALK_COL;
     ctx.fillRect(r.minX - SIDEWALK, r.minZ - SIDEWALK, r.maxX - r.minX + 2 * SIDEWALK, r.maxZ - r.minZ + 2 * SIDEWALK);
-    ctx.fillStyle = b.kind === 'park' ? PARK : b.kind === 'plaza' ? PLAZA : LOT;
+    ctx.fillStyle = b.kind === 'park' ? PARK : b.kind === 'plaza' ? PLAZA : b.kind === 'lot' ? WASTE : LOT;
     ctx.fillRect(r.minX, r.minZ, r.maxX - r.minX, r.maxZ - r.minZ);
   }
 

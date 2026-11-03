@@ -152,6 +152,7 @@ export function generatePackages(city: City, count = PACKAGE_COUNT, seed = 0x9ac
     [blocks[i], blocks[j]] = [blocks[j], blocks[i]];
   }
   for (const b of blocks) {
+    if (b.kind === 'lot') continue;
     const obstacles = byBlock.get(key(b.bx, b.bz)) ?? [];
     const spot =
       b.kind === 'buildings' ? alleySpot(b.interior, obstacles, rand) : b.kind === 'park' ? parkSpot(b.interior, obstacles, rand) : plazaSpot(b.interior, rand);

@@ -185,7 +185,8 @@ export function placeVendors(city: City, placer: Placer): VendorSpot[] {
       }
       return;
     }
-    if (isCarPark(city, bytes, i)) return;
+    // No trade on a car park or waste ground.
+    if (b.kind === 'lot' || isCarPark(city, bytes, i)) return;
     // Parks get one or two, open plazas two, on sides of their own and clear of the trees' canopies.
     const n = b.kind === 'plaza' ? 2 : 1 + (rand() < 0.6 ? 1 : 0);
     const first = Math.floor(rand() * 4);

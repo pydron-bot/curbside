@@ -417,7 +417,16 @@ function closeRoadEnd(ix: number, iz: number, tx: number, tz: number, put: (kind
 /** Block (bx, bz) a building stands in. */
 const blockOf = (b: Rect): [number, number] => [Math.floor(((b.minX + b.maxX) / 2 + HALF_EXTENT) / BLOCK_SIZE), Math.floor(((b.minZ + b.maxZ) / 2 + HALF_EXTENT) / BLOCK_SIZE)];
 
-/** Kerbside furniture round each block, bollards round plazas, trees in parks. */
+/** A waste lot's junk, by weight: what gets dumped on an empty plot. */
+const LOT_JUNK: ReadonlyArray<readonly [StreetPropKind, number]> = [
+  ['dumpster', 1],
+  ['traffic_barrel', 2],
+  ['shopping_cart', 1.5],
+  ['traffic_cone', 1.5],
+  ['trash_bin', 0.6],
+];
+
+/** Kerbside furniture round each block, bollards round plazas (a broken line round a waste lot, its junk inside), trees in parks. */
 function dressBlocks(city: City, blocks: readonly Block[], clear: (x: number, z: number, r: number) => boolean, put: Put): void {
   for (const b of blocks) {
     const rand = keyedStream(city.seed, 0x7e11, b.bx - CORE_OFFSET, b.bz - CORE_OFFSET);
@@ -429,6 +438,15 @@ function dressBlocks(city: City, blocks: readonly Block[], clear: (x: number, z:
         for (let t = 16; t <= 48; t += 2.4) {
           const p = at(t, KERB_LINE);
           if (Math.abs(t - 32) < 4.5 || !clear(p.x, p.z, 0.4)) continue;
+          put('bollard', p.x, p.z, toRoad);
+        }
+        continue;
+      }
+      if (b.kind === 'lot') {
+        // What's left of a row of bollards, with a gap where the trucks drive in.
+        for (let t = 10; t <= 54; t += 3) {
+          const p = at(t, KERB_LINE);
+          if (rand() < 0.35 || Math.abs(t - 32) < 5 || !clear(p.x, p.z, 0.4)) continue;
           put('bollard', p.x, p.z, toRoad);
         }
         continue;
@@ -452,6 +470,18 @@ function dressBlocks(city: City, blocks: readonly Block[], clear: (x: number, z:
       }
     }
     if (b.kind === 'park') plantTrees(city, b.bx, b.bz, b.district, put);
+    if (b.kind === 'lot') {
+      const r = b.interior;
+      const n = 4 + Math.floor(rand() * 5);
+      for (let k = 0; k < n; k++) {
+        const x = r.minX + 4 + rand() * (r.maxX - r.minX - 8);
+        const z = r.minZ + 4 + rand() * (r.maxZ - r.minZ - 8);
+        const kind = pick(LOT_JUNK, rand());
+        const heading = rand() * Math.PI * 2;
+        // Solid things (dumpsters) to a quarter turn: the collision boxes are axis-aligned.
+        if (clear(x, z, ROOM[kind] ?? 0.6)) put(kind, x, z, SOLID_HALF[kind] ? Math.round(heading / (Math.PI / 2)) * (Math.PI / 2) : heading);
+      }
+    }
   }
 }
 

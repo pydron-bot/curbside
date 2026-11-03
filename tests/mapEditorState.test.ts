@@ -260,6 +260,18 @@ describe('picking', () => {
 
 describe('tools', () => {
   const base = { kind: 'buildings' as const, district: 'downtown' as const };
+  it('a style the block already has is no style; a district repaint to the style clears it', () => {
+    let e = editBlock(NO_EDITS, 3 + CORE_OFFSET, 4 + CORE_OFFSET, { style: 'downtown' }, base);
+    expect(e.blocks).toEqual([]);
+    e = editBlock(NO_EDITS, 3 + CORE_OFFSET, 4 + CORE_OFFSET, { style: 'arts' }, base);
+    expect(e.blocks).toEqual([{ at: [3, 4], style: 'arts' }]);
+    expect(describeChange({ section: 'blocks', key: '3,4', after: e.blocks[0] })).toBe('Block 3,4: arts style');
+    e = editBlock(e, 3 + CORE_OFFSET, 4 + CORE_OFFSET, { district: 'arts' }, base);
+    expect(e.blocks).toEqual([{ at: [3, 4], district: 'arts' }]);
+    e = editBlock(NO_EDITS, 3 + CORE_OFFSET, 4 + CORE_OFFSET, { kind: 'lot' }, base);
+    expect(describeChange({ section: 'blocks', key: '3,4', after: e.blocks[0] })).toBe('Block 3,4: empty lot');
+  });
+
   it('edits a block, and setting it back to generated is no edit at all', () => {
     let e = editBlock(NO_EDITS, 3 + CORE_OFFSET, 4 + CORE_OFFSET, { kind: 'park' }, base);
     expect(e.blocks).toEqual([{ at: [3, 4], kind: 'park' }]);

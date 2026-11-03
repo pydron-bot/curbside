@@ -101,7 +101,7 @@ const CONFIRM_MS = 3000;
 const TOAST_MS = 3200;
 const QUARTER = Math.PI / 2;
 
-const KIND_LABEL: Readonly<Record<string, string>> = { buildings: 'BUILDINGS', park: 'PARK', plaza: 'PLAZA', carpark: 'CAR PARK' };
+const KIND_LABEL: Readonly<Record<string, string>> = { buildings: 'BUILDINGS', park: 'PARK', plaza: 'PLAZA', carpark: 'CAR PARK', lot: 'EMPTY LOT' };
 
 export interface MapEditorDeps {
   audio: GameAudio;
@@ -422,6 +422,7 @@ export class MapEditor implements Panel {
       }
       case 'kind':
       case 'district':
+      case 'style':
       case 'reroll':
       case 'layout':
       case 'clearBlock': {
@@ -430,9 +431,10 @@ export class MapEditor implements Panel {
         if (!base) return;
         if (act === 'kind') this.commit(editBlock(e, sel.bx, sel.bz, { kind: arg as BlockBase['kind'] }, base));
         else if (act === 'district') this.commit(editBlock(e, sel.bx, sel.bz, { district: arg as District }, base));
+        else if (act === 'style') this.commit(editBlock(e, sel.bx, sel.bz, { style: arg as District }, base));
         else if (act === 'reroll') this.commit(rerollBlock(e, sel.bx, sel.bz, base));
         else if (act === 'layout') this.commit(editBlock(e, sel.bx, sel.bz, { variant: undefined }, base));
-        else this.commit(editBlock(e, sel.bx, sel.bz, { kind: undefined, district: undefined, variant: undefined, height: undefined }, base));
+        else this.commit(editBlock(e, sel.bx, sel.bz, { kind: undefined, district: undefined, style: undefined, variant: undefined, height: undefined }, base));
         return this.d.audio.ui('confirm');
       }
       case 'road':
@@ -935,6 +937,8 @@ export class MapEditor implements Panel {
         <div class="me-row">${BLOCK_EDIT_KINDS.map((k) => btn('kind', KIND_LABEL[k], { arg: k, on: kind === k })).join('')}</div>
         <h4>DISTRICT</h4>
         <div class="me-row">${DISTRICTS.map((dname) => `<button type="button" class="me-btn me-dist${block.district === dname ? ' on' : ''}" data-act="district" data-arg="${dname}" style="--hue:${DISTRICT_HUE[dname]}">${DISTRICT_NAMES[dname]}</button>`).join('')}</div>
+        <h4>BUILDING STYLE <span class="me-sub">${block.style ? `looks ${DISTRICT_NAMES[block.style]}` : 'its district’s'}</span></h4>
+        <div class="me-row">${DISTRICTS.map((dname) => `<button type="button" class="me-btn me-dist${(block.style ?? block.district) === dname ? ' on' : ''}" data-act="style" data-arg="${dname}" style="--hue:${DISTRICT_HUE[dname]}"${kind === 'buildings' ? '' : ' disabled'}>${DISTRICT_NAMES[dname]}</button>`).join('')}</div>
         <h4>LAYOUT &amp; HEIGHT</h4>
         <div class="me-row">${btn('reroll', 'REROLL', { sub: edit?.variant !== undefined ? `layout ${edit.variant}` : 'as generated' })}${edit?.variant !== undefined ? btn('layout', 'GENERATED LAYOUT') : ''}</div>
         <label class="me-slider">HEIGHT <input type="range" data-input="height" min="${HEIGHT_SCALE_MIN}" max="${HEIGHT_SCALE_MAX}" step="0.05" value="${height}" ${kind === 'buildings' ? '' : 'disabled'}><span class="me-height-v">×${height.toFixed(2)}</span></label>
@@ -1052,7 +1056,7 @@ export class MapEditor implements Panel {
       ctx.fillStyle = `hsl(${hue} 10% 31%)`;
       ctx.fillRect(r.minX - SIDEWALK, r.minZ - SIDEWALK, r.maxX - r.minX + 2 * SIDEWALK, r.maxZ - r.minZ + 2 * SIDEWALK);
       const kind = p.kinds[i];
-      ctx.fillStyle = kind === 'park' ? '#2c5a37' : kind === 'plaza' ? '#6a6153' : kind === 'carpark' ? '#3a3d46' : `hsl(${hue} 22% 19%)`;
+      ctx.fillStyle = kind === 'park' ? '#2c5a37' : kind === 'plaza' ? '#6a6153' : kind === 'carpark' ? '#3a3d46' : kind === 'lot' ? '#4a4236' : `hsl(${hue} 22% 19%)`;
       ctx.fillRect(r.minX, r.minZ, r.maxX - r.minX, r.maxZ - r.minZ);
       if (kind === 'carpark' && s > 1.2) {
         ctx.strokeStyle = 'rgb(255 255 255 / 0.25)';

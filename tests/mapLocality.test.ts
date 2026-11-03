@@ -53,7 +53,7 @@ describe('a map edit stays in its block', () => {
   const pickBlock = (kind: Block['kind'], edit: Omit<BlockEdit, 'at'>) =>
     plain.blocks.find((b) => {
       if (kind === 'plaza' && !isCarPark(plain, plainBytes, plain.blocks.indexOf(b))) return false;
-      if (b.kind !== kind || b.bx < CORE_OFFSET + 2 || b.bz < CORE_OFFSET + 2) return false;
+      if (b.kind !== kind || b.bx < CORE_OFFSET + 2 || b.bz < CORE_OFFSET + 2 || b.district === edit.style) return false;
       const city = generateCity(1337, { ...NO_EDITS, blocks: [{ ...edit, at: [b.bx - CORE_OFFSET, b.bz - CORE_OFFSET] }] });
       return landmarks(city) === plainLandmarks;
     })!;
@@ -65,6 +65,8 @@ describe('a map edit stays in its block', () => {
     ['car park to open plaza', 'plaza', { kind: 'plaza' }],
     ['a reroll', 'buildings', { variant: 7 }],
     ['a repaint', 'buildings', { district: 'industrial' }],
+    ['buildings to an empty lot', 'buildings', { kind: 'lot' }],
+    ['a restyle', 'buildings', { style: 'downtown' }],
   ];
 
   for (const [name, kind, edit] of cases) {
@@ -82,7 +84,7 @@ describe('a map edit stays in its block', () => {
       });
       // And the edit did change its own block.
       const mine = (x: Dressing) => x.street.props.filter((p) => inCell(b, p.x, p.z)).map((p) => `${p.kind} ${p.x} ${p.z}`);
-      if (edit.district === undefined) expect(mine(d)).not.toEqual(mine(plainDress));
+      if (edit.district === undefined && edit.style === undefined) expect(mine(d)).not.toEqual(mine(plainDress));
     });
   }
 });

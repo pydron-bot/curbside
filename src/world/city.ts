@@ -75,7 +75,7 @@ export interface Tree {
   radius: number;
 }
 
-export type BlockKind = 'buildings' | 'park' | 'plaza';
+export type BlockKind = 'buildings' | 'park' | 'plaza' | 'lot';
 
 export interface Block {
   bx: number;
@@ -84,6 +84,8 @@ export interface Block {
   district: District;
   /** Buildable interior (inside the sidewalk). */
   interior: Rect;
+  /** The district its buildings and pavement look like, when a map edit gave it another's style (else its own). */
+  style?: District;
   /** A plaza the map edits made a car park (true) or an open plaza (false); else the lot byte decides (lotBytes). */
   carPark?: boolean;
 }
@@ -154,15 +156,18 @@ export function generateCity(seed = 1337, edits: MapEdits = NO_EDITS): City {
     const kind = edit?.kind === undefined ? generated : edit.kind === 'carpark' ? 'plaza' : edit.kind;
     const block: Block = { bx, bz, kind, district, interior };
     if (edit?.kind === 'carpark' || edit?.kind === 'plaza') block.carPark = edit.kind === 'carpark';
+    // A style edit: the buildings take that district's look (the same random draws, so the same footprints).
+    const look = edit?.style ?? district;
+    if (edit?.style !== undefined) block.style = edit.style;
     blocks.push(block);
 
     const first = buildings.length;
     if (kind === generated && edit?.variant === undefined) {
       // As generated (a repaint keeps the footprints and takes the new district's heights and colours).
-      fillBlock(interior, kind, district, rand, buildings, trees);
+      fillBlock(interior, kind, look, rand, buildings, trees);
     } else {
       fillBlock(interior, generated, district, rand, scrapBuildings, scrapTrees);
-      fillBlock(interior, kind, district, mulberry32(blockSeed(seed, bx - CORE_OFFSET, bz - CORE_OFFSET, edit?.variant ?? 0)), buildings, trees);
+      fillBlock(interior, kind, look, mulberry32(blockSeed(seed, bx - CORE_OFFSET, bz - CORE_OFFSET, edit?.variant ?? 0)), buildings, trees);
     }
     // A height edit scales the block's buildings (footprints and roof kit as they were).
     if (edit?.height !== undefined) for (let i = first; i < buildings.length; i++) buildings[i].height = Math.min(MAX_HEIGHT, buildings[i].height * edit.height);

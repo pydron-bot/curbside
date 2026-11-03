@@ -7,9 +7,10 @@
  *
  * Version 2 has four sections, each written so it stays put in a bigger
  * city (W3-A):
- * - blocks: a block's kind (buildings, park, plaza, car park), district (a
- *   repaint), variant (a reroll of its buildings or trees) and building
- *   height (a scale), in core blocks;
+ * - blocks: a block's kind (buildings, park, plaza, car park, empty lot),
+ *   district (a repaint), building style (another district's look for its
+ *   buildings, the district staying), variant (a reroll of its buildings or
+ *   trees) and building height (a scale), in core blocks;
  * - roads: a road between two neighbouring crossings (centred nodes, as
  *   races use) closed to traffic, or one-way from `a` to `b`;
  * - spots: a hand-placed spot (an anchor id from game/mapAnchors.ts: the
@@ -31,8 +32,8 @@ import { DISTRICTS, type District } from './districts';
 export const MAP_EDITS_VERSION = 2;
 
 /** What a block can be made: 'carpark' is a plaza painted with bays, 'plaza' one without. */
-export type BlockEditKind = 'buildings' | 'park' | 'plaza' | 'carpark';
-export const BLOCK_EDIT_KINDS: readonly BlockEditKind[] = ['buildings', 'park', 'plaza', 'carpark'];
+export type BlockEditKind = 'buildings' | 'park' | 'plaza' | 'carpark' | 'lot';
+export const BLOCK_EDIT_KINDS: readonly BlockEditKind[] = ['buildings', 'park', 'plaza', 'carpark', 'lot'];
 /** Building height scale limits (heights stay capped at districts.ts MAX_HEIGHT). */
 export const HEIGHT_SCALE_MIN = 0.4;
 export const HEIGHT_SCALE_MAX = 1.6;
@@ -44,6 +45,8 @@ export interface BlockEdit {
   at: readonly [number, number];
   kind?: BlockEditKind;
   district?: District;
+  /** Its buildings (and pavement) look like this district's: heights, walls, shopfronts, roofs and signs; the district stays for the game. */
+  style?: District;
   /** Rebuild the block's buildings or trees from this stream (any integer; a new number is a new layout). */
   variant?: number;
   /** Scale the block's building heights (HEIGHT_SCALE_MIN..MAX; the footprints stay). */
@@ -206,7 +209,7 @@ export function parseMapEdits(raw: unknown): ParsedMapEdits {
     const at = e.at;
     if (!Array.isArray(at) || at.length !== 2 || !isInt(at[0]) || !isInt(at[1])) return void problems.push(`${where}: "at" must be [bx, bz] integers`), null;
     if (Math.abs(at[0]) >= BLOCK_REACH || Math.abs(at[1]) >= BLOCK_REACH) return void problems.push(`${where}: block ${at[0]},${at[1]} is off any city`), null;
-    unknownFields(where, e, ['at', 'kind', 'district', 'variant', 'height']);
+    unknownFields(where, e, ['at', 'kind', 'district', 'style', 'variant', 'height']);
     const edit: { -readonly [K in keyof BlockEdit]: BlockEdit[K] } = { at: [at[0], at[1]] };
     if (e.kind !== undefined) {
       if (BLOCK_EDIT_KINDS.includes(e.kind as BlockEditKind)) edit.kind = e.kind as BlockEditKind;
@@ -215,6 +218,10 @@ export function parseMapEdits(raw: unknown): ParsedMapEdits {
     if (e.district !== undefined) {
       if (DISTRICTS.includes(e.district as District)) edit.district = e.district as District;
       else problems.push(`${where}: unknown district ${JSON.stringify(e.district)} ignored`);
+    }
+    if (e.style !== undefined) {
+      if (DISTRICTS.includes(e.style as District)) edit.style = e.style as District;
+      else problems.push(`${where}: unknown style ${JSON.stringify(e.style)} ignored`);
     }
     if (e.variant !== undefined) {
       if (isInt(e.variant)) edit.variant = e.variant;
@@ -288,7 +295,7 @@ export function parseMapEdits(raw: unknown): ParsedMapEdits {
   };
 }
 
-const blockChanges = (e: Omit<BlockEdit, 'at'>) => e.kind !== undefined || e.district !== undefined || e.variant !== undefined || e.height !== undefined;
+const blockChanges = (e: Omit<BlockEdit, 'at'>) => e.kind !== undefined || e.district !== undefined || e.style !== undefined || e.variant !== undefined || e.height !== undefined;
 
 const byNode = (p: Node, q: Node) => p[1] - q[1] || p[0] - q[0];
 
@@ -323,7 +330,7 @@ function oneLine(v: unknown): string {
 
 /** Entries with their keys in the file's fixed order. */
 const ORDER: Readonly<Record<MapSection, readonly string[]>> = {
-  blocks: ['at', 'kind', 'district', 'variant', 'height'],
+  blocks: ['at', 'kind', 'district', 'style', 'variant', 'height'],
   roads: ['a', 'b', 'closed', 'oneWay'],
   spots: ['id', 'add', 'x', 'z', 'heading', 'removed'],
   props: ['kind', 'x', 'z', 'heading', 'removed'],

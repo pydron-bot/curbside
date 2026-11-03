@@ -74,7 +74,7 @@ export class Buskers implements Scene {
     const city = life.d.city;
     const bytes = lotBytes(city);
     city.blocks.forEach((b, i) => {
-      if (b.kind === 'buildings' || isCarPark(city, bytes, i)) return;
+      if (b.kind === 'buildings' || b.kind === 'lot' || isCarPark(city, bytes, i)) return;
       for (let side = 0; side < 4; side++) {
         const s = blockSide(b, side);
         for (const t of [BLOCK_SIZE * 0.3, BLOCK_SIZE * 0.7]) {

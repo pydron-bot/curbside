@@ -226,6 +226,29 @@ describe('generateCity with edits', () => {
     expect(districtOf(built.bx, built.bz)).toBe(was);
   });
 
+  it('restyles a block: the same footprints in another district\'s look, the district kept', () => {
+    const to = built.district === 'downtown' ? 'industrial' : 'downtown';
+    const city = generateCity(1337, edits([{ at: at(built), style: to }]));
+    const block = blockOf(city, ...at(built));
+    expect(block.district).toBe(built.district);
+    expect(block.style).toBe(to);
+    expect(districtOf(built.bx, built.bz)).toBe(built.district);
+    const mine = city.buildings.filter(centreIn(built.interior));
+    const before = plain.buildings.filter(centreIn(built.interior));
+    expect(mine.map((b) => [b.minX, b.minZ, b.maxX, b.maxZ])).toEqual(before.map((b) => [b.minX, b.minZ, b.maxX, b.maxZ]));
+    expect(mine.every((b) => b.district === to)).toBe(true);
+  });
+
+  it('clears a block to waste ground: no buildings or trees', () => {
+    const city = generateCity(1337, edits([{ at: at(built), kind: 'lot' }, { at: at(park), kind: 'lot' }]));
+    expect(blockOf(city, ...at(built)).kind).toBe('lot');
+    expect(city.buildings.filter(centreIn(built.interior))).toEqual([]);
+    expect(city.trees.filter((t) => inside(park.interior, t.x, t.z))).toEqual([]);
+    const r = parseMapEdits({ version: 2, blocks: [{ at: [1, 1], kind: 'lot', style: 'arts' }, { at: [2, 2], style: 'moon' }] });
+    expect(r.edits.blocks).toEqual([{ at: [1, 1], kind: 'lot', style: 'arts' }]);
+    expect(r.problems).toEqual(['blocks[1]: unknown style "moon" ignored', 'blocks[1]: changes nothing']);
+  });
+
   it('scales a block\'s building heights, capped, footprints kept', () => {
     const city = generateCity(1337, edits([{ at: at(built), height: 0.5 }]));
     const mine = city.buildings.filter(centreIn(built.interior));
