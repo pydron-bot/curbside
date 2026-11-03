@@ -95,9 +95,11 @@ export function placeLandmarkProps(input: LandmarkInput): Landmarks {
   const st = input.station;
   const signWall = wallBehind(input.city, st.x, st.z, st.heading);
   put('police_sign', st.x, signWall.z, st.heading, 1, 1, 1, 0);
+  // The door faces the road its pavement runs along (north, as generated; the map edits can move it).
   const home = input.safehouse;
-  const doorWall = wallBehind(input.city, home.x, home.z, Math.PI);
-  put('safehouse_door', home.x, doorWall.z, Math.PI);
+  const door = inward(home.x, home.z);
+  if (door.inZ !== 0) put('safehouse_door', home.x, wallBehind(input.city, home.x, home.z, door.heading).z, door.heading);
+  else put('safehouse_door', wallBeside(input.city, home.x, home.z, door.inX), home.z, door.heading);
 
   // Payphones a step back from the pavement path, facing the road (people walk past in front).
   for (const p of input.payphones) {
@@ -162,6 +164,19 @@ function wallBehind(city: City, x: number, z: number, heading: number): { z: num
   }
   // No building there: the edge of the lot behind the pavement.
   return { z: best ?? z + (facingSouth ? -1 : 1) * (SIDEWALK / 2) };
+}
+
+/** As wallBehind for a pavement along a north-south road: the x of the wall on side `inX` (+1 east, -1 west). */
+function wallBeside(city: City, x: number, z: number, inX: number): number {
+  let best: number | null = null;
+  for (const b of city.buildings) {
+    if (z < b.minZ + 0.5 || z > b.maxZ - 0.5) continue;
+    const face = inX > 0 ? b.minX : b.maxX;
+    const gap = (face - x) * inX;
+    if (gap < 0 || gap > SIDEWALK + 2) continue;
+    if (best === null || Math.abs(x - face) < Math.abs(x - best)) best = face;
+  }
+  return best ?? x + inX * (SIDEWALK / 2);
 }
 
 /** From a pavement spot: the unit step toward the building side, and the heading that faces the road. */

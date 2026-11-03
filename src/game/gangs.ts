@@ -16,6 +16,9 @@
 import { corePavement } from './modes/places';
 import type { BodyKind } from './bodies';
 import type { District } from '../world/districts';
+import type { MapEdits } from '../world/mapEdits';
+import { ACTIVE_MAP } from '../world/shippedMap';
+import { editSpot } from '../world/spotEdits';
 
 export interface GangDef {
   id: string;
@@ -159,7 +162,7 @@ export interface Hangout {
 }
 
 /** Every gang's hangouts, with each member's spot (pure: the same city gives the same places). */
-export function placeHangouts(gangs: readonly GangDef[] = GANGS): Hangout[] {
+export function placeHangouts(gangs: readonly GangDef[] = GANGS, edits: MapEdits = ACTIVE_MAP): Hangout[] {
   const out: Hangout[] = [];
   for (const g of gangs) {
     g.hangouts.forEach(([bx, bz, edge, t], i) => {
@@ -167,7 +170,16 @@ export function placeHangouts(gangs: readonly GangDef[] = GANGS): Hangout[] {
       const members: Array<{ x: number; z: number }> = [];
       // Along the pavement, a couple of metres apart (the edge is ~45 m long).
       for (let k = 0; k < CREW_SIZE; k++) members.push(corePavement(bx, bz, edge, t + (k - (CREW_SIZE - 1) / 2) * 0.05));
-      out.push({ id: `${g.id}-${i}`, gang: g, x: centre.x, z: centre.z, members });
+      const h: Hangout = { id: `${g.id}-${i}`, gang: g, x: centre.x, z: centre.z, members };
+      // Map edits (W3-D): moved, the crew comes along in the same line; removed, no crew.
+      const e = editSpot(h, edits, true);
+      if (e && e !== h) {
+        for (const m of members) {
+          m.x += e.x - centre.x;
+          m.z += e.z - centre.z;
+        }
+      }
+      if (e) out.push(e);
     });
   }
   return out;

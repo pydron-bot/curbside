@@ -15,13 +15,18 @@
  */
 import { launch, type VehicleState } from '../entities/vehicle';
 import { BLOCK_SIZE, ROAD_WIDTH, type Rect } from './city';
-import { CORE_MAX_NODE, DIR_VEC, dirHeading, type Dir } from './roads';
+import { CORE_MAX_NODE, DIRS, DIR_VEC, dirHeading, type Dir } from './roads';
 import { mulberry32 } from './random';
+import type { MapEdits } from './mapEdits';
+import { ACTIVE_MAP } from './shippedMap';
+import { spotEdit } from './spotEdits';
 import { len2 } from '../core/len';
 
 export type RampKind = 'ramp' | 'kicker';
 
 export interface Ramp {
+  /** Its anchor id ('ramp-<n>', game/mapAnchors.ts), from placeCityRamps. */
+  id?: string;
   kind: RampKind;
   /** Centre of the footprint. */
   x: number;
@@ -130,6 +135,36 @@ export function placeKickers(seed: number, ramps: readonly Ramp[], count = KICKE
     if (out.some((q) => len2(q.x - k.x, q.z - k.z) < KICKER_SPACING)) continue;
     out.push(k);
   }
+  return out;
+}
+
+/**
+ * The city's ramps then kickers, each with its anchor id ('ramp-<n>' by
+ * place in that list), as the map edits (W3-D) leave them: moved, turned (to
+ * the nearest quarter: ramps are axis-aligned) or removed. What main.ts,
+ * the dressing and the map checks use.
+ */
+export function placeCityRamps(seed: number, edits: MapEdits = ACTIVE_MAP): Ramp[] {
+  const big = placeRamps(seed);
+  const all = [...big, ...placeKickers(seed, big)];
+  const out: Ramp[] = [];
+  all.forEach((r, i) => {
+    const id = `ramp-${i}`;
+    const e = spotEdit(edits, id);
+    if (e?.removed) return;
+    const ramp: Ramp = { ...r, id };
+    if (e?.x !== undefined && e.z !== undefined) {
+      ramp.x = e.x;
+      ramp.z = e.z;
+    }
+    if (e?.heading !== undefined) {
+      const h = e.heading;
+      const off = (d: Dir) => Math.abs(Math.atan2(Math.sin(h - dirHeading(d)), Math.cos(h - dirHeading(d))));
+      ramp.dir = DIRS.reduce((a, d) => (off(d) < off(a) ? d : a));
+      ramp.heading = dirHeading(ramp.dir);
+    }
+    out.push(ramp);
+  });
   return out;
 }
 
