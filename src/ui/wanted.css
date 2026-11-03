@@ -233,9 +233,12 @@ body:has(#radio.in) #wanted {
 }
 
 #wasted.busted .wasted-title {
-  color: #4f8bff;
-  -webkit-text-stroke-color: #02092a;
-  text-shadow: 0 0.06em 0 #020b38, 0 0 0.5em rgb(60 120 255 / 0.5);
+  --tube: var(--neon-cyan);
+  --ghost: rgb(255 46 136 / 0.55);
+  background: linear-gradient(180deg, #f2fbff 0%, #a8e6ff 26%, #3d8bff 58%, #0f2a9a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0.05em 0 #020b38) drop-shadow(0 0 0.2em rgb(60 140 255 / 0.6));
 }
 
 #wasted.busted .wasted-timer > i {

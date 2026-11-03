@@ -689,16 +689,120 @@ body:not([data-device='touch']) .hud-pause {
   }
 }
 
+/* The title in the logo's neon (0.24.0): a hot gradient fill, a neon tube
+   outline offset behind it that flickers, a ghost for a chromatic edge, and
+   a VHS glitch as it lands and every few seconds after. */
 .wasted-title {
+  --tube: #ff2e6e;
+  --ghost: rgb(46 230 255 / 0.6);
   position: relative;
   margin-top: -6vmin;
   font: italic 900 clamp(58px, 20vmin, 128px)/0.9 var(--display-font);
   letter-spacing: 0.05em;
-  color: #ff2a3d;
-  -webkit-text-stroke: 2px #2a0006;
-  text-shadow: 0 0.06em 0 #3a000a, 0 0 0.5em rgb(255 0 40 / 0.45);
+  color: transparent;
+  background: linear-gradient(180deg, #fff3f6 0%, #ffb0c8 26%, #ff2e6e 58%, #b0002c 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter: drop-shadow(0 0.05em 0 #2a0010) drop-shadow(0 0 0.2em rgb(255 46 110 / 0.6));
   transform: skewX(-8deg);
-  animation: wasted-slam 0.6s cubic-bezier(0.2, 1.5, 0.35, 1) both;
+  animation:
+    wasted-slam 0.6s cubic-bezier(0.2, 1.5, 0.35, 1) both,
+    vhs-glitch 4.2s 0.55s steps(1) infinite;
+}
+
+.wasted-title::before,
+.wasted-title::after {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: transparent;
+  pointer-events: none;
+}
+
+/* The neon tube behind the fill. */
+.wasted-title::before {
+  z-index: -1;
+  -webkit-text-stroke: 0.035em var(--tube);
+  transform: translate(0.06em, 0.055em);
+  filter: drop-shadow(0 0 0.1em var(--tube));
+  animation: wasted-flicker 5s 0.8s infinite;
+}
+
+/* The ghost: a sliver of it tears sideways while the tape glitches. */
+.wasted-title::after {
+  z-index: -2;
+  color: var(--ghost);
+  transform: translate(-0.04em, -0.02em);
+  animation: vhs-tear 4.2s 0.55s steps(1) infinite;
+}
+
+@keyframes vhs-glitch {
+  0%,
+  9%,
+  100% {
+    transform: skewX(-8deg);
+    clip-path: none;
+  }
+  2% {
+    transform: skewX(-8deg) translateX(-0.06em);
+    clip-path: inset(18% 0 52% 0);
+  }
+  4% {
+    transform: skewX(-8deg) translateX(0.08em);
+    clip-path: inset(56% 0 12% 0);
+  }
+  6% {
+    transform: skewX(-8deg) translateX(-0.03em);
+    clip-path: inset(0 0 70% 0);
+  }
+}
+
+@keyframes vhs-tear {
+  0%,
+  9%,
+  100% {
+    transform: translate(-0.04em, -0.02em);
+    clip-path: none;
+  }
+  3% {
+    transform: translate(0.12em, -0.02em);
+    clip-path: inset(30% 0 40% 0);
+  }
+  5% {
+    transform: translate(-0.14em, 0);
+    clip-path: inset(62% 0 8% 0);
+  }
+}
+
+@keyframes wasted-flicker {
+  0%,
+  41%,
+  43%,
+  45%,
+  100% {
+    opacity: 1;
+  }
+  42%,
+  44% {
+    opacity: 0.25;
+  }
+}
+
+/* Faint tape scanlines rolling down the screen behind the title. */
+#wasted::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgb(255 255 255 / 0.035) 0 1px, rgb(0 0 0 / 0.07) 1px 2px, transparent 2px 4px);
+  animation: tape-roll 6s linear infinite;
+}
+
+@keyframes tape-roll {
+  to {
+    background-position: 0 120px;
+  }
 }
 
 @keyframes wasted-slam {
@@ -897,6 +1001,9 @@ body:not([data-device='touch']) .hud-pause {
 
 @media (prefers-reduced-motion: reduce) {
   .wasted-title,
+  .wasted-title::before,
+  .wasted-title::after,
+  #wasted::after,
   .wasted-slash,
   .ws-row,
   .feed-line {
