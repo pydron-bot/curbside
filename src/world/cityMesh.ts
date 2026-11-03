@@ -84,6 +84,12 @@ export interface CityMesh {
    * switching back reuses the original.
    */
   setBreaches(on: boolean): void;
+  /**
+   * The map editor's live rebuild: build `city` again and swap in only the
+   * 256 m chunks whose contents changed (same geometries and materials, so
+   * no new shader programs). Returns how many chunks were rebuilt.
+   */
+  rebuild(city: City, plans: readonly BuildingPlan[]): number;
 }
 
 /**
@@ -113,6 +119,93 @@ export function createCityMesh(city: City, plans: readonly BuildingPlan[] = plan
   const canopyMat = new MeshLambertMaterial({ flatShading: true });
   const glowMat = glowMaterial();
 
+  const parts: Record<PartName, [BufferGeometry, Material, string[]]> = {
+    buildings: [unitBox, buildingMat, ['aRoofColor:3', 'aInfo:4']],
+    boxes: [unitBox, propMat, ['aGlow:1']],
+    standins: [unitBox, propMat, ['aGlow:1']],
+    cylinders: [cylinder, propMat, ['aGlow:1']],
+    canopies: [canopyGeo, canopyMat, []],
+    glows: [glowGeo, glowMat, []],
+  };
+  const glowMeshes = new Set<InstancedMesh>();
+  const standIns = new Set<InstancedMesh>();
+  let standInsGone = false;
+  /** Each chunk's group and a hash of what went into it (a rebuild swaps the ones that differ). */
+  const mounted = new Map<number, { group: Group; hash: string }>();
+
+  const mount = (key: number, c: ChunkBuilder) => {
+    const group = c.build(parts);
+    for (const mesh of [...group.children] as InstancedMesh[]) {
+      if (STANDIN_PARTS.includes(mesh.userData.part)) {
+        // The models are already in (a live rebuild): no stand-ins.
+        if (standInsGone) {
+          mesh.removeFromParent();
+          disposeChunkMesh(mesh, parts);
+          continue;
+        }
+        standIns.add(mesh);
+      }
+      if (mesh.userData.part === 'glows') glowMeshes.add(mesh);
+      else {
+        mesh.castShadow = true;
+        mesh.receiveShadow = mesh.userData.part !== 'canopies';
+      }
+    }
+    root.add(group);
+    mounted.set(key, { group, hash: c.hash() });
+  };
+  const unmount = (key: number) => {
+    const old = mounted.get(key);
+    if (!old) return;
+    for (const mesh of old.group.children as InstancedMesh[]) {
+      standIns.delete(mesh);
+      glowMeshes.delete(mesh);
+      disposeChunkMesh(mesh, parts);
+    }
+    old.group.removeFromParent();
+    mounted.delete(key);
+  };
+
+  for (const [key, c] of fillChunks(city, plans)) mount(key, c);
+  root.add(boundaryWallMesh(city, unitBox, propMat));
+
+  return {
+    root,
+    update(night: number) {
+      const show = night > 0.02;
+      for (const g of glowMeshes) g.visible = show;
+    },
+    hideStandIns() {
+      // Out of the scene altogether (not just hidden), so nothing ever draws or re-uploads them.
+      for (const m of standIns) {
+        m.removeFromParent();
+        m.dispose();
+      }
+      standIns.clear();
+      standInsGone = true;
+    },
+    rebuild(next: City, nextPlans: readonly BuildingPlan[]) {
+      const built = fillChunks(next, nextPlans);
+      let n = 0;
+      for (const key of new Set([...mounted.keys(), ...built.keys()])) {
+        const c = built.get(key);
+        if (c && mounted.get(key)?.hash === c.hash()) continue;
+        unmount(key);
+        if (c) mount(key, c);
+        n++;
+      }
+      return n;
+    },
+    setBreaches(on: boolean) {
+      if (on === (buildingMat.defines?.CURBSIDE_BREACH !== undefined)) return;
+      buildingMat.defines = on ? { CURBSIDE_BREACH: '' } : {};
+      buildingMat.needsUpdate = true;
+    },
+  };
+}
+
+/** Everything the city draws, sorted into 256 m chunks by key (cx · CHUNKS_PER_SIDE + cz). */
+function fillChunks(city: City, plans: readonly BuildingPlan[]): Map<number, ChunkBuilder> {
   const chunks = new Map<number, ChunkBuilder>();
   const chunkFor = (x: number, z: number) => {
     const cx = clampChunk(Math.floor((x + HALF_EXTENT) / CHUNK_SIZE));
@@ -164,51 +257,14 @@ export function createCityMesh(city: City, plans: readonly BuildingPlan[] = plan
     m.makeScale(t.radius, t.radius * 0.8, t.radius).setPosition(t.x, h + t.radius * 0.4, t.z);
     c.add('canopies', m, color.setHSL(0.24 + ((t.x * 7.1 + t.z) % 1) * 0.07, 0.5, 0.27));
   }
+  return chunks;
+}
 
-  const parts: Record<PartName, [BufferGeometry, Material, string[]]> = {
-    buildings: [unitBox, buildingMat, ['aRoofColor:3', 'aInfo:4']],
-    boxes: [unitBox, propMat, ['aGlow:1']],
-    standins: [unitBox, propMat, ['aGlow:1']],
-    cylinders: [cylinder, propMat, ['aGlow:1']],
-    canopies: [canopyGeo, canopyMat, []],
-    glows: [glowGeo, glowMat, []],
-  };
-  const glowMeshes: InstancedMesh[] = [];
-  const standIns: InstancedMesh[] = [];
-  for (const c of chunks.values()) {
-    const group = c.build(parts);
-    for (const mesh of group.children as InstancedMesh[]) {
-      if (STANDIN_PARTS.includes(mesh.userData.part)) standIns.push(mesh);
-      if (mesh.userData.part === 'glows') glowMeshes.push(mesh);
-      else {
-        mesh.castShadow = true;
-        mesh.receiveShadow = mesh.userData.part !== 'canopies';
-      }
-    }
-    root.add(group);
-  }
-  root.add(boundaryWallMesh(city, unitBox, propMat));
-
-  return {
-    root,
-    update(night: number) {
-      const show = night > 0.02;
-      for (const g of glowMeshes) g.visible = show;
-    },
-    hideStandIns() {
-      // Out of the scene altogether (not just hidden), so nothing ever draws or re-uploads them.
-      for (const m of standIns) {
-        m.removeFromParent();
-        m.dispose();
-      }
-      standIns.length = 0;
-    },
-    setBreaches(on: boolean) {
-      if (on === (buildingMat.defines?.CURBSIDE_BREACH !== undefined)) return;
-      buildingMat.defines = on ? { CURBSIDE_BREACH: '' } : {};
-      buildingMat.needsUpdate = true;
-    },
-  };
+/** A chunk mesh's own geometry (a clone, when it has per-instance attributes) and instance buffers; the shared ones stay. */
+function disposeChunkMesh(mesh: InstancedMesh, parts: Record<PartName, [BufferGeometry, Material, string[]]>): void {
+  const shared = parts[mesh.userData.part as PartName]?.[0];
+  if (mesh.geometry !== shared) mesh.geometry.dispose();
+  mesh.dispose();
 }
 
 // --- Content ---------------------------------------------------------------
@@ -504,6 +560,13 @@ class ChunkBuilder {
     p.extra.push(...extra);
   }
 
+  /** What went into the chunk, as text: equal hashes draw the same. */
+  hash(): string {
+    let h = '';
+    for (const [part, { matrices, colors, extra }] of this.parts) h += `${part}:${hashNumbers(matrices)}/${hashNumbers(colors)}/${hashNumbers(extra)};`;
+    return h;
+  }
+
   build(defs: Record<PartName, [BufferGeometry, Material, string[]]>): Group {
     const g = new Group();
     g.name = this.name;
@@ -532,6 +595,18 @@ class ChunkBuilder {
     }
     return g;
   }
+}
+
+/** A quick 32-bit hash of a list of numbers (with its length), for telling chunks apart. */
+function hashNumbers(v: readonly number[]): string {
+  let h = 0x811c9dc5;
+  const f = new Float32Array(1);
+  const u = new Uint32Array(f.buffer);
+  for (let i = 0; i < v.length; i++) {
+    f[0] = v[i];
+    h = Math.imul(h ^ u[0], 0x01000193);
+  }
+  return `${v.length}.${(h >>> 0).toString(36)}`;
 }
 
 function clampChunk(c: number) {

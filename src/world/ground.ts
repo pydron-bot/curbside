@@ -89,7 +89,22 @@ export function createGround(city: City): Mesh {
   // the screen, so early depth rejection skips it under roofs and cars.
   ground.renderOrder = 1;
   ground.name = 'ground';
+  ground.userData.textures = { blocks, ao };
   return ground;
+}
+
+/** The map editor's live rebuild: the ground's per-block facts and contact shadows for `city`, in the textures it has. */
+export function refreshGround(ground: Mesh, city: City): void {
+  const t = ground.userData.textures as { blocks: DataTexture; ao: DataTexture } | undefined;
+  if (!t) return;
+  for (const [tex, next] of [
+    [t.blocks, blockTexture(city)],
+    [t.ao, contactShadowTexture(city)],
+  ] as const) {
+    (tex.image.data as Uint8Array).set(next.image.data as Uint8Array);
+    tex.needsUpdate = true;
+    next.dispose();
+  }
 }
 
 /**

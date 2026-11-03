@@ -1,4 +1,5 @@
 import {
+  type BufferGeometry,
   AddEquation,
   BoxGeometry,
   Color,
@@ -110,13 +111,26 @@ export class LowResFx {
     uProj: { value: new Vector2(-1, -2) },
   };
 
+  private occluders: Group;
+
+  /** The map editor's live rebuild: new occluders for new buildings (the same box and material). */
+  setBuildings(buildings: ReadonlyArray<Rect & { height: number }>): void {
+    const old = this.occluders;
+    const first = old.children[0] as InstancedMesh | undefined;
+    this.occluders = buildingBoxes(buildings, first?.geometry, first?.material as ShaderMaterial | undefined);
+    for (const m of old.children as InstancedMesh[]) m.dispose();
+    old.removeFromParent();
+    this.scene.add(this.occluders);
+  }
+
   /** `buildings`: boxes from the ground up to `height`, the occluders the offscreen pass knows. */
   constructor(
     private readonly renderer: WebGLRenderer,
     buildings: ReadonlyArray<Rect & { height: number }>,
   ) {
     this.hdr = isHdr(renderer);
-    this.scene.add(buildingBoxes(buildings));
+    this.occluders = buildingBoxes(buildings);
+    this.scene.add(this.occluders);
     const ext = renderer.extensions;
     this.supported = ext.has('EXT_color_buffer_float') || ext.has('EXT_color_buffer_half_float');
     const plane = new PlaneGeometry(1, 1);
@@ -271,10 +285,9 @@ const COMPOSITE_BIAS = 3;
  * pass. One batch per 256 m chunk, culled whole, so a bigger city (W3-A)
  * draws only the boxes round the camera.
  */
-function buildingBoxes(buildings: ReadonlyArray<Rect & { height: number }>): Group {
-  const geo = new BoxGeometry(1, 1, 1);
-  geo.translate(0, 0.5, 0);
-  const material = new ShaderMaterial({
+function buildingBoxes(buildings: ReadonlyArray<Rect & { height: number }>, box?: BufferGeometry, mat?: ShaderMaterial): Group {
+  const geo = box ?? new BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
+  const material = mat ?? new ShaderMaterial({
     vertexShader: /* glsl */ `
       void main() {
         gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);

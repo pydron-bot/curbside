@@ -1,9 +1,10 @@
-import { Vector3, type Camera, type Object3D, type Scene, type WebGLRenderer } from 'three';
+import { Vector3, type Camera, type Mesh, type Object3D, type Scene, type WebGLRenderer } from 'three';
 import { planBuildings, type BuildingPlan } from '../world/buildingPlans';
 import type { City, Rect } from '../world/city';
 import { createCityMesh, type CityMesh } from '../world/cityMesh';
 import type { StreetProps } from '../world/streetProps';
-import { createGround } from '../world/ground';
+import type { Landmarks } from '../world/landmarkProps';
+import { createGround, refreshGround } from '../world/ground';
 import type { Pickup } from '../world/pickups';
 import type { CameraRig } from './cameraRig';
 import { CharacterBodies } from './characterBodies';
@@ -82,6 +83,9 @@ export class Look {
   readonly plans: readonly BuildingPlan[];
   private readonly sunShadow: SunShadow;
   private readonly city: CityMesh;
+  private readonly ground: Mesh;
+  private searchlights: ReturnType<typeof planSearchlights>;
+  private neon: ReturnType<typeof neonSources>;
   private readonly view: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
   private dt = 0;
   private player: PlayerView | null = null;
@@ -99,6 +103,26 @@ export class Look {
   /** Metres added to the fog's near and far each frame (Observe mode's high camera; 0 in play). */
   fogPush = 0;
 
+  /**
+   * The map editor's live rebuild (W3-D): the ground's lots and shadows, the
+   * building plans (in place: `plans` keeps its identity), the city's chunks
+   * that changed, every static prop and the night glows that come from the
+   * buildings, all for `city` (already regenerated in place). Same materials,
+   * so nothing compiles; returns how many 256 m chunks were rebuilt.
+   */
+  rebuildCity(city: City, streetProps: StreetProps, landmarks: Landmarks): number {
+    refreshGround(this.ground, city);
+    const plans = this.plans as BuildingPlan[];
+    plans.splice(0, plans.length, ...planBuildings(city));
+    const n = this.city.rebuild(city, plans);
+    this.props.rebuild(streetProps, plans, landmarks);
+    this.searchlights = planSearchlights(city.buildings, plans);
+    this.neon = neonSources(city.buildings, plans);
+    this.lowFx.setBuildings(city.buildings);
+    this.warmedUp = false;
+    return n;
+  }
+
   constructor(
     private readonly renderer: WebGLRenderer,
     private readonly scene: Scene,
@@ -110,7 +134,8 @@ export class Look {
   ) {
     this.lighting = new SceneLighting(scene);
     this.sunShadow = new SunShadow(renderer, this.lighting.sun);
-    scene.add(createGround(city));
+    this.ground = createGround(city);
+    scene.add(this.ground);
     const plans = planBuildings(city);
     this.plans = plans;
     this.city = createCityMesh(city, plans);
@@ -124,12 +149,12 @@ export class Look {
     });
     this.addGlowSource((g, view) => this.props.drawGlows(g, view));
     // Searchlights sweeping from downtown's tallest roofs at night (world/searchlights.ts).
-    const lights = planSearchlights(city.buildings, this.plans);
+    this.searchlights = planSearchlights(city.buildings, this.plans);
     this.addGlowSource((g) => {
       const night = worldUniforms.uNight.value;
       if (night < 0.05) return;
       const t = worldUniforms.uTime.value;
-      for (const s of lights) {
+      for (const s of this.searchlights) {
         const h = searchlightHeading(s, t);
         const k = 0.3 * night * look.searchlights;
         g.addFlat(s.x + Math.sin(h) * SEARCH_REACH * 0.5, s.y + 2, s.z + Math.cos(h) * SEARCH_REACH * 0.5, h, 16, SEARCH_REACH, 0.55 * k, 0.62 * k, 0.75 * k, GLOW.search);
@@ -138,9 +163,10 @@ export class Look {
       }
     });
     // Neon in the wet road at night (render/neonReflect.ts).
-    const neon = neonSources(city.buildings, this.plans);
+    this.neon = neonSources(city.buildings, this.plans);
     const glint: Glint = { x: 0, z: 0, heading: 0, length: 0 };
     this.addGlowSource((g, view) => {
+      const neon = this.neon;
       const night = worldUniforms.uNight.value;
       if (night < 0.05) return;
       const k = night * (0.13 + 0.25 * worldUniforms.uWetness.value) * look.neonReflect;

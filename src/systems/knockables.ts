@@ -51,13 +51,19 @@ const DRAG: Readonly<Record<string, number>> = {
 const CELL = 16;
 
 export class Knockables {
-  private readonly items: KnockableItem[];
-  private readonly knockedAt: Float64Array;
+  private items: KnockableItem[] = [];
+  private knockedAt = new Float64Array(0);
   private readonly cells = new Map<number, number[]>();
   /** Sim time, s (stepped by step()). */
   private time = 0;
 
   constructor(items: readonly KnockableItem[]) {
+    this.replace(items);
+  }
+
+  /** Replace every item, all standing (the map editor's live rebuild). */
+  replace(items: readonly KnockableItem[]): void {
+    this.cells.clear();
     this.items = items.slice();
     this.knockedAt = new Float64Array(this.items.length).fill(-1);
     this.items.forEach((k, i) => {

@@ -142,6 +142,11 @@ export class Radar {
    * Per frame: the player's position, heading (vehicle convention) and
    * speed (m/s), and the car they're driving (not drawn as traffic).
    */
+  /** The city changed under it (the map editor's live rebuild): draw it again on the next update. */
+  refreshMap(): void {
+    this.map = null;
+  }
+
   update(dt: number, x: number, z: number, heading: number, speed: number, driving: Vehicle | null): void {
     if (!this.visible || !this.ctx) return;
     const want = driving ? Math.min(RANGE_MAX, RANGE_CAR + speed * RANGE_PER_MPS) : RANGE_FOOT;

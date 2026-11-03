@@ -151,20 +151,18 @@ export class WorldProps {
   private readonly handles = new Map<number, [PropBatch, number]>();
   private readonly loadedHooks: Array<() => void> = [];
   /** The traffic lights, for their lens glows: x, z, heading, cycle offset, east-west (1/0). */
-  private readonly signalData: Float32Array;
+  private signalData: Float32Array;
   /** Scratch for the signals' reflections. */
   private readonly glint: Glint = { x: 0, z: 0, heading: 0, length: 0 };
   /** Wall lamps on landmarks (the station's blue lamp, the safehouse's light): x, y, z, kind (0 police, 1 warm). */
   private wallLamps = new Float32Array(0);
 
   constructor(
-    private readonly streetProps: StreetProps,
-    private readonly plans: readonly BuildingPlan[],
+    private streetProps: StreetProps,
+    private plans: readonly BuildingPlan[],
   ) {
     this.families = [this.lamps, this.street, this.roofs, this.trees, this.landmarks, this.things, this.debris];
-    const lights = streetProps.props.filter((p) => p.kind === 'traffic_light');
-    this.signalData = new Float32Array(lights.length * 5);
-    lights.forEach((p, i) => this.signalData.set([p.x, p.z, p.heading, p.phase, p.eastWest ? 1 : 0], i * 5));
+    this.signalData = signalData(streetProps);
     PropModels.load(publicUrl('assets/props.glb'), publicUrl('assets/pickups.glb'), publicUrl('assets/debris.glb')).then(
       (models) => this.useModels(models),
       (err) => console.error('Failed to load props.glb / pickups.glb / debris.glb', err),
@@ -199,6 +197,24 @@ export class WorldProps {
     }
     this.wallLamps = new Float32Array(lamps);
     if (this.loaded) this.addLandmarks();
+  }
+
+  /**
+   * The map editor's live rebuild: every static prop again, from new street
+   * props, building plans and landmarks (knocked ones stand back up).
+   */
+  rebuild(streetProps: StreetProps, plans: readonly BuildingPlan[], landmarks: Landmarks): void {
+    this.streetProps = streetProps;
+    this.plans = plans;
+    this.signalData = signalData(streetProps);
+    this.handles.clear();
+    if (this.models) for (const f of [this.lamps, this.street, this.roofs, this.trees, this.landmarks]) f.clearStatic();
+    // setLandmarks re-adds the landmarks; the rest go back in first (the landmarks share the street family).
+    if (this.models) {
+      this.addStreet();
+      this.addRoofs(this.models);
+    }
+    this.setLandmarks(landmarks);
   }
 
   /** A street prop (or a landmark's cone) knocked flying: hide it until restore(). */
@@ -349,4 +365,12 @@ export class WorldProps {
       }
     }
   }
+}
+
+/** The traffic lights, for their lens glows: x, z, heading, cycle offset, east-west (1/0) each. */
+function signalData(streetProps: StreetProps): Float32Array {
+  const lights = streetProps.props.filter((p) => p.kind === 'traffic_light');
+  const out = new Float32Array(lights.length * 5);
+  lights.forEach((p, i) => out.set([p.x, p.z, p.heading, p.phase, p.eastWest ? 1 : 0], i * 5));
+  return out;
 }

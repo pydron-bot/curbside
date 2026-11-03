@@ -25,6 +25,12 @@ export class StaticGrid {
     obstacles: Rect[],
     private readonly cellSize = 32,
   ) {
+    this.reset(obstacles);
+  }
+
+  /** Replace every obstacle (the map editor's live rebuild); queries see the new set at once. */
+  reset(obstacles: readonly Rect[]): void {
+    this.cells = new Map();
     for (const r of obstacles) {
       const [x0, z0, x1, z1] = this.range(r.minX, r.minZ, r.maxX, r.maxZ);
       for (let cx = x0; cx <= x1; cx++) {

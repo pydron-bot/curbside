@@ -30,7 +30,6 @@ import {
   editBlock,
   fitView,
   flipRoad,
-  lookParam,
   moveAddedProp,
   moveSpot,
   nodePoint,
@@ -107,12 +106,14 @@ export interface MapEditorDeps {
   audio: GameAudio;
   /** The committed file (CHANGES and REVERT are against it). */
   shipped: MapEdits;
-  /** The map the running game was built with: its district repaints are put back after every preview. */
-  gameMap: MapEdits;
+  /** The map the running game shows (as built, or as the live rebuild left it): its district repaints and road rules are put back after every preview. */
+  readonly gameMap: MapEdits;
   /** Pickups and ramps, as the game placed them (the dressing keeps clear of them). */
   inputs: PreviewInputs;
-  /** Load this URL (VIEW IN 3D): the save is flushed first. */
+  /** Load this URL (PLAY ON EDITS, SHIPPED MAP): the save is flushed first. */
   navigate(url: string): void;
+  /** VIEW IN 3D: rebuild the running city on these edits and look at `at` (the editor has closed). */
+  viewLive(edits: MapEdits, at: Point): void;
 }
 
 type Drag =
@@ -180,7 +181,8 @@ export class MapEditor implements Panel {
             <select><option value="">—</option><optgroup label="SPOTS">${PLACEABLE_SPOTS.map((k) => `<option value="${placeValue(k)}">${k.label}</option>`).join('')}</optgroup><optgroup label="STREET PROPS">${PLACEABLE_PROPS.map((k) => `<option value="${k}">${k.replace(/_/g, ' ').toUpperCase()}</option>`).join('')}</optgroup></select>
           </label>
           <button type="button" class="me-btn" data-act="export" title="Download city.json and copy it">EXPORT</button>
-          <button type="button" class="me-btn hot" data-act="view3d" title="Reload the game on your local edits, looking at the selection">VIEW IN 3D</button>
+          <button type="button" class="me-btn hot" data-act="view3d" title="Rebuild the city on your edits and look at the selection in observe mode (no reload)">VIEW IN 3D</button>
+          <button type="button" class="me-btn" data-act="play" title="Reload the game on your local edits, to play on them">PLAY ON EDITS</button>
           ${local ? '<button type="button" class="me-btn" data-act="shipped" title="Reload the game on the shipped map">SHIPPED MAP</button>' : ''}
         </div>
         <button type="button" class="sheet-close" aria-label="Close">${ICONS.close}</button>
@@ -414,6 +416,13 @@ export class MapEditor implements Panel {
         return this.exportFile();
       case 'view3d':
         return this.view3d();
+      case 'play': {
+        this.save();
+        const url = new URL(location.href);
+        url.searchParams.set('map', 'local');
+        url.searchParams.delete('look');
+        return this.d.navigate(url.toString());
+      }
       case 'shipped': {
         const url = new URL(location.href);
         url.searchParams.delete('map');
@@ -569,11 +578,12 @@ export class MapEditor implements Panel {
     const h = this.history;
     if (!h || !this.preview) return;
     this.save();
+    const edits = h.current;
     const at = (this.selection && selectionCentre(this.selection, this.allAnchors())) ?? { x: this.view.cx, z: this.view.cz };
-    const url = new URL(location.href);
-    url.searchParams.set('map', 'local');
-    url.searchParams.set('look', lookParam(at));
-    this.d.navigate(url.toString());
+    this.d.audio.ui('confirm');
+    this.hide();
+    this.onClose();
+    this.d.viewLive(edits, at);
   }
 
   /** Select what a change is about and bring it into view. */

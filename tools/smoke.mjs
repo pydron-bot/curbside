@@ -571,6 +571,35 @@ async function mapEditorCheck(page, label) {
     `${label}: Ctrl+Z undoes it (no local edits left) and Esc closes the editor to the paused run (${JSON.stringify({ open: after.open, paused: after.paused, saved: after.saved })})`,
   );
   check(after.districts === before.districts, `${label}: closing the map editor leaves the game's districts as they were`);
+
+  // VIEW IN 3D: the city rebuilt in place (no reload, no new shader programs), looked at in observe mode.
+  const programs = await page.evaluate(async () => {
+    const u = window.__ub;
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const n = u.renderer.info.programs.length;
+    u.mapEditor.open();
+    u.mapEditor.editor.select({ kind: 'block', bx: 9, bz: 8 }, true);
+    return n;
+  });
+  await page.locator('#mapeditor [data-act="kind"][data-arg="lot"]').click({ timeout: 30000 });
+  await page.locator('#mapeditor [data-act="view3d"]').click({ timeout: 30000 });
+  const live = await page.evaluate(async () => {
+    const u = window.__ub;
+    for (let i = 0; i < 3; i++) await new Promise((res) => requestAnimationFrame(res));
+    const lot = u.mapEditor.live.edits.blocks.find((b) => b.kind === 'lot');
+    const r = { url: location.search, observe: !!u.observe?.active, dirty: u.mapEditor.live.dirty, lot: !!lot, programs: u.renderer.info.programs.length };
+    // Put the shipped city back for the checks after this one (and forget the live edit, or RESUME would reload).
+    u.mapEditor.live.apply(u.mapEditor.shipped);
+    u.mapEditor.live.dirty = false;
+    localStorage.removeItem('curbside.map.local');
+    u.observe.exit();
+    if (u.paused) u.setPaused(false);
+    return r;
+  });
+  check(
+    live.observe && live.dirty && live.lot && !live.url.includes('map=local') && live.programs === programs,
+    `${label}: VIEW IN 3D rebuilds the city live in observe mode, no reload, no new programs (${JSON.stringify({ ...live, before: programs })})`,
+  );
 }
 
 /** What the best-moment card must stay clear of on WASTED: its title, numbers and timer, the pause button, the corners' HUD and the thumbs. */

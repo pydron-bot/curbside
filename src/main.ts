@@ -162,6 +162,7 @@ import { worldUniforms } from './render/shaderLib';
 import { addBugReportButton, BugReportSheet } from './ui/bugReport';
 import { ObserveMode } from './ui/observeMode';
 import { MapEditor } from './ui/mapEditor';
+import { LiveMap } from './game/liveMap';
 import { LookPanel } from './ui/lookPanel';
 import { lookTuning } from './render/lookLive';
 import { LOOK_SPECS } from './render/lookTuning';
@@ -366,6 +367,8 @@ rig.snapTo(player.ped.x, player.ped.z);
 const viewRect: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 /** Observe mode (ui/observeMode.ts): a free camera over the city, no player; created with the menus, below. */
 let observe: ObserveMode | null = null;
+/** The map editor's live rebuild (set with the editor, below). */
+let liveMap: LiveMap | null = null;
 /** Attract mode: the sim runs behind the title with the camera cruising over traffic. */
 const attract = new AttractCamera(rand);
 attract.start(SPAWN_POINT.x, SPAWN_POINT.z);
@@ -1609,8 +1612,18 @@ function warmShaders(): number {
   return performance.now() - t0;
 }
 
+/** After a live map rebuild: reload on the local edits (the map editor saved them), where every system placed its spots on them. */
+function playOnLocalMap(): void {
+  progress.progress.flush();
+  const url = new URL(location.href);
+  url.searchParams.set('map', 'local');
+  url.searchParams.delete('look');
+  location.href = url.toString();
+}
+
 /** PLAY: from the attract city to a fresh run at the spawn corner. */
 function startGame() {
+  if (liveMap?.dirty) return playOnLocalMap();
   progress.startRun();
   titleCam.stop();
   hud.setScene('play');
@@ -1694,8 +1707,12 @@ let pausedForContext = false;
 /** Why the game is paused, while it is. */
 let pauseReason: PauseReason = 'paused';
 
+/** Observe mode leaving the pause for its own view (not play): a live map rebuild doesn't reload for it. */
+let observeSwitch = false;
 function setPaused(p: boolean, reason: PauseReason = 'paused') {
   if (!p && contextLost) return;
+  // The city was rebuilt live for the map editor: what the game modes placed at boot no longer matches it, so play restarts on the edits.
+  if (!p && liveMap?.dirty && !observeSwitch) return void playOnLocalMap();
   if (p) {
     pauseReason = reason;
     frontDoor.showPause(reason);
@@ -1804,14 +1821,31 @@ const titleCam = new TitleCamera({
   moved: () => maintainPopulation(true, false),
 });
 // MAP EDITOR (TEST → MAP, desktop): the city top-down, the map edits and what relies on what (ui/mapEditor.ts).
+// VIEW IN 3D rebuilds the city in place (game/liveMap.ts) and looks at it in observe mode; play on it then reloads.
+liveMap = new LiveMap({ city, ramps, pickups, dressing, collision, rampGrid, knockables, look, radar, signals }, ACTIVE_MAP);
+const live = liveMap;
 const mapEditor = new MapEditor(document.body, {
   audio,
   shipped: SHIPPED_MAP,
-  gameMap: ACTIVE_MAP,
+  get gameMap() {
+    return live.edits;
+  },
   inputs: { pickups, ramps },
   navigate: (url) => {
     progress.progress.flush();
     location.href = url;
+  },
+  viewLive: (edits, at) => {
+    const r = live.apply(edits);
+    console.info(`map editor: city rebuilt live, ${r.chunks} chunks in ${r.ms.toFixed(0)} ms`);
+    if (!observe) return;
+    if (frontDoor.inTitle) observe.enterFromTitle();
+    else observe.enterFromRun();
+    const cam = observe.cam;
+    cam.x = at.x;
+    cam.z = at.z;
+    cam.vx = cam.vz = 0;
+    hud.score.notice('YOUR EDITS, LIVE · PLAYING ON THEM RESTARTS ON THEM', 'progress');
   },
 });
 function openMapEditor() {
@@ -1879,7 +1913,14 @@ observe = new ObserveMode({
   tier: () => getQuality().name,
   heights: { title: CAMERA_ATTRACT, foot: CAMERA_FOOT, car: CAMERA_CAR },
   best: () => score.best,
-  setPaused: (p) => setPaused(p),
+  setPaused: (p) => {
+    observeSwitch = true;
+    try {
+      setPaused(p);
+    } finally {
+      observeSwitch = false;
+    }
+  },
   moved: () => maintainPopulation(true, false),
   offered: () => progress.offer.observe,
 });
@@ -2044,13 +2085,20 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   },
   /**
    * The map editor (TEST → MAP): open() pauses and opens it; editor.edits, changes, problems, undo(), back();
-   * districts() (what districtOf says now, block by block: the editor must leave it as it was); parse(text) reads a map file.
+   * districts() (what districtOf says now, block by block: the editor must leave it as it was); parse(text) reads a map file;
+   * live: VIEW IN 3D's rebuild in place (game/liveMap.ts).
    */
   mapEditor: {
     editor: mapEditor,
     open: openMapEditor,
     districts: () => city.blocks.map((b) => districtOf(b.bx, b.bz)).join(),
     parse: (text: string) => parseMapEdits(JSON.parse(text)),
+    /** The committed map file. */
+    shipped: SHIPPED_MAP,
+    /** VIEW IN 3D's live rebuild: edits (what the city shows), dirty (play reloads), apply(edits). */
+    get live() {
+      return liveMap;
+    },
   },
   /** The PLAY button: closes the title and starts a fresh run. */
   startGame: () => frontDoor.play(),
