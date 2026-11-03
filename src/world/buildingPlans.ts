@@ -66,8 +66,12 @@ export interface RoofNeon {
   edges: number;
   /** Tubes down the corners where two lit edges meet. */
   corners: boolean;
-  /** A sign on this side's roof edge (null: none), in its own colour and animation (NEON_ANIM). */
-  sign: { side: Side; from: number; to: number; colour: string; anim: NeonAnim } | null;
+  /**
+   * A sign on this side's roof edge (null: none), in its own colour and
+   * animation (NEON_ANIM); a painted one shows an advert by day and its
+   * neon at night (most of downtown's).
+   */
+  sign: { side: Side; from: number; to: number; colour: string; anim: NeonAnim; painted: boolean } | null;
   /** Stutters now and then, like a tired tube. */
   flicker: boolean;
   /** The edge tubes run chase lights (some in the arts quarter). */
@@ -86,6 +90,9 @@ const STREET_GAP = 2;
 /** Clear band inside the parapet that props keep off, m. */
 const PARAPET_CLEAR = 0.9;
 const NEON_COLOURS = ['#ff2d95', '#22e4ff', '#b14bff', '#ffd21f', '#ff5a1f', '#3dff8b'];
+
+/** Share of roof signs that are painted adverts by day (neon at night), by district: most of downtown's. */
+const PAINTED_SIGNS: Readonly<Record<District, number>> = { downtown: 0.8, oldtown: 0.45, residential: 0.4, industrial: 0.35, arts: 0.25 };
 
 /** A roof sign leans back over the roof this far in from its edge, m (cityMesh draws it to fit). */
 export const SIGN_REACH = 2;
@@ -259,10 +266,13 @@ export function planRoofNeon(b: Building, citySeed: number, props: readonly Rect
     const foot = at(side, from, from + width);
     // Most signs move: about one in four burns steady.
     const anim = Math.min(3, Math.floor(rand() * 4)) as NeonAnim;
-    if (width >= 2.5 && !props.some((p) => overlaps(p, foot, 0.2))) sign = { side, from, to: from + width, colour: signColour, anim };
+    if (width >= 2.5 && !props.some((p) => overlaps(p, foot, 0.2))) sign = { side, from, to: from + width, colour: signColour, anim, painted: false };
   }
   const flicker = rand() < 0.18;
-  return { colour, edges, corners, sign, flicker, chase: b.district === 'arts' && !flicker && rand() < 0.3 };
+  const chase = b.district === 'arts' && !flicker && rand() < 0.3;
+  // Drawn last, so the rest of the plan is as it was before painted signs.
+  if (rand() < PAINTED_SIGNS[b.district] && sign) sign.painted = true;
+  return { colour, edges, corners, sign, flicker, chase };
 }
 
 /** Which faces front the street (by Side): within STREET_GAP of the block's sidewalk edge. */

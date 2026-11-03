@@ -310,12 +310,14 @@ function addShopfronts(c: ChunkBuilder, b: Rect, plan: BuildingPlan, m: Matrix4)
 
 /**
  * aGlow for neon (propMaterial reads it back): the brightness, plus 100 ×
- * the animation (NEON_ANIM), negative to flicker.
+ * the animation (NEON_ANIM), plus 1000 for a painted sign (an advert by
+ * day), negative to flicker.
  */
-function neonGlow(glow: number, anim: NeonAnim, flicker: boolean): number {
-  const g = anim * 100 + glow;
+function neonGlow(glow: number, anim: NeonAnim, flicker: boolean, painted = false): number {
+  const g = (painted ? PAINTED : 0) + anim * 100 + glow;
   return flicker ? -g : g;
 }
+const PAINTED = 1000;
 
 /** Neon glow (aGlow) of a rooftop tube and sign; see neonGlow. */
 const ROOF_TUBE_GLOW = 0.8;
@@ -327,6 +329,8 @@ const HALO_PIECE = 7;
 /** A roof sign: how tall it is and how far it leans back from upright (its top reaches SIGN_REACH in). */
 const SIGN_HEIGHT = 1.5;
 const SIGN_LEAN = 0.95;
+/** A painted advert is a proper billboard: taller, so it reads from above (its top still within SIGN_REACH). */
+const BILLBOARD_HEIGHT = 2.4;
 
 /** Rooftop neon (BuildingPlan.roofNeon): tubes on the street edges and corners, a leaning sign, halos on the roof. */
 function addRoofNeon(c: ChunkBuilder, b: Rect & { height: number }, n: RoofNeon, m: Matrix4): void {
@@ -385,9 +389,10 @@ function addRoofNeon(c: ChunkBuilder, b: Rect & { height: number }, n: RoofNeon,
     // Tip the top inward: about X for the north and south edges, about Z for east and west.
     const angle = s.side === 0 || s.side === 1 ? SIGN_LEAN : -SIGN_LEAN;
     const q = new Quaternion().setFromAxisAngle(new Vector3(alongX ? 1 : 0, 0, alongX ? 0 : 1), angle);
-    m.compose(new Vector3(bx, b.height, bz), q, new Vector3(alongX ? width : 0.12, SIGN_HEIGHT, alongX ? 0.12 : width));
-    c.add('boxes', m, color.set(s.colour), [neonGlow(ROOF_SIGN_GLOW, s.anim, n.flicker)]);
-    const reach = Math.sin(SIGN_LEAN) * SIGN_HEIGHT;
+    const tall = s.painted ? BILLBOARD_HEIGHT : SIGN_HEIGHT;
+    m.compose(new Vector3(bx, b.height, bz), q, new Vector3(alongX ? width : 0.12, tall, alongX ? 0.12 : width));
+    c.add('boxes', m, color.set(s.colour), [neonGlow(ROOF_SIGN_GLOW, s.anim, n.flicker, s.painted)]);
+    const reach = Math.sin(SIGN_LEAN) * tall;
     const gx = alongX ? mid : s.side === 1 ? b.maxX - inset - reach / 2 : b.minX + inset + reach / 2;
     const gz = alongX ? (s.side === 0 ? b.minZ + inset + reach / 2 : b.maxZ - inset - reach / 2) : mid;
     m.makeScale(alongX ? width + 3 : 4.5, 1, alongX ? 4.5 : width + 3).setPosition(gx, b.height + 0.1, gz);
@@ -568,6 +573,83 @@ function boundaryWallMesh(city: City, geo: BufferGeometry, mat: Material): Insta
 // --- Materials ---------------------------------------------------------------
 
 /**
+ * A painted roof sign's advert by day (propMaterial; the sign's box from
+ * its unit-cube position and instance scale): one of four designs picked by
+ * the sign's seed, in its neon colour and a second one turned from it,
+ * with a frame and "copy" (rows of word-blocks) beside the picture. Seen
+ * from above it reads as a billboard; at night the neon takes over.
+ */
+const BILLBOARD_GLSL = /* glsl */ `
+float bbHash(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+
+/** Rows of word-blocks filling the rect lo..hi (m on the face), the last row shorter. */
+float bbCopy(vec2 p, vec2 lo, vec2 hi, float rows, float seed) {
+  if (p.x < lo.x || p.x > hi.x || p.y < lo.y || p.y > hi.y) return 0.0;
+  float rh = (hi.y - lo.y) / rows;
+  float ri = floor((p.y - lo.y) / rh);
+  float fy = fract((p.y - lo.y) / rh);
+  if (fy < 0.22 || fy > 0.78) return 0.0;
+  float ci = floor((p.x - lo.x) / 0.3);
+  float gap = step(0.74, bbHash(vec2(ci, ri * 7.0 + seed * 31.0)));
+  float lim = (hi.x - lo.x) * (ri < 0.5 ? 0.55 + 0.3 * bbHash(vec2(seed, 3.0)) : 1.0);
+  return (1.0 - gap) * step(p.x - lo.x, lim);
+}
+
+vec3 billboard(vec3 l, vec3 sc, vec3 accent, float seed) {
+  bool alongX = sc.x > sc.z;
+  float w = alongX ? sc.x : sc.z;
+  float h = sc.y;
+  vec2 hs = vec2(w, h) * 0.5;
+  vec2 p = vec2((alongX ? l.x : l.z) * w, l.y * h);
+  vec3 paper = vec3(0.82, 0.8, 0.74);
+  vec3 ink = vec3(0.03, 0.03, 0.05);
+  vec3 acc = accent;
+  vec3 acc2 = max(accent.gbr, vec3(0.08));
+  float design = floor(seed * 4.0);
+  vec3 c = paper;
+  // The picture fills a square at one end; the copy runs beside it.
+  float side = bbHash(vec2(seed, 9.0)) < 0.5 ? -1.0 : 1.0;
+  vec2 pc = vec2(side * (hs.x - hs.y), 0.0);
+  vec2 pp = p - pc;
+  float r = hs.y * 0.82;
+  vec2 copyLo = vec2(side < 0.0 ? pc.x + hs.y + 0.15 : -hs.x + 0.2, -hs.y * 0.62);
+  vec2 copyHi = vec2(side < 0.0 ? hs.x - 0.2 : pc.x - hs.y - 0.15, hs.y * 0.62);
+  if (design < 0.5) {
+    // Bold stripes behind a white roundel.
+    c = mix(acc, acc2, step(0.5, fract((p.x + p.y) * 0.75)));
+    c = mix(c, paper, step(length(pp), r));
+    c = mix(c, acc, step(length(pp), r * 0.55));
+    if (p.x > copyLo.x - 0.1 && p.x < copyHi.x + 0.1 && abs(p.y) < hs.y * 0.75) c = mix(paper, ink, bbCopy(p, copyLo, copyHi, 2.0, seed));
+  } else if (design < 1.5) {
+    // A face: a round head on a coloured ground, eyes and a smile.
+    c = acc;
+    if (length(pp) < r) {
+      c = vec3(0.86, 0.58, 0.42);
+      if (length(pp - vec2(-r * 0.36, r * 0.22)) < r * 0.13 || length(pp - vec2(r * 0.36, r * 0.22)) < r * 0.13) c = ink;
+      if (abs(length(pp - vec2(0.0, r * 0.15)) - r * 0.56) < r * 0.09 && pp.y < -r * 0.08) c = ink;
+    }
+    c = mix(c, paper, bbCopy(p, copyLo, copyHi, 2.0, seed));
+  } else if (design < 2.5) {
+    // A product: the brand's ring and dot on paper, copy in its colour.
+    c = paper;
+    c = mix(c, acc, step(length(pp), r));
+    c = mix(c, paper, step(length(pp), r * 0.62));
+    c = mix(c, acc2, step(length(pp), r * 0.3));
+    c = mix(c, acc * 0.5, bbCopy(p, copyLo, copyHi, 2.0, seed));
+  } else {
+    // A sunset: warm bands under the sign's colour, a low sun, a headline.
+    float t = (p.y / hs.y + 1.0) * 0.5;
+    c = mix(vec3(0.95, 0.42, 0.1), acc, smoothstep(0.1, 0.9, t));
+    c *= 0.9 + 0.1 * step(0.5, fract(t * 6.0));
+    c = mix(c, vec3(1.0, 0.85, 0.3), step(length(pp + vec2(0.0, r * 0.45)), r * 0.6));
+    c = mix(c, paper, bbCopy(p, copyLo, copyHi, 2.0, seed));
+  }
+  // A dark frame round the edge.
+  float frame = step(hs.x - 0.08, abs(p.x)) + step(hs.y - 0.08, abs(p.y));
+  return mix(c, ink, min(frame, 1.0));
+}`;
+
+/**
  * Rooftop props, awnings, lamps, trunks: instance colour, plus `aGlow`
  * emission at night (neon, lamp heads). Every instance shares one program
  * (the cache key), so other batches (rubble) can use it for free; they need
@@ -586,13 +668,16 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
     shader.vertexShader = after(
       shader.vertexShader,
       '#include <common>',
-      'attribute float aGlow;\nvarying float vGlow;\nvarying vec3 vPropWorld;\nvarying vec3 vPropNormal;' +
+      'attribute float aGlow;\nvarying float vGlow;\nvarying vec3 vPropWorld;\nvarying vec3 vPropNormal;\nvarying vec3 vPropLocal;\nvarying vec3 vPropScale;\nvarying float vPropSeed;' +
         (listed ? '\nattribute vec4 aLamps;\nflat varying vec4 vPropLamps;' : ''),
     );
     shader.vertexShader = after(
       shader.vertexShader,
       '#include <project_vertex>',
       `vGlow = aGlow;
+      vPropLocal = transformed;
+      vPropScale = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
+      vPropSeed = fract(sin(dot(instanceMatrix[3].xz, vec2(12.9898, 78.233))) * 43758.5453);
       mat4 propModel = modelMatrix * instanceMatrix;
       vPropWorld = (propModel * vec4(transformed, 1.0)).xyz;
       vPropNormal = normalize(mat3(propModel) * objectNormal);${listed ? '\nvPropLamps = aLamps;' : ''}`,
@@ -600,7 +685,7 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
     shader.fragmentShader = after(
       shader.fragmentShader,
       '#include <common>',
-      `varying float vGlow;\nvarying vec3 vPropWorld;\nvarying vec3 vPropNormal;\n${UB_COMMON}\n${UB_STREET_LIGHT}` +
+      `varying float vGlow;\nvarying vec3 vPropWorld;\nvarying vec3 vPropNormal;\nvarying vec3 vPropLocal;\nvarying vec3 vPropScale;\nvarying float vPropSeed;\n${UB_COMMON}\n${UB_STREET_LIGHT}\n${BILLBOARD_GLSL}` +
         (listed ? `\nflat varying vec4 vPropLamps;\n${UB_LAMP_LIST}` : ''),
     );
     shader.fragmentShader = after(
@@ -608,6 +693,9 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
       '#include <emissivemap_fragment>',
       `// Neon (cityMesh neonGlow): |aGlow| = 100 × animation + brightness; negative stutters now and then. Seeded per 32 m cell.
       float glowAbs = abs(vGlow);
+      // A painted sign: its advert by day (diffuse), its neon fading in with the night.
+      float painted = step(${PAINTED - 0.5}, glowAbs);
+      glowAbs -= painted * ${PAINTED}.0;
       float anim = floor(glowAbs / 100.0);
       float glowK = glowAbs - anim * 100.0;
       vec3 neon = vColor.rgb;
@@ -640,6 +728,12 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
         float t = fract(uTime * 0.22 + seed) * 1.5;
         float at = fract(along * 0.11);
         glowK *= t < 1.25 && at < t ? 1.0 : 0.12;
+      }
+      if (painted > 0.5) {
+        vec3 ad = billboard(vPropLocal, vPropScale, vColor.rgb, vPropSeed);
+        float day = 1.0 - smoothstep(0.25, 0.75, uNight);
+        diffuseColor.rgb = mix(diffuseColor.rgb, ad * ubCloudShade(vPropWorld.xz), day);
+        glowK *= 1.0 - day;
       }
       totalEmissiveRadiance += neon * glowK * (0.12 + uNight)
         + diffuseColor.rgb * ${listed ? 'ubListedLight' : 'ubStreetLight'}(vPropWorld, normalize(vPropNormal));`,

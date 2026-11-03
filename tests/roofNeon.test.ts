@@ -54,4 +54,13 @@ describe('rooftop neon (BuildingPlan.roofNeon)', () => {
   it('is the same every time for the same city', () => {
     expect(planBuildings(city).map((p) => p.roofNeon)).toEqual(plans.map((p) => p.roofNeon));
   });
+
+  it('paints most of downtown\'s signs as adverts by day, fewer in the arts quarter', () => {
+    const painted = (district: string) => {
+      const signs = city.buildings.map((b, i) => [b, plans[i].roofNeon?.sign] as const).filter(([b, s]) => b.district === district && s);
+      return signs.filter(([, s]) => s!.painted).length / Math.max(1, signs.length);
+    };
+    expect(painted('downtown')).toBeGreaterThan(0.6);
+    expect(painted('downtown')).toBeGreaterThan(painted('arts'));
+  });
 });
