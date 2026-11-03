@@ -27,7 +27,8 @@ ARCHETYPES = {
                     cabin_h=0.62, taper=0.25, wheelbase=2.4, wheel_r=0.31),
     "sports": dict(length=4.4, width=1.95, body_h=0.48, clearance=0.24, cabin_len=1.6, cabin_off=0.35,
                    cabin_h=0.42, taper=0.45, wheelbase=2.6, wheel_r=0.34),
-    "van": dict(length=4.8, width=2.0, body_h=0.95, clearance=0.38, cabin_len=3.6, cabin_off=-0.4,
+    # Short bonnet up front, tall box to the back: from above, the low end reads as the nose.
+    "van": dict(length=4.8, width=2.0, body_h=0.95, clearance=0.38, cabin_len=3.95, cabin_off=0.33,
                 cabin_h=0.85, taper=0.12, wheelbase=3.0, wheel_r=0.38),
     "police": dict(length=4.5, width=1.9, body_h=0.62, clearance=0.32, cabin_len=2.2, cabin_off=0.2,
                    cabin_h=0.58, taper=0.32, wheelbase=2.75, wheel_r=0.34, lightbar=True),

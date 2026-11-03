@@ -76,19 +76,31 @@ body:has(#radio.in) #wanted {
   filter: drop-shadow(0 0 4px rgb(255 210 63 / 0.75)) drop-shadow(0 1px 1px rgb(0 0 0 / 0.8));
 }
 
-/* A star lit just now: slams in with a white flash. */
+/* A star lit just now: slams in with a white flash. Transform and opacity
+   only, and nothing held once it ends (wantedHud.ts drops the class): an
+   animated filter over the stars' drop shadows is the likely source of the
+   ghost stars Safari drew. */
 .w-star.gain {
-  animation: star-gain 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  animation: star-gain 0.55s cubic-bezier(0.2, 1.6, 0.4, 1) backwards;
+}
+
+.w-star.gain path {
+  animation: star-flash 0.55s ease-out backwards;
 }
 
 @keyframes star-gain {
   0% {
     transform: scale(2.6) rotate(-30deg);
-    filter: brightness(3);
     opacity: 0;
   }
   45% {
     opacity: 1;
+  }
+}
+
+@keyframes star-flash {
+  0% {
+    fill: #fff;
   }
 }
 
@@ -266,6 +278,7 @@ body:has(#radio.in) #wanted {
 
 @media (prefers-reduced-motion: reduce) {
   .w-star.gain,
+  .w-star.gain path,
   #wanted.searching .w-star.on,
   .w-pop,
   .w-arrest b {

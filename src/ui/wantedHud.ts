@@ -69,6 +69,9 @@ export class WantedHud {
     parent.append(el);
     this.el = el;
     this.stars.push(...el.querySelectorAll<HTMLElement>('.w-star'));
+    // Drop the pop once it has played: a finished animation held on every
+    // lit star kept layers alive, the likely source of Safari's stray stars.
+    for (const s of this.stars) s.addEventListener('animationend', (e) => e.animationName === 'star-gain' && s.classList.remove('gain'));
     this.pop = el.querySelector('.w-pop')!;
     this.arrest = el.querySelector('.w-arrest')!;
     this.spray = el.querySelector('.w-spray')!;
@@ -109,8 +112,9 @@ export class WantedHud {
         const s = this.stars[i];
         const on = i < level;
         s.classList.toggle('on', on);
+        if (!on) s.classList.remove('gain');
         // A newly lit star pops (restart the animation).
-        if (on && i >= prev) {
+        else if (i >= prev) {
           s.classList.remove('gain');
           void s.offsetWidth;
           s.classList.add('gain');

@@ -17,14 +17,25 @@ export interface LeadSettings {
   seconds: number;
   /** Most lead across the screen, as a fraction of the visible half-width. */
   maxX: number;
-  /** Most lead up/down the screen, as a fraction of the visible half-height. */
+  /** Most lead up the screen (heading north, the player below centre), as a fraction of the visible half-height. */
   maxZ: number;
+  /**
+   * Most lead down the screen (heading south, the player above centre);
+   * defaults to maxZ. Kept smaller: the top centre holds the activity card
+   * and the stars, and a car led up under them is hidden.
+   */
+  maxZDown?: number;
 }
 
-/** Driving: ~1.5 s of road ahead up the screen without the car dropping under the thumbs. */
-export const LEAD_CAR: LeadSettings = { seconds: 1.25, maxX: 0.38, maxZ: 0.55 };
+/**
+ * Driving: the car stays in the clear middle band of a landscape phone,
+ * between the activity card and stars (top) and the scanner's subtitle
+ * (bottom); the camera climbs on north-south runs (verticalClimb) to keep the
+ * road ahead in view.
+ */
+export const LEAD_CAR: LeadSettings = { seconds: 1.25, maxX: 0.38, maxZ: 0.34, maxZDown: 0.2 };
 /** On foot: a gentle nudge toward where you're going. */
-export const LEAD_FOOT: LeadSettings = { seconds: 0.45, maxX: 0.22, maxZ: 0.28 };
+export const LEAD_FOOT: LeadSettings = { seconds: 0.45, maxX: 0.22, maxZ: 0.28, maxZDown: 0.2 };
 
 const DEG = Math.PI / 180;
 
@@ -88,6 +99,12 @@ export class CameraRig {
       maxHeight: 58,
       /** Height gained per m/s of speed. */
       heightPerSpeed: 1.05,
+      /**
+       * Extra share of the height gained over minHeight when heading straight
+       * up or down the screen, where a landscape view is short (none with
+       * the height pinned, minHeight = maxHeight).
+       */
+      verticalClimb: 0.2,
       /** Camera sits this fraction of its height behind (toward screen-bottom, +Z). */
       tilt: 0.12,
       /** How fast the camera closes on its target, 1/s (on top of velocity feed-forward). */
@@ -176,7 +193,8 @@ export class CameraRig {
   update(dt: number, targetX: number, targetZ: number, vx: number, vz: number): void {
     const o = this.opts;
     const speed = len2(vx, vz);
-    const wantHeight = Math.min(o.maxHeight, o.minHeight + speed * o.heightPerSpeed);
+    let wantHeight = Math.min(o.maxHeight, o.minHeight + speed * o.heightPerSpeed);
+    if (speed > 1) wantHeight += (wantHeight - o.minHeight) * ((o.verticalClimb * vz * vz) / (speed * speed));
     this.height += (wantHeight - this.height) * (1 - Math.exp(-o.zoomRate * dt));
     this.liftNow += (this.lift - this.liftNow) * (1 - Math.exp(-2 * dt));
 
@@ -185,7 +203,7 @@ export class CameraRig {
     const halfW = halfH * this.camera.aspect;
     const l = this.lead;
     const wantX = softClamp(vx * l.seconds, halfW * l.maxX);
-    const wantZ = softClamp(vz * l.seconds, halfH * l.maxZ);
+    const wantZ = softClamp(vz * l.seconds, halfH * (vz > 0 ? (l.maxZDown ?? l.maxZ) : l.maxZ));
     const lk = 1 - Math.exp(-o.leadRate * dt);
     this.leadX += (wantX - this.leadX) * lk;
     this.leadZ += (wantZ - this.leadZ) * lk;

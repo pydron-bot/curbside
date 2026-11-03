@@ -15,6 +15,16 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.21.1',
+    date: '2026-11-03',
+    title: 'Fixes',
+    notes: [
+      'Driving fast north or south, the camera no longer pushes your car up under the job card and the stars, or down under the scanner\'s subtitle: it keeps you in the clear middle of the screen and climbs a little to show the road ahead.',
+      'The white van (the one parked by the safehouse) no longer looks like it is going backwards: its bonnet is now at the front.',
+      'The wanted stars should no longer leave a stray star beside or between them on iPhone.',
+    ],
+  },
+  {
     version: '0.21.0',
     date: '2026-11-03',
     title: 'Map editor',

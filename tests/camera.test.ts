@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CameraRig } from '../src/render/cameraRig';
+import { Vector3 } from 'three';
+import { CameraRig, LEAD_CAR } from '../src/render/cameraRig';
 
 describe('camera rig', () => {
   it('projects the view onto the ground around where it looks', () => {
@@ -33,5 +34,25 @@ describe('camera rig', () => {
     rig.snapTo(10, 10); // a respawn drops it
     rig.update(1 / 60, 10, 10, 0, 0);
     expect(rig.focusX).toBeCloseTo(10, 0);
+  });
+
+  it('keeps a car flat out north or south in the clear band of a landscape phone', () => {
+    // 852×393: the activity card and stars reach ~35% down the top centre,
+    // the scanner's subtitle starts ~75% down.
+    const screenY = (vz: number) => {
+      const rig = new CameraRig(852 / 393);
+      rig.resize(852 / 393);
+      rig.setHeights(26, 64);
+      rig.setLead(LEAD_CAR);
+      rig.snapTo(0, 0);
+      let z = 0;
+      for (let i = 0; i < 600; i++) rig.update(1 / 60, 0, (z += vz / 60), 0, vz);
+      const p = new Vector3(0, 0.8, z).project(rig.camera);
+      return (1 - p.y) / 2;
+    };
+    for (const speed of [18, 33]) {
+      expect(screenY(speed)).toBeGreaterThan(0.38); // heading south: under the stars
+      expect(screenY(-speed)).toBeLessThan(0.7); // heading north: over the subtitle
+    }
   });
 });
