@@ -91,6 +91,20 @@ float ubNoise(vec2 p) {
 float ubFbm(vec2 p) {
   return ubNoise(p) * 0.6 + ubNoise(p * 2.13 + 17.0) * 0.28 + ubNoise(p * 4.37 + 41.0) * 0.12;
 }
+/**
+ * Cloud shadows drifting over the city by day (0.25.0): patches ~30-50 m
+ * across moving with the wind (smaller than the view, so their edges pass through it), the cover thickening and thinning slowly. A
+ * multiplier for a surface's base colour (lit windows and neon are emissive,
+ * so they stay bright); 1 at night and in the rain (overcast already).
+ */
+float ubCloudShade(vec2 xz) {
+  float day = 1.0 - uNight;
+  if (day < 0.02) return 1.0;
+  vec2 p = (xz + uTime * vec2(3.6, 1.3)) * 0.026;
+  float cover = 0.6 + 0.05 * sin(uTime * 0.013);
+  float c = smoothstep(cover, cover + 0.08, ubFbm(p));
+  return 1.0 - 0.28 * c * day * (1.0 - 0.8 * uWetness);
+}
 /** 1 inside [a, b], anti-aliased over width w. */
 float ubBand(float x, float a, float b, float w) {
   return smoothstep(a - w, a + w, x) - smoothstep(b - w, b + w, x);

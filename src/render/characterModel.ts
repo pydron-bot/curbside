@@ -365,7 +365,7 @@ export class CharacterBatch {
         '#include <common>',
         `varying vec3 vPartColor;\nvarying float vFlash;\nvarying vec3 vCrowdWorld;\nvarying vec3 vCrowdNormal;\n${UB_COMMON}\n${UB_STREET_LIGHT}`,
       );
-      shader.fragmentShader = replace(shader.fragmentShader, '#include <color_fragment>', 'diffuseColor.rgb *= vPartColor;');
+      shader.fragmentShader = replace(shader.fragmentShader, '#include <color_fragment>', 'diffuseColor.rgb *= vPartColor * ubCloudShade(vCrowdWorld.xz);');
       shader.fragmentShader = after(
         shader.fragmentShader,
         '#include <emissivemap_fragment>',

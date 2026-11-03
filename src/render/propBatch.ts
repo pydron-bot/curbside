@@ -618,7 +618,7 @@ function propMaterial(verts: IUniform<DataTexture>): MeshLambertMaterial {
     shader.fragmentShader = replace(
       shader.fragmentShader,
       '#include <color_fragment>',
-      `diffuseColor.rgb = vPropColor;
+      `diffuseColor.rgb = vPropColor * ubCloudShade(vPropWorld.xz);
       vec3 propGlow = vPropGlow;
       if (abs(vPropSurf - 9.0) < 0.5) {
         // Ramp deck: yellow-and-black chevrons pointing up the slope (+Z), bright edges.

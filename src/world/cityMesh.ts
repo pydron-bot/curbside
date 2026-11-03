@@ -721,7 +721,8 @@ function buildingMaterial(): MeshLambertMaterial {
       else if (vBN.y > -0.5) wallSurface(diffuseColor.rgb, bGlow, bl, bpx);
       #ifdef CURBSIDE_BREACH
       if (vBreachMask != 0u && abs(vBN.y) < 0.5) breachSurface(diffuseColor.rgb, bGlow, bNormal, vWorldB, bpx);
-      #endif`,
+      #endif
+      diffuseColor.rgb *= ubCloudShade(vWorldB.xz);`,
     );
     shader.fragmentShader = after(
       shader.fragmentShader,

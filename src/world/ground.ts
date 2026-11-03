@@ -63,7 +63,7 @@ export function createGround(city: City): Mesh {
       shader.fragmentShader,
       '#include <color_fragment>',
       `vec3 groundGlow = vec3(0.0);
-      diffuseColor.rgb = groundColour(vGroundXZ, groundGlow);`,
+      diffuseColor.rgb = groundColour(vGroundXZ, groundGlow) * ubCloudShade(vGroundXZ);`,
     );
     shader.fragmentShader = after(
       shader.fragmentShader,

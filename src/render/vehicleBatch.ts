@@ -494,7 +494,7 @@ function carMaterial(): MeshStandardMaterial {
       ${UB_COMMON}
       ${UB_STREET_LIGHT}`,
     );
-    shader.fragmentShader = replace(shader.fragmentShader, '#include <color_fragment>', 'diffuseColor.rgb = vCarColor;');
+    shader.fragmentShader = replace(shader.fragmentShader, '#include <color_fragment>', 'diffuseColor.rgb = vCarColor * ubCloudShade(vCarWorld.xz);');
     shader.fragmentShader = after(shader.fragmentShader, '#include <roughnessmap_fragment>', 'roughnessFactor = vCarSurf.x;');
     shader.fragmentShader = after(shader.fragmentShader, '#include <metalnessmap_fragment>', 'metalnessFactor = vCarSurf.y;');
     shader.fragmentShader = after(
