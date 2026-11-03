@@ -116,7 +116,7 @@ import { enterGameMode } from './ui/titleScreen';
 import { WantedHud } from './ui/wantedHud';
 import { ScreenAwake } from './ui/wakeLock';
 import { generateCity, type Rect } from './world/city';
-import { SHIPPED_MAP } from './world/shippedMap';
+import { ACTIVE_MAP } from './world/shippedMap';
 import { StaticGrid } from './world/collision';
 import { mulberry32 } from './world/random';
 import { Knockables, type KnockableItem } from './systems/knockables';
@@ -197,7 +197,7 @@ const [P_SCENES, P_HEAT, P_COMBAT, P_MAINTAIN, P_PEOPLE, P_PIGEONS, P_FRAME] = [
 
 // --- Scene ---
 const scene = new Scene();
-const city = generateCity(1337, SHIPPED_MAP);
+const city = generateCity(1337, ACTIVE_MAP);
 const pickups = generatePickups(1337);
 /** Stunt ramps and kickers: their sides and backs are solid. */
 const bigRamps = placeRamps(1337);

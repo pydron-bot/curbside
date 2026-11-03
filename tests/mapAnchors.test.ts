@@ -9,6 +9,7 @@ import { CORE_OFFSET, generateCity } from '../src/world/city';
 import { dressCity } from '../src/world/dressing';
 import { generatePickups } from '../src/world/pickups';
 import { placeKickers, placeRamps } from '../src/world/ramps';
+import { NO_EDITS } from '../src/world/mapEdits';
 import { SHIPPED_MAP } from '../src/world/shippedMap';
 
 afterEach(() => void generateCity(1337));
@@ -63,7 +64,7 @@ describe('what an edit breaks', () => {
     // On the road: the district is the block to its south-east's, and repainting that block is what breaks it.
     const b = districtBlockAt(noise.points[0].x, noise.points[0].z);
     expect(dependentsOf(anchors, { kind: 'block', ...b }).map((a) => a.id)).toContain(noise.id);
-    const city = generateCity(1337, { version: 1, seed: 1337, blocks: [{ at: [b.bx - CORE_OFFSET, b.bz - CORE_OFFSET], district: 'arts' }] });
+    const city = generateCity(1337, { ...NO_EDITS, blocks: [{ at: [b.bx - CORE_OFFSET, b.bz - CORE_OFFSET], district: 'arts' }] });
     const problems = checkAnchors(city, collectAnchors(city));
     expect(problems.map((p) => p.id)).toContain(noise.id);
     expect(problems.find((p) => p.id === noise.id)!.problem).toBe('written for oldtown, but its spot is in arts');
@@ -79,7 +80,7 @@ describe('what an edit breaks', () => {
       { id: 'far', group: 'story', label: 'far', points: [], via: [[0, 0], [40, 0]] },
     ];
     expect(checkAnchors(plain, spots).map((p) => p.id)).toEqual(['zigzag', 'far']);
-    const built = generateCity(1337, { version: 1, seed: 1337, blocks: [{ at: [park.bx - CORE_OFFSET, park.bz - CORE_OFFSET], kind: 'buildings' }] });
+    const built = generateCity(1337, { ...NO_EDITS, blocks: [{ at: [park.bx - CORE_OFFSET, park.bz - CORE_OFFSET], kind: 'buildings' }] });
     const covered = built.buildings.some((b) => mid.x > b.minX && mid.x < b.maxX && mid.z > b.minZ && mid.z < b.maxZ);
     expect(checkAnchors(built, spots).some((p) => p.id === 'bench')).toBe(covered);
   });

@@ -5,10 +5,21 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CORE_OFFSET, generateCity, isCarPark, lotBytes, type City, type Rect } from '../src/world/city';
 import { districtOf } from '../src/world/districts';
-import { NO_EDITS, diffMapEdits, parseMapEdits, serializeMapEdits, withBlockEdit, type MapEdits } from '../src/world/mapEdits';
+import {
+  NO_EDITS,
+  diffMapEdits,
+  parseMapEdits,
+  revertChange,
+  serializeMapEdits,
+  withBlockEdit,
+  withPropEdit,
+  withRoadEdit,
+  withSpotEdit,
+  type MapEdits,
+} from '../src/world/mapEdits';
 import { SHIPPED_MAP, SHIPPED_MAP_PROBLEMS } from '../src/world/shippedMap';
 
-const edits = (blocks: MapEdits['blocks']): MapEdits => ({ version: 1, seed: 1337, blocks });
+const edits = (blocks: MapEdits['blocks']): MapEdits => ({ ...NO_EDITS, blocks });
 const blockOf = (city: City, cx: number, cz: number) => city.blocks.find((b) => b.bx === cx + CORE_OFFSET && b.bz === cz + CORE_OFFSET)!;
 const inside = (r: Rect, x: number, z: number) => x > r.minX && x < r.maxX && z > r.minZ && z < r.maxZ;
 const centreIn = (r: Rect) => (b: Rect) => inside(r, (b.minX + b.maxX) / 2, (b.minZ + b.maxZ) / 2);
@@ -26,43 +37,79 @@ describe('the committed map file', () => {
 });
 
 describe('parse and serialize', () => {
-  const sample = edits([
-    { at: [9, 3], kind: 'carpark' },
-    { at: [-2, 17], district: 'arts', variant: -4 },
-    { at: [5, 6], kind: 'park', district: 'oldtown' },
-  ]);
+  const sample: MapEdits = {
+    ...NO_EDITS,
+    blocks: [
+      { at: [9, 3], kind: 'carpark' },
+      { at: [-2, 17], district: 'arts', variant: -4 },
+      { at: [5, 6], kind: 'park', district: 'oldtown', height: 1.25 },
+    ],
+    roads: [
+      { a: [3, 1], b: [2, 1], closed: true },
+      { a: [0, -2], b: [0, -1], oneWay: true },
+    ],
+    spots: [{ id: 'phone-docks', x: 12.34, z: -50.06 }, { id: 'ramp-3', removed: true }],
+    props: [
+      { kind: 'bench', x: 40.04, z: 9.5, heading: 1.5708 },
+      { kind: 'hydrant', x: -3, z: 9.6, removed: true },
+    ],
+  };
 
-  it('round-trips, sorted north to south then west to east, one block a line', () => {
+  it('round-trips, each section sorted, one entry a line, positions to 0.1 m', () => {
     const text = serializeMapEdits(sample);
     expect(text).toBe(
       [
         '{',
-        '  "version": 1,',
+        '  "version": 2,',
         '  "seed": 1337,',
         '  "blocks": [',
         '    { "at": [9, 3], "kind": "carpark" },',
-        '    { "at": [5, 6], "kind": "park", "district": "oldtown" },',
+        '    { "at": [5, 6], "kind": "park", "district": "oldtown", "height": 1.25 },',
         '    { "at": [-2, 17], "district": "arts", "variant": -4 }',
+        '  ],',
+        '  "roads": [',
+        '    { "a": [0, -2], "b": [0, -1], "oneWay": true },',
+        '    { "a": [3, 1], "b": [2, 1], "closed": true }',
+        '  ],',
+        '  "spots": [',
+        '    { "id": "phone-docks", "x": 12.34, "z": -50.06 },',
+        '    { "id": "ramp-3", "removed": true }',
+        '  ],',
+        '  "props": [',
+        '    { "kind": "bench", "x": 40.04, "z": 9.5, "heading": 1.5708 },',
+        '    { "kind": "hydrant", "x": -3, "z": 9.6, "removed": true }',
         '  ]',
         '}',
         '',
       ].join('\n'),
     );
+    // Read back: positions to 0.1 m, headings to 0.01, a two-way edit smaller node first.
     const back = parseMapEdits(JSON.parse(text));
     expect(back.problems).toEqual([]);
-    expect(serializeMapEdits(back.edits)).toBe(text);
-    expect(serializeMapEdits(NO_EDITS)).toBe('{\n  "version": 1,\n  "seed": 1337,\n  "blocks": []\n}\n');
+    expect(back.edits.roads).toContainEqual({ a: [2, 1], b: [3, 1], closed: true });
+    expect(back.edits.spots[0]).toEqual({ id: 'phone-docks', x: 12.3, z: -50.1 });
+    expect(back.edits.props[0]).toEqual({ kind: 'bench', x: 40, z: 9.5, heading: 1.57 });
+    const again = serializeMapEdits(back.edits);
+    expect(serializeMapEdits(parseMapEdits(JSON.parse(again)).edits)).toBe(again);
+    expect(serializeMapEdits(NO_EDITS)).toBe('{\n  "version": 2,\n  "seed": 1337,\n  "blocks": [],\n  "roads": [],\n  "spots": [],\n  "props": []\n}\n');
+  });
+
+  it('reads a version 1 file (blocks only)', () => {
+    const r = parseMapEdits({ version: 1, seed: 1337, blocks: [{ at: [1, 2], kind: 'park' }] });
+    expect(r.problems).toEqual([]);
+    expect(r.edits).toEqual({ ...NO_EDITS, blocks: [{ at: [1, 2], kind: 'park' }] });
+    expect(parseMapEdits({ version: 1, roads: [] }).problems).toEqual(['unknown section "roads" ignored']);
   });
 
   it('drops what it cannot read, says why, and never throws', () => {
-    for (const junk of [null, 3, 'x', [], { version: 2, blocks: [{ at: [1, 1], kind: 'park' }] }]) {
+    for (const junk of [null, 3, 'x', [], { version: 3, blocks: [{ at: [1, 1], kind: 'park' }] }]) {
       const r = parseMapEdits(junk);
-      expect(r.edits.blocks).toEqual([]);
+      expect(r.edits).toEqual(NO_EDITS);
       expect(r.problems.length).toBeGreaterThan(0);
     }
     const r = parseMapEdits({
-      version: 1,
-      roads: [],
+      version: 2,
+      bridges: [],
       blocks: [
         { at: [1, 2], kind: 'castle' },
         { at: [1.5, 2], kind: 'park' },
@@ -70,26 +117,46 @@ describe('parse and serialize', () => {
         { at: [3, 3] },
         { at: [4, 4], kind: 'park', colour: 'red' },
         { at: [4, 4], kind: 'plaza', district: 'moon' },
+        { at: [5, 5], height: 9 },
         'nope',
       ],
+      roads: [{ a: [0, 0], b: [2, 0], closed: true }, { a: [0, 0], b: [0, 1] }, { a: [1, 1], b: [1, 2], closed: true, oneWay: true }],
+      spots: [{ id: '' }, { id: 'safehouse' }, { id: 'safehouse', x: 1 }],
+      props: [{ kind: 'Bench!', x: 0, z: 0 }, { kind: 'bench', x: 1e9, z: 0 }],
     });
     expect(r.edits.blocks).toEqual([{ at: [4, 4], kind: 'plaza' }]);
-    expect(r.problems).toHaveLength(10);
-    expect(r.problems.join('\n')).toMatch(/unknown section "roads"/);
-    expect(r.problems.join('\n')).toMatch(/edited twice; the later one wins/);
+    expect(r.edits.roads).toEqual([{ a: [1, 1], b: [1, 2], closed: true }]);
+    expect(r.edits.spots).toEqual([]);
+    expect(r.edits.props).toEqual([]);
+    const all = r.problems.join('\n');
+    for (const want of [/unknown section "bridges"/, /edited twice; the later one wins/, /height must be a scale/, /aren't neighbouring crossings/, /closed and one-way; closed wins/, /must both be on the map/, /"kind" must be a prop kind/]) {
+      expect(all).toMatch(want);
+    }
   });
 
-  it('diffs local edits against the file, and sets or clears one block', () => {
+  it('diffs local edits against the file, in the file\'s order, and reverts a change', () => {
     let local = withBlockEdit(sample, [9, 3]);
     local = withBlockEdit(local, [5, 6], { kind: 'plaza' });
     local = withBlockEdit(local, [0, 0], { variant: 1 });
+    local = withRoadEdit(local, [2, 1], [3, 1]);
+    local = withRoadEdit(local, [4, 4], [4, 5], { oneWay: true });
+    local = withSpotEdit(local, 'safehouse', { x: 10, z: 20 });
+    local = withPropEdit(local, { kind: 'hydrant', x: -3, z: 9.6, removed: true }, true);
     expect(withBlockEdit(local, [1, 1], {}).blocks).toEqual(local.blocks);
-    expect(diffMapEdits(sample, local)).toEqual([
-      { at: [0, 0], after: { at: [0, 0], variant: 1 } },
-      { at: [9, 3], before: { at: [9, 3], kind: 'carpark' } },
-      { at: [5, 6], before: { at: [5, 6], kind: 'park', district: 'oldtown' }, after: { at: [5, 6], kind: 'plaza' } },
+    const changes = diffMapEdits(sample, local);
+    expect(changes.map((c) => `${c.section} ${c.key} ${c.before ? 'B' : '-'}${c.after ? 'A' : '-'}`)).toEqual([
+      'blocks 0,0 -A',
+      'blocks 9,3 B-',
+      'blocks 5,6 BA',
+      'roads 2,1|3,1 B-',
+      'roads 4,4|4,5 -A',
+      'spots safehouse -A',
+      'props hydrant@-3.0,9.6 B-',
     ]);
     expect(diffMapEdits(sample, sample)).toEqual([]);
+    // Reverting every change gets the file back.
+    const reverted = changes.reduce((e, c) => revertChange(e, c), local);
+    expect(serializeMapEdits(reverted)).toBe(serializeMapEdits(sample));
   });
 });
 
@@ -135,6 +202,16 @@ describe('generateCity with edits', () => {
     expect(mine.every((b) => b.district === to)).toBe(true);
     generateCity(1337);
     expect(districtOf(built.bx, built.bz)).toBe(was);
+  });
+
+  it('scales a block\'s building heights, capped, footprints kept', () => {
+    const city = generateCity(1337, edits([{ at: at(built), height: 0.5 }]));
+    const mine = city.buildings.filter(centreIn(built.interior));
+    const before = plain.buildings.filter(centreIn(built.interior));
+    expect(mine.map((b) => [b.minX, b.minZ, b.maxX, b.maxZ])).toEqual(before.map((b) => [b.minX, b.minZ, b.maxX, b.maxZ]));
+    mine.forEach((b, i) => expect(b.height).toBeCloseTo(before[i].height * 0.5, 6));
+    const tall = generateCity(1337, edits([{ at: at(built), height: 1.6 }])).buildings.filter(centreIn(built.interior));
+    expect(Math.max(...tall.map((b) => b.height))).toBeLessThanOrEqual(12);
   });
 
   it('makes a plaza a car park or an open one, and leaves the other lots alone', () => {

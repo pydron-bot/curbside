@@ -10,7 +10,7 @@ import { planBuildings } from '../src/world/buildingPlans';
 import { BLOCK_SIZE, CORE_OFFSET, HALF_EXTENT, generateCity, isCarPark, lotBytes, type Block, type City } from '../src/world/city';
 import { dressCity, type Dressing } from '../src/world/dressing';
 import { placeSprayShops, placeStation } from '../src/world/landmarks';
-import type { BlockEdit } from '../src/world/mapEdits';
+import { NO_EDITS, type BlockEdit } from '../src/world/mapEdits';
 import { generatePickups } from '../src/world/pickups';
 import { placeKickers, placeRamps } from '../src/world/ramps';
 import { placeHospital } from '../src/world/streetSpots';
@@ -54,7 +54,7 @@ describe('a map edit stays in its block', () => {
     plain.blocks.find((b) => {
       if (kind === 'plaza' && !isCarPark(plain, plainBytes, plain.blocks.indexOf(b))) return false;
       if (b.kind !== kind || b.bx < CORE_OFFSET + 2 || b.bz < CORE_OFFSET + 2) return false;
-      const city = generateCity(1337, { version: 1, seed: 1337, blocks: [{ ...edit, at: [b.bx - CORE_OFFSET, b.bz - CORE_OFFSET] }] });
+      const city = generateCity(1337, { ...NO_EDITS, blocks: [{ ...edit, at: [b.bx - CORE_OFFSET, b.bz - CORE_OFFSET] }] });
       return landmarks(city) === plainLandmarks;
     })!;
 
@@ -71,7 +71,7 @@ describe('a map edit stays in its block', () => {
     it(name, () => {
       const b = pickBlock(kind, edit);
       expect(b, `a ${kind} block whose edit keeps the landmarks`).toBeDefined();
-      const city = generateCity(1337, { version: 1, seed: 1337, blocks: [{ ...edit, at: [b.bx - CORE_OFFSET, b.bz - CORE_OFFSET] }] });
+      const city = generateCity(1337, { ...NO_EDITS, blocks: [{ ...edit, at: [b.bx - CORE_OFFSET, b.bz - CORE_OFFSET] }] });
       const d = dress(city);
       expect(outside(d, b)).toEqual(outside(plainDress, b));
       // Every building outside the block keeps its plan (roof, shopfronts, awnings).

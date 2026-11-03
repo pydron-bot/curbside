@@ -13,7 +13,7 @@
  * first from the same stream, the ring after from its own. Hand-placed spots
  * are written in core blocks (`core()`) so they stay put.
  */
-import { buildingHeight, districtOf, paintDistricts, type District } from './districts';
+import { MAX_HEIGHT, buildingHeight, districtOf, paintDistricts, type District } from './districts';
 import { NO_EDITS, blockEditKey, blockSeed, type BlockEdit, type MapEdits } from './mapEdits';
 import { mulberry32 } from './random';
 import { len2 } from '../core/len';
@@ -151,6 +151,7 @@ export function generateCity(seed = 1337, edits: MapEdits = NO_EDITS): City {
     if (edit?.kind === 'carpark' || edit?.kind === 'plaza') block.carPark = edit.kind === 'carpark';
     blocks.push(block);
 
+    const first = buildings.length;
     if (kind === generated && edit?.variant === undefined) {
       // As generated (a repaint keeps the footprints and takes the new district's heights and colours).
       fillBlock(interior, kind, district, rand, buildings, trees);
@@ -158,6 +159,8 @@ export function generateCity(seed = 1337, edits: MapEdits = NO_EDITS): City {
       fillBlock(interior, generated, district, rand, scrapBuildings, scrapTrees);
       fillBlock(interior, kind, district, mulberry32(blockSeed(seed, bx - CORE_OFFSET, bz - CORE_OFFSET, edit?.variant ?? 0)), buildings, trees);
     }
+    // A height edit scales the block's buildings (footprints and roof kit as they were).
+    if (edit?.height !== undefined) for (let i = first; i < buildings.length; i++) buildings[i].height = Math.min(MAX_HEIGHT, buildings[i].height * edit.height);
   };
 
   // The core first, from the seed's own stream (so it's the same at any size),
