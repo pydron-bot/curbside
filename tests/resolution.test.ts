@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ResolutionController, STALL_MS, buildLadder, type QualityLevel } from '../src/render/dynamicResolution';
+import { ResolutionController, STALL_MS, buildLadder, renderScaleFrom, type QualityLevel } from '../src/render/dynamicResolution';
 import { QUALITY_TIERS, tierForPreset } from '../src/render/quality';
 import type { QualityPreset } from '../src/core/settings';
 
@@ -235,5 +235,17 @@ describe('resolution controller', () => {
     const fresh: QualityLevel[] = buildLadder('high', false, 2);
     c.setLadder(fresh);
     expect(c.current).toEqual(fresh[0]);
+  });
+});
+
+describe('render scale (test harnesses: ?renderScale=)', () => {
+  it('is 1 unless asked, and clamped to 0.1..1', () => {
+    expect(renderScaleFrom('')).toBe(1);
+    expect(renderScaleFrom('?debug')).toBe(1);
+    expect(renderScaleFrom('?renderScale=0.35')).toBe(0.35);
+    expect(renderScaleFrom('?renderScale=0.01')).toBe(0.1);
+    expect(renderScaleFrom('?renderScale=3')).toBe(1);
+    expect(renderScaleFrom('?renderScale=nope')).toBe(1);
+    expect(renderScaleFrom('?renderScale=-1')).toBe(1);
   });
 });

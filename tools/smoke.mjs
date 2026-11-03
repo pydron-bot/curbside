@@ -22,17 +22,24 @@
  * `npm test` can't.
  *
  *   npx -y -p playwright@1.63.0 node tools/smoke.mjs [--no-build] [--port 4318] [--out smoke-out]
- *     [--only desktop|852x393|852x340|pwa]
+ *     [--only desktop|852x393|852x340|pwa] [--jobs 2] [--scale 0.35]
  *
  * SwiftShader runs at ~1 fps, so it judges draw calls and errors, never
  * frame times. Exit code 1 on any failure; screenshots land in --out.
+ *
+ * Speed: the canvas is drawn at --scale of its pixel ratio (`?renderScale=`,
+ * render/dynamicResolution.ts): software rendering costs by the pixel, and
+ * draw calls, tiers and the HUD are the same at any scale. --scale 1 for
+ * sharp screenshots of the 3D view. --jobs N builds once and runs the
+ * profiles N at a time as child runs (each with its own port and
+ * --out/<profile>); CI runs them as separate jobs instead.
  */
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { args, launch, playwright } from './tune/lib.mjs';
 
-const opt = args({ build: true, port: 4318, out: 'smoke-out', only: '' });
+const opt = args({ build: true, port: 4318, out: 'smoke-out', only: '', jobs: 1, scale: 0.35 });
 /** --only desktop | 852x393 | 852x340 | pwa: one profile (CI runs them as parallel jobs). */
 const ONLY = ['', 'desktop', '852x393', '852x340', 'pwa'];
 if (!ONLY.includes(String(opt.only))) {
@@ -40,7 +47,10 @@ if (!ONLY.includes(String(opt.only))) {
   process.exit(2);
 }
 const BASE = '/curbside/';
-const URL = `http://localhost:${opt.port}${BASE}`;
+const SCALE = Math.min(1, Math.max(0.1, Number(opt.scale) || 1));
+const URL = `http://localhost:${opt.port}${BASE}${SCALE < 1 ? `?renderScale=${SCALE}` : ''}`;
+const started = Date.now();
+const seconds = (since) => `${Math.round((Date.now() - since) / 1000)} s`;
 const DRAW_BUDGET = 150;
 const env = { ...process.env, CURBSIDE_BASE: BASE };
 const failures = [];
@@ -562,6 +572,38 @@ async function momentCheck(page, label) {
 }
 
 let server = null;
+/** The profiles, slowest first, as --only names. */
+const PROFILE_NAMES = ['desktop', '852x393', '852x340', 'pwa'];
+
+/** --jobs N: build once, then run each profile as a child run, N at a time; each one's output is printed when it ends. */
+async function runParallel(jobs) {
+  if (opt.build) await run('npx', ['vite', 'build']);
+  const queue = PROFILE_NAMES.map((name, i) => ({ name, port: Number(opt.port) + i }));
+  const results = [];
+  const worker = async () => {
+    for (let job = queue.shift(); job; job = queue.shift()) {
+      const t0 = Date.now();
+      const argv = [process.argv[1], '--only', job.name, '--no-build', '--port', String(job.port), '--out', path.join(opt.out, job.name), '--scale', String(SCALE)];
+      const out = [];
+      const code = await new Promise((resolve) => {
+        const p = spawn(process.execPath, argv, { env: process.env });
+        p.stdout.on('data', (d) => out.push(d));
+        p.stderr.on('data', (d) => out.push(d));
+        p.on('exit', (c) => resolve(c ?? 1));
+      });
+      // Keep the checks and the summary; Chromium's stderr chatter goes.
+      const text = Buffer.concat(out).toString().split('\n').filter((l) => !l.startsWith('[pid=')).join('\n');
+      console.log(`\n=== ${job.name} (${seconds(t0)}) ===\n${text.trim()}`);
+      results.push({ name: job.name, ok: code === 0 });
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(jobs, PROFILE_NAMES.length)) }, worker));
+  const failed = results.filter((r) => !r.ok).map((r) => r.name);
+  console.log(failed.length ? `\nSMOKE FAILED: ${failed.join(', ')} (${seconds(started)})` : `\nSMOKE OK, all profiles (${seconds(started)})`);
+  process.exit(failed.length ? 1 : 0);
+}
+if (Number(opt.jobs) > 1 && !opt.only) await runParallel(Number(opt.jobs));
+
 let browser = null;
 try {
   if (opt.build) await run('npx', ['vite', 'build']);
@@ -578,6 +620,7 @@ try {
   ].filter(([label]) => !opt.only || label.includes(String(opt.only)));
   for (const [label, ctxOpt, saved] of profiles) {
     console.log(label);
+    const t0 = Date.now();
     const ctx = await browser.newContext({ ...ctxOpt, serviceWorkers: 'block', acceptDownloads: true });
     const page = await ctx.newPage();
     const errors = watch(page, label);
@@ -596,6 +639,7 @@ try {
     }
     check(errors.length === 0, `${label}: no page or console errors${errors.length ? `\n      ${errors.join('\n      ')}` : ''}`);
     await ctx.close();
+    console.log(`  ${label} took ${seconds(t0)}`);
   }
 
   if (!opt.only || opt.only === 'pwa') await pwaCheck();
@@ -610,6 +654,7 @@ try {
 /** Installable, then offline once the service worker has precached: the cold open still plays. */
 async function pwaCheck() {
   console.log('pwa');
+  const t0 = Date.now();
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 } });
   const page = await ctx.newPage();
   const errors = watch(page, 'pwa');
@@ -630,7 +675,8 @@ async function pwaCheck() {
   }
   check(errors.length === 0, `pwa: no page or console errors${errors.length ? `\n      ${errors.join('\n      ')}` : ''}`);
   await ctx.close();
+  console.log(`  pwa took ${seconds(t0)}`);
 }
 
-console.log(failures.length ? `\nSMOKE FAILED: ${failures.length} check(s)` : '\nSMOKE OK');
+console.log(failures.length ? `\nSMOKE FAILED: ${failures.length} check(s) (${seconds(started)})` : `\nSMOKE OK (${seconds(started)}, canvas at ${SCALE}×)`);
 process.exit(failures.length ? 1 : 0);

@@ -301,6 +301,17 @@ function round2(v: number): number {
   return Math.round(v * 100) / 100;
 }
 
+/**
+ * `?renderScale=0.35` (test harnesses only): draw the canvas at that share of
+ * the chosen pixel ratio. Software rendering (SwiftShader in the smoke test)
+ * costs by the pixel; draw calls, tiers and effects stay as chosen.
+ */
+export function renderScaleFrom(search: string): number {
+  const v = Number(new URLSearchParams(search).get('renderScale'));
+  return Number.isFinite(v) && v > 0 ? Math.min(1, Math.max(0.1, v)) : 1;
+}
+const RENDER_SCALE = typeof location === 'undefined' ? 1 : renderScaleFrom(location.search);
+
 /** Applies ResolutionController decisions to the renderer and the quality tier. */
 export class DynamicResolution {
   private readonly controller: ResolutionController;
@@ -358,7 +369,8 @@ export class DynamicResolution {
 
   private apply(): void {
     const { pixelRatio, tier } = this.controller.current;
-    if (this.renderer.getPixelRatio() !== pixelRatio) this.renderer.setPixelRatio(pixelRatio);
+    const drawn = pixelRatio * RENDER_SCALE;
+    if (this.renderer.getPixelRatio() !== drawn) this.renderer.setPixelRatio(drawn);
     setQualityTier(tier);
   }
 }
