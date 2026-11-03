@@ -2020,12 +2020,16 @@ are `src/game/modes/*Mode.ts`.
   60 s, SMASH ×12 in 50 s, a ×8 COMBO in 45 s. They count the same bus events
   as the score. $1,000 the first time (the gem turns gold), $150 a replay.
 - **Hidden packages** (`modes/packages.ts`, `packageMode.ts`): 40 green
-  parcels, seeded from the city: about half deep in alleys (with a straight
-  person-wide way out to the street), the rest in park interiors and plaza
-  corners, at least 20 m apart and in every quarter. $100 each,
-  "PACKAGES 12/40"; every tenth is a perk: a pistol every life, banked
-  chains +25%, an SMG every life, health that refills when you lie low.
-  Only on the radar with the scanner.
+  parcels at fixed places (`PACKAGE_SPOTS`, worked out once by
+  `generatePackages` from the unedited core city): about half deep in
+  alleys (with a straight person-wide way out to the street), the rest in
+  park interiors and plaza corners, at least 20 m apart and in every
+  quarter. Fixed so a map edit never moves them and the save, which keeps
+  found ones by index, stays right; the map edits can move, remove or add
+  them (`pkg-<index>`, `placePackages`). $100 each, "PACKAGES 12/40";
+  every tenth is a perk: a pistol every life, banked chains +25%, an SMG
+  every life, health that refills when you lie low. Only on the radar
+  with the scanner.
 - **Checkpoint races** (`modes/races.ts`, `raceMode.ts`): six courses of 8–12
   crossings authored as data (DOWNTOWN DASH, HARBOUR LOOP, OLD TOWN
   SCRAMBLE, NEON NIGHTS, CUL-DE-SAC CRAWL, RING ROAD RUN), 'R' on the radar.
@@ -3036,9 +3040,11 @@ and every new program is compiled behind the current frame.
   live in `src/world/maps/city.json` (bundled; empty today), read by
   `parseMapEdits` (never throws, reports what it drops) and applied by
   `generateCity(seed, edits)`: a block's kind (buildings, park, plaza, car
-  park), a district repaint (same footprints, the new district for
-  `districtOf`/`districtAt` everywhere) and a variant reroll, in core
-  blocks. An edited block is rebuilt from its own stream, so other blocks
+  park, empty lot: waste ground with junk, a broken line of bollards and
+  no carts or buskers), a district repaint (same footprints, the new
+  district for `districtOf`/`districtAt` everywhere), a building style
+  (another district's look for its buildings and pavement, `Block.style`,
+  the district kept for the game) and a variant reroll, in core blocks. An edited block is rebuilt from its own stream, so other blocks
   don't move. `collectAnchors` lists everything tied to a place (spots,
   jobs' spawns and routes, races, hangouts, ramps, bus stops);
   `dependentsOf` says what relies on a block, road segment or junction and
@@ -3057,32 +3063,52 @@ and every new program is compiled behind the current frame.
   closed road or a one-way's empty lane; road-works barriers and barrels
   across both ends of a closed road (knockable: the player isn't bound);
   the radar hatches closed roads and arrows one-ways. **Spots**:
-  `placeSafehouse`, `placePayphones`, `placeFrenzyTokens`, `placeHangouts`
-  and `placeCityRamps` (ids `ramp-<n>`) apply moves, turns and removals
-  (`world/spotEdits.ts`), defaulting to `ACTIVE_MAP`; the dressing reads
-  `city.edits`. `spotRules(id)` says what may move or go. **Props**:
+  `placeSafehouse`, `placePayphones`, `placeFrenzyTokens`, `placeHangouts`,
+  `placeCityRamps` (ids `ramp-<n>`) and `placePackages` (`pkg-<n>`) apply
+  moves, turns and removals (`world/spotEdits.ts`), defaulting to
+  `ACTIVE_MAP`; the dressing reads `city.edits`. A spot entry with `add`
+  adds a new ramp, kicker, gang hangout or package (`addedSpots`; ids from
+  `newSpotId`, past every generated one). `spotRules(id)` says what may
+  move or go (and whether the city generates it). **Props**:
   `placeStreetProps` removes a generated prop of the edit's kind within
   `PROP_MATCH` (its room stays claimed) and adds props last
   (`propEditable`: not lamps or traffic lights). **Checks**:
   `checkMapEdits(city, edits, anchors, { street })` adds to `checkAnchors`
   courses over closed roads or against one-ways, drive routes that can't
   get round, bus stops cut off, crossings traffic can't reach or leave,
-  bad spot and prop edits, each naming the edit at fault; `editsOn` lists
+  bad spot and prop edits (an added spot reusing an id or with the wrong
+  kind of id, a package count other than 40), each naming the edit at fault; `editsOn` lists
   the edits on a pick (`tests/mapEditsApply.test.ts`).
 - **Map editor** (`ui/mapEditor.ts`, logic in `game/mapEditorState.ts`;
   TEST → MAP → MAP EDITOR, desktop only): the city top-down on a canvas
   (drag or arrows to pan, wheel to zoom), every anchor as a labelled icon
-  and, zoomed in, the street props. Click a block (kind, district, REROLL,
-  height), a road (open, closed, one-way, FLIP), a crossing, a spot (drag
-  to move, Del removes where `spotRule` allows, ramps turn) or a prop
-  (remove, put back; PLACE adds one). The selection's dependents
+  and, zoomed in, the street props. Click a block (kind, district,
+  building style, REROLL, height), a road (open, closed, one-way, FLIP), a
+  crossing, a spot (drag to move, Del removes where `spotRule` allows,
+  ramps turn) or a prop (remove, put back); click again in the same place
+  for what's stacked under it (`picksAt`, `nextPick`). PLACE adds a street
+  prop or a new spot (stunt ramp, kicker, gang hangout, hidden package). The selection's dependents
   (`dependentsOf`) are drawn (courses and job routes as lines) and listed;
   `problemsFor` runs every check after each edit and turns breakages red.
   Ctrl+Z / Ctrl+Shift+Z, edits saved locally (`curbside.map.local`), CHANGES
   against the shipped file with REVERT and RESET ALL, EXPORT (downloads and
   copies `city.json` to commit as `src/world/maps/city.json`), VIEW IN 3D
-  (reloads on `?map=local&look=x,z`, observe mode over the selection). The
-  preview puts the game's district repaints back after every build.
+  and PLAY ON EDITS. The preview puts the game's district repaints back
+  after every build.
+  VIEW IN 3D rebuilds the running city in place (`game/liveMap.ts`): the
+  city's blocks, buildings and trees (in place, so every holder sees
+  them), districts and road rules, ramps, dressing, collision and
+  knockables (`StaticGrid.reset`, `Knockables.replace`), and through
+  `Look.rebuildCity` the ground's lot texture and contact shadows, the
+  building plans, the city mesh's changed 256 m chunks only
+  (`CityMesh.rebuild` hashes each chunk's contents), every static prop
+  (`WorldProps.rebuild`), the searchlights, neon reflections and smoke
+  occluders, then the radar (`refreshMap`). Same materials, so no new
+  shader programs. Observe mode opens over the selection. What the game
+  modes placed at boot (phones, tokens, packages, hangouts, jobs, the
+  city's scenes) isn't rebuilt, so after a live rebuild leaving the pause
+  for play, or PLAY from the title, reloads on `?map=local` (where all of
+  it agrees); PLAY ON EDITS does that at once.
 - **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new

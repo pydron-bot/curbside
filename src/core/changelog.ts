@@ -15,6 +15,18 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.28.0',
+    date: '2026-11-03',
+    title: 'Map makers',
+    notes: [
+      'Map editor: PLACE now adds new stunt ramps, kickers, gang hangouts and hidden packages, not just street props.',
+      'Hidden packages stay put: they no longer shift when a block is edited, and the editor can move, remove or add them (the map wants 40).',
+      'A block can be cleared to an empty lot (waste ground with dumped junk), or given another district\'s building style while keeping its own district.',
+      'VIEW IN 3D rebuilds the city in place, with no reload, and drops you into observe mode over your edit. PLAY ON EDITS restarts the game on them.',
+      'Click again on a spot in the editor to step through everything stacked there.',
+    ],
+  },
+  {
     version: '0.27.0',
     date: '2026-11-03',
     title: 'Look book',

@@ -70,6 +70,19 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
+**Map editor, round 2 (2026-11-03, branch `claude/w3d-map-2`):**
+**0.28.0 "Map makers"** (details in `docs/W3D_MAP.md` → *Round 2*): click
+again on a spot to step through what's stacked there; hidden packages are
+pinned to a fixed list (block edits no longer move them; same indices, so
+saves are unchanged) and are editable spots; PLACE adds new stunt ramps,
+kickers, gang hangouts and packages (`"add"` in a spot entry); a block
+can be an empty lot (waste ground) or take another district's building
+style; VIEW IN 3D rebuilds the running city in place (changed 256 m
+chunks only, no new shader programs) and opens observe mode, and play
+after it reloads on the local edits (PLAY ON EDITS does that at once).
+Not yet: adding payphones or frenzy tokens (each needs its job or frenzy
+in code). Desktop only, so no iPhone check needed beyond the game itself.
+
 **Where the look work stands (2026-11-03, LOOK panel session):** `main` =
 **0.27.0 "Look book", live** (from branch `claude/look-panel`): the LOOK
 tuning panel, TEST → LOOK (README → *Look → Tuning*). Not yet tried on a
@@ -236,8 +249,8 @@ at a shelter 66 m from the safehouse (was 100 m). Also: the smoke test
 draws the 3D view at 0.35× (`--scale`, about 6 min, was ~18) and has
 `--jobs`. **Device checks:** the cold open's new shelter (STEAL THIS CAR
 over the bus, the bus nose against the crash), the reshuffled streets
-reading as before. Open: hidden packages move with any block edit (saved
-by index; the owner's call, shared with W3-A).
+reading as before. (Hidden packages moving with block edits: fixed in
+0.28.0, the owner chose pinned, editable packages.)
 **Next:** the iPhone device pass (V2-14) on 0.18.0, then 1.0.0. Wave 3
 candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B is complete
 (AIR HORN, TASER, STINGER and SMOKE GRENADE shipped; STICKY CHARGE on

@@ -171,13 +171,57 @@ the selection.
 
 Still open:
 - **On the iPhone:** the cold open's new shelter (66 m from the safehouse).
-- **Hidden packages** move with any block edit (saved by index): the
-  owner's decision, shared with W3-A.
-- **Not editable yet:** building style beyond the district repaint, an
-  empty-lot kind, adding new spots (a new payphone or ramp), story spots
-  (jobs are data in `missionsData.ts`).
-- **Later:** rebuild the 3D city in place (per 256 m chunk) instead of
-  VIEW IN 3D's reload; click-to-cycle through stacked icons.
+- **Not editable yet:** adding payphones and frenzy tokens (each is tied
+  to jobs or a frenzy written in code: a new one needs its job or frenzy
+  first), story spots (jobs are data in `missionsData.ts`).
+- **Live rebuild gaps:** VIEW IN 3D's in-place rebuild doesn't redo what
+  the game modes placed at boot, the city's scenes, bus stops and carts,
+  the fountains' spray, the pigeons' map or the TEST teleport map; play
+  after it reloads instead (below).
+
+## Round 2 (2026-11-03, branch `claude/w3d-map-2`, 0.28.0)
+
+The four "later" items and the packages, as the owner picked them:
+
+- **Click again to cycle.** `picksAt(p, …)` lists everything at a point
+  (spots nearest first, then props, then the road or block under them);
+  a click again within a few pixels of the last steps down it
+  (`nextPick`), and the toast says "2 OF 3 HERE". A press on the selected
+  thing drags it even when it's lower in the stack.
+- **Hidden packages are spots.** They stand at a fixed list
+  (`PACKAGE_SPOTS`: what `generatePackages` gives for the unedited core
+  city, same order, so saves by index are unchanged), so block edits no
+  longer move them; ids `pkg-<index>`, movable and removable. The checks
+  want 40 in all (the perks and 100% count 40). `pruneSave` keeps the
+  indices of the shipped map's packages and this page's (a `?map=local`
+  preview shares the save, so a package the edits remove isn't pruned).
+  In a bigger city (W3-A) the packages are now the core's 40.
+- **New spots.** A spot entry with `add` (`ramp`, `kicker`, `hangout`,
+  `package`) adds one: `{ "id": "ramp-18", "add": "kicker", "x": 120,
+  "z": 64, "heading": 1.57 }`. Ids come from `newSpotId` (past every
+  generated and edited id with that prefix: `ramp-<n>`, `<gang>-<n>`,
+  `pkg-<n>`; a package's number is its save index). Added ramps face
+  along the road they stand on unless turned; an added hangout's crew
+  lines up along the nearer street. Checks: an added id the city already
+  has, an id of the wrong kind (`pkg-41` as a ramp), a move of an id
+  nobody generated or added. PLACE's SPOTS group adds them; REMOVE drops
+  the entry (AS GENERATED doesn't apply).
+- **Empty lots and building style.** Block kind `lot`: a real `BlockKind`
+  (so nothing that looks for plazas, parks or buildings picks it up):
+  waste ground in the ground shader (dirt, gravel, weeds, a slab of what
+  stood there, ruts from the bollard gap, puddles), a broken line of
+  bollards and 4–8 bits of junk (dumpsters, barrels, carts, cones, bins),
+  no carts or buskers, no packages generated on it. Block `style`: the
+  buildings (and pavement paving) take that district's look, heights and
+  shopfronts from the same random draws, so the footprints stay; the
+  block keeps its district for everything else (`Block.style`). A style
+  equal to the block's district is cleared.
+- **VIEW IN 3D rebuilds in place** (`game/liveMap.ts`, README → *Map
+  editor*): ~0.2 s on SwiftShader for one changed chunk, no new programs
+  (the smoke test checks). Then observe mode over the selection. Because
+  the modes' spots aren't redone, leaving the pause for play (or PLAY
+  from the title) after a live rebuild reloads on `?map=local`; PLAY ON
+  EDITS does that straight away (the old VIEW IN 3D).
 
 ## Roads, spots and props in the game (2026-11-03, branch `claude/w3d-engine`)
 
@@ -322,7 +366,6 @@ A desktop 2D editor rather than a live 3D rebuild: TEST → MAP → MAP EDITOR
   `checkMapEdits`). The preview shows prop edits and spot moves itself
   (removed props as red crosses, added ones green); both are idempotent
   once the engine applies them in `dressCity` / `collectAnchors`.
-- **Not yet:** the 3D view (VIEW IN 3D) shows block edits only; road,
-  spot and prop edits reach the game with the engine half. Undo keeps up to
-  200 MapEdits snapshots.
+- Undo keeps up to 200 MapEdits snapshots. (VIEW IN 3D now rebuilds in
+  place: see *Round 2* above.)
 
