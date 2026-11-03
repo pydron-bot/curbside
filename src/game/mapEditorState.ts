@@ -9,7 +9,8 @@
  * spots move and which can go) and `problemsFor` (every check an edit
  * runs). Both are local stand-ins today.
  */
-import { checkMapEdits, collectAnchors, blockAt, roadAt, routeNodes, spotRules, type Anchor, type AnchorGroup, type MapPick, type Node } from './mapAnchors';
+import { checkMapEdits, collectAnchors, blockAt, newSpotId, roadAt, routeNodes, spotRules, type Anchor, type AnchorGroup, type MapPick, type Node } from './mapAnchors';
+import { GANGS } from './gangs';
 import { BLOCK_SIZE, CORE_OFFSET, HALF_EXTENT, generateCity, isCarPark, lotBytes, type City } from '../world/city';
 import { paintDistricts, type District } from '../world/districts';
 import { dressCity, type Dressing } from '../world/dressing';
@@ -25,6 +26,8 @@ import {
   withPropEdit,
   withRoadEdit,
   withSpotEdit,
+  withAddedSpot,
+  type AddedSpotKind,
   type BlockEdit,
   type BlockEditKind,
   type MapEditChange,
@@ -52,6 +55,14 @@ export function spotRule(id: string): { movable: boolean; removable: boolean; tu
   const r = spotRules(id);
   return { movable: r?.movable ?? false, removable: r?.removable ?? false, turnable: r?.turnable ?? false };
 }
+
+/** What PLACE can add besides street props: new spots (game/mapAnchors.ts newSpotId gives each its id). */
+export const PLACEABLE_SPOTS: ReadonlyArray<{ kind: AddedSpotKind; label: string; gang?: string }> = [
+  { kind: 'ramp', label: 'STUNT RAMP' },
+  { kind: 'kicker', label: 'KICKER' },
+  ...GANGS.map((g) => ({ kind: 'hangout' as const, label: `${g.name} HANGOUT`, gang: g.id })),
+  { kind: 'package', label: 'HIDDEN PACKAGE' },
+];
 
 // --- The preview: the edited city and everything on it ---
 
@@ -89,6 +100,8 @@ export interface Preview {
   removed: Anchor[];
   /** The ramps as generated (by id: a turn's base). */
   rawRamps: readonly Ramp[];
+  /** The ramps as the edits leave them (an added one's turn base). */
+  ramps: readonly Ramp[];
   problems: EditorProblem[];
   /** How long the build took, ms. */
   ms: number;
@@ -121,7 +134,7 @@ export function buildPreview(edits: MapEdits, inputs: PreviewInputs, gameMap: Ma
     const { moved, removed } = applySpotEdits(collectAnchors(city, { ...more, ramps: rawRamps, edits: NO_EDITS }), edits);
     // Checked with the preview's districts and road rules installed (districtAt and the router read them).
     const problems = problemsFor(city, edits, anchors, street);
-    return { edits, city, kinds, props: propsOnMap(dressing, edits), anchors, moved, removed, rawRamps, problems, ms: performance.now() - t0 };
+    return { edits, city, kinds, props: propsOnMap(dressing, edits), anchors, moved, removed, rawRamps, ramps, problems, ms: performance.now() - t0 };
   } finally {
     restoreGameMap(gameMap);
   }
@@ -534,9 +547,10 @@ function spotEditOf(edits: MapEdits, id: string): SpotEdit | undefined {
   return edits.spots.find((s) => s.id === id);
 }
 
-/** Move a spot to (x, z); back within 0.1 m of where it was generated clears the move (a turn stays). */
+/** Move a spot to (x, z); back within 0.1 m of where it was generated clears the move (a turn stays). An added spot just moves. */
 export function moveSpot(edits: MapEdits, id: string, x: number, z: number, generated: Point): MapEdits {
   const old = spotEditOf(edits, id);
+  if (old?.add) return withAddedSpot(edits, id, { add: old.add, x, z, heading: old.heading });
   const home = Math.abs(x - generated.x) < 0.1 && Math.abs(z - generated.z) < 0.1;
   return withSpotEdit(edits, id, { ...(home ? {} : { x, z }), ...(old?.heading !== undefined ? { heading: old.heading } : {}) });
 }
@@ -546,17 +560,26 @@ export function turnSpot(edits: MapEdits, id: string, delta: number, base: numbe
   const old = spotEditOf(edits, id);
   let h = (old?.heading ?? base) + delta;
   h = Math.atan2(Math.sin(h), Math.cos(h));
+  if (old?.add) return withAddedSpot(edits, id, { add: old.add, x: old.x!, z: old.z!, heading: h });
   const same = Math.abs(Math.atan2(Math.sin(h - base), Math.cos(h - base))) < 0.01;
   return withSpotEdit(edits, id, { ...(old?.x !== undefined ? { x: old.x, z: old.z } : {}), ...(same ? {} : { heading: h }) });
 }
 
+/** Remove a spot: a generated one is marked removed, an added one is dropped from the edits. */
 export function removeSpot(edits: MapEdits, id: string): MapEdits {
+  if (spotEditOf(edits, id)?.add) return withAddedSpot(edits, id);
   return spotRule(id).removable ? withSpotEdit(edits, id, { removed: true }) : edits;
 }
 
-/** Back where (and as) it was generated. */
+/** Back where (and as) it was generated (an added spot has nowhere to go back to: it stays). */
 export function resetSpot(edits: MapEdits, id: string): MapEdits {
-  return withSpotEdit(edits, id);
+  return spotEditOf(edits, id)?.add ? edits : withSpotEdit(edits, id);
+}
+
+/** Add a new spot of `kind` at (x, z) (a hangout for `gang`); returns the edits and the new spot's id. */
+export function placeSpot(edits: MapEdits, kind: AddedSpotKind, x: number, z: number, gang?: string): { edits: MapEdits; id: string } {
+  const id = newSpotId(edits, kind, gang);
+  return { edits: withAddedSpot(edits, id, { add: kind, x, z }), id };
 }
 
 export function spotEdited(edits: MapEdits, id: string): SpotEdit | undefined {
@@ -645,6 +668,7 @@ export const GROUP_STYLE: Readonly<Record<AnchorGroup, { letter: string; color: 
   busStop: { letter: 'B', color: '#9aa3b5', name: 'Bus stops' },
   vendor: { letter: 'V', color: '#ff9f5a', name: 'Food carts' },
   hydrant: { letter: 'W', color: '#5aa8ff', name: 'Hydrants' },
+  package: { letter: '?', color: '#6dff5a', name: 'Hidden packages' },
   test: { letter: 'T', color: '#b0b0b0', name: 'Test teleports' },
 };
 
@@ -669,9 +693,10 @@ export function describeChange(c: MapEditChange): string {
     }
     case 'spots': {
       const s = (c.after ?? c.before) as SpotEdit;
-      if (!c.after) return `Spot ${s.id}: back where generated`;
+      if (!c.after) return s.add ? `Spot ${s.id}: no longer added` : `Spot ${s.id}: back where generated`;
       const a = c.after as SpotEdit;
       if (a.removed) return `Spot ${a.id}: removed`;
+      if (a.add) return `Spot ${a.id}: ${a.add} added at ${a.x!.toFixed(0)}, ${a.z!.toFixed(0)}`;
       const bits = [a.x !== undefined ? `moved to ${a.x.toFixed(0)}, ${a.z!.toFixed(0)}` : '', a.heading !== undefined ? 'turned' : ''].filter(Boolean);
       return `Spot ${a.id}: ${bits.join(', ')}`;
     }

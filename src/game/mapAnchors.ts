@@ -16,6 +16,7 @@
  * Pure: no three.js; the tests run the checks against the committed map.
  */
 import { placeDocks, placeFrenzyTokens, placePayphones, placeSafehouse } from './modes/places';
+import { PACKAGE_COUNT, PACKAGE_SPOTS, packageId, placePackages } from './modes/packages';
 import { RACES } from './modes/races';
 import { GANGS, placeHangouts } from './gangs';
 import { districtCentre, snapOnFoot } from './testSpots';
@@ -24,11 +25,11 @@ import type { MissionDef } from '../systems/missions';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, core, type City } from '../world/city';
 import { DISTRICT_NAMES, districtAt, type District } from '../world/districts';
 import { placeSprayShops, placeStation } from '../world/landmarks';
-import { NO_EDITS, entryKey, propKey, roadKey, type MapEdits, type MapSection } from '../world/mapEdits';
+import { NO_EDITS, entryKey, propKey, roadKey, type AddedSpotKind, type MapEdits, type MapSection } from '../world/mapEdits';
 import { placeCityRamps } from '../world/ramps';
 import { RoadRules } from '../world/roadRules';
 import { DIRS, DIR_VEC, MAX_NODE, reverse, turnToward, type Dir } from '../world/roads';
-import { spotEdit } from '../world/spotEdits';
+import { idNumber, spotEdit } from '../world/spotEdits';
 import { placeHospital } from '../world/streetSpots';
 import { fixedStopLanes } from '../world/streetStops';
 import type { PropEditProblem } from '../world/streetProps';
@@ -48,6 +49,7 @@ export type AnchorGroup =
   | 'busStop'
   | 'vendor'
   | 'hydrant'
+  | 'package'
   | 'test';
 
 type Point = { x: number; z: number };
@@ -69,8 +71,10 @@ export interface Anchor {
   district?: District;
   /** A bus stop's lane: the bus pulls in travelling `dir` toward crossing (ix, iz). */
   lane?: { ix: number; iz: number; dir: Dir };
-  /** Moved by the map edits (a spot edit names it). */
+  /** Moved by the map edits (a spot edit names it), or added by them. */
   moved?: boolean;
+  /** Added by the map edits (not a spot the city generates). */
+  added?: boolean;
 }
 
 /** Where on the map a pick (and so a dependency) is: block and crossing indices as the road grid numbers them. */
@@ -98,7 +102,9 @@ export function collectAnchors(city: City, inputs: AnchorInputs = {}): Anchor[] 
   const out: Anchor[] = [];
   const spot = (id: string, group: AnchorGroup, label: string, p: Point) => {
     const a: Anchor = { id, group, label, points: [{ x: p.x, z: p.z }] };
-    if (spotRules(id) && spotEdit(edits, id)) a.moved = true;
+    const e = spotRules(id) && spotEdit(edits, id);
+    if (e) a.moved = true;
+    if (e && e.add) a.added = true;
     out.push(a);
   };
 
@@ -117,6 +123,7 @@ export function collectAnchors(city: City, inputs: AnchorInputs = {}): Anchor[] 
   for (const r of RACES) out.push({ id: r.id, group: 'race', label: `Race: ${r.name}`, points: [nodePoint(r.nodes[0])], route: r.nodes });
   for (const m of buildMissions(docks, safehouse)) storyAnchors(m, out);
   inputs.ramps?.forEach((r, i) => spot(r.id ?? `ramp-${i}`, 'ramp', r.kind === 'kicker' ? 'Kicker' : 'Stunt ramp', r));
+  for (const p of placePackages(edits)) spot(packageId(p.index), 'package', `Hidden package ${p.index}`, p);
   inputs.busStops?.forEach((s, i) => {
     spot(`bus-${i}`, 'busStop', 'Bus stop', s);
     if (s.ix !== undefined && s.iz !== undefined && s.dir !== undefined) out[out.length - 1].lane = { ix: s.ix, iz: s.iz, dir: s.dir };
@@ -307,6 +314,8 @@ export interface SpotRule {
   turnable: boolean;
   /** Why it can't be removed, for the editor's tooltip. */
   why?: string;
+  /** The city generates it (false: an id only a spot the edits add can have). */
+  generated: boolean;
 }
 
 /**
@@ -318,20 +327,48 @@ export interface SpotRule {
  */
 export function spotRules(id: string, seed = 1337): SpotRule | null {
   const ids = spotIds(seed);
-  const group = ids.get(id);
+  const generated = ids.has(id);
+  const group = ids.get(id) ?? addedGroup(id);
   if (!group) return null;
   switch (group) {
     case 'safehouse':
-      return { group, label: 'Safehouse', movable: true, removable: false, turnable: false, why: 'the shop, and jobs drop off at it' };
+      return { group, label: 'Safehouse', movable: true, removable: false, turnable: false, why: 'the shop, and jobs drop off at it', generated };
     case 'payphone':
-      return { group, label: `Payphone ${id.slice(6)}`, movable: true, removable: false, turnable: false, why: 'story jobs ring it' };
+      return { group, label: `Payphone ${id.slice(6)}`, movable: true, removable: false, turnable: false, why: 'story jobs ring it', generated };
     case 'frenzy':
-      return { group, label: `Frenzy token ${id.slice(3)}`, movable: true, removable: false, turnable: false, why: 'its frenzy counts toward 100%' };
+      return { group, label: `Frenzy token ${id.slice(3)}`, movable: true, removable: false, turnable: false, why: 'its frenzy counts toward 100%', generated };
     case 'hangout':
-      return { group, label: `${GANGS.find((g) => id.startsWith(`${g.id}-`))?.name ?? 'Gang'} hangout`, movable: true, removable: true, turnable: false };
+      return { group, label: `${GANGS.find((g) => id.startsWith(`${g.id}-`))?.name ?? 'Gang'} hangout`, movable: true, removable: true, turnable: false, generated };
+    case 'package':
+      return { group, label: `Hidden package ${id.slice(4)}`, movable: true, removable: true, turnable: false, generated };
     default:
-      return { group, label: 'Ramp', movable: true, removable: true, turnable: true };
+      return { group, label: 'Ramp', movable: true, removable: true, turnable: true, generated };
   }
+}
+
+/** The group an added spot's id belongs to (`ramp-<n>`, `<gang>-<n>`, `pkg-<n>`), or null. */
+function addedGroup(id: string): AnchorGroup | null {
+  if (idNumber(id, 'pkg') !== null) return 'package';
+  if (idNumber(id, 'ramp') !== null) return 'ramp';
+  return GANGS.some((g) => idNumber(id, g.id) !== null) ? 'hangout' : null;
+}
+
+/** The group each kind of added spot joins. */
+export const ADDED_GROUP: Readonly<Record<AddedSpotKind, AnchorGroup>> = { ramp: 'ramp', kicker: 'ramp', hangout: 'hangout', package: 'package' };
+
+/**
+ * An id for a new spot of `kind` (for a hangout, of gang `gang`): the next
+ * number after every generated and edited one of its prefix (a package's
+ * number is its index in the save, so it's never reused within a map).
+ */
+export function newSpotId(edits: MapEdits, kind: AddedSpotKind, gang = GANGS[0].id): string {
+  const prefix = kind === 'package' ? 'pkg' : kind === 'hangout' ? gang : 'ramp';
+  let next = 0;
+  for (const id of [...spotIds(edits.seed).keys(), ...edits.spots.map((s) => s.id)]) {
+    const n = idNumber(id, prefix);
+    if (n !== null) next = Math.max(next, n + 1);
+  }
+  return `${prefix}-${next}`;
 }
 
 const idsBySeed = new Map<number, ReadonlyMap<string, AnchorGroup>>();
@@ -344,6 +381,7 @@ function spotIds(seed: number): ReadonlyMap<string, AnchorGroup> {
   for (const p of placeFrenzyTokens(NO_EDITS)) ids.set(p.id, 'frenzy');
   for (const h of placeHangouts(GANGS, NO_EDITS)) ids.set(h.id, 'hangout');
   for (const r of placeCityRamps(seed, NO_EDITS)) ids.set(r.id!, 'ramp');
+  PACKAGE_SPOTS.forEach((_, i) => ids.set(packageId(i), 'package'));
   idsBySeed.set(seed, (m = ids));
   return m;
 }
@@ -468,8 +506,16 @@ export function checkMapEdits(city: City, edits: MapEdits, anchors: readonly Anc
   for (const e of edits.spots) {
     const rule = spotRules(e.id, edits.seed);
     const edit = { section: 'spots' as const, key: e.id };
-    if (!rule) {
+    if (!rule || (!rule.generated && !e.add)) {
       out.push({ id: e.id, label: e.id, problem: ids.has(e.id) ? "isn't a spot the map file moves or removes" : `no spot has the id "${e.id}"`, edit });
+      continue;
+    }
+    if (e.add && rule.generated) {
+      out.push({ id: e.id, label: rule.label, problem: `adds a ${e.add} with the id of a spot the city already has (give it a new number)`, edit, at: e.x !== undefined ? { x: e.x, z: e.z! } : undefined });
+      continue;
+    }
+    if (e.add && rule.group !== ADDED_GROUP[e.add]) {
+      out.push({ id: e.id, label: e.id, problem: `an added ${e.add} needs an id like "${newSpotId(NO_EDITS, e.add)}"`, edit });
       continue;
     }
     if (e.removed && !rule.removable) out.push({ id: e.id, label: rule.label, problem: `can't be removed (${rule.why})`, edit });
@@ -484,6 +530,11 @@ export function checkMapEdits(city: City, edits: MapEdits, anchors: readonly Anc
     if (g.hangouts.length > 0 && !anchors.some((a) => a.group === 'hangout' && a.id.startsWith(`${g.id}-`))) {
       out.push({ id: g.id, label: `${g.name} hangouts`, problem: 'every hangout is removed: the gang never shows up', edit: { section: 'spots', key: `${g.id}-0` } });
     }
+  }
+
+  const packages = anchors.filter((a) => a.group === 'package').length;
+  if (packages !== PACKAGE_COUNT) {
+    out.push({ id: 'packages', label: 'Hidden packages', problem: `${packages} on the map, not ${PACKAGE_COUNT}: the perks and 100% count ${PACKAGE_COUNT}` });
   }
 
   // Props.

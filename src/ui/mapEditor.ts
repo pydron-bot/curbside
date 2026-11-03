@@ -38,6 +38,8 @@ import {
   picksAt,
   nextPick,
   placeProp,
+  placeSpot,
+  PLACEABLE_SPOTS,
   removeProp,
   removeSpot,
   rerollBlock,
@@ -81,6 +83,7 @@ import {
 } from '../world/mapEdits';
 import { LOCAL_MAP_KEY, loadLocalMap, previewingLocalMap } from '../world/shippedMap';
 import type { StreetPropKind } from '../world/streetProps';
+import type { AddedSpotKind } from '../world/mapEdits';
 import { DISTRICT_HUE } from './cityMap';
 import { ICONS } from './icons';
 import { MenuNav, type Panel } from './menu';
@@ -139,7 +142,8 @@ export class MapEditor implements Panel {
   private selection: Selection | null = null;
   /** Edits being made (a slider mid-drag): previewed, not yet an undo step. */
   private pending: MapEdits | null = null;
-  private placing: StreetPropKind | null = null;
+  /** What PLACE puts down: a street prop kind, or a spot (`spot:<kind>[:<gang>]`). */
+  private placing: string | null = null;
   private drag: Drag | null = null;
   private hover: Point | null = null;
   /** Where the last click landed, world m (a click again there steps through the stack). */
@@ -172,8 +176,8 @@ export class MapEditor implements Panel {
         <div class="me-bar">
           <button type="button" class="me-btn" data-act="undo" title="Undo (Ctrl+Z)">UNDO</button>
           <button type="button" class="me-btn" data-act="redo" title="Redo (Ctrl+Shift+Z)">REDO</button>
-          <label class="me-place" title="Pick a street prop, then click the map to place it (Esc stops)">PLACE
-            <select><option value="">—</option>${PLACEABLE_PROPS.map((k) => `<option value="${k}">${k.replace(/_/g, ' ').toUpperCase()}</option>`).join('')}</select>
+          <label class="me-place" title="Pick a spot or a street prop, then click the map to place it (Esc stops)">PLACE
+            <select><option value="">—</option><optgroup label="SPOTS">${PLACEABLE_SPOTS.map((k) => `<option value="${placeValue(k)}">${k.label}</option>`).join('')}</optgroup><optgroup label="STREET PROPS">${PLACEABLE_PROPS.map((k) => `<option value="${k}">${k.replace(/_/g, ' ').toUpperCase()}</option>`).join('')}</optgroup></select>
           </label>
           <button type="button" class="me-btn" data-act="export" title="Download city.json and copy it">EXPORT</button>
           <button type="button" class="me-btn hot" data-act="view3d" title="Reload the game on your local edits, looking at the selection">VIEW IN 3D</button>
@@ -231,8 +235,8 @@ export class MapEditor implements Panel {
       if (t.dataset.input === 'height') this.setHeight(Number(t.value), true);
     });
     this.placeEl.addEventListener('change', () => {
-      this.placing = (this.placeEl.value || null) as StreetPropKind | null;
-      if (this.placing && this.view.scale < PROPS_FROM_SCALE) this.say('ZOOM IN TO SEE THE STREET PROPS');
+      this.placing = this.placeEl.value || null;
+      if (this.placing && !this.placing.startsWith('spot:') && this.view.scale < PROPS_FROM_SCALE) this.say('ZOOM IN TO SEE THE STREET PROPS');
       this.placeEl.blur();
       this.syncCursor();
       this.redraw();
@@ -528,7 +532,7 @@ export class MapEditor implements Panel {
     const p = this.preview;
     if (!h || !p) return;
     if (sel?.kind === 'anchor' && sel.id.startsWith('ramp-')) {
-      const ramp = p.rawRamps.find((r) => r.id === sel.id);
+      const ramp = p.rawRamps.find((r) => r.id === sel.id) ?? p.ramps.find((r) => r.id === sel.id);
       if (ramp) this.commit(turnSpot(h.current, sel.id, delta, ramp.heading));
     } else if (sel?.kind === 'prop' && sel.prop.origin === 'added') {
       const pr = sel.prop;
@@ -782,8 +786,18 @@ export class MapEditor implements Panel {
     }
     if (g.moved || e.button !== 0) return;
     const w = toWorld(this.view, g.x, g.y);
+    if (this.placing?.startsWith('spot:')) {
+      const [, kind, gang] = this.placing.split(':');
+      const placed = placeSpot(h.current, kind as AddedSpotKind, w.x, w.z, gang);
+      this.commit(placed.edits, true);
+      this.selection = { kind: 'anchor', id: placed.id };
+      this.d.audio.ui('confirm');
+      this.refreshSide();
+      this.redraw();
+      return;
+    }
     if (this.placing) {
-      this.commit(placeProp(h.current, this.placing, w.x, w.z), true);
+      this.commit(placeProp(h.current, this.placing as StreetPropKind, w.x, w.z), true);
       this.resolveSelection();
       const placed = this.preview?.props.find((q) => q.origin === 'added' && q.kind === this.placing && Math.abs(q.x - w.x) <= 0.1 && Math.abs(q.z - w.z) <= 0.1);
       if (placed) this.selection = { kind: 'prop', prop: placed };
@@ -837,7 +851,7 @@ export class MapEditor implements Panel {
   private status(): void {
     const w = this.hover;
     const hint = this.placing
-      ? `PLACING ${this.placing.replace(/_/g, ' ').toUpperCase()} · CLICK THE MAP · ESC STOPS`
+      ? `PLACING ${this.placeEl.selectedOptions[0]?.textContent ?? ''} · CLICK THE MAP · ESC STOPS`
       : 'DRAG OR ARROWS TO PAN · WHEEL TO ZOOM · CLICK TO SELECT · DRAG A SELECTED SPOT TO MOVE IT · DEL REMOVES · CTRL+Z UNDO';
     this.statusEl.textContent = w ? `${w.x.toFixed(1)}, ${w.z.toFixed(1)} m · ${hint}` : hint;
   }
@@ -903,7 +917,7 @@ export class MapEditor implements Panel {
   private selectionHtml(e: MapEdits, p: Preview): string {
     const s = this.selection;
     if (!s) {
-      return `<h3>SELECT</h3><p class="me-note">Click a block, a road, a crossing, a spot or (zoomed in) a street prop. Pick a prop under PLACE to add one.</p>
+      return `<h3>SELECT</h3><p class="me-note">Click a block, a road, a crossing, a spot or (zoomed in) a street prop; click again in the same place for what's under it. Pick a spot or a prop under PLACE to add one.</p>
         <p class="me-note">${p.anchors.length} spots and routes · ${p.props.filter((x) => x.origin !== 'removed').length} street props · built in ${p.ms.toFixed(0)} ms</p>`;
     }
     const btn = (act: string, label: string, opts: { arg?: string; on?: boolean; sub?: string; disabled?: boolean } = {}) =>
@@ -960,12 +974,18 @@ export class MapEditor implements Panel {
       const at = a.points[0];
       const g = GROUP_STYLE[a.group];
       const line = routeLine(a);
-      const state = removed ? 'Removed' : edit ? [edit.x !== undefined ? 'moved' : '', edit.heading !== undefined ? 'turned' : ''].filter(Boolean).join(', ') : '';
+      const state = removed
+        ? 'Removed'
+        : edit?.add
+          ? 'Added by your edits'
+          : edit
+            ? [edit.x !== undefined ? 'moved' : '', edit.heading !== undefined ? 'turned' : ''].filter(Boolean).join(', ')
+            : '';
       return `<h3><i class="me-dot" style="background:${g.color}"></i>${esc(a.label)}</h3>
         <p class="me-note">${g.name} · <code>${esc(a.id)}</code>${at ? ` · ${at.x.toFixed(1)}, ${at.z.toFixed(1)}` : ''}${a.points.length > 1 ? ` · ${a.points.length} points` : ''}${line ? ` · ${line.fixed ? 'a course' : 'a drive route'} through ${line.points.length - (line.fixed ? 0 : 1)} crossings` : ''}</p>
         ${state ? `<p class="me-note edited">${state}</p>` : ''}
         <p class="me-note">${rule.movable ? (removed ? 'Removed from the city.' : 'Drag it on the map to move it.') : 'Placed by the game (not a spot the map file moves): this shows what it relies on.'}</p>
-        <div class="me-row">${rule.removable && !removed ? btn('removeSpot', 'REMOVE', { sub: 'Del' }) : ''}${edit ? btn('resetSpot', removed ? 'PUT BACK' : 'AS GENERATED') : ''}${
+        <div class="me-row">${rule.removable && !removed ? btn('removeSpot', 'REMOVE', { sub: 'Del' }) : ''}${edit && !edit.add ? btn('resetSpot', removed ? 'PUT BACK' : 'AS GENERATED') : ''}${
           a.id.startsWith('ramp-') && !removed ? btn('turnSpot', 'TURN ⟲', { arg: String(-QUARTER) }) + btn('turnSpot', 'TURN ⟳', { arg: String(QUARTER) }) : ''
         }</div>`;
     }
@@ -1337,3 +1357,6 @@ export class MapEditor implements Panel {
 }
 
 const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+/** PLACE's value for a spot: `spot:<kind>` (and `:<gang>` for a hangout). */
+const placeValue = (k: (typeof PLACEABLE_SPOTS)[number]) => `spot:${k.kind}${k.gang ? `:${k.gang}` : ''}`;

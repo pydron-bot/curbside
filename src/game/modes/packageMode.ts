@@ -8,9 +8,9 @@
 import type { GlowSprites } from '../../render/glowSprites';
 import type { Arsenal, WeaponKind } from '../../systems/weapons';
 import { MARK, groundRing, nearView, type ProgressProps } from '../../render/progressLook';
-import type { City, Rect } from '../../world/city';
+import type { Rect } from '../../world/city';
 import type { Mode, ModeCtx } from './context';
-import { PACKAGE_COUNT, PACKAGE_PAY, PACKAGE_REACH_CAR, PACKAGE_REACH_FOOT, generatePackages, perkFor, type HiddenPackage } from './packages';
+import { PACKAGE_COUNT, PACKAGE_PAY, PACKAGE_REACH_CAR, PACKAGE_REACH_FOOT, perkFor, placePackages, type HiddenPackage } from './packages';
 import { len2 } from '../../core/len';
 
 /** First aid (the 40-package perk): health refills this fast after this long unhurt. */
@@ -23,11 +23,9 @@ export class PackageMode implements Mode {
   private blipsOn = false;
   private sinceHurt = 0;
 
-  constructor(
-    private readonly ctx: ModeCtx,
-    city: City,
-  ) {
-    this.packages = generatePackages(city);
+  constructor(private readonly ctx: ModeCtx) {
+    // Fixed places (not from the city), as the map edits leave them: block edits never move them.
+    this.packages = placePackages();
     this.found = new Set(ctx.progress.data.packages);
     const { bus, player } = ctx.deps;
     bus.on('playerHurt', () => (this.sinceHurt = 0));

@@ -36,7 +36,7 @@ import { AreaMode } from './modes/areaMode';
 import { GangMode } from './modes/gangMode';
 import { GANGS, RESPECT_MAX } from './gangs';
 import { AreaCard } from '../ui/areaCard';
-import { PACKAGE_COUNT } from './modes/packages';
+import { PACKAGE_COUNT, knownPackageIndices } from './modes/packages';
 import { PackageMode } from './modes/packageMode';
 import { SAFEHOUSE } from './modes/places';
 import { RaceMode } from './modes/raceMode';
@@ -121,7 +121,7 @@ export class ProgressDirector implements ModeCtx {
     this.progress = new Progress();
     // Ids this build doesn't have can't count (missions' ids once the jobs are built, below).
     pruneSave(this.progress.data, {
-      packages: PACKAGE_COUNT,
+      packages: knownPackageIndices(),
       frenzies: FRENZIES.map((f) => f.id),
       exportOrders: exportList(this.progress.data.exports.lists).map((o) => o.id),
     });
@@ -140,7 +140,7 @@ export class ProgressDirector implements ModeCtx {
 
     this.chaos = new ChaosRunMode(this, this.results);
     this.frenzies = new FrenzyMode(this);
-    this.packages = new PackageMode(this, d.city);
+    this.packages = new PackageMode(this);
     this.races = new RaceMode(this);
     this.exports = new ExportMode(this, d.city);
     this.taxi = new TaxiMode(this);

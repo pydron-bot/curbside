@@ -25,6 +25,7 @@ import {
   anchorShown,
   PROPS_FROM_SCALE,
   placeProp,
+  placeSpot,
   propsOnMap,
   removeProp,
   removeSpot,
@@ -291,6 +292,28 @@ describe('tools', () => {
     e = moveSpot(e, 'ramp-0', 0.02, 0, { x: 0, z: 0 });
     expect(e.spots).toEqual([{ id: 'ramp-0', heading: 1.57 }]);
     expect(resetSpot(e, 'ramp-0').spots).toEqual([]);
+  });
+
+  it('adds new spots with new ids, and moves, turns and removes them', () => {
+    let { edits: e, id } = placeSpot(NO_EDITS, 'kicker', 100.04, 64);
+    expect(id).toBe('ramp-18');
+    expect(e.spots).toEqual([{ id: 'ramp-18', add: 'kicker', x: 100, z: 64 }]);
+    const second = placeSpot(e, 'package', 10, 10);
+    expect(second.id).toBe('pkg-40');
+    e = moveSpot(second.edits, id, 120, 64, { x: 0, z: 0 });
+    expect(e.spots.find((s) => s.id === id)).toEqual({ id, add: 'kicker', x: 120, z: 64 });
+    e = turnSpot(e, id, Math.PI / 2, 0);
+    expect(e.spots.find((s) => s.id === id)).toMatchObject({ add: 'kicker', heading: 1.57 });
+    // AS GENERATED has nothing to go back to; REMOVE drops the entry.
+    expect(resetSpot(e, id)).toBe(e);
+    e = removeSpot(e, id);
+    expect(e.spots.map((s) => s.id)).toEqual(['pkg-40']);
+    expect(describeChange({ section: 'spots', key: 'pkg-40', after: e.spots[0] })).toBe('Spot pkg-40: package added at 10, 10');
+    expect(describeChange({ section: 'spots', key: 'pkg-40', before: e.spots[0] })).toBe('Spot pkg-40: no longer added');
+    // The preview draws it, and it can be picked.
+    const p = buildPreview(e, inputs, SHIPPED_MAP);
+    expect(p.anchors.find((a) => a.id === 'pkg-40')).toMatchObject({ group: 'package', added: true });
+    expect(p.problems.filter((x) => x.id === 'packages')).toEqual([expect.objectContaining({ problem: expect.stringMatching(/^41 on the map/) })]);
   });
 
   it('places, moves, removes and restores props', () => {

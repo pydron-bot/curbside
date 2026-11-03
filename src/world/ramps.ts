@@ -19,7 +19,7 @@ import { CORE_MAX_NODE, DIRS, DIR_VEC, dirHeading, type Dir } from './roads';
 import { mulberry32 } from './random';
 import type { MapEdits } from './mapEdits';
 import { ACTIVE_MAP } from './shippedMap';
-import { spotEdit } from './spotEdits';
+import { addedSpots, spotEdit } from './spotEdits';
 import { len2 } from '../core/len';
 
 export type RampKind = 'ramp' | 'kicker';
@@ -148,23 +148,36 @@ export function placeCityRamps(seed: number, edits: MapEdits = ACTIVE_MAP): Ramp
   const big = placeRamps(seed);
   const all = [...big, ...placeKickers(seed, big)];
   const out: Ramp[] = [];
+  /** A heading to the nearest quarter: ramps are axis-aligned. */
+  const turn = (ramp: Ramp, h: number) => {
+    const off = (d: Dir) => Math.abs(Math.atan2(Math.sin(h - dirHeading(d)), Math.cos(h - dirHeading(d))));
+    ramp.dir = DIRS.reduce((a, d) => (off(d) < off(a) ? d : a));
+    ramp.heading = dirHeading(ramp.dir);
+  };
   all.forEach((r, i) => {
     const id = `ramp-${i}`;
     const e = spotEdit(edits, id);
-    if (e?.removed) return;
+    if (e?.removed && !e.add) return;
     const ramp: Ramp = { ...r, id };
-    if (e?.x !== undefined && e.z !== undefined) {
+    if (e && !e.add && e.x !== undefined && e.z !== undefined) {
       ramp.x = e.x;
       ramp.z = e.z;
     }
-    if (e?.heading !== undefined) {
-      const h = e.heading;
-      const off = (d: Dir) => Math.abs(Math.atan2(Math.sin(h - dirHeading(d)), Math.cos(h - dirHeading(d))));
-      ramp.dir = DIRS.reduce((a, d) => (off(d) < off(a) ? d : a));
-      ramp.heading = dirHeading(ramp.dir);
-    }
+    if (e && !e.add && e.heading !== undefined) turn(ramp, e.heading);
     out.push(ramp);
   });
+  // Ramps and kickers the edits add (ids from ramp-<count> up; the map checks mind the ids).
+  for (const kind of ['ramp', 'kicker'] as const) {
+    for (const e of addedSpots(edits, kind)) {
+      if (out.some((r) => r.id === e.id)) continue;
+      // No heading: along the road it stands on (east on an east–west road, else north).
+      const offRoad = (v: number) => Math.abs(v - Math.round(v / BLOCK_SIZE) * BLOCK_SIZE);
+      const dir: Dir = offRoad(e.z!) < offRoad(e.x!) ? 1 : 0;
+      const ramp: Ramp = { id: e.id, kind, x: e.x!, z: e.z!, dir, heading: dirHeading(dir), ...RAMP_SIZES[kind] };
+      if (e.heading !== undefined) turn(ramp, e.heading);
+      out.push(ramp);
+    }
+  }
   return out;
 }
 

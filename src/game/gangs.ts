@@ -18,7 +18,8 @@ import type { BodyKind } from './bodies';
 import type { District } from '../world/districts';
 import type { MapEdits } from '../world/mapEdits';
 import { ACTIVE_MAP } from '../world/shippedMap';
-import { editSpot } from '../world/spotEdits';
+import { addedSpots, editSpot } from '../world/spotEdits';
+import { BLOCK_SIZE } from '../world/city';
 
 export interface GangDef {
   id: string;
@@ -182,5 +183,22 @@ export function placeHangouts(gangs: readonly GangDef[] = GANGS, edits: MapEdits
       if (e) out.push(e);
     });
   }
+  // Hangouts the edits add (`<gang>-<n>`): the crew in a line along whichever street is nearer.
+  for (const e of addedSpots(edits, 'hangout')) {
+    const g = gangs.find((x) => e.id.startsWith(`${x.id}-`));
+    if (!g || out.some((h) => h.id === e.id)) continue;
+    const x = e.x!;
+    const z = e.z!;
+    const offRoad = (v: number) => Math.abs(v - Math.round(v / BLOCK_SIZE) * BLOCK_SIZE);
+    const alongZ = offRoad(x) < offRoad(z);
+    const members = Array.from({ length: CREW_SIZE }, (_, k) => {
+      const d = (k - (CREW_SIZE - 1) / 2) * CREW_SPACING;
+      return alongZ ? { x, z: z + d } : { x: x + d, z };
+    });
+    out.push({ id: e.id, gang: g, x, z, members });
+  }
   return out;
 }
+
+/** An added hangout's crew stand this far apart, m (a generated one's: 5% of a ~45 m pavement edge). */
+const CREW_SPACING = 2.25;

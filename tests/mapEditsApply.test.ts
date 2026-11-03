@@ -5,7 +5,8 @@
  * turn a breaking edit red (game/mapAnchors.ts checkMapEdits).
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { checkMapEdits, collectAnchors, editsOn, spotRules, type Anchor } from '../src/game/mapAnchors';
+import { checkMapEdits, collectAnchors, editsOn, newSpotId, spotRules, type Anchor } from '../src/game/mapAnchors';
+import { placePackages } from '../src/game/modes/packages';
 import { placeFrenzyTokens, placePayphones, placeSafehouse } from '../src/game/modes/places';
 import { GANGS, placeHangouts } from '../src/game/gangs';
 import { createVehicleState } from '../src/entities/vehicle';
@@ -174,8 +175,53 @@ describe('spot edits', () => {
     expect(spotRules('fz-brawl')).toMatchObject({ movable: true, removable: false });
     expect(spotRules(`${GANGS[0].id}-1`)).toMatchObject({ group: 'hangout', movable: true, removable: true });
     expect(spotRules('ramp-0')).toMatchObject({ movable: true, removable: true, turnable: true });
-    expect(spotRules('ramp-99')).toBeNull();
+    // An id only an added spot can have: the rules, marked not generated.
+    expect(spotRules('ramp-99')).toMatchObject({ group: 'ramp', generated: false, turnable: true });
+    expect(spotRules('ramp-0')).toMatchObject({ generated: true });
+    expect(spotRules('pkg-3')).toMatchObject({ group: 'package', movable: true, removable: true, generated: true });
+    expect(spotRules('pkg-40')).toMatchObject({ group: 'package', generated: false });
+    expect(spotRules('ramp-x')).toBeNull();
     expect(spotRules('docks')).toBeNull();
+  });
+
+  it('added ramps, kickers, hangouts and packages are placed, with new ids', () => {
+    const g = GANGS[0].id;
+    expect(newSpotId(NO_EDITS, 'ramp')).toBe(`ramp-${placeCityRamps(1337, NO_EDITS).length}`);
+    expect(newSpotId(NO_EDITS, 'package')).toBe('pkg-40');
+    expect(newSpotId(NO_EDITS, 'hangout')).toBe(`${g}-${GANGS[0].hangouts.length}`);
+    const spots: SpotEdit[] = [
+      { id: 'ramp-30', add: 'ramp', x: 64, z: 100, heading: 3.1 },
+      { id: 'ramp-31', add: 'kicker', x: 120, z: 64 },
+      { id: `${g}-9`, add: 'hangout', x: 74.5, z: 100 },
+      { id: 'pkg-40', add: 'package', x: 100, z: 100 },
+      { id: 'pkg-7', removed: true },
+    ];
+    const map = edits({ spots });
+    expect(newSpotId(map, 'ramp')).toBe('ramp-32');
+    expect(newSpotId(map, 'package')).toBe('pkg-41');
+    const ramps = placeCityRamps(1337, map);
+    expect(ramps.find((r) => r.id === 'ramp-30')).toMatchObject({ kind: 'ramp', x: 64, z: 100, dir: 0, length: 6 });
+    expect(ramps.find((r) => r.id === 'ramp-31')).toMatchObject({ kind: 'kicker', dir: 1, length: 2.5 });
+    const h = placeHangouts(GANGS, map).find((x) => x.id === `${g}-9`)!;
+    // Nearer the road at x = 64 than z = 64 or 128: the crew lines up north–south.
+    expect(new Set(h.members.map((m) => m.x))).toEqual(new Set([74.5]));
+    expect(h.members.length).toBeGreaterThan(1);
+    const pk = placePackages(map);
+    expect(pk.length).toBe(40);
+    expect(pk.some((p) => p.index === 7)).toBe(false);
+    expect(pk.find((p) => p.index === 40)).toMatchObject({ x: 100, z: 100 });
+    const city = generateCity(1337, map);
+    const anchors = collectAnchors(city, { ramps, edits: map });
+    expect(anchors.find((a) => a.id === 'pkg-40')).toMatchObject({ group: 'package', added: true, moved: true });
+    expect(anchors.find((a) => a.id === 'ramp-31')).toMatchObject({ group: 'ramp', added: true });
+    expect(anchors.find((a) => a.id === 'pkg-0')?.added).toBeUndefined();
+  });
+
+  it('packages stay put whatever a block becomes', () => {
+    const before = placePackages(NO_EDITS);
+    generateCity(1337, edits({ blocks: [{ at: [3, 4], kind: 'park' }, { at: [9, 9], variant: 3 }] }));
+    expect(placePackages(NO_EDITS)).toEqual(before);
+    expect(before.map((p) => p.index)).toEqual([...Array(40).keys()]);
   });
 });
 
@@ -251,6 +297,27 @@ describe('what the map edits break', () => {
     expect(about('ramp-1')).toContain('a ramp must stand on a road');
     expect(about(GANGS[0].id)).toEqual(['every hangout is removed: the gang never shows up']);
     expect(problems.find((p) => p.id === 'fz-brawl')?.edit).toEqual({ section: 'spots', key: 'fz-brawl' });
+  });
+
+  it('added spots: an id the city has, an id of the wrong kind, a move of a spot nobody added, and the package count', () => {
+    const map = edits({
+      spots: [
+        { id: 'ramp-0', add: 'kicker', x: 64, z: 100 },
+        { id: 'pkg-41', add: 'ramp', x: 64, z: 120 },
+        { id: 'ramp-77', x: 64, z: 140 },
+        { id: 'pkg-3', removed: true },
+      ],
+    });
+    const { city, d, ramps } = dressed(map);
+    const anchors = collectAnchors(city, { ramps, busStops: d.street.busStops, edits: map });
+    const problems = ids(city, map, anchors);
+    const about = (id: string) => problems.filter((p) => p.id === id).map((p) => p.problem);
+    expect(about('ramp-0')[0]).toMatch(/id of a spot the city already has/);
+    expect(about('pkg-41')).toEqual(['an added ramp needs an id like "ramp-18"']);
+    expect(about('ramp-77')).toEqual(['no spot has the id "ramp-77"']);
+    expect(about('packages')).toEqual(['39 on the map, not 40: the perks and 100% count 40']);
+    // The generated ramp-0 stays as it was.
+    expect(ramps.find((r) => r.id === 'ramp-0')).toEqual(placeCityRamps(1337, NO_EDITS).find((r) => r.id === 'ramp-0'));
   });
 
   it('prop edits that match nothing, or a kind that can’t be edited', () => {

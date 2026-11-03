@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PACKAGE_COUNT, PACKAGE_PERKS, generatePackages, interiorAround, perkFor, wayOut } from '../src/game/modes/packages';
+import { PACKAGE_COUNT, PACKAGE_PERKS, PACKAGE_SPOTS, generatePackages, interiorAround, perkFor, placePackages, wayOut } from '../src/game/modes/packages';
+import { NO_EDITS } from '../src/world/mapEdits';
 import { generateCity } from '../src/world/city';
 
 const city = generateCity(1337);
@@ -11,6 +12,16 @@ describe('hidden packages', () => {
     expect(pkgs).toHaveLength(PACKAGE_COUNT);
     expect(generatePackages(generateCity(1337))).toEqual(pkgs);
     expect(pkgs.map((p) => p.index)).toEqual([...Array(PACKAGE_COUNT).keys()]);
+  });
+
+  it('the game plays a fixed list: the generator’s places for the unedited core city, so saves (by index) stay right', () => {
+    expect(PACKAGE_SPOTS.length).toBe(PACKAGE_COUNT);
+    PACKAGE_SPOTS.forEach(([x, z, where], i) => {
+      expect(x).toBeCloseTo(pkgs[i].x, 1);
+      expect(z).toBeCloseTo(pkgs[i].z, 1);
+      expect(where).toBe(pkgs[i].where);
+    });
+    expect(placePackages(NO_EDITS).map((p) => [p.x, p.z])).toEqual(PACKAGE_SPOTS.map(([x, z]) => [x, z]));
   });
 
   it('hidden in alleys, parks and plazas, about half in alleys', () => {

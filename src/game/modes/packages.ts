@@ -1,15 +1,25 @@
 /**
  * HIDDEN PACKAGES: 40 spinning green parcels tucked down alleys, in park
- * interiors and in plaza corners, the same places every game (seeded from
- * the city). Each pays $100; every tenth unlocks a permanent perk. They
- * don't show on the radar unless the scanner has been bought at the shop.
- * Pure logic, unit-tested.
+ * interiors and in plaza corners, the same places every game. Each pays
+ * $100; every tenth unlocks a permanent perk. They don't show on the radar
+ * unless the scanner has been bought at the shop. Pure logic, unit-tested.
+ *
+ * Where they are is a fixed list (PACKAGE_SPOTS, worked out once by
+ * generatePackages from the unedited core city), so editing a block never
+ * moves them, and the save, which keeps found packages by index, stays
+ * right. The map edits (W3-D) can move or remove any (`pkg-<index>`) and
+ * add new ones (`pkg-<n>`, n from 40 up, which is its index); the map
+ * checks want 40 in all, the number the perks and 100% count.
  */
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type City, type Rect } from '../../world/city';
+import type { MapEdits } from '../../world/mapEdits';
 import { mulberry32 } from '../../world/random';
+import { ACTIVE_MAP, SHIPPED_MAP } from '../../world/shippedMap';
+import { addedSpots, editSpot, idNumber } from '../../world/spotEdits';
 import { len2 } from '../../core/len';
 
 export interface HiddenPackage {
+  /** Its place in the save's list (and its id, `pkg-<index>`). */
   index: number;
   x: number;
   z: number;
@@ -35,6 +45,80 @@ export function perkFor(found: number): (typeof PACKAGE_PERKS)[number] | null {
   return PACKAGE_PERKS.find((p) => p[0] === found) ?? null;
 }
 
+/** Where the packages are, by index: generatePackages for the unedited core city (seed 1337), fixed so map edits don't move them (a test checks it still matches). */
+export const PACKAGE_SPOTS: ReadonlyArray<readonly [number, number, HiddenPackage['where']]> = [
+  [-422.89, -286.15, 'alley'],
+  [-370.5, 333.5, 'plaza'],
+  [40.3, -226.52, 'alley'],
+  [406.61, 482.72, 'alley'],
+  [228.18, 285.08, 'alley'],
+  [33.19, 419.49, 'alley'],
+  [-50.5, 13.5, 'plaza'],
+  [34.27, -404.1, 'alley'],
+  [-434.5, 498.5, 'plaza'],
+  [-174.83, 342.23, 'alley'],
+  [-299, -226.01, 'alley'],
+  [-220.73, -281.13, 'alley'],
+  [-210.35, 167.74, 'park'],
+  [-18.65, 339.37, 'alley'],
+  [168.57, -163.26, 'alley'],
+  [-361.02, 93.05, 'alley'],
+  [-35.72, -81.6, 'alley'],
+  [-484.93, 154.09, 'alley'],
+  [77.5, -77.5, 'plaza'],
+  [493.64, -22.77, 'alley'],
+  [-237.22, -40.43, 'park'],
+  [-92.27, 410.36, 'alley'],
+  [295.73, 354.16, 'alley'],
+  [296.72, 426.15, 'park'],
+  [-110.1, -211.63, 'alley'],
+  [-224.24, -473.31, 'alley'],
+  [44.68, -476.45, 'alley'],
+  [-397.5, -461.5, 'plaza'],
+  [471.13, -145.63, 'park'],
+  [178.5, -333.5, 'plaza'],
+  [370.5, -434.5, 'plaza'],
+  [306.5, 141.5, 'plaza'],
+  [434.5, -205.5, 'plaza'],
+  [295.23, 220.87, 'park'],
+  [-230.62, -165.78, 'park'],
+  [306.5, -370.5, 'plaza'],
+  [283.35, -84.46, 'park'],
+  [-151.52, 492.97, 'park'],
+  [-478.21, -30.61, 'park'],
+  [-37.68, -217.88, 'park']
+];
+
+/** A package's map id. */
+export const packageId = (index: number): string => `pkg-${index}`;
+
+/** The packages as the map edits leave them: moved, removed, and any added (indexed by their id). */
+export function placePackages(edits: MapEdits = ACTIVE_MAP): HiddenPackage[] {
+  const out: HiddenPackage[] = [];
+  PACKAGE_SPOTS.forEach(([x, z, where], index) => {
+    const p = editSpot({ id: packageId(index), x, z }, edits, true);
+    if (p) out.push({ index, x: p.x, z: p.z, where });
+  });
+  const taken = new Set(out.map((p) => p.index));
+  for (const s of addedSpots(edits, 'package')) {
+    const index = idNumber(s.id, 'pkg');
+    // A new package's index must be new (the map checks say so; here it's skipped).
+    if (index === null || index < PACKAGE_SPOTS.length || taken.has(index)) continue;
+    taken.add(index);
+    out.push({ index, x: s.x!, z: s.z!, where: 'plaza' });
+  }
+  return out;
+}
+
+/**
+ * Package indices a save may keep: the shipped map's and this page's (a
+ * VIEW IN 3D preview of local edits shares the save, so a package the edits
+ * remove isn't pruned from it).
+ */
+export function knownPackageIndices(): number[] {
+  return [...new Set([...placePackages(SHIPPED_MAP), ...placePackages(ACTIVE_MAP)].map((p) => p.index))];
+}
+
 /** Keep packages apart, m. */
 const MIN_SPACING = 70;
 /** Clearance from walls and trunks, m (a person fits; you have to look). */
@@ -45,7 +129,7 @@ const INSET = ROAD_WIDTH / 2 + SIDEWALK;
 
 const overlaps = (a: Rect, b: Rect) => a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ;
 
-/** Place the packages for `city` (deterministic per seed). */
+/** Place the packages for `city` (deterministic per seed): how PACKAGE_SPOTS was made. */
 export function generatePackages(city: City, count = PACKAGE_COUNT, seed = 0x9ac4e): HiddenPackage[] {
   const rand = mulberry32(city.seed ^ seed);
   // Obstacles bucketed by block, so each test only looks at its neighbours.

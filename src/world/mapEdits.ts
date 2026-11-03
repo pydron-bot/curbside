@@ -13,7 +13,9 @@
  * - roads: a road between two neighbouring crossings (centred nodes, as
  *   races use) closed to traffic, or one-way from `a` to `b`;
  * - spots: a hand-placed spot (an anchor id from game/mapAnchors.ts: the
- *   safehouse, payphones, frenzy tokens, hangouts, ramps) moved or removed;
+ *   safehouse, payphones, frenzy tokens, hangouts, ramps, hidden packages)
+ *   moved or removed, or a new ramp, kicker, hangout or package added
+ *   (`add`, with a new id: `ramp-<n>`, `<gang>-<n>`, `pkg-<n>`);
  * - props: street furniture added, or a generated one removed, by kind and
  *   place (world metres; the dressing is placed block by block, so a prop's
  *   place is stable).
@@ -58,9 +60,15 @@ export interface RoadEdit {
   oneWay?: boolean;
 }
 
+/** Spots the map can add (game/mapAnchors.ts spotRules: what each is and its id). */
+export type AddedSpotKind = 'ramp' | 'kicker' | 'hangout' | 'package';
+export const ADDED_SPOT_KINDS: readonly AddedSpotKind[] = ['ramp', 'kicker', 'hangout', 'package'];
+
 export interface SpotEdit {
-  /** An anchor id (game/mapAnchors.ts): 'safehouse', 'phone-docks', 'fz-drift', 'vipers-0', 'ramp-3'... */
+  /** An anchor id (game/mapAnchors.ts): 'safehouse', 'phone-docks', 'fz-drift', 'vipers-0', 'ramp-3', 'pkg-12'... */
   id: string;
+  /** A new spot of this kind, not one the city generates (it needs x and z; `removed` doesn't apply: drop the entry). */
+  add?: AddedSpotKind;
   /** Moved to (world m); both or neither. */
   x?: number;
   z?: number;
@@ -236,9 +244,15 @@ export function parseMapEdits(raw: unknown): ParsedMapEdits {
 
   const spots = entries('spots', (e, where) => {
     if (typeof e.id !== 'string' || !/^[a-z0-9][a-z0-9:/._-]*$/i.test(e.id)) return void problems.push(`${where}: "id" must be an anchor id`), null;
-    unknownFields(where, e, ['id', 'x', 'z', 'heading', 'removed']);
+    unknownFields(where, e, ['id', 'add', 'x', 'z', 'heading', 'removed']);
     const edit: { -readonly [K in keyof SpotEdit]: SpotEdit[K] } = { id: e.id };
-    if (e.removed === true) edit.removed = true;
+    if (e.add !== undefined) {
+      if (!ADDED_SPOT_KINDS.includes(e.add as AddedSpotKind)) return void problems.push(`${where}: can't add a spot of kind ${JSON.stringify(e.add)}`), null;
+      if (!isNum(e.x) || !isNum(e.z) || Math.abs(e.x) > WORLD_REACH || Math.abs(e.z) > WORLD_REACH) return void problems.push(`${where}: an added spot needs "x" and "z" on the map`), null;
+      if (e.removed !== undefined) problems.push(`${where}: an added spot can't be removed (drop its entry); "removed" ignored`);
+      edit.add = e.add as AddedSpotKind;
+    }
+    if (e.removed === true && !edit.add) edit.removed = true;
     else {
       if (e.x !== undefined || e.z !== undefined) {
         if (isNum(e.x) && isNum(e.z) && Math.abs(e.x) <= WORLD_REACH && Math.abs(e.z) <= WORLD_REACH) {
@@ -311,7 +325,7 @@ function oneLine(v: unknown): string {
 const ORDER: Readonly<Record<MapSection, readonly string[]>> = {
   blocks: ['at', 'kind', 'district', 'variant', 'height'],
   roads: ['a', 'b', 'closed', 'oneWay'],
-  spots: ['id', 'x', 'z', 'heading', 'removed'],
+  spots: ['id', 'add', 'x', 'z', 'heading', 'removed'],
   props: ['kind', 'x', 'z', 'heading', 'removed'],
 };
 const ordered = (section: MapSection, e: object): Record<string, unknown> =>
@@ -419,6 +433,12 @@ export function withSpotEdit(edits: MapEdits, id: string, edit?: Omit<SpotEdit, 
       ? { id, removed: true }
       : { id, ...(edit.x !== undefined && edit.z !== undefined ? { x: tenth(edit.x), z: tenth(edit.z) } : {}), ...(edit.heading !== undefined ? { heading: hundredth(edit.heading) } : {}) };
   return withEntry(edits, 'spots', id, entry);
+}
+
+/** Add a new spot (or with `entry` undefined, drop the added spot `id`). */
+export function withAddedSpot(edits: MapEdits, id: string, entry?: { add: AddedSpotKind; x: number; z: number; heading?: number }): MapEdits {
+  const e: SpotEdit | undefined = entry && { id, add: entry.add, x: tenth(entry.x), z: tenth(entry.z), ...(entry.heading !== undefined ? { heading: hundredth(entry.heading) } : {}) };
+  return withEntry(edits, 'spots', id, e);
 }
 
 /** Add a prop, or mark a generated one removed; `undo` drops the edit at that kind and place instead. */

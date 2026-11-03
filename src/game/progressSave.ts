@@ -193,9 +193,10 @@ export function migrateSave(raw: unknown, legacyBest = 0): SaveData {
   return save;
 }
 
-/** What this build has: package count and the ids it knows (each optional). */
+/** What this build has: its packages and the ids it knows (each optional). */
 export interface KnownIds {
-  packages?: number;
+  /** The packages' indices on the map this page plays (a number n: 0 to n − 1). */
+  packages?: number | readonly number[];
   frenzies?: readonly string[];
   missions?: readonly string[];
   /** The current export list's order ids. */
@@ -208,7 +209,8 @@ export interface KnownIds {
  * In place; the director calls it at boot with the game's data.
  */
 export function pruneSave(save: SaveData, known: KnownIds): void {
-  if (known.packages !== undefined) save.packages = save.packages.filter((i) => i < known.packages!);
+  const pk = known.packages;
+  if (pk !== undefined) save.packages = save.packages.filter((i) => (typeof pk === 'number' ? i < pk : pk.includes(i)));
   const keep = (ids: string[], of: readonly string[] | undefined) => (of ? ids.filter((id) => of.includes(id)) : ids);
   save.frenzies = keep(save.frenzies, known.frenzies);
   save.missions = keep(save.missions, known.missions);

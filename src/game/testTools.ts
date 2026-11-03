@@ -24,7 +24,7 @@ import type { CityLife } from './cityLife';
 import type { Heat } from './heat';
 import { CAR_NAMES } from './modes/exports';
 import { FRENZIES } from './modes/frenzies';
-import { PACKAGE_COUNT } from './modes/packages';
+import { knownPackageIndices } from './modes/packages';
 import { SAFEHOUSE, placePayphones } from './modes/places';
 import { MAX_ARMOUR, type Player } from './player';
 import type { Population, Vehicle } from './population';
@@ -399,7 +399,7 @@ export class TestTools {
   importText(text: string): string | null {
     const pd = this.d.progress;
     const r = importSave(text, {
-      packages: PACKAGE_COUNT,
+      packages: knownPackageIndices(),
       frenzies: FRENZIES.map((f) => f.id),
       missions: pd.missions.missions.map((j) => j.id),
     });

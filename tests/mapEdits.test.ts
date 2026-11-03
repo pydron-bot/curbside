@@ -94,6 +94,28 @@ describe('parse and serialize', () => {
     expect(serializeMapEdits(NO_EDITS)).toBe('{\n  "version": 2,\n  "seed": 1337,\n  "blocks": [],\n  "roads": [],\n  "spots": [],\n  "props": []\n}\n');
   });
 
+  it('reads added spots, and drops one with no place or an unknown kind', () => {
+    const r = parseMapEdits({
+      version: 2,
+      spots: [
+        { id: 'ramp-20', add: 'kicker', x: 1.23, z: 4, heading: 1 },
+        { id: 'pkg-40', add: 'package', x: 5, z: 6, removed: true },
+        { id: 'pkg-41', add: 'package' },
+        { id: 'ramp-21', add: 'rocket', x: 1, z: 1 },
+      ],
+    });
+    expect(r.edits.spots).toEqual([
+      { id: 'pkg-40', add: 'package', x: 5, z: 6 },
+      { id: 'ramp-20', add: 'kicker', x: 1.2, z: 4, heading: 1 },
+    ]);
+    expect(r.problems).toEqual([
+      'spots[1]: an added spot can\'t be removed (drop its entry); "removed" ignored',
+      'spots[2]: an added spot needs "x" and "z" on the map',
+      'spots[3]: can\'t add a spot of kind "rocket"',
+    ]);
+    expect(serializeMapEdits(r.edits)).toContain('{ "id": "ramp-20", "add": "kicker", "x": 1.2, "z": 4, "heading": 1 }');
+  });
+
   it('reads a version 1 file (blocks only)', () => {
     const r = parseMapEdits({ version: 1, seed: 1337, blocks: [{ at: [1, 2], kind: 'park' }] });
     expect(r.problems).toEqual([]);
