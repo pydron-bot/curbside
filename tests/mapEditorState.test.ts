@@ -186,6 +186,7 @@ describe('picking', () => {
   const p = buildPreview(SHIPPED_MAP, inputs, SHIPPED_MAP);
   it('hits an anchor first, then (zoomed in) a prop, then the road, then the block', () => {
     const safe = p.anchors.find((a) => a.id === 'safehouse')!.points[0];
+    expect(pickAt(safe, p.anchors, p.props, 2)).toEqual({ kind: 'anchor', id: 'safehouse' });
     expect(pickAt({ x: safe.x + 1, z: safe.z }, p.anchors, p.props, 2)).toEqual({ kind: 'anchor', id: 'safehouse' });
     const prop = p.props.find((q) => q.kind === 'hydrant' && !p.anchors.some((a) => a.points.some((pt) => Math.hypot(pt.x - q.x, pt.z - q.z) < 10)))!;
     expect(pickAt({ x: prop.x + 0.2, z: prop.z }, p.anchors, p.props, 4)).toMatchObject({ kind: 'prop', prop: { kind: 'hydrant' } });

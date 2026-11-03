@@ -379,13 +379,14 @@ export const HIT_PX = 9;
 export function pickAt(p: Point, anchors: readonly Anchor[], props: readonly PropRef[], scale: number): Selection | null {
   const reach = HIT_PX / scale;
   let best: Selection | null = null;
-  let bestD = reach * reach;
+  // Ties go to the first listed (strict <): the safehouse before a job's spot at its door.
+  let bestD = reach * reach + 1e-9;
   for (const a of anchors) {
     // A spot the map can edit wins over a job's spot drawn on top of it (the safehouse's door has a job on it).
     const weight = spotRule(a.id).movable ? 0.25 : 1;
     for (const q of a.points) {
       const d = ((q.x - p.x) ** 2 + (q.z - p.z) ** 2) * weight;
-      if (d <= bestD) {
+      if (d < bestD) {
         bestD = d;
         best = { kind: 'anchor', id: a.id };
       }

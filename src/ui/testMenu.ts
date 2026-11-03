@@ -31,6 +31,8 @@ export interface TestMenuHooks {
   openMap(): void;
   /** What an action did, in the HUD feed too (it shows once play resumes). */
   notice(text: string): void;
+  /** The map editor (desktop only), when the game has one. */
+  openEditor?(): void;
 }
 
 /**
@@ -324,6 +326,15 @@ export class TestMenu implements Panel {
     this.button(g, 'CITY MAP', () => this.hooks.openMap(), { sub: 'TAP A SPOT TO GO THERE', className: 'wide' });
     const q = this.section(pane, 'QUICK', 'test-grid4');
     for (const m of t.landmarks) this.button(q, m.label, () => t.landmark(m.id), { className: 'small' });
+    const openEditor = this.hooks.openEditor;
+    if (openEditor) {
+      // The map editor is a mouse-and-keyboard tool: hidden on touch screens.
+      const e = this.section(pane, 'EDIT');
+      const b = this.button(e, 'MAP EDITOR', () => openEditor(), { sub: 'BLOCKS, ROADS, SPOTS, PROPS · WHAT RELIES ON THEM', className: 'wide' });
+      const sync = () => (e.parentElement!.hidden = b.hidden = !finePointer());
+      sync();
+      this.refreshers.push(sync);
+    }
   }
 
   private buildScenes(): void {
@@ -425,6 +436,11 @@ export class TestMenu implements Panel {
   }
 }
 
+/** A mouse (not a touch screen): where the map editor is offered. */
+function finePointer(): boolean {
+  return globalThis.matchMedia?.('(hover: hover) and (pointer: fine)').matches ?? false;
+}
+
 /**
  * TEST in the pause menu's corner while Settings → Test tools is on: the
  * TEST sheet, and the teleport map over it. Returns the sheet.
@@ -434,11 +450,12 @@ export function mountTestMenu(
   frontDoor: FrontDoor,
   audio: GameAudio,
   city: City,
-  d: { resume(): void; showFocus(): boolean; at(): { x: number; z: number }; notice(text: string): void },
+  d: { resume(): void; showFocus(): boolean; at(): { x: number; z: number }; notice(text: string): void; openEditor?(): void },
 ): TestMenu {
   const menu: TestMenu = new TestMenu(document.body, audio, tools, {
     resume: d.resume,
     notice: d.notice,
+    openEditor: d.openEditor,
     openMap: () => {
       frontDoor.openPanel(map);
       map.open(() => frontDoor.closePanel(map), d.showFocus());
