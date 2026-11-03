@@ -705,6 +705,9 @@ future Blender pass. The code works round each one for now:
 
 ## 11. The air horn (W3-B, requested 2026-11-02)
 
+**Done 2026-11-02** (`blender/generators/pickups.py`; `PICKUP_MODELS` and the `things`
+list point at the crates). The brief, as asked:
+
 The air horn weapon is in the game (README → *Driving and combat*, the air
 horn) with nothing in the hand and the ammo box standing in for its crate.
 The held model swaps in by name; the crate needs a one-line code change:
@@ -719,6 +722,9 @@ The held model swaps in by name; the crate needs a one-line code change:
   family's list (`src/render/worldProps.ts`) at it.
 
 ## 12. The taser (W3-B, requested 2026-11-02)
+
+**Done 2026-11-02** (`blender/generators/pickups.py`; `PICKUP_MODELS` and the `things`
+list point at the crates). The brief, as asked:
 
 The taser weapon is in the game (README → *Driving and combat*, the taser)
 with nothing in the hand and the ammo box standing in for its crate. The
@@ -737,6 +743,9 @@ held model swaps in by name; the crate needs a one-line code change:
 
 ## 13. The stinger (W3-B, requested 2026-11-02)
 
+**Done 2026-11-02** (`blender/generators/pickups.py`; `PICKUP_MODELS` and the `things`
+list point at the crates). The brief, as asked:
+
 The stinger is in the game (README → *Driving and combat*, the stinger).
 The strip on the road is built in code (`src/render/stingerLook.ts`) and
 needs no model; nothing shows in the hand and the ammo box stands in for
@@ -751,6 +760,9 @@ its crate:
   family's list (`src/render/worldProps.ts`) at it.
 
 ## 14. The smoke grenade (W3-B, requested 2026-11-02)
+
+**Done 2026-11-02** (`blender/generators/pickups.py`; `PICKUP_MODELS` and the `things`
+list point at the crates). The brief, as asked:
 
 The smoke grenade is in the game (README → *Driving and combat*, the smoke
 grenade) with nothing in the hand and the grenade crate standing in for its

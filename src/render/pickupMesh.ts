@@ -57,14 +57,10 @@ export const PICKUP_MODELS: Readonly<Record<PickupKind, string>> = {
   grenade: 'crate_grenade',
   molotov: 'crate_molotov',
   rocket: 'crate_rocket',
-  // No crate_horn in pickups.glb yet: the ammo box stands in, in the horn's pink ring.
-  horn: 'ammo_box',
-  // No crate_taser in pickups.glb yet: the ammo box stands in, in the taser's electric-blue ring.
-  taser: 'ammo_box',
-  // Nor a crate_stinger: the ammo box again, in the stinger's steel ring.
-  stinger: 'ammo_box',
-  // No crate_smoke in pickups.glb yet: the grenade crate stands in, in the smoke's pale grey ring.
-  smoke: 'crate_grenade',
+  horn: 'crate_horn',
+  taser: 'crate_taser',
+  stinger: 'crate_stinger',
+  smoke: 'crate_smoke',
   health: 'health_kit',
   armour: 'armour',
   ammo: 'ammo_box',

@@ -127,7 +127,7 @@ two clouds at most (`mayhem.mjs --scenario smoke`: peak smoke fill 1.46
 vs a car explosion's 5.05 on medium, 47–50 draw calls). Merge note: the
 projectile fuse runs for grenades and smoke, not stingers. Crate odds
 rebalanced to sum to 1 with the three new crates. No held models or
-crates yet (BLENDER_TODO §12–14). Device checks: the taser's wires and the
+crates in 0.18.0; 0.19.1 added them (BLENDER_TODO §11–14, done). Device checks: the taser's wires and the
 stinger's strip legible at 852×340, two smoke clouds' frame rate on the
 iPhone, the smoke confusion split reading as scattered in a real chase.
 **Next:** the iPhone device pass (V2-14) on 0.18.0, then 1.0.0. Wave 3

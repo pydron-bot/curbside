@@ -453,9 +453,8 @@ COMPLAINT IN …, 90 s cooldown). Heat: a public-order nuisance, +0.1 a
 witnessed blast, at most +0.2 per 5 s, so a whole canister never makes a
 star. The sound is a synthesised three-reed chord (`sfx.airHorn`); the look
 is three pale shock rings down the cone from Effects' pooled fake lights
-(no draw call of its own). Pickups: a pink-ringed crate (the ammo box
-model until `pickups.glb` has a `crate_horn`); in the hand, nothing shows
-until `weapons.glb` has an `air_horn` root.
+(no draw call of its own). Pickups: a pink-ringed `crate_horn`; in the
+hand, `weapons.glb`'s `air_horn` (a red canister, the trumpet forward).
 
 **The taser** (W3-B, `systems/taser.ts`, `Combat.tase`): held, aimed and
 locked on like a pistol (on foot only; with it in hand the lock-on flags a
@@ -484,9 +483,8 @@ hand to the darts, shooting out in 0.06 s and crackling blue-white for
 ground from Effects' pooled fake lights, so no draw call and no real
 light. The sound is the cartridge's pop, then ~0.8 s of the current's dry
 ticking over a thin buzz (`sfx.taser`, one gated noise source). Pickups:
-an electric-blue-ringed crate (the ammo box until `pickups.glb` has a
-`crate_taser`); in the hand, nothing shows until `weapons.glb` has a
-`taser` root.
+an electric-blue-ringed `crate_taser`; in the hand, `weapons.glb`'s
+`taser` (a stubby yellow pistol, the cartridge on its nose).
 
 **The stinger** (W3-B, `systems/stinger.ts`, `Combat.throwIt` /
 `dropStinger`): a folding spike strip, thrown like a grenade on foot (16 m
@@ -515,9 +513,8 @@ folded in flight, glints in headlights, and in hand a ghost shows where it
 would lie. Flats scrape rim streaks and sparks (`fxDriving`). The sound is
 the sections slapping out (`sfx`, ~0.45 s) and the burst's double bang,
 hiss and flapping rubber that slows with the car (~1.3 s). Pickups: a
-steel-ringed crate (the ammo box until `pickups.glb` has a
-`crate_stinger`); in the hand, nothing shows until `weapons.glb` has a
-`stinger` root.
+steel-ringed `crate_stinger`; in the hand, `weapons.glb`'s `stinger`
+(the strip folded into a block).
 
 **The smoke grenade** (W3-B, `systems/smoke.ts`, `Combat.pourSmoke` /
 `stepSmoke`): thrown like a grenade (20 m at most, the grenade's arc and
@@ -549,9 +546,8 @@ cloud stops being thick, so it thins as its effect ends. The budget check
 is `tools/tune/mayhem.mjs --scenario smoke --seconds 12` (two clouds on
 the player on foot). The sound is the cap's pop and ~3 s of gas hiss over
 a low rush (`sfx.smokePop`), and coughs (`sfx.cough`, deeper for an
-officer, one at a time). Pickups: a pale-grey-ringed crate (the grenade
-crate until `pickups.glb` has a `crate_smoke`); in the hand, nothing shows
-until `weapons.glb` has a `smoke_grenade` root.
+officer, one at a time). Pickups: a pale-grey-ringed `crate_smoke`; in
+the hand, `weapons.glb`'s `smoke_grenade`.
 
 **Stunts** (`world/ramps.ts`, `systems/stunts.ts`). Ten stunt ramps
 (6 × 3.2 m, 1.6 m lip, matching the `ramp` model in props.glb) on road

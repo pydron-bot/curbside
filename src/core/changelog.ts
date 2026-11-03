@@ -15,6 +15,14 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.19.1',
+    date: '2026-11-02',
+    title: 'New weapon models',
+    notes: [
+      'The air horn, taser, stinger and smoke grenade now show in your hand, and each has its own crate in the street with the weapon on the lid.',
+    ],
+  },
+  {
     version: '0.19.0',
     date: '2026-11-02',
     title: 'Room to grow',

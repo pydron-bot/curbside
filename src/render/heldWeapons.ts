@@ -29,15 +29,14 @@ const ROOT: Record<WeaponKind, string> = {
   grenade: 'grenade',
   molotov: 'molotov',
   rocket: 'rocket_launcher',
-  // Not in weapons.glb yet (docs/BLENDER_TODO.md): the hand shows nothing until they are.
   horn: 'air_horn',
   taser: 'taser',
-  // Nor this (BLENDER_TODO): the folded strip, held low like a grenade.
+  // The strip folded up, held in the fist like a grenade.
   stinger: 'stinger',
   smoke: 'smoke_grenade',
 };
 /** Grip → muzzle along the barrel, m, until the GLB's `muzzle` extras arrive. */
-const MUZZLE_GUESS: Record<WeaponKind, number> = { pistol: 0.2, smg: 0.38, shotgun: 0.73, grenade: 0, molotov: 0, rocket: 0.76, horn: 0.22, taser: 0.17, stinger: 0, smoke: 0 };
+const MUZZLE_GUESS: Record<WeaponKind, number> = { pistol: 0.2, smg: 0.38, shotgun: 0.73, grenade: 0, molotov: 0, rocket: 0.76, horn: 0.2, taser: 0.15, stinger: 0, smoke: 0 };
 /** The bore's height above the grip, m (the `_muzzle` / `_barrel` node's, once weapons.glb is in). */
 const MUZZLE_HEIGHT_GUESS: Record<WeaponKind, number> = { pistol: 0.05, smg: 0.07, shotgun: 0.07, grenade: 0, molotov: 0, rocket: 0.11, horn: 0.06, taser: 0.05, stinger: 0, smoke: 0 };
 /** Shots start this far ahead of the shooter (combat.ts), m: how a shot is matched to who fired it. */
