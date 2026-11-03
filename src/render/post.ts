@@ -180,6 +180,19 @@ export const BLOOM_SANITIZE = /* glsl */ `
   if (!(texel.a >= 0.0)) texel.a = 0.0;
   texel = min(texel, vec4(${BLOOM_INPUT_MAX.toFixed(1)}));`;
 
+/**
+ * The title screen's look over the game, for Settings → Neon filter: pink
+ * light at the bottom, cyan at the top and faint scanlines. A CSS layer like
+ * the vignette (no GPU pass), hidden unless the setting is on.
+ */
+export function mountNeonFilter(parent: HTMLElement): HTMLElement {
+  const el = document.createElement('div');
+  el.className = 'look-neon';
+  el.hidden = true;
+  parent.append(el);
+  return el;
+}
+
 /** A soft dark vignette over the game view: a CSS layer, free on the GPU. */
 export function mountVignette(parent: HTMLElement): HTMLElement {
   const el = document.createElement('div');

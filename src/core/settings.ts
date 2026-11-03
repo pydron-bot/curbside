@@ -45,6 +45,8 @@ export interface Settings {
   debugLabels: boolean;
   /** The police scanner's lines and radar pings (game/scanner.ts). */
   scanner: boolean;
+  /** The title screen's neon tint and scanlines over the game (a CSS layer, render/post.ts). */
+  screenFilter: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -63,6 +65,7 @@ export const DEFAULT_SETTINGS: Settings = {
   testTools: false,
   debugLabels: false,
   scanner: true,
+  screenFilter: false,
 };
 
 const KEY = 'curbside.settings';
@@ -86,7 +89,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     const v = raw[k];
     if (typeof v === 'number' && Number.isFinite(v)) out[k] = Math.min(1, Math.max(0, v));
   }
-  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics', 'godMode', 'testTools', 'debugLabels', 'scanner'] as const) {
+  for (const k of ['ignoreSilentSwitch', 'leftHanded', 'haptics', 'godMode', 'testTools', 'debugLabels', 'scanner', 'screenFilter'] as const) {
     const v = raw[k];
     if (typeof v === 'boolean') out[k] = v;
   }

@@ -7,7 +7,7 @@ import { MenuNav, overlay, type Panel } from './menu';
 import { onTap } from './tap';
 
 type SliderKey = 'masterVolume' | 'sfxVolume' | 'musicVolume';
-type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics' | 'testTools' | 'scanner';
+type ToggleKey = 'ignoreSilentSwitch' | 'leftHanded' | 'haptics' | 'testTools' | 'scanner' | 'screenFilter';
 type ChoiceKey = 'quality' | 'steering' | 'perfOverlay';
 
 type Row =
@@ -58,7 +58,7 @@ export class SettingsPanel implements Panel {
       <div class="sheet-body settings-grid" data-scroll>
         <div class="settings-col">
           <section><h3>SOUND</h3></section>
-          <section><h3>TESTING</h3></section>
+          <section><h3>EXTRAS</h3></section>
         </div>
         <div class="settings-col">
           <section><h3>CONTROLS</h3></section>
@@ -132,7 +132,10 @@ export class SettingsPanel implements Panel {
       { kind: 'toggle', key: 'scanner', label: 'Police scanner', sub: 'Dispatch lines and radar pings' },
     ];
     // Its own section in the shorter column, so both still fit unscrolled on a phone.
-    const testingRows: Row[] = [{ kind: 'toggle', key: 'testTools', label: 'Test tools', sub: 'Adds TEST to the pause menu' }];
+    const testingRows: Row[] = [
+      { kind: 'toggle', key: 'screenFilter', label: 'Neon filter', sub: "The title screen's tint and scanlines" },
+      { kind: 'toggle', key: 'testTools', label: 'Test tools', sub: 'Adds TEST to the pause menu' },
+    ];
     for (const r of soundRows) sound.append(this.row(r));
     for (const r of testingRows) testing.append(this.row(r));
     for (const r of controlRows) controls.append(this.row(r));

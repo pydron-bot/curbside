@@ -324,6 +324,10 @@ onSettingsChange((s) => look.characters.setBody(playerModel, playerBody(s.charac
 // God mode (TEST menu), for mayhem testing.
 player.invulnerable = settings.godMode;
 onSettingsChange((s) => (player.invulnerable = s.godMode));
+// Settings → Neon filter: the title's tint and scanlines over the game.
+const showNeonFilter = (s: { screenFilter: boolean }) => (look.neonFilter.hidden = !s.screenFilter);
+onSettingsChange(showNeonFilter);
+showNeonFilter(settings);
 
 let viewW = 0;
 let viewH = 0;

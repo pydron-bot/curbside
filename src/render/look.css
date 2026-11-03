@@ -7,3 +7,25 @@
   pointer-events: none;
   background: radial-gradient(ellipse 72% 78% at 50% 50%, transparent 58%, rgba(6, 8, 18, 0.34) 100%);
 }
+
+/* Settings → Neon filter: the title screen's tint and scanlines (render/post.ts mountNeonFilter). */
+.look-neon {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 90% 60% at 50% 115%, rgb(255 46 136 / 0.2), transparent 62%),
+    radial-gradient(ellipse 90% 55% at 50% -15%, rgb(46 230 255 / 0.13), transparent 60%),
+    radial-gradient(ellipse 70% 80% at 50% 50%, transparent 55%, rgb(40 8 60 / 0.28) 100%);
+}
+
+.look-neon::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(0deg, rgb(255 255 255 / 0.03) 0 1px, rgb(0 0 0 / 0.05) 1px 2px, transparent 2px 3px);
+}
+
+.look-neon[hidden] {
+  display: none;
+}

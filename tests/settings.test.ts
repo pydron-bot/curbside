@@ -31,6 +31,7 @@ describe('settings: sanitising what was stored', () => {
       testTools: true,
       debugLabels: true,
       scanner: false,
+      screenFilter: true,
     };
     expect(sanitizeSettings(stored)).toEqual(stored);
   });
@@ -65,6 +66,12 @@ describe('settings: sanitising what was stored', () => {
       expect(sanitizeSettings({ debugLabels: bad }).debugLabels).toBe(false);
     }
     expect(sanitizeSettings({ debugLabels: true }).debugLabels).toBe(true);
+  });
+
+  it('the neon filter is off by default and must be a boolean', () => {
+    expect(DEFAULT_SETTINGS.screenFilter).toBe(false);
+    for (const bad of ['true', 1, null, {}]) expect(sanitizeSettings({ screenFilter: bad }).screenFilter).toBe(false);
+    expect(sanitizeSettings({ screenFilter: true }).screenFilter).toBe(true);
   });
 
   it('the police scanner is on by default and must be a boolean', () => {

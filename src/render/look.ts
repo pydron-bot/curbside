@@ -14,7 +14,7 @@ import { GLOW, GlowSprites } from './glowSprites';
 export type GlowSource = (glows: GlowSprites, view: Rect) => void;
 import { LowResFx, type LowResSource } from './lowResFx';
 import { PickupMesh } from './pickupMesh';
-import { PostEffects, mountVignette, precompile } from './post';
+import { PostEffects, mountNeonFilter, mountVignette, precompile } from './post';
 import { getQuality, onQualityChange } from './quality';
 import { SceneLighting } from './sceneLighting';
 import { worldUniforms } from './shaderLib';
@@ -62,6 +62,8 @@ export class Look {
   readonly pickups: PickupMesh;
   /** props.glb / pickups.glb models: street furniture, rooftop kit, trees, landmarks, and per-frame `things`. */
   readonly props: WorldProps;
+  /** Settings → Neon filter's layer over the view (hidden while the setting is off). */
+  readonly neonFilter: HTMLElement;
   readonly post: PostEffects;
   /** Smoke and dust drawn at the tier's fxScale when that saves fill (see useLowResFx). */
   readonly lowFx: LowResFx;
@@ -119,6 +121,7 @@ export class Look {
     scene.add(this.lowFx.composite);
     renderer.info.autoReset = false; // reset once per frame in render()
     mountVignette(overlayParent);
+    this.neonFilter = mountNeonFilter(overlayParent);
     onQualityChange(() => this.applyTier());
     this.applyTier();
     // Lost GPU state is rebuilt by three.js, except what was rendered into a

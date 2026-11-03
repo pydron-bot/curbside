@@ -46,8 +46,8 @@ body:not([data-scene='play']) #wasted {
   flex: none;
   width: 15px;
   height: 15px;
-  color: #ff4d6a;
-  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.8));
+  color: #ff4d8a;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.8)) drop-shadow(0 0 4px rgb(255 46 136 / 0.6));
 }
 
 .hp-bar {
@@ -59,6 +59,7 @@ body:not([data-scene='play']) #wasted {
   border: 1px solid rgb(255 255 255 / 0.35);
   border-radius: 2px;
   overflow: hidden;
+  outline: 1px solid rgb(255 46 136 / 0.35);
   box-shadow: 0 1px 4px rgb(0 0 0 / 0.5);
 }
 
@@ -74,7 +75,8 @@ body:not([data-scene='play']) #wasted {
 }
 
 .hp-fill {
-  background: linear-gradient(180deg, #ff7b8b, #ff2346 55%, #c80f2e);
+  background: linear-gradient(180deg, #ff7bb0, #ff2e6e 55%, #c80f4a);
+  box-shadow: 0 0 6px rgb(255 46 110 / 0.7);
   transition: transform 0.12s ease-out;
 }
 
@@ -173,7 +175,7 @@ body:not([data-scene='play']) #wasted {
 
 /* --- Speedometer (in a car) --- */
 .speedo {
-  --car-col: var(--neon-green);
+  --car-col: var(--neon-cyan);
   position: absolute;
   top: calc(var(--edge-t) + 22px);
   left: calc(var(--edge-l) + var(--radar) + 6px);

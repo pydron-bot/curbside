@@ -18,10 +18,10 @@ const MAP_MAX_PX = 2048;
 /** Map resolution: about native for a ~100 px radar at 2x showing ±60 m (1.5 for the core city). */
 export const MAP_PX_PER_M = Math.min(1.5, MAP_MAX_PX / (2 * MAP_EXTENT));
 
-const ASPHALT = '#262932';
-const LANE = 'rgba(255, 214, 92, 0.22)';
-const SIDEWALK_COL = '#4b4f5b';
-const LOT = '#31343d';
+const ASPHALT = '#211f30';
+const LANE = 'rgba(255, 46, 136, 0.26)';
+const SIDEWALK_COL = '#4a4560';
+const LOT = '#2d2a3c';
 const PARK = '#2c5a37';
 const TREE = '#20442a';
 const PLAZA = '#6a6153';
