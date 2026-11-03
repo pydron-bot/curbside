@@ -8,6 +8,7 @@ import type { Pickup } from '../world/pickups';
 import type { CameraRig } from './cameraRig';
 import { CharacterBodies } from './characterBodies';
 import { ContactShadows } from './contactShadows';
+import { Flyovers } from './flyovers';
 import { GLOW, GlowSprites } from './glowSprites';
 import { SOURCE_STRIDE, glintOf, inView, neonSources, onRoad, type Glint } from './neonReflect';
 import { planSearchlights, searchlightHeading } from '../world/searchlights';
@@ -58,6 +59,8 @@ const MARKER = [1.0, 0.62, 0.08] as const;
  */
 export class Look {
   readonly time = new TimeOfDay();
+  /** Planes and blimps passing over by day, as shadows (render/flyovers.ts). */
+  readonly flyovers = new Flyovers();
   readonly lighting: SceneLighting;
   /** Everyone, by body (one batch each), and what they hold. */
   readonly characters: CharacterBodies;
@@ -179,6 +182,7 @@ export class Look {
     this.player = player;
     this.time.update(dt);
     worldUniforms.uTime.value += dt;
+    this.flyovers.update(dt, this.time.hour, player?.x ?? 0, player?.z ?? 0);
     const sky = this.lighting.apply(this.time.hour);
     this.renderer.toneMappingExposure *= this.exposureBoost;
     // Observe mode's wide zoom: the haze starts as far over the street as it does from play height.

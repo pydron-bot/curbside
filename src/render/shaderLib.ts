@@ -32,6 +32,8 @@ export const worldUniforms = {
   uSkyTint: { value: new Color('#bcd2ff') },
   /** Up to four police light bars near the view (x, z, strength 0..1, unused), washing walls and road (CarBatch sets them). */
   uSirens: { value: [new Vector4(), new Vector4(), new Vector4(), new Vector4()] },
+  /** A plane or blimp overhead (x, z, heading, kind: 0 none, 1 plane, 2 blimp): its shadow (render/flyovers.ts). */
+  uFlyer: { value: new Vector4() },
   /** Toward the sun (sceneLighting sets it; the moon's at night, when glints are off). */
   uSunDir: { value: new Vector3(0, 1, 0) },
   /** The last two explosions' flashes (x, z, strength fading from 1, unused), lighting walls and road (Effects sets them). */
@@ -57,6 +59,7 @@ uniform vec3 uSkyTint;
 uniform vec4 uSirens[4];
 uniform vec4 uBlasts[2];
 uniform vec3 uSunDir;
+uniform vec4 uFlyer;
 
 const float UB_HALF = ${f(HALF_EXTENT)};
 const float UB_BLOCK = ${f(BLOCK_SIZE)};
@@ -106,7 +109,30 @@ float ubCloudShade(vec2 xz) {
   vec2 p = (xz + uTime * vec2(3.6, 1.3)) * 0.026;
   float cover = 0.6 + 0.05 * sin(uTime * 0.013);
   float c = smoothstep(cover, cover + 0.08, ubFbm(p));
-  return 1.0 - 0.28 * c * day * (1.0 - 0.8 * uWetness);
+  float shade = 1.0 - 0.28 * c * day * (1.0 - 0.8 * uWetness);
+  if (uFlyer.w > 0.5) {
+    // A plane's or blimp's shadow sliding over (render/flyovers.ts): along = its heading, across = to its side.
+    vec2 d = xz - uFlyer.xy;
+    float sh = sin(uFlyer.z);
+    float ch = cos(uFlyer.z);
+    float along = d.x * sh + d.y * ch;
+    float across = d.x * ch - d.y * sh;
+    float ax = abs(across);
+    float m;
+    if (uFlyer.w < 1.5) {
+      float fuselage = (1.0 - smoothstep(0.9, 1.4, ax)) * (1.0 - smoothstep(11.0, 12.0, abs(along)));
+      float wing = (1.0 - smoothstep(12.5, 13.5, ax)) * (1.0 - smoothstep(1.2, 1.8, abs(along - 1.0 + ax * 0.22)));
+      float tail = (1.0 - smoothstep(4.0, 4.6, ax)) * (1.0 - smoothstep(0.6, 1.1, abs(along + 10.0 - ax * 0.15)));
+      // The contrail's faint shadow, widening and fading behind it.
+      float trail = (1.0 - smoothstep(0.4 - along * 0.012, 0.9 - along * 0.012, ax)) * step(along, -12.0) * (1.0 - smoothstep(40.0, 260.0, -along)) * 0.3;
+      m = max(max(fuselage, wing), max(tail, trail));
+    } else {
+      float body = length(vec2(across / 4.6, along / 17.0));
+      m = max(1.0 - smoothstep(0.92, 1.05, body), (1.0 - smoothstep(0.9, 1.2, ax)) * (1.0 - smoothstep(2.5, 3.0, abs(along))));
+    }
+    shade *= 1.0 - 0.46 * m * day;
+  }
+  return shade;
 }
 /**
  * A glint of the sun off a shiny surface at wp with normal n, as the camera
