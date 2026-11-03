@@ -155,6 +155,20 @@ at 852×393 and 852×340 on foot and in a car (and left-handed), that
 D-pad down in play doesn't fight anything, and the four-charge refusal
 notice reading clearly. Known gap: a police car retired by the police
 system takes its charge with it.
+**0.21.0 "Map editor"** (`claude/w3-map`, W3-D; details in
+`docs/W3D_MAP.md`): the map file (`src/world/maps/city.json`, v2: blocks,
+roads, spots, props; empty in this release) applied in the game, the
+checks (`checkMapEdits`), and the desktop editor with the dependency
+overlay (TEST → MAP → MAP EDITOR; EXPORT, VIEW IN 3D on `?map=local`).
+The dressing and building plans now come from per-block and per-building
+streams, so an edit stays in its block: a one-time reshuffle of the
+furniture, bus stops (93, was 86), carts and rooftops, and the cold open
+at a shelter 66 m from the safehouse (was 100 m). Also: the smoke test
+draws the 3D view at 0.35× (`--scale`, about 6 min, was ~18) and has
+`--jobs`. **Device checks:** the cold open's new shelter (STEAL THIS CAR
+over the bus, the bus nose against the crash), the reshuffled streets
+reading as before. Open: hidden packages move with any block edit (saved
+by index; the owner's call, shared with W3-A).
 **Next:** the iPhone device pass (V2-14) on 0.18.0, then 1.0.0. Wave 3
 candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B is complete
 (AIR HORN, TASER, STINGER and SMOKE GRENADE shipped; STICKY CHARGE on

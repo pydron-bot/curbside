@@ -15,6 +15,16 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.21.0',
+    date: '2026-11-03',
+    title: 'Map editor',
+    notes: [
+      'A map editor, for testing on a desktop (TEST → MAP → MAP EDITOR, with Test tools on): the whole city from above. Change a block (buildings, park, plaza or car park, its district, its layout and how tall it builds), close a road or make it one-way, move the safehouse, payphones, frenzy tokens, gang hangouts and ramps, and place or remove street furniture. Select a road, block or crossing to see everything that relies on it, races and story jobs included; anything an edit breaks shows in red. VIEW IN 3D plays your edits; EXPORT writes the map file that ships.',
+      'Closed roads in a shipped map get barriers at both ends, and traffic, the police, buses and story drivers keep off them (and keep to one-way streets).',
+      'The street furniture, bus stops, food carts and shopfronts have been laid out afresh (same streets, a new arrangement), so editing one block never moves anything in another. The opening scene now plays at a bus shelter closer to the safehouse.',
+    ],
+  },
+  {
     version: '0.20.0',
     date: '2026-11-02',
     title: 'Sticky charge',
