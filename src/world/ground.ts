@@ -285,7 +285,7 @@ vec3 asphalt(vec2 w, float a, float b, float roadAxis, bool horizontal, float px
 }
 
 /** Road paint (rgb, coverage) on a road segment. a along the road, b across it. */
-vec4 roadPaint(vec2 w, float a, float b, bool horizontal, float px) {
+vec4 roadPaint(vec2 w, float a, float b, bool horizontal, float px, float segId) {
   float aa = abs(a);
   float wear = 0.72 + 0.28 * ubNoise(w * 2.3 + 5.0);
   vec3 white = srgb(0.86, 0.85, 0.80);
@@ -300,34 +300,35 @@ vec4 roadPaint(vec2 w, float a, float b, bool horizontal, float px) {
   float whiteCover = max(stop, zebra) * wear;
   float yellowCover = centre * wear;
   float inBox = ubBand(aa, 8.8, 11.3, px) * ubBand(abs(b), 0.0, 7.6, px);
-  if (gDistrict >= 0.0 && inBox > 0.0 && stop < 0.5 && yellowCover < 0.5) {
-    // Each part of town paints its crossings its own way.
+  // About one crossing in four is painted in its part of town's style, faded
+  // (0.26.0: every crossing at full strength was too much); the rest stay white.
+  bool styled = ubHash(vec2(segId, sign(a) * 3.0 + 17.0)) < 0.26;
+  if (styled && gDistrict >= 0.0 && inBox > 0.0 && stop < 0.5 && yellowCover < 0.5) {
     float k = floor((b + 7.6) / 1.2);
+    float fade = 0.62 * wear;
+    vec3 col;
+    float cover = zebra;
     if (abs(gDistrict - ${DISTRICTS.indexOf('arts')}.0) < 0.5) {
       // Arts quarter: rainbow stripes.
       float m = mod(k, 6.0);
-      vec3 rainbow = m < 0.5 ? srgb(0.95, 0.22, 0.45) : m < 1.5 ? srgb(1.0, 0.55, 0.15) : m < 2.5 ? srgb(1.0, 0.85, 0.2)
+      col = m < 0.5 ? srgb(0.95, 0.22, 0.45) : m < 1.5 ? srgb(1.0, 0.55, 0.15) : m < 2.5 ? srgb(1.0, 0.85, 0.2)
         : m < 3.5 ? srgb(0.3, 0.8, 0.4) : m < 4.5 ? srgb(0.2, 0.7, 0.95) : srgb(0.6, 0.35, 0.9);
-      return vec4(rainbow, zebra * (0.85 + 0.15 * wear));
+    } else if (abs(gDistrict - ${DISTRICTS.indexOf('industrial')}.0) < 0.5) {
+      // The docks: yellow and white bars.
+      col = mod(k, 2.0) < 0.5 ? srgb(0.95, 0.75, 0.1) : white;
+    } else if (abs(gDistrict - ${DISTRICTS.indexOf('oldtown')}.0) < 0.5) {
+      // Old town: cream bars on a brick-red band.
+      col = mix(srgb(0.6, 0.22, 0.16), srgb(0.9, 0.84, 0.7), zebra);
+      cover = inBox;
+    } else if (abs(gDistrict - ${DISTRICTS.indexOf('downtown')}.0) < 0.5) {
+      // Downtown: white and cyan bars in turn.
+      col = mod(k, 2.0) < 0.5 ? white : srgb(0.2, 0.85, 0.95);
+    } else {
+      // Residential: pastel blue and white bars.
+      col = mod(k, 2.0) < 0.5 ? white : srgb(0.55, 0.75, 0.95);
     }
-    if (abs(gDistrict - ${DISTRICTS.indexOf('industrial')}.0) < 0.5) {
-      // (Hazard stripes fill the whole crossing.)
-      // The docks: yellow and black hazard stripes, edge to edge.
-      vec3 hz = mod(k, 2.0) < 0.5 ? srgb(0.95, 0.75, 0.1) : srgb(0.08, 0.08, 0.08);
-      return vec4(hz, inBox * (0.8 + 0.2 * wear));
-    }
-    if (abs(gDistrict - ${DISTRICTS.indexOf('oldtown')}.0) < 0.5) {
-      // Old town: a brick-red band with cream bars.
-      return vec4(mix(srgb(0.6, 0.22, 0.16), srgb(0.9, 0.84, 0.7), zebra), inBox * (0.75 + 0.25 * wear));
-    }
-    if (abs(gDistrict - ${DISTRICTS.indexOf('downtown')}.0) < 0.5) {
-      // Downtown: bold double-width bars, white and cyan in turn.
-      float k2 = floor((b + 7.6) / 2.4);
-      float bar = ubLine(fract((b + 7.6) / 2.4) - 0.5, 0.36, px / 2.4);
-      return vec4(mod(k2, 2.0) < 0.5 ? white : srgb(0.2, 0.85, 0.95), bar * inBox * wear);
-    }
-    // Residential: pastel blue and white bars.
-    return vec4(mod(k, 2.0) < 0.5 ? white : srgb(0.55, 0.75, 0.95), zebra * wear);
+    // Weathered toward the white the rest of the city's crossings are.
+    return vec4(mix(col, white, 0.3), cover * fade);
   }
   return vec4(whiteCover >= yellowCover ? white : yellow, max(whiteCover, yellowCover));
 }
@@ -404,20 +405,20 @@ vec3 lot(vec2 w, vec2 lp, float kind, float seed, float px, inout vec3 glow) {
     bloom = mix(srgb(0.25, 0.36, 0.14), bloom, step(0.55, ubHash(floor(w * 2.6) + 3.0)));
     c = mix(c, bloom, ubBand(bed, 2.2, 5.0, px));
     c = mix(c, gravel, ubBand(bed, 5.0, 5.6, px));
-    if (fract(seed * 7.13) < 0.5) {
+    if (fract(seed * 7.13) < 0.22) {
       // A basketball court across one half of the park: blue apron, terracotta court, white lines.
       vec2 cp = vec2(lp.x, lp.y - (fract(seed * 3.31) < 0.5 ? 15.0 : -15.0));
       vec2 cq = abs(cp);
       float apron = ubLine(cq.x, 13.0, px) * ubLine(cq.y, 8.0, px);
       float court = ubLine(cq.x, 11.4, px) * ubLine(cq.y, 6.6, px);
-      vec3 surf = mix(srgb(0.16, 0.36, 0.7), srgb(0.82, 0.38, 0.2), court);
+      vec3 surf = mix(srgb(0.24, 0.34, 0.5), srgb(0.62, 0.38, 0.28), court);
       float lw = 0.06;
       float lines = ubLine(abs(cq.x - 11.4), lw, px) * step(cq.y, 6.66) + ubLine(abs(cq.y - 6.6), lw, px) * step(cq.x, 11.46)
         + ubLine(cp.x, lw, px) * step(cq.y, 6.6) + ubLine(abs(length(cp) - 1.8), lw, px)
         + ubLine(abs(cq.y - 2.45), lw, px) * step(11.4 - 5.8, cq.x) * step(cq.x, 11.4)
         + ubLine(abs(cq.x - (11.4 - 5.8)), lw, px) * step(cq.y, 2.45)
         + ubLine(abs(length(vec2(cq.x - 10.2, cp.y)) - 6.75), lw, px) * step(cq.x, 10.2) * step(cq.y, 6.6);
-      surf = mix(surf, srgb(0.95, 0.95, 0.92), min(1.0, lines) * court + min(1.0, lines) * (1.0 - court) * 0.0);
+      surf = mix(surf, srgb(0.86, 0.86, 0.82), min(1.0, lines) * court);
       c = mix(c, surf, apron);
     }
     return c;
@@ -509,7 +510,7 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
       : floor(g.y / UB_BLOCK) * 37.0 + floor(g.x / UB_BLOCK + 0.5) + 900.0;
     c = asphalt(w, a, b, roadAxis, hz, px, segId);
     if (roadAxis > 0.5) {
-      vec4 paint = roadPaint(w, a, b, hz, px);
+      vec4 paint = roadPaint(w, a, b, hz, px, segId);
       c = mix(c, paint.rgb, paint.a);
     }
     // Gutter: a darker, grimier strip along the kerb.
