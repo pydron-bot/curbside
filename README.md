@@ -2698,6 +2698,39 @@ the first time it comes into view.
   rooftop props, awnings, neon, lamps and trees; `world/districts.ts` and
   `world/buildingPlans.ts` (pure, tested) decide districts, heights,
   palettes, roof types, props and shopfronts.
+- **Neon city (0.22.0).** The in-game look follows the title screen's
+  synthwave neon, all at no new draw call or pass:
+  - *Grade* (`post.ts` GRADE, inside the tone mapping): violet-indigo
+    shadows, rose highlights, a touch of the logo's pink in the upper mids,
+    more saturation above the darks. *Sky* (`timeOfDay.ts`): a cyan moon
+    and violet fill at night (the old blue night's brightness), a pink and
+    magenta sunset into a violet dusk.
+  - *Rooftop neon* (`BuildingPlan.roofNeon`, planned on its own stream in
+    `buildingPlans.ts`, tested in `tests/roofNeon.test.ts`): tubes on the
+    street-facing roof edges, down the corners, and lit signs leaning back
+    over the roof (clear of the rooftop kit), by district (arts and
+    downtown most); drawn by `cityMesh.ts` in the `boxes` batch with halos
+    in the night `glows`. A negative `aGlow` makes a tube stutter now and
+    then (propMaterial). Tube emission sits at the night bloom threshold,
+    or desktop bloom washes whole buildings.
+  - *Wet-look roads* (`ground.ts`): at night the road darkens a little and
+    gets damp patches (`gSheen`, most along the gutters) that take a share
+    of the lamp light and mirror each lamp head as a warm streak toward the
+    viewer (`gLampGlints`: the head mirrored under the ground, seen from
+    `cameraPosition`); rain strengthens them. Tail lights smear red on the
+    road behind cars.
+  - *Car neon* (`carNeon.ts`, pure and tested): every sports car and some
+    other civilian cars carry an underglow (rolled per car on create and
+    recycle; never police, emergency or work vehicles), one disc glow
+    under the body; at night fast cars leave tail-light trails
+    (`trailLength`). `GlowSprites` holds 512 a frame.
+  - *Headlights*: `CarDims.lampX` is where the model's `headlight`
+    vertices sit; the cone is sized so its two lamps (`BEAM_LAMP`) land
+    there, one spreading beam per lamp.
+  - *HUD*: a pink-cyan-violet radar rim, violet-navy map streets, a hot
+    pink health bar, a cyan healthy-car ring. *Settings → Extras → Neon
+    filter* (`screenFilter`, off by default): the title's edge light and
+    scanlines as a CSS layer (`mountNeonFilter`).
 - **Phones vs desktop.** Phones render straight to the canvas: no
   full-screen passes, glow comes from additive sprites, a CSS vignette
   frames the view. Desktops render into a half-float buffer so the 'high'

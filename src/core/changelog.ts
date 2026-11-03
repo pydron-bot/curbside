@@ -15,6 +15,21 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.22.0',
+    date: '2026-11-03',
+    title: 'Neon city',
+    notes: [
+      'The city now looks like the title screen: a new colour grade with violet shadows and warm pink highlights, a pink-and-magenta sunset into a violet dusk, and nights under a cyan moon.',
+      'Neon on the rooftops: glowing tubes along the roof edges and down the corners of buildings, and lit signs leaning over the roofs, most of all in the arts quarter and downtown. A few of them flicker.',
+      'Wet-look streets at night: the roads take on a damp sheen, street lamps streak across the asphalt, and tail lights smear red behind the traffic.',
+      'Sports cars come with neon underglow in pink, cyan, violet or green, and now and then other cars do too. Fast cars leave light trails at night.',
+      'Headlights no longer throw extra beams out to the sides: each beam now starts at the car\'s own lamps.',
+      'The HUD matches the logo: a neon rim on the radar, a hot-pink health bar and a cyan car-health ring.',
+      'New in Settings → Extras: Neon filter, the title screen\'s tint and scanlines over the game (off by default).',
+      'Downtown picks up some Art Deco pastels: aqua, periwinkle and lilac.',
+    ],
+  },
+  {
     version: '0.21.2',
     date: '2026-11-03',
     title: 'Sticky charge models',

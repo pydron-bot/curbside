@@ -70,6 +70,17 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
+**0.22.0 "Neon city" (2026-11-03, branch `claude/neon-polish`, stacked on
+`claude/sticky-charge-model` / 0.21.2; neither merged yet, at the owner's
+request):** the in-game look brought to the title screen's neon (README →
+*Look → Neon city*): grade, synthwave dusk/night, rooftop neon, wet-look
+night roads with lamp streaks, underglow (all sports cars, some others),
+light trails, headlight beams fixed to start at the lamps, HUD restyle and
+a Neon filter setting. **For the device pass:** are the lamp streaks on
+the road too strong on the phone; does the rooftop neon read at 852×340;
+the iPhone Settings sheet now scrolls a little in both columns at 393 px
+tall (Police scanner was already cut off before).
+
 **V2 status (2026-11-02, second session):** wave 1 is live as **0.14.0**
 (V2-01 in-view meter, V2-02 the city doesn't stop, V2-03 chase handoff,
 V2-04 stamps, V2-05 story scene/mayhem steps, V2-08 Night Shift, s2/s3 of
