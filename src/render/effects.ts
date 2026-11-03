@@ -479,6 +479,34 @@ export class Effects {
     }
   }
 
+  /**
+   * A firework shell bursting at (x, y, z): a sphere of streaks in its colour
+   * (linear, bright), sagging under gravity and fading, with a few white
+   * crackles (Fireworks, 0.24.0).
+   */
+  firework(x: number, y: number, z: number, r: number, g: number, b: number): void {
+    const n = Math.round(46 * this.scale);
+    for (let k = 0; k < n; k++) {
+      // A random direction on the sphere.
+      const u = Math.random() * 2 - 1;
+      const a = Math.random() * Math.PI * 2;
+      const s = Math.sqrt(1 - u * u);
+      const sp = 9 + Math.random() * 4;
+      const white = k % 9 === 0;
+      const i = this.hot.spawn(x, y, z, Math.cos(a) * s * sp, u * sp, Math.sin(a) * s * sp, 1.1 + Math.random() * 0.6, 0.22, 0.12, RAMP.flat, FRAME.spark);
+      if (i < 0) return;
+      this.hot.flags[i] = FLAG.stretch;
+      this.hot.stretch[i] = 0.05;
+      this.hot.gravity[i] = 5;
+      this.hot.drag[i] = 1.4;
+      this.hot.add[i] = 1;
+      const k2 = white ? 3.2 : 2.6;
+      this.hot.r[i] = (white ? 1 : r) * k2;
+      this.hot.g[i] = (white ? 1 : g) * k2;
+      this.hot.b[i] = (white ? 1 : b) * k2;
+    }
+  }
+
   /** Glowing embers drifting up and off with the wind, flickering out. */
   embers(x: number, z: number, count: number, lo: number, hi: number): void {
     for (let k = 0; k < count; k++) {

@@ -49,6 +49,7 @@ import { CombatLook } from './render/combatLook';
 import { StingerLook } from './render/stingerLook';
 import { ChargeLook } from './render/chargeLook';
 import { SteamLook } from './render/steamLook';
+import { Fireworks } from './render/fireworks';
 import { planSteamVents } from './world/steamVents';
 import { canDetonate, detonateHint } from './systems/charges';
 import { SmokeLook } from './render/smokeLook';
@@ -485,6 +486,9 @@ const smokeLook = new SmokeLook(look, effects, smoke, heat.police.units);
 // Steam from the road vents at night (render/steamLook.ts).
 const steamLook = new SteamLook(effects, planSteamVents(city.seed));
 const steamView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
+// Midnight fireworks over downtown (render/fireworks.ts).
+const fireworks = new Fireworks(effects);
+look.addGlowSource((g) => fireworks.drawGlows(g));
 
 // --- The city's own life (game/cityLife.ts): ambient scenes, parking, dropped guns ---
 const cityLife = new CityLife({
@@ -1363,6 +1367,7 @@ function frame(now: number) {
   chargeLook.update();
   smokeLook.update(frameSeconds * fx.hitStop.scale * slow);
   steamLook.update(frameSeconds * fx.hitStop.scale * slow, rig.visibleGround(steamView));
+  fireworks.update(frameSeconds * fx.hitStop.scale * slow, look.time.hour, steamView);
   stamps.step();
   updateHud(frameSeconds);
   progress.update(frameSeconds);
