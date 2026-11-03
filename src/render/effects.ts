@@ -191,6 +191,33 @@ export class Effects {
     this.soft.drag[i] = 0.4;
   }
 
+  /**
+   * A wisp of steam from a road vent at (x, z): pale, slow, spreading as it
+   * rises and drifts with the wind, in the colour (linear) of the light round it.
+   */
+  emitSteam(x: number, z: number, r: number, g: number, b: number): void {
+    const i = this.soft.spawn(
+      x + (Math.random() - 0.5) * 0.5,
+      0.15,
+      z + (Math.random() - 0.5) * 0.5,
+      this.windX * 0.5 + (Math.random() - 0.5) * 0.3,
+      0.7 + Math.random() * 0.5,
+      this.windZ * 0.5 + (Math.random() - 0.5) * 0.3,
+      2.2 + Math.random() * 1.2,
+      0.9 + Math.random() * 0.4,
+      4.2 + Math.random() * 1.6,
+      RAMP.smoke,
+      puffFrame(),
+    );
+    if (i < 0) return;
+    this.soft.r[i] = r;
+    this.soft.g[i] = g;
+    this.soft.b[i] = b;
+    this.soft.alpha[i] = 0.5;
+    this.soft.spin[i] = (Math.random() - 0.5) * 0.5;
+    this.soft.drag[i] = 0.5;
+  }
+
   /** A lick of flame at (x, y, z) (burning cars, small muzzle-like puffs). */
   emitFire(x: number, z: number, y: number): void {
     const i = this.hot.spawn(

@@ -25,6 +25,7 @@ import { AWNING_DEPTH, AWNING_HEIGHT, planBuildings, NEON_ANIM, type BuildingPla
 import { DISTRICTS, DISTRICT_STYLES, ROOF_TYPES, type District, type RoofType } from './districts';
 import { LAMP_ARM, LAMP_HEIGHT, generateStreetLamps } from './streetLamps';
 import { planSearchlights } from './searchlights';
+import { planSteamVents } from './steamVents';
 import { STRING_PALETTES, planStringLights, spanHeight, type StringSpan } from './stringLights';
 
 /** Blocks per render chunk along each axis (4 → 256 m chunks, 16 chunks). */
@@ -145,6 +146,8 @@ export function createCityMesh(city: City, plans: readonly BuildingPlan[] = plan
 
   for (const lamp of generateStreetLamps()) addLamp(chunkFor(lamp.x, lamp.z), lamp, m);
   for (const s of planStringLights(city.seed)) addStringLights(chunkFor((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2), s, m);
+  // Steam vent grates in the roads (the steam is particles at night, render/steamLook.ts).
+  for (const v of planSteamVents(city.seed)) chunkFor(v.x, v.z).add('boxes', m.makeScale(1.0, 0.04, 0.7).setPosition(v.x, 0.0, v.z), color.set('#1d1d22'), [0]);
   // Searchlight housings on downtown's tallest roofs (the beams are glows, render/look.ts).
   for (const s of planSearchlights(city.buildings, plans)) {
     const c = chunkFor(s.x, s.z);

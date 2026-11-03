@@ -48,6 +48,8 @@ import { addHeatLook } from './render/heatLook';
 import { CombatLook } from './render/combatLook';
 import { StingerLook } from './render/stingerLook';
 import { ChargeLook } from './render/chargeLook';
+import { SteamLook } from './render/steamLook';
+import { planSteamVents } from './world/steamVents';
 import { canDetonate, detonateHint } from './systems/charges';
 import { SmokeLook } from './render/smokeLook';
 import { PeoplePose } from './render/peoplePose';
@@ -480,6 +482,9 @@ const stingerLook = new StingerLook(scene, look, combat);
 const chargeLook = new ChargeLook(scene, look, combat);
 chargedCars = (out) => combat.charges.cars(out as Vehicle[]);
 const smokeLook = new SmokeLook(look, effects, smoke, heat.police.units);
+// Steam from the road vents at night (render/steamLook.ts).
+const steamLook = new SteamLook(effects, planSteamVents(city.seed));
+const steamView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 
 // --- The city's own life (game/cityLife.ts): ambient scenes, parking, dropped guns ---
 const cityLife = new CityLife({
@@ -1357,6 +1362,7 @@ function frame(now: number) {
   stingerLook.update();
   chargeLook.update();
   smokeLook.update(frameSeconds * fx.hitStop.scale * slow);
+  steamLook.update(frameSeconds * fx.hitStop.scale * slow, rig.visibleGround(steamView));
   stamps.step();
   updateHud(frameSeconds);
   progress.update(frameSeconds);
