@@ -1,4 +1,4 @@
-import type { Camera, Object3D, Scene, WebGLRenderer } from 'three';
+import { Vector3, type Camera, type Object3D, type Scene, type WebGLRenderer } from 'three';
 import { planBuildings, type BuildingPlan } from '../world/buildingPlans';
 import type { City, Rect } from '../world/city';
 import { createCityMesh, type CityMesh } from '../world/cityMesh';
@@ -9,6 +9,7 @@ import type { CameraRig } from './cameraRig';
 import { CharacterBodies } from './characterBodies';
 import { ContactShadows } from './contactShadows';
 import { GLOW, GlowSprites } from './glowSprites';
+import { SOURCE_STRIDE, glintOf, inView, neonSources, type Glint } from './neonReflect';
 
 /** Adds faked lights for one frame (muzzle flashes, beacons, ...); `view` is the visible ground. */
 export type GlowSource = (glows: GlowSprites, view: Rect) => void;
@@ -64,6 +65,8 @@ export class Look {
   readonly props: WorldProps;
   /** Settings → Neon filter's layer over the view (hidden while the setting is off). */
   readonly neonFilter: HTMLElement;
+  /** The camera's world position, for the glows' reflections. */
+  private readonly eyeAt = new Vector3();
   readonly post: PostEffects;
   /** Smoke and dust drawn at the tier's fxScale when that saves fill (see useLowResFx). */
   readonly lowFx: LowResFx;
@@ -112,6 +115,22 @@ export class Look {
       this.warmedUp = false;
     });
     this.addGlowSource((g, view) => this.props.drawGlows(g, view));
+    // Neon in the wet road at night (render/neonReflect.ts).
+    const neon = neonSources(city.buildings, this.plans);
+    const glint: Glint = { x: 0, z: 0, heading: 0, length: 0 };
+    this.addGlowSource((g, view) => {
+      const night = worldUniforms.uNight.value;
+      if (night < 0.05) return;
+      const k = night * (0.13 + 0.25 * worldUniforms.uWetness.value);
+      const e = g.eye;
+      for (let o = 0; o < neon.length; o += SOURCE_STRIDE) {
+        if (!inView(view, neon[o], neon[o + 1], 8)) continue;
+        glintOf(neon[o], neon[o + 1], neon[o + 2], e.x, e.y, e.z, glint);
+        const w = Math.min(2.4, Math.max(1, neon[o + 3] * 0.3));
+        const s = glint.length;
+        g.addFlat(glint.x + Math.sin(glint.heading) * s * 0.5, 0.05, glint.z + Math.cos(glint.heading) * s * 0.5, glint.heading, w, s, neon[o + 4] * k, neon[o + 5] * k, neon[o + 6] * k, GLOW.beam);
+      }
+    });
     this.characters = new CharacterBodies();
     this.cars = new CarBatch(renderer);
     this.pickups = new PickupMesh(pickups, this.props);
@@ -165,6 +184,10 @@ export class Look {
     // A redraw without update() (resized while paused) must not read as motion.
     this.dt = 0;
     this.pickups.update(worldUniforms.uTime.value, this.glows, view);
+    camera.getWorldPosition(this.eyeAt);
+    this.glows.eye.x = this.eyeAt.x;
+    this.glows.eye.y = this.eyeAt.y;
+    this.glows.eye.z = this.eyeAt.z;
     this.addMarker();
     for (let i = 0; i < this.glowSources.length; i++) this.glowSources[i](this.glows, view);
     this.props.end();

@@ -48,7 +48,10 @@ export class GlowSprites {
   /** Quad area added this frame, m² (the fill estimate). */
   private areaNow = 0;
 
-  constructor(private readonly capacity = 512) {
+  /** The camera's position this frame (Look.render sets it before the sources run): for reflections. */
+  readonly eye = { x: 0, y: 30, z: 0 };
+
+  constructor(private readonly capacity = 640) {
     const geo = new PlaneGeometry(1, 1);
     this.colour = new InstancedBufferAttribute(new Float32Array(capacity * 3), 3).setUsage(DynamicDrawUsage);
     this.shape = new InstancedBufferAttribute(new Float32Array(capacity), 1).setUsage(DynamicDrawUsage);

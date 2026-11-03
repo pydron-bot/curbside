@@ -1,3 +1,4 @@
+import { glintOf, type Glint } from './neonReflect';
 import { Color, type Object3D } from 'three';
 import type { BuildingPlan, RoofProp } from '../world/buildingPlans';
 import { LANDMARK_KNOCK_ID } from '../world/dressing';
@@ -150,6 +151,8 @@ export class WorldProps {
   private readonly loadedHooks: Array<() => void> = [];
   /** The traffic lights, for their lens glows: x, z, heading, cycle offset, east-west (1/0). */
   private readonly signalData: Float32Array;
+  /** Scratch for the signals' reflections. */
+  private readonly glint: Glint = { x: 0, z: 0, heading: 0, length: 0 };
   /** Wall lamps on landmarks (the station's blue lamp, the safehouse's light): x, y, z, kind (0 police, 1 warm). */
   private wallLamps = new Float32Array(0);
 
@@ -249,6 +252,12 @@ export class WorldProps {
         // On the lanes it governs: ahead of the pole and in off the kerb (the pole stands right of them).
         const w = 0.35 * night;
         glows.addFlat(x + fx * 3.2 - fz * SPILL_IN, 0.06, z + fz * 3.2 + fx * SPILL_IN, d[o + 2], 4.5, 5.5, r * w, g * w, b * w, GLOW.disc);
+        // Its colour streaking in the wet road toward the viewer (neonReflect.ts).
+        const e = glows.eye;
+        glintOf(x + fx * 0.45, z + fz * 0.45, LENS_Y[k], e.x, e.y, e.z, this.glint);
+        const s = this.glint.length;
+        const q = (0.3 + 0.35 * worldUniforms.uWetness.value) * night;
+        glows.addFlat(this.glint.x + Math.sin(this.glint.heading) * s * 0.5, 0.05, this.glint.z + Math.cos(this.glint.heading) * s * 0.5, this.glint.heading, 1.3, s, r * q, g * q, b * q, GLOW.beam);
       }
     }
     // The station's blue lamp (a slow pulse) and the safehouse's light: a halo and a pool below, at night.
