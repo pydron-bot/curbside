@@ -82,7 +82,7 @@ const KEYS: readonly Key[] = [
   { h: 0, light: 0.77, lightColor: hex(0x86c4f4), sky: hex(0x4a4490), ground: hex(0x22182c), hemi: 1.44, fog: hex(0x140f2a), fogNear: 46, fogFar: 150, exposure: 1.38, night: 1, env: 0.25 },
   { h: 4.6, light: 0.7, lightColor: hex(0x86c4f4), sky: hex(0x46448a), ground: hex(0x21182a), hemi: 1.44, fog: hex(0x16122e), fogNear: 46, fogFar: 150, exposure: 1.38, night: 1, env: 0.25 },
   { h: SUNRISE, light: 0, lightColor: hex(0xffa08a), sky: hex(0x6e6a9c), ground: hex(0x2c2228), hemi: 2.5, fog: hex(0x3e3258), fogNear: 60, fogFar: 190, exposure: 1.34, night: 0.55, env: 0.4 },
-  { h: 6.4, light: 1.6, lightColor: hex(0xffa968), sky: hex(0xa7a6c4), ground: hex(0x4a3a30), hemi: 0.9, fog: hex(0x9a8f9e), fogNear: 80, fogFar: 260, exposure: 1.08, night: 0.1, env: 0.75 },
+  { h: 6.4, light: 1.6, lightColor: hex(0xffa968), sky: hex(0xa7a6c4), ground: hex(0x4a3a30), hemi: 0.9, fog: hex(0xa69aa8), fogNear: 62, fogFar: 225, exposure: 1.08, night: 0.1, env: 0.75 },
   { h: 8, light: 2.5, lightColor: hex(0xffe2bd), sky: hex(0xb9cdf0), ground: hex(0x6b5a48), hemi: 0.9, fog: hex(0xa8bdd6), fogNear: 110, fogFar: 320, exposure: 1, night: 0, env: 1 },
   { h: 12.5, light: 2.75, lightColor: hex(0xfff1dc), sky: hex(0xbfd3ff), ground: hex(0x6e5e4c), hemi: 0.95, fog: hex(0xaec4dd), fogNear: 120, fogFar: 340, exposure: 1, night: 0, env: 1 },
   { h: 16.5, light: 2.75, lightColor: hex(0xffe4c0), sky: hex(0xb7c9ee), ground: hex(0x6d5a46), hemi: 0.92, fog: hex(0xb3bfd2), fogNear: 110, fogFar: 320, exposure: 1.02, night: 0, env: 1 },
@@ -114,6 +114,18 @@ export function createSkyState(): SkyState {
     envIntensity: 1,
     shadowStrength: 1,
   };
+}
+
+/**
+ * Morning mist, 0..1: rises before dawn from 05:00, thickest 05:50-06:50,
+ * burnt off by the climbing sun by 08:15 (shaderLib ubMist).
+ */
+export function morningMist(hour: number): number {
+  const h = wrapHour(hour);
+  if (h < 5 || h >= 8.25) return 0;
+  if (h < 5.85) return smooth((h - 5) / 0.85);
+  if (h < 6.85) return 1;
+  return 1 - smooth((h - 6.85) / 1.4);
 }
 
 /** Wrap any hour into [0, 24). */

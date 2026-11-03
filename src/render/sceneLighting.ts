@@ -10,7 +10,7 @@ import {
   type WebGLRenderer,
 } from 'three';
 import { worldUniforms } from './shaderLib';
-import { createSkyState, sampleSky, type SkyState } from './timeOfDay';
+import { createSkyState, morningMist, sampleSky, type SkyState } from './timeOfDay';
 
 /**
  * The scene's lights, fog and exposure, driven by the time of day. One sun
@@ -63,6 +63,7 @@ export class SceneLighting {
     this.renderer.toneMappingExposure = s.exposure;
     worldUniforms.uNight.value = s.night;
     worldUniforms.uLate.value = lateness(s.hour);
+    worldUniforms.uMist.value = morningMist(s.hour);
     worldUniforms.uSkyTint.value.setRGB(s.skyColor[0], s.skyColor[1], s.skyColor[2], SRGBColorSpace);
     return s;
   }

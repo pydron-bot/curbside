@@ -36,6 +36,8 @@ export const worldUniforms = {
   uFlyer: { value: new Vector4() },
   /** Toward the sun (sceneLighting sets it; the moon's at night, when glints are off). */
   uSunDir: { value: new Vector3(0, 1, 0) },
+  /** Morning mist, 0..1 (timeOfDay morningMist): low haze in the streets at dawn, most in the old town and residential districts. */
+  uMist: { value: 0 },
   /** The last two explosions' flashes (x, z, strength fading from 1, unused), lighting walls and road (Effects sets them). */
   uBlasts: { value: [new Vector4(), new Vector4()] },
 } satisfies Record<string, IUniform>;
@@ -60,6 +62,7 @@ uniform vec4 uSirens[4];
 uniform vec4 uBlasts[2];
 uniform vec3 uSunDir;
 uniform vec4 uFlyer;
+uniform float uMist;
 
 const float UB_HALF = ${f(HALF_EXTENT)};
 const float UB_BLOCK = ${f(BLOCK_SIZE)};
@@ -103,6 +106,23 @@ float ubFbm(vec2 p) {
  * multiplier for a surface's base colour (lit windows and neon are emissive,
  * so they stay bright); 1 at night and in the rain (overcast already).
  */
+/**
+ * Morning mist at a point y m up, where the district weight is dw
+ * (1 in the old town and the residential streets): drifting patches of low
+ * haze, thickest on the ground and gone by 5 m. 0 outside the dawn hours.
+ */
+float ubMist(vec2 xz, float y, float dw) {
+  if (uMist < 0.01) return 0.0;
+  vec2 q = xz * 0.03 + uTime * vec2(0.021, 0.008);
+  float n = smoothstep(0.35, 0.7, ubFbm(q));
+  return uMist * dw * (0.15 + 0.85 * n) * (1.0 - smoothstep(0.0, 5.0, y));
+}
+
+/** The mist's colour: pale, warmed by the dawn sky. */
+vec3 ubMistColour() {
+  return mix(vec3(0.6, 0.62, 0.66), uSkyTint, 0.22);
+}
+
 float ubCloudShade(vec2 xz) {
   float day = 1.0 - uNight;
   if (day < 0.02) return 1.0;

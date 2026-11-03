@@ -755,7 +755,11 @@ function buildingMaterial(): MeshLambertMaterial {
       #ifdef CURBSIDE_BREACH
       if (vBreachMask != 0u && abs(vBN.y) < 0.5) breachSurface(diffuseColor.rgb, bGlow, bNormal, vWorldB, bpx);
       #endif
-      diffuseColor.rgb *= ubCloudShade(vWorldB.xz);`,
+      diffuseColor.rgb *= ubCloudShade(vWorldB.xz);
+      float bMistW = (abs(vInfo.w - ${DISTRICTS.indexOf('oldtown')}.0) < 0.5 || abs(vInfo.w - ${DISTRICTS.indexOf('residential')}.0) < 0.5) ? 1.0 : 0.2;
+      float bMist = ubMist(vWorldB.xz, vWorldB.y, bMistW);
+      diffuseColor.rgb = mix(diffuseColor.rgb, ubMistColour(), bMist * 0.42);
+      bGlow += ubMistColour() * bMist * 0.06;`,
     );
     shader.fragmentShader = after(
       shader.fragmentShader,

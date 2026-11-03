@@ -63,7 +63,10 @@ export function createGround(city: City): Mesh {
       shader.fragmentShader,
       '#include <color_fragment>',
       `vec3 groundGlow = vec3(0.0);
-      diffuseColor.rgb = groundColour(vGroundXZ, groundGlow) * ubCloudShade(vGroundXZ);`,
+      diffuseColor.rgb = groundColour(vGroundXZ, groundGlow) * ubCloudShade(vGroundXZ);
+      float groundMist = ubMist(vGroundXZ, 0.0, gMistWeight(vGroundXZ));
+      diffuseColor.rgb = mix(diffuseColor.rgb, ubMistColour(), groundMist * 0.42);
+      groundGlow += ubMistColour() * groundMist * 0.06;`,
     );
     shader.fragmentShader = after(
       shader.fragmentShader,
@@ -485,6 +488,26 @@ vec3 shore(vec2 w, float ring, float px, inout vec3 glow) {
   water = mix(water, srgb(0.8, 0.85, 0.85), foam * 0.7);
   glow += sea * uSkyTint * (0.03 + 0.05 * waves) * (1.0 - uNight * 0.8);
   return mix(c, water, sea);
+}
+
+/**
+ * How much morning mist this part of town gets (1 in the old town and the
+ * residential streets, a fifth elsewhere), blended between the four nearest
+ * blocks' middles so it fades across district lines instead of stopping at
+ * a road's centreline.
+ */
+float gMistWeight(vec2 w) {
+  if (uMist < 0.01) return 0.0;
+  vec2 g = (w + UB_HALF) / UB_BLOCK - 0.5;
+  vec2 c0 = floor(g);
+  vec2 f = smoothstep(0.0, 1.0, g - c0);
+  float m[4];
+  for (int k = 0; k < 4; k++) {
+    vec2 c = clamp(c0 + vec2(float(k & 1), float(k >> 1)), vec2(0.0), vec2(UB_BLOCKS - 1.0));
+    float d = texelFetch(uBlocks, ivec2(c), 0).g * 255.0;
+    m[k] = (abs(d - ${DISTRICTS.indexOf('oldtown')}.0) < 0.5 || abs(d - ${DISTRICTS.indexOf('residential')}.0) < 0.5) ? 1.0 : 0.2;
+  }
+  return mix(mix(m[0], m[1], f.x), mix(m[2], m[3], f.x), f.y);
 }
 
 vec3 groundColour(vec2 w, inout vec3 glow) {
