@@ -36,6 +36,10 @@ PROP_BUDGET_OVERRIDE.update({
     "fruit_stand": 120, "bus_shelter": 150, "bike_rack": 80, "planter": 50, "parking_meter": 40,
     "recycling_bin": 40, "cafe_table": 80, "vending_machine": 40, "atm": 40, "shopping_cart": 40,
 })
+# The sticky charge (§15): held in weapons.glb, stuck on a car in props.glb (with a `*_glow` lamp face).
+PROP_BUDGET_OVERRIDE.update({"sticky_charge": 120, "charge_stuck": 80})
+NEEDS_GLOW = {"charge_stuck"}
+REQUIRED_ROOTS = {"weapons.glb": {"sticky_charge"}, "props.glb": {"charge_stuck"}}
 
 problems = []
 
@@ -141,6 +145,8 @@ def check_multi_root(path, gltf, kind, allowed_kinds=None):
         print(f"  {name:16s} {tris:5d} tris  {', '.join(sorted(mats))}{flag}")
         if tris > budget:
             problem(f"{path.name}/{name}: {tris} tris > {budget}")
+        if name in NEEDS_GLOW and not any(m.endswith("_glow") for m in mats):
+            problem(f"{path.name}/{name}: no *_glow material")
         if allowed_kinds is not None:
             other = mats - allowed_kinds
             if other:
@@ -161,6 +167,9 @@ def main():
     for path in sorted(folder.glob("*.glb")):
         gltf = read_glb(path)
         print(f"{path.name} ({path.stat().st_size // 1024} KB)")
+        roots = {gltf["nodes"][n].get("name") for n in gltf["scenes"][gltf.get("scene", 0)]["nodes"]}
+        for name in sorted(REQUIRED_ROOTS.get(path.name, set()) - roots):
+            problem(f"{path.name}: no {name} root")
         if CHARACTER_FILES.match(path.name):
             check_character(path, gltf)
         elif path.name == "vehicles.glb":

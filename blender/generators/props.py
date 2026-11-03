@@ -12,6 +12,7 @@ Materials with a meaning for the game:
   spray_sign                           Pay 'n' Spray sign and stripes
   export_sign                          export bay '$' and lintel
   frenzy                               frenzy token (glow it)
+  charge_glow                          top of the sticky charge's detonator (charge_stuck), blinks red
 Everything else is a fixed colour.
 """
 from pathlib import Path
@@ -123,6 +124,11 @@ def mats():
         "screen": material("screen", (89, 198, 255), 0.2),
         "stripe_atm": material("stripe_atm", (42, 125, 225), 0.4),
         "cart_red": material("cart_red", (200, 48, 42), 0.5),
+        # The sticky charge on a roof (§15; weapons.glb's held one uses the same colours).
+        "charge_body": material("charge_body", (64, 68, 72), 0.8),
+        "charge_tape": material("charge_tape", (220, 200, 140), 0.6),
+        "charge_box": material("charge_box", (210, 30, 30), 0.5),
+        "charge_glow": material("charge_glow", (255, 70, 50), 0.3),
     }
 
 
@@ -767,6 +773,24 @@ def atm(m):
     ]
 
 
+def charge_stuck(m):
+    # §15: the sticky charge as it sits on a car, life size (the game draws it 3x): origin at the
+    # base centre, long side across (X). The game tumbles the same mesh in flight, so the brick and
+    # its tape keep their undersides. The detonator's top is `charge_glow`, the face the game blinks
+    # a red light over. The aerial is a chunky stub (3x makes wires vanish).
+    det = open_box("charge_stuck_det", (0.05, 0.055, 0.03), (0.032, 0, 0.085), m["charge_box"])
+    det.data.materials.append(m["charge_glow"])
+    for poly in det.data.polygons:
+        if poly.normal.z > 0.9:
+            poly.material_index = 1
+    return [
+        box("charge_stuck_brick", (0.16, 0.11, 0.07), (0, 0, 0.035), m["charge_body"]),
+        box("charge_stuck_tape", (0.035, 0.116, 0.074), (-0.03, 0, 0.036), m["charge_tape"]),
+        det,
+        open_box("charge_stuck_aerial", (0.014, 0.014, 0.03), (0.049, 0.019, 0.115), m["dark"]),
+    ]
+
+
 def shopping_cart(m):
     # The handle at the back (game -Z, Blender +Y).
     return [
@@ -796,6 +820,7 @@ PROPS = {
     "fruit_stand": fruit_stand, "bus_shelter": bus_shelter, "bike_rack": bike_rack, "planter": planter,
     "parking_meter": parking_meter, "recycling_bin": recycling_bin, "cafe_table": cafe_table,
     "vending_machine": vending_machine, "atm": atm, "shopping_cart": shopping_cart,
+    "charge_stuck": charge_stuck,  # §15
 }
 
 

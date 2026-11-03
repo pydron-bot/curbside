@@ -550,9 +550,9 @@ the `_seat` empty.
     and the hands land on the bars of both bikes; I checked this in three.js
     for player, tuna, pike and cop.
   - There's no lean in the clip, only a slight shoulder sway.
-- **Known issue:** Pike's ankle-length coat is rigid on the hips, so when
-  he's seated it hangs straight down through the bike. If he needs to ride,
-  either accept it or tell me and I'll split the coat onto the leg bones.
+- ~~**Known issue:** Pike's ankle-length coat is rigid on the hips, so when
+  he's seated it hangs straight down through the bike.~~ Fixed 2026-11-03: the
+  coat's skirt is split onto the leg bones (§15 notes).
 
 ---
 
@@ -677,11 +677,12 @@ future Blender pass. The code works round each one for now:
 - **`heli` is life-size** (about 12 m). It flies under the camera, so
   perspective blows it up, and it's drawn ×0.55. That's fine as it is,
   just don't be surprised.
-- **`panel_a`–`panel_c` are `paint` only.** They tumble as flat chips of
+- ~~**`panel_a`–`panel_c` are `paint` only.**~~ Done 2026-11-03: each has a
+  `trim` lip folded up along its longest torn edge (34–38 tris). Was: They tumble as flat chips of
   colour, and at night they're black specks. A `trim` edge would give them
   some shape (the door, hood, bumper and wheel are fine).
-- **Bikes:** Pike's coat still passes through the seat when he rides, as
-  noted in §9.
+- ~~**Bikes:** Pike's coat still passes through the seat when he rides, as
+  noted in §9.~~ Done 2026-11-03: the skirt is split onto the legs (§15 notes).
 
 ### §10 notes (2026-11-02, street props round 2)
 
@@ -778,6 +779,9 @@ crate. The cloud is particles and needs no model.
 
 ## 15. The sticky charge (W3-B, requested 2026-11-02)
 
+**Done 2026-11-03** (`sticky_charge` in `blender/generators/pickups.py`, `charge_stuck` in
+`props.py`; `chargeLook.ts` still to switch over, see the §15 notes at the end). The brief, as asked:
+
 The sticky charge is in the game (README → *Driving and combat*, the
 sticky charge) with code-built stand-ins: the held brick in
 `src/render/heldWeapons.ts` (`STAND_INS`) and the charge stuck to a car or
@@ -800,3 +804,64 @@ lying on the road in `src/render/chargeLook.ts`. Both swap for models:
   shop item, never in the street, so it has no `crate_charge`
   (`PICKUP_MODELS.charge` points at `crate_grenade` only to fill the
   table).
+
+### §15 notes (2026-11-03, the sticky charge, debris panels, Pike's coat)
+
+_Branch `blender/sticky-charge` off main 0.21.1, local Blender 5.2.3. `check_assets.py`
+now also fails if `weapons.glb` has no `sticky_charge` root, `props.glb` no `charge_stuck`,
+or `charge_stuck` no `*_glow` material. Only weapons.glb, props.glb, debris.glb and pike.glb
+were rebuilt; every other root, bone, clip and empty in them is unchanged._
+
+**`weapons.glb` root `sticky_charge`** (48 tris, `muzzle` = 0):
+- Built life size and held 1.4× (`HELD_SCALE`, as the grenade is 1.7× and the smoke grenade
+  1.6×), so in the hand it's 0.224 across (X) × 0.098 high × 0.154 deep (Z).
+- Origin at the brick's centre, the middle of the fist, as `grenade` has it. The buff tape band
+  is at x −0.042, the red detonator box at x +0.045 on top (its top 0.091 above the origin), and
+  a stubby black aerial at its back corner reaching 0.15 up.
+- Materials (all fixed colour): `charge_body` (dark grey, 64/68/72), `tape`, `red`, `black`.
+- It replaces the stand-in by name with no code change: checked in game, the held batch's
+  charge slot is 144 vertices from the GLB, not the stand-in's 72. `STAND_INS.charge` in
+  `heldWeapons.ts` can go.
+
+**`props.glb` root `charge_stuck`** (44 tris), life size, for the game to draw at 3×:
+- Origin at the base centre, flat on y = 0, long side across (X), as `chargeGeometry()` was.
+  The brick is 0.16 × 0.07 × 0.11 and the tape band sits at x −0.03.
+- The red detonator box (`charge_box`) is 0.05 × 0.055, centred at **x +0.032, z 0**, from
+  y 0.07 to 0.10. Its top face is the separate material **`charge_glow`** (255/70/50).
+  At SCALE 3 that face is at (+0.096, 0.30, 0) in the charge's frame: `drawGlows` puts the
+  blinking light at x, z (the centre) and y + 0.3045, so the height is right; offset it +0.096
+  along the charge's local X (rotated by its yaw) to sit on the box.
+- A chunky `dark` aerial stub (0.014 square) reaches y 0.13 behind the box. No wires.
+- The brick and tape keep their undersides because `chargeLook` tumbles the same mesh in
+  flight. The detonator and stub have none.
+- Other materials: `charge_body`, `charge_tape` (buff), `charge_box` (red), `dark`. All are fixed
+  colour, and none of them hits a special case in `surfaceFor`.
+
+**Code side, to use it** (`src/render/chargeLook.ts`):
+- Build the `InstancedMesh` from `charge_stuck` instead of `chargeGeometry()`. Merge its
+  parts into one geometry with a vertex colour per material, as `heldWeapons` does, taken
+  about the root's own origin (roots sit side by side in props.glb). Keep one instanced mesh,
+  the stingers' material and `SCALE` 3. Fall back to `chargeGeometry()` until the GLB loads.
+- If the `charge_glow` face should be drawn lit rather than flat red, tag its vertices (as
+  `aSurf` does for props). The game's blinking glow sprite over it may be enough on its own.
+- Don't add `charge_stuck` to any `worldProps` family list: it's only drawn by `chargeLook`.
+- `BRICK` (shadow and glow sizing) still matches the model.
+
+**`debris.glb` `panel_a` / `panel_b` / `panel_c`** (34 / 38 / 34 tris, were 18–22):
+- Each keeps its torn `paint` sheet. Along the sheet's longest outline edge it now has a `trim`
+  lip, 0.1 m high, 0.025 thick and leaning out, like the flange round a wheel arch or door shut.
+- They tumble with an L-shaped profile instead of as flat chips, and the dark lip gives the
+  chip an edge at night.
+- Origins are still at the chunk centre, and the only materials are `paint` and `trim`.
+
+**`pike.glb` coat** (528 → 568 tris, still the 8 bones, no vertex weights):
+- Only the coat's top (hip_z − 0.12 to hip_z + 0.11) is still rigid on `hips`.
+- The skirt below is split down the middle into `pike_skirt.L` / `pike_skirt.R`, rigid on
+  `leg.L` / `leg.R`. Each half is an 8-sided half-frustum from 0.14 m to hip_z − 0.03, closed by
+  a flat face at x = 0. They overlap the top by 0.09 m, so no gap opens when a leg swings.
+- **Ride:** the skirt now lies forward along the thighs and no longer hangs through the bike.
+- **Idle:** the same octagonal ankle-length silhouette from above as before.
+- **Walk:** the two halves part with the legs at the contact poses, like coat-tails, which
+  makes his outline longer from above rather than less coat-like.
+- Run, Fall, Down, Arrested and Cower carry the halves with the legs too. In Arrested and
+  Cower they lie back along the ground with the legs, which reads as a coat spread behind him.

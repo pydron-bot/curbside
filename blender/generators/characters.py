@@ -182,6 +182,39 @@ def frustum(name, bottom, top, z0, z1, mat, sides=6, y_off=0.0):
     return obj
 
 
+def half_frustum(name, bottom, top, z0, z1, mat, side):
+    """One side (x * side >= 0) of an 8-sided `frustum`, closed by a flat face down the middle."""
+    import math
+
+    mesh = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    rings = []
+    for (rx, ry), z in ((bottom, z0), (top, z1)):
+        # The octagon's corners on this side, and where its front and back edges cross x = 0.
+        mid = ry * math.sin(math.radians(67.5))
+        ring = [bm.verts.new((0, -mid, z))]
+        for deg in (-67.5, -22.5, 22.5, 67.5):
+            a = math.radians(deg)
+            ring.append(bm.verts.new((side * rx * math.cos(a), ry * math.sin(a), z)))
+        ring.append(bm.verts.new((0, mid, z)))
+        rings.append(ring)
+    lo, hi = rings
+    bm.faces.new(lo)
+    bm.faces.new(hi)
+    for i in range(len(lo)):
+        j = (i + 1) % len(lo)
+        bm.faces.new((lo[i], lo[j], hi[j], hi[i]))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bm.normal_update()
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.materials.append(mat)
+    shade_flat(obj)
+    return obj
+
+
 def build_body(rig, spec, name, d):
     palette = spec["palette"]
     skin = material(f"{name}_skin", palette["skin"])
@@ -267,9 +300,21 @@ def build_body(rig, spec, name, d):
                             rotation=(0, 90, 0)), "head")
         attach(box(f"{name}_headband", (0.33, 0.05, 0.04), (0, 0, d.neck_z + 0.27), shoes), "head")
     if spec.get("long_coat"):
-        # Ankle-length coat flaring out below the hips, and a raised collar.
-        attach(frustum(f"{name}_coat", (0.32 * sw, 0.22 * dp), (0.23 * sw, 0.155 * dp),
-                       0.14, d.hip_z + 0.11, shirt, sides=8), "hips")
+        # Ankle-length coat flaring out below the hips, and a raised collar. Only the top rides the
+        # hips; the skirt is split down the middle onto the legs so it follows them (seated in Ride
+        # it lies along the thighs instead of hanging through the bike). The halves start a little
+        # inside the top so no gap opens when a leg swings.
+        bottom, top, z0, z1 = (0.32 * sw, 0.22 * dp), (0.23 * sw, 0.155 * dp), 0.14, d.hip_z + 0.11
+        split = d.hip_z - 0.12
+
+        def ring_at(z):
+            f = (z - z0) / (z1 - z0)
+            return tuple(b + (t - b) * f for b, t in zip(bottom, top))
+
+        attach(frustum(f"{name}_coat", ring_at(split), top, split, z1, shirt, sides=8), "hips")
+        for side, x in (("L", 1), ("R", -1)):
+            attach(half_frustum(f"{name}_skirt.{side}", bottom, ring_at(d.hip_z - 0.03), z0, d.hip_z - 0.03,
+                                shirt, x), f"leg.{side}")
         # The collar pale (fixed-colour badge slot): a dark coat's outline from above.
         collar = material(f"{name}_badge", (178, 180, 188), 0.6)
         attach(box(f"{name}_collar", (0.4 * sw, 0.1, 0.16), (0, 0.11 * dp, d.shoulder_z + 0.06), collar), "chest")

@@ -1,7 +1,7 @@
 """Guns and pickups: weapons.glb and pickups.glb.
 
 weapons.glb: `pistol`, `smg`, `shotgun`, `grenade`, `molotov`, `rocket_launcher`, and W3-B's `air_horn`,
-`taser`, `stinger` (the strip folded) and `smoke_grenade`, as loose models for the game to attach
+`taser`, `stinger` (the strip folded), `smoke_grenade` and `sticky_charge`, as loose models for the game to attach
 at the hand. Origin at the grip (where the fist closes), barrel toward Blender
 -Y (game +Z), up is up; `muzzle` (metres ahead of the grip, along the barrel)
 is exported as a custom property on each root for muzzle flashes (0 for thrown
@@ -53,6 +53,7 @@ def mats():
         "black": material("black", (26, 26, 30), 0.6),
         "safety_yellow": material("safety_yellow", (240, 196, 30), 0.5),
         "smoke_green": material("smoke_green", (104, 120, 96), 0.7),
+        "charge_body": material("charge_body", (64, 68, 72), 0.8),
     }
     for gun, rgb in GUN_STRIPES.items():
         m[f"stripe_{gun}"] = material(f"stripe_{gun}", rgb, 0.5)
@@ -186,11 +187,22 @@ def smoke_grenade(m, p="smoke_grenade"):
     ], 0.0
 
 
+def sticky_charge(m, p="sticky_charge"):
+    # §15: held in the fist like the grenade (origin at the brick's centre), long side across (X).
+    # A band of tape round the brick, the red detonator box on top with a stubby aerial at its back.
+    return [
+        box(f"{p}_brick", (0.16, 0.11, 0.07), (0, 0, 0), m["charge_body"]),
+        box(f"{p}_tape", (0.035, 0.116, 0.075), (-0.03, 0, 0), m["tape"]),
+        box(f"{p}_det", (0.05, 0.055, 0.03), (0.032, 0, 0.05), m["red"]),
+        box(f"{p}_aerial", (0.01, 0.01, 0.045), (0.048, 0.02, 0.085), m["black"]),
+    ], 0.0
+
+
 # Held in a hand the guns are drawn at 20-27 m: wider and taller than life (lengths kept), with
 # a stripe on top in the crate's colour; the thrown ones bigger than the fist that holds them.
 # Crates build the life-size models (their own scale table below).
 HELD_WIDEN = {"pistol": 1.45, "smg": 1.4, "shotgun": 1.35, "air_horn": 1.35, "taser": 1.45}
-HELD_SCALE = {"grenade": 1.7, "molotov": 1.25, "stinger": 1.2, "smoke_grenade": 1.6}
+HELD_SCALE = {"grenade": 1.7, "molotov": 1.25, "stinger": 1.2, "smoke_grenade": 1.6, "sticky_charge": 1.4}
 HELD_ACCENT = {  # top stripe: size, centre (before widening)
     "pistol": ((0.022, 0.15, 0.008), (0, -0.08, 0.072)),
     "smg": ((0.028, 0.2, 0.008), (0, -0.03, 0.097)),
@@ -219,7 +231,8 @@ def held(m, name):
 
 GUNS = {"pistol": pistol, "smg": smg, "shotgun": shotgun, "grenade": grenade, "molotov": molotov,
         "rocket_launcher": rocket_launcher, "rocket": rocket,
-        "air_horn": air_horn, "taser": taser, "stinger": stinger, "smoke_grenade": smoke_grenade}
+        "air_horn": air_horn, "taser": taser, "stinger": stinger, "smoke_grenade": smoke_grenade,
+        "sticky_charge": sticky_charge}  # no crate: a story reward and shop item (§15)
 # The crate roots that don't follow `crate_<gun>` (the names the game asks pickups.glb for).
 CRATE_NAMES = {"rocket_launcher": "crate_rocket", "air_horn": "crate_horn", "smoke_grenade": "crate_smoke"}
 

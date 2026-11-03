@@ -60,15 +60,49 @@ def wheel(m):
     ]
 
 
-def panel(name, seed):
+def outline(pts):
+    """Convex outline (x, y) of a point set, counter-clockwise (gift wrapping; a handful of points)."""
+    start = min(pts)
+    out, p = [], start
+    while True:
+        out.append(p)
+        q = pts[0] if pts[0] != p else pts[1]
+        for r in pts:
+            cross = (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0])
+            if cross < 0:
+                q = r
+        p = q
+        if p == start:
+            return out
+
+
+def panel(name, seed, lip=0.1, tilt=0.9):
+    """A torn sheet of body panel and, along its longest torn edge, a `trim` lip folded up:
+    the flange round a wheel arch or door shut, so it tumbles with some shape (and the dark
+    trim against the paint still reads at night)."""
     def make(m):
         rnd = random.Random(seed)
-        pts = []
+        pts, flat = [], []
         for _ in range(7):
             x, y = rnd.uniform(-0.35, 0.35), rnd.uniform(-0.3, 0.3)
             z = rnd.uniform(-0.08, 0.08)
             pts += [(x, y, z), (x, y, z + 0.03)]
-        return [hull(f"{name}_skin", pts, m["paint"])]
+            flat.append((x, y, z))
+        ring = outline([(x, y) for x, y, _ in flat])
+        z_at = {(x, y): z for x, y, z in flat}
+        edges = [(ring[i], ring[(i + 1) % len(ring)]) for i in range(len(ring))]
+        a, b = max(edges, key=lambda e: (e[1][0] - e[0][0]) ** 2 + (e[1][1] - e[0][1]) ** 2)
+        # Outward in the plane (the ring is counter-clockwise, so outward is to the right of a -> b).
+        dx, dy = b[0] - a[0], b[1] - a[1]
+        n = (dx * dx + dy * dy) ** 0.5
+        ox, oy = dy / n, -dx / n
+        flange = []
+        for (x, y) in (a, b):
+            z = z_at[(x, y)]
+            for t in (0.0, 0.025):  # the lip's thickness, inward from the edge
+                flange += [(x - ox * t, y - oy * t, z), (x - ox * t, y - oy * t, z + 0.035),
+                           (x + ox * lip * tilt - ox * t, y + oy * lip * tilt - oy * t, z + 0.035 + lip)]
+        return [hull(f"{name}_skin", pts, m["paint"]), hull(f"{name}_lip", flange, m["trim"])]
 
     return make
 
