@@ -13,6 +13,9 @@ import {
  * Shapes a glow quad can take, drawn analytically in the shader (crisp at
  * any size, no texture).
  */
+/** Where a headlight cone's two lamps sit, as a fraction of its half-width (vehicleBatch sizes the cone to put them on the model's). */
+export const BEAM_LAMP = 0.16;
+
 export const GLOW = {
   /** Soft round blob: lamp halos, light flares, siren wash. */
   disc: 0,
@@ -161,15 +164,20 @@ function material(): ShaderMaterial {
           a = max(1.0 - d, 0.0);
           a *= a;
         } else if (vShape < 1.5) {
-          // Beam: v runs 0 (lamps) .. 1 (far end); spreads and fades with distance.
+          // Beam: v runs 0 (lamps) .. 1 (far end). One cone from each lamp (at
+          // ±BEAM_LAMP of the half-width, which the caller sizes to the model),
+          // spreading and merging ahead, plus a hot spot at each lamp.
           // Clamped: interpolation lands a hair past 1 along the far edge, and
           // pow() of the negative base is NaN on real GPUs — a black line across the road.
           float v = clamp(vUv.y, 0.0, 1.0);
-          float half_ = 0.22 + 0.78 * v;
-          float x = abs(p.x) / half_;
-          float side = 1.0 - smoothstep(0.55, 1.0, x);
-          float lamps = 1.0 - smoothstep(0.0, 0.35, abs(abs(p.x) - 0.3) + v * 0.5);
-          a = side * pow(1.0 - v, 1.4) * smoothstep(0.0, 0.06, v) + lamps * 0.8 * (1.0 - v);
+          float ax = abs(p.x);
+          float cx = ${BEAM_LAMP.toFixed(3)} + 0.12 * v;
+          float w = 0.05 + 0.42 * v;
+          float beam = 1.0 - smoothstep(0.35, 1.0, abs(ax - cx) / w);
+          // The two cones overlap in the middle; don't let the overlap double up.
+          beam = max(beam, 0.8 * (1.0 - smoothstep(0.0, cx + w * 0.6, ax)) * step(0.25, v));
+          float hot = 1.0 - smoothstep(0.0, 0.1, abs(ax - ${BEAM_LAMP.toFixed(3)}) + v * 0.9);
+          a = beam * pow(1.0 - v, 1.4) * smoothstep(0.0, 0.05, v) + hot * 0.7;
         } else if (vShape < 2.5) {
           float d = length(p);
           a = 1.0 - smoothstep(0.0, 0.12, abs(d - 0.82));

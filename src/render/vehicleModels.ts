@@ -2,7 +2,7 @@ import { Box3, Matrix4, Mesh, Vector3, type BufferGeometry, type MeshStandardMat
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { VehicleArchetype } from '../entities/vehicle';
-import { partKind, tagCarGeometry } from './carMesh';
+import { PART, partKind, tagCarGeometry } from './carMesh';
 
 /** A car model's footprint, for lights and shadows. */
 export interface CarDims {
@@ -17,6 +17,8 @@ export interface CarDims {
   /** Along local +Z, where the body rises well over the hood line (the cabin); equal when nothing does. */
   cabinFrom: number;
   cabinTo: number;
+  /** How far the headlights sit from the centre line (their vertices' mean |x|), m: the beams start there. */
+  lampX: number;
 }
 
 /**
@@ -86,7 +88,20 @@ export function dimsOf(geo: BufferGeometry): CarDims {
     cabinTo = Math.max(cabinTo, pos.getZ(i));
   }
   if (cabinFrom > cabinTo) cabinFrom = cabinTo = 0;
-  return { halfWidth: Math.max(-b.min.x, b.max.x), front: b.max.z, rear: -b.min.z, height: b.max.y, hood, cabinFrom, cabinTo };
+  const halfWidth = Math.max(-b.min.x, b.max.x);
+  // Headlight vertices (part kind, carMesh.ts), when the geometry is tagged.
+  const kind = geo.getAttribute('aKind');
+  let lampSum = 0;
+  let lamps = 0;
+  if (kind) {
+    for (let i = 0; i < pos.count; i++) {
+      if (kind.getX(i) !== PART.headlight) continue;
+      lampSum += Math.abs(pos.getX(i));
+      lamps++;
+    }
+  }
+  const lampX = lamps ? lampSum / lamps : halfWidth * 0.62;
+  return { halfWidth, front: b.max.z, rear: -b.min.z, height: b.max.y, hood, cabinFrom, cabinTo, lampX };
 }
 
 function mergeCar(root: Object3D): BufferGeometry | null {

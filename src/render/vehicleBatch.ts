@@ -24,7 +24,7 @@ import { VEHICLE_SPECS, type VehicleArchetype } from '../entities/vehicle';
 import type { Rect } from '../world/city';
 import { createCarMesh, placeholderCarGeometry, type CarMesh } from './carMesh';
 import type { ContactShadows } from './contactShadows';
-import { GLOW, uploadRange, type GlowSprites } from './glowSprites';
+import { BEAM_LAMP, GLOW, uploadRange, type GlowSprites } from './glowSprites';
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from './shaderLib';
 import { dimsOf, type CarDims, type VehicleModels } from './vehicleModels';
 
@@ -280,12 +280,14 @@ export class CarBatch {
     time: number,
   ): void {
     if (beams > 0.01) {
-      // Beam on the road ahead, and flares at the lamps themselves.
+      // Beam on the road ahead, and flares at the lamps themselves. The cone's
+      // lamps sit at ±BEAM_LAMP of its half-width, so its width puts them on this model's.
       const reach = 13;
-      glows.addFlat(x + sin * (d.front + reach / 2 - 0.3), 0.07, z + cos * (d.front + reach / 2 - 0.3), heading, 7.5, reach, 0.34 * beams, 0.29 * beams, 0.2 * beams, GLOW.cone);
+      const width = Math.min(10, Math.max(4.5, (2 * d.lampX) / BEAM_LAMP));
+      glows.addFlat(x + sin * (d.front + reach / 2 - 0.3), 0.07, z + cos * (d.front + reach / 2 - 0.3), heading, width, reach, 0.34 * beams, 0.29 * beams, 0.2 * beams, GLOW.cone);
       for (let side = -1; side <= 1; side += 2) {
-        const lx = x + sin * (d.front - 0.1) + cos * side * d.halfWidth * 0.62;
-        const lz = z + cos * (d.front - 0.1) - sin * side * d.halfWidth * 0.62;
+        const lx = x + sin * (d.front - 0.1) + cos * side * d.lampX;
+        const lz = z + cos * (d.front - 0.1) - sin * side * d.lampX;
         glows.addFlat(lx, 0.8, lz, heading, 1.1, 1.1, 0.9 * beams, 0.8 * beams, 0.6 * beams, GLOW.disc);
       }
     }
