@@ -31,41 +31,53 @@ import { BENCH_LINE, KERB_LINE, blockSide, type Placer } from './kerbs';
 import { generateStreetLamps } from './streetLamps';
 import { placeBusStops, placeVendors, type BusStop, type VendorSpot } from './streetStops';
 import { len2 } from '../core/len';
+import { PROP_MATCH, type PropEdit, type RoadEdit } from './mapEdits';
 
-export type StreetPropKind =
-  | 'streetlamp'
-  | 'traffic_light'
-  | 'hydrant'
-  | 'bench'
-  | 'trash_bin'
-  | 'bollard'
-  | 'newspaper_box'
-  | 'mailbox'
-  | 'dumpster'
-  | 'tree_round'
-  | 'tree_tall'
-  | 'palm'
-  | 'parking_meter'
-  | 'planter'
-  | 'bike_rack'
-  | 'recycling_bin'
-  | 'shopping_cart'
-  | 'cafe_table'
-  | 'vending_machine'
-  | 'atm'
-  | 'bus_shelter'
-  | 'food_cart_hotdog'
-  | 'food_cart_coffee'
-  | 'fruit_stand'
-  | 'traffic_cone'
-  | 'traffic_barrel'
-  | 'work_barrier'
-  | 'roadwork_sign'
-  | 'steel_plate'
-  | 'work_trench'
-  | 'skip'
-  | 'mini_digger'
-  | 'portable_toilet';
+export const STREET_PROP_KINDS = [
+  'streetlamp',
+  'traffic_light',
+  'hydrant',
+  'bench',
+  'trash_bin',
+  'bollard',
+  'newspaper_box',
+  'mailbox',
+  'dumpster',
+  'tree_round',
+  'tree_tall',
+  'palm',
+  'parking_meter',
+  'planter',
+  'bike_rack',
+  'recycling_bin',
+  'shopping_cart',
+  'cafe_table',
+  'vending_machine',
+  'atm',
+  'bus_shelter',
+  'food_cart_hotdog',
+  'food_cart_coffee',
+  'fruit_stand',
+  'traffic_cone',
+  'traffic_barrel',
+  'work_barrier',
+  'roadwork_sign',
+  'steel_plate',
+  'work_trench',
+  'skip',
+  'mini_digger',
+  'portable_toilet',
+] as const;
+export type StreetPropKind = (typeof STREET_PROP_KINDS)[number];
+
+/**
+ * Can the map edits (W3-D) add or remove this kind? Not lamps or traffic
+ * lights: the lamps' light and the signals come from the city's own plans
+ * (streetLamps.ts, signals.ts), so a post can't move without them.
+ */
+export function propEditable(kind: string): kind is StreetPropKind {
+  return (STREET_PROP_KINDS as readonly string[]).includes(kind) && kind !== 'streetlamp' && kind !== 'traffic_light';
+}
 
 export interface StreetProp {
   kind: StreetPropKind;
@@ -104,6 +116,13 @@ export interface StreetProps {
   vendors: VendorSpot[];
   /** Bus shelters, with where people wait and where a bus pulls in (streetStops.ts). */
   busStops: BusStop[];
+  /** Prop edits that couldn't be applied: a removal that matched nothing, a kind that can't be edited (the map checks show them). */
+  propEditProblems: PropEditProblem[];
+}
+
+export interface PropEditProblem {
+  edit: PropEdit;
+  problem: string;
 }
 
 export interface StreetPropOptions {
@@ -117,6 +136,10 @@ export interface StreetPropOptions {
   quietRoads?: ReadonlySet<number>;
   /** The building plans (for the shopfronts), if already made. */
   plans?: readonly BuildingPlan[];
+  /** Map edits (W3-D): roads closed to traffic (barriers across both ends). */
+  closedRoads?: readonly RoadEdit[];
+  /** Map edits: props added, and generated ones removed (by kind, within PROP_MATCH). */
+  propEdits?: readonly PropEdit[];
 }
 
 /** Furniture slots along a block side (m from the block's corner), 3 m apart and clear of the lamps at 16, 32, 48. */
@@ -299,7 +322,21 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
     if (!list) taken.set(key, (list = []));
     list.push(x, z, r);
   };
+  // Removals (map edits) waiting for the generated prop they name; added props come last.
+  const removals = (opts.propEdits ?? []).filter((e) => e.removed && propEditable(e.kind)).map((edit) => ({ edit, used: false }));
+  const removed = (kind: StreetPropKind, x: number, z: number) => {
+    for (const r of removals) {
+      if (r.used || r.edit.kind !== kind || len2(r.edit.x - x, r.edit.z - z) > PROP_MATCH) continue;
+      return (r.used = true);
+    }
+    return false;
+  };
   const put = (kind: StreetPropKind, x: number, z: number, heading: number, scale = 1, phase = 0, eastWest = false, tint?: string) => {
+    // A removed prop still takes its room, so nothing else moves in (the edit stays local).
+    if (removals.length > 0 && removed(kind, x, z)) {
+      if (!NO_ROOM.has(kind)) claim(x, z, (ROOM[kind] ?? 0.4) * scale);
+      return -1;
+    }
     const i = props.push(tint ? { kind, x, z, heading, scale, phase, eastWest, tint } : { kind, x, z, heading, scale, phase, eastWest }) - 1;
     // Turned a quarter, a footprint swaps.
     const turned = Math.abs(Math.sin(heading)) > 0.5;
@@ -342,7 +379,39 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
     dressBlocks(city, blocks, clear, put);
     placeDumpsters(city, city.buildings.filter((b) => inCoreBlock(...blockOf(b)) !== ring), clear, put);
   }
-  return { props, solids, knockables, roadworks, vendors, busStops };
+
+  // Map edits (W3-D), after everything generated: barriers across closed roads, then added props.
+  const propEditProblems: PropEditProblem[] = removals.filter((r) => !r.used).map((r) => ({ edit: r.edit, problem: `no ${r.edit.kind} within ${PROP_MATCH} m to remove` }));
+  removals.length = 0;
+  for (const r of opts.closedRoads ?? []) {
+    closeRoadEnd(r.a[0], r.a[1], r.b[0], r.b[1], put);
+    closeRoadEnd(r.b[0], r.b[1], r.a[0], r.a[1], put);
+  }
+  for (const e of opts.propEdits ?? []) {
+    if (!propEditable(e.kind)) {
+      const known = (STREET_PROP_KINDS as readonly string[]).includes(e.kind);
+      propEditProblems.push({ edit: e, problem: known ? `a ${e.kind} can't be ${e.removed ? 'removed' : 'added'} (the city's lighting and signals plan them)` : `unknown prop kind "${e.kind}"` });
+    } else if (!e.removed) put(e.kind, e.x, e.z, e.heading ?? 0);
+  }
+  return { props, solids, knockables, roadworks, vendors, busStops, propEditProblems };
+}
+
+/** Closed-road barriers stand this far into the road from its crossing's centre: past the stop line and the people's crossing, m. */
+const CLOSURE_ALONG = 12;
+/** Barriers across the carriageway (offsets from the centreline, m), and a blinking barrel at each kerb. */
+const CLOSURE_BARRIERS = [-5.5, -3.3, -1.1, 1.1, 3.3, 5.5];
+const CLOSURE_BARRELS = [-7.2, 7.2];
+
+/** A line of road-works barriers across the road from crossing (ix, iz) toward its neighbour (tx, tz), knockable like a site's. */
+function closeRoadEnd(ix: number, iz: number, tx: number, tz: number, put: (kind: StreetPropKind, x: number, z: number, heading: number, scale?: number, phase?: number) => number): void {
+  const vx = Math.sign(tx - ix);
+  const vz = Math.sign(tz - iz);
+  const cx = ix * BLOCK_SIZE + vx * CLOSURE_ALONG;
+  const cz = iz * BLOCK_SIZE + vz * CLOSURE_ALONG;
+  // Across the road is (-vz, vx); a barrier's long side is across its heading.
+  const heading = Math.atan2(vx, vz);
+  CLOSURE_BARRIERS.forEach((o, k) => put('work_barrier', cx - vz * o, cz + vx * o, heading, 1, k * 0.17));
+  for (const o of CLOSURE_BARRELS) put('traffic_barrel', cx - vz * o, cz + vx * o, heading, 1, 0.5);
 }
 
 /** Block (bx, bz) a building stands in. */
