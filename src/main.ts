@@ -72,7 +72,7 @@ import {
   stepDamage,
 } from './systems/damage';
 import { StuntTracker } from './systems/stunts';
-import { enteringRamp, placeKickers, placeRamps, rampSolids, rideRamps } from './world/ramps';
+import { enteringRamp, placeCityRamps, rampSolids, rideRamps } from './world/ramps';
 import { RampMesh } from './render/rampMesh';
 import {
   bodiesMayTouch,
@@ -200,8 +200,7 @@ const scene = new Scene();
 const city = generateCity(1337, ACTIVE_MAP);
 const pickups = generatePickups(1337);
 /** Stunt ramps and kickers: their sides and backs are solid. */
-const bigRamps = placeRamps(1337);
-const ramps = [...bigRamps, ...placeKickers(1337, bigRamps)];
+const ramps = placeCityRamps(1337, ACTIVE_MAP);
 /** Street furniture and landmark models: lamp posts, signal poles, bollards, booth walls... collide. */
 const dressing = dressCity(city, pickups, ramps);
 const collision = new StaticGrid([...city.obstacles, ...dressing.solids]);

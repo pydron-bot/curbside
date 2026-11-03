@@ -5,9 +5,12 @@
  * frenzy tokens, races, ramps, pickups), so furniture keeps clear of every
  * marker and bay mouth. main.ts adds `solids` to the collision grid and
  * hands the rest to the renderer (render/worldProps.ts) and the knockables
- * to systems/knockables.ts. Pure data.
+ * to systems/knockables.ts. The city's map edits (W3-D, `city.edits`) move
+ * the spots, close roads (barriers across both ends) and add or remove
+ * props. Pure data.
  */
-import { SAFEHOUSE, placeDocks, placeFrenzyTokens, placePayphones } from '../game/modes/places';
+import { placeDocks, placeFrenzyTokens, placePayphones, placeSafehouse } from '../game/modes/places';
+import { NO_EDITS } from './mapEdits';
 import { RACES, legDir, nodeX, nodeZ } from '../game/modes/races';
 import type { City, Rect } from './city';
 import { placeSprayShops, placeStation, shopRect } from './landmarks';
@@ -34,15 +37,17 @@ export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: num
   const shops = placeSprayShops(city);
   const docks = placeDocks(city);
   const station = placeStation(city);
-  const payphones = placePayphones();
+  const edits = city.edits ?? NO_EDITS;
+  const safehouse = placeSafehouse(edits);
+  const payphones = placePayphones(edits);
   const raceStarts = RACES.map((r) => ({ x: nodeX(r.nodes[0]), z: nodeZ(r.nodes[0]), heading: dirHeading(legDir(r.nodes[0], r.nodes[1])) }));
-  const landmarks = placeLandmarkProps({ city, shops, docks, station, safehouse: SAFEHOUSE, payphones, raceStarts, ramps });
+  const landmarks = placeLandmarkProps({ city, shops, docks, station, safehouse, payphones, raceStarts, ramps });
   const avoid = [
     ...landmarks.avoid,
     ...pickups.map((p) => ({ x: p.x, z: p.z, r: 1.6 })),
-    ...placeFrenzyTokens().map((t) => ({ x: t.x, z: t.z, r: 2.5 })),
+    ...placeFrenzyTokens(edits).map((t) => ({ x: t.x, z: t.z, r: 2.5 })),
     ...payphones.map((p) => ({ x: p.x, z: p.z, r: 2 })),
-    { x: SAFEHOUSE.x, z: SAFEHOUSE.z, r: 3.5 },
+    { x: safehouse.x, z: safehouse.z, r: 3.5 },
     { x: station.x, z: station.z, r: 4 },
     ...raceStarts.map((r) => ({ x: r.x, z: r.z, r: 10 })),
   ];
@@ -61,7 +66,7 @@ export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: num
   });
   // Things in the road keep off the spawn corner (its parked cars), the ramps' run-ups and every car a mission parks.
   const reserve = [{ x: 0, z: 0, r: 70 }, ...ramps.map((r) => ({ x: r.x, z: r.z, r: 30 }))];
-  for (const m of buildMissions(docks, SAFEHOUSE)) {
+  for (const m of buildMissions(docks, safehouse)) {
     for (const step of m.steps) {
       for (const a of [...(step.start ?? []), ...(step.done ?? [])]) if (a.do === 'spawnCar') reserve.push({ x: a.x, z: a.z, r: 6 });
     }
@@ -81,7 +86,7 @@ export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: num
       }
     }
   }
-  const street = placeStreetProps(city, { avoid, keepOut, reserve, quietRoads });
+  const street = placeStreetProps(city, { avoid, keepOut, reserve, quietRoads, closedRoads: edits.roads.filter((r) => r.closed), propEdits: edits.props });
   const knockables: KnockableItem[] = [
     ...street.knockables.map((k) => ({ id: k.prop, kind: street.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius, hx: k.hx, hz: k.hz })),
     ...landmarks.knockables.map((k) => ({ id: LANDMARK_KNOCK_ID + k.prop, kind: landmarks.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius })),

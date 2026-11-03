@@ -27,6 +27,7 @@ import {
   exitPoint,
   lanePoint,
   nodeValid,
+  roadExists,
   reverse,
   turnLeft,
   turnRight,
@@ -595,7 +596,10 @@ export function rerouteAi(ai: AiDriver, car: VehicleState, rand: () => number): 
   const offX = Math.abs(car.x - Math.round(car.x / BLOCK_SIZE) * BLOCK_SIZE);
   const offZ = Math.abs(car.z - Math.round(car.z / BLOCK_SIZE) * BLOCK_SIZE);
   let dir: Dir = offX < offZ ? (fz < 0 ? 0 : 2) : fx > 0 ? 1 : 3;
-  for (let attempt = 0; attempt < 2; attempt++) {
+  // Either way along the road the rules allow; on a closed road (knocked
+  // through the barriers), whichever way gets off it.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const leave = attempt < 2 ? canLeave : roadExists;
     const v = DIR_VEC[dir];
     // The road line we'll drive along...
     const ix0 = v.x === 0 ? clampNode(Math.round(car.x / BLOCK_SIZE)) : 0;
@@ -612,7 +616,7 @@ export function rerouteAi(ai: AiDriver, car: VehicleState, rand: () => number): 
     if (!ahead(n)) n += sign;
     const ix = v.x !== 0 ? n : ix0;
     const iz = v.z !== 0 ? n : iz0;
-    if (Math.abs(ix) <= MAX_NODE && Math.abs(iz) <= MAX_NODE && canLeave(ix - v.x, iz - v.z, dir)) {
+    if (Math.abs(ix) <= MAX_NODE && Math.abs(iz) <= MAX_NODE && leave(ix - v.x, iz - v.z, dir)) {
       ai.ix = ix;
       ai.iz = iz;
       ai.dir = dir;

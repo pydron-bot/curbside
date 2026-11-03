@@ -1,11 +1,13 @@
 /**
  * The whole city drawn once into an offscreen canvas for the radar: asphalt,
  * sidewalks, building footprints tinted by district, parks with trees,
- * plazas, and the boundary wall. The radar then just copies the part around
+ * plazas, the boundary wall, and the map edits' road rules (W3-D: a closed
+ * road dimmed and hatched, a one-way with arrows). The radar then just copies the part around
  * the player each redraw, so the city costs nothing per frame.
  */
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, SIDEWALK, WORLD_LIMIT, type City } from '../world/city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, WORLD_LIMIT, type City } from '../world/city';
 import type { District } from '../world/districts';
+import type { RoadEdit } from '../world/mapEdits';
 
 /** Dark ground drawn beyond the walls, m. */
 export const MAP_MARGIN = 30;
@@ -90,8 +92,58 @@ export function renderCityMap(city: City, pxPerM = MAP_PX_PER_M): HTMLCanvasElem
     ctx.fill();
   }
 
+  for (const r of city.edits?.roads ?? []) drawRoadRule(ctx, r);
+
   ctx.strokeStyle = WALL;
   ctx.lineWidth = 3;
   ctx.strokeRect(-L - 1.5, -L - 1.5, 2 * L + 3, 2 * L + 3);
   return canvas;
+}
+
+const CLOSED = 'rgba(9, 11, 16, 0.6)';
+const CLOSED_HATCH = 'rgba(232, 92, 72, 0.75)';
+const ONE_WAY = 'rgba(240, 240, 240, 0.7)';
+/** One-way arrows this far apart along the road, m. */
+const ARROW_EVERY = 16;
+
+/** A closed road (dimmed, hatched across) or a one-way (arrows a → b), between the junction boxes. */
+function drawRoadRule(ctx: CanvasRenderingContext2D, r: RoadEdit): void {
+  const ax = r.a[0] * BLOCK_SIZE;
+  const az = r.a[1] * BLOCK_SIZE;
+  const vx = Math.sign(r.b[0] - r.a[0]);
+  const vz = Math.sign(r.b[1] - r.a[1]);
+  const half = ROAD_WIDTH / 2;
+  const len = BLOCK_SIZE - ROAD_WIDTH;
+  // Along the road from the end of a's junction box; across it, -half..half.
+  const at = (along: number, across: number): [number, number] => [ax + vx * (half + along) - vz * across, az + vz * (half + along) + vx * across];
+  if (r.closed) {
+    const [x0, z0] = at(0, -half);
+    const [x1, z1] = at(len, half);
+    const box: [number, number, number, number] = [Math.min(x0, x1), Math.min(z0, z1), Math.abs(x1 - x0), Math.abs(z1 - z0)];
+    ctx.fillStyle = CLOSED;
+    ctx.fillRect(...box);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(...box);
+    ctx.clip();
+    ctx.strokeStyle = CLOSED_HATCH;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (let t = -ROAD_WIDTH; t < len; t += 6) {
+      ctx.moveTo(...at(t, -half));
+      ctx.lineTo(...at(t + ROAD_WIDTH, half));
+    }
+    ctx.stroke();
+    ctx.restore();
+    return;
+  }
+  ctx.fillStyle = ONE_WAY;
+  for (let t = ARROW_EVERY / 2; t < len; t += ARROW_EVERY) {
+    ctx.beginPath();
+    ctx.moveTo(...at(t + 3, 0));
+    ctx.lineTo(...at(t - 2, -2.6));
+    ctx.lineTo(...at(t - 2, 2.6));
+    ctx.closePath();
+    ctx.fill();
+  }
 }

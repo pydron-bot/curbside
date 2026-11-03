@@ -16,6 +16,7 @@
 import { MAX_HEIGHT, buildingHeight, districtOf, paintDistricts, type District } from './districts';
 import { NO_EDITS, blockEditKey, blockSeed, type BlockEdit, type MapEdits } from './mapEdits';
 import { mulberry32 } from './random';
+import { setRoadRules } from './roadRules';
 import { len2 } from '../core/len';
 
 export const BLOCK_SIZE = 64;
@@ -94,6 +95,8 @@ export interface City {
   trees: Tree[];
   /** Static obstacles for collision: buildings, tree trunks, boundary walls. */
   obstacles: Rect[];
+  /** The map edits it was built with (W3-D): the dressing, the radar and the checks read their roads, spots and props. */
+  edits?: MapEdits;
 }
 
 /**
@@ -127,11 +130,13 @@ export function blockInterior(bx: number, bz: number): Rect {
  * on top. An edited block is rebuilt from a stream of its own, after its
  * generated content has been drawn and thrown away, so every other block
  * comes out exactly as it would unedited. District repaints are installed
- * for districtOf (and so districtAt everywhere) as a side effect: the last
- * city generated is the one the game plays.
+ * for districtOf (and so districtAt everywhere), and closed and one-way
+ * roads for canLeave (world/roadRules.ts), as a side effect: the last city
+ * generated is the one the game plays.
  */
 export function generateCity(seed = 1337, edits: MapEdits = NO_EDITS): City {
   paintDistricts(edits.blocks);
+  setRoadRules(edits.roads);
   const byBlock = new Map<number, BlockEdit>();
   for (const e of edits.blocks) byBlock.set(blockEditKey(e.at[0], e.at[1]), e);
   const blocks: Block[] = [];
@@ -179,7 +184,7 @@ export function generateCity(seed = 1337, edits: MapEdits = NO_EDITS): City {
     ...trees.map((t) => ({ minX: t.x - 0.4, minZ: t.z - 0.4, maxX: t.x + 0.4, maxZ: t.z + 0.4 })),
     ...boundaryWalls(),
   ];
-  return { seed, blocks, buildings, trees, obstacles };
+  return { seed, blocks, buildings, trees, obstacles, edits };
 }
 
 /** A block's buildings or trees (a plaza has neither). */

@@ -4,12 +4,18 @@
  * missions and the frenzy tokens. Fixed points derived from the city layout
  * (pure and deterministic, like world/landmarks.ts), so the markers, the
  * radar and the rules agree. Everything stands on a pavement path or an
- * open lot, away from the spray bays and the police station.
+ * open lot, away from the spray bays and the police station. The map
+ * edits (W3-D) can move the safehouse, payphones and frenzy tokens (not
+ * remove them: jobs ring the phones, the shop is the safehouse, and the
+ * frenzies count toward 100%); `edits` defaults to the map this page plays.
  */
 import { cornerPoint } from '../../systems/crowd';
 import { core, type City } from '../../world/city';
 import { bayFor, placeSprayShops, type SprayShop } from '../../world/landmarks';
 import { len2 } from '../../core/len';
+import type { MapEdits } from '../../world/mapEdits';
+import { ACTIVE_MAP } from '../../world/shippedMap';
+import { editSpot } from '../../world/spotEdits';
 
 export interface Spot {
   id: string;
@@ -33,8 +39,13 @@ export function corePavement(bx: number, bz: number, edge: number, t: number): {
   return pavement(core(bx), core(bz), edge, t);
 }
 
-/** The safehouse door: on the pavement 16 m east of the spawn corner, in view as you start. */
-export const SAFEHOUSE: Spot = { id: 'safehouse', ...corePavement(8, 8, 0, 16.5 / 45) };
+/** The safehouse door: on the pavement 16 m east of the spawn corner, in view as you start (or where the map edits moved it). */
+export function placeSafehouse(edits: MapEdits = ACTIVE_MAP): Spot {
+  return editSpot({ id: 'safehouse', ...corePavement(8, 8, 0, 16.5 / 45) }, edits, false)!;
+}
+
+/** The safehouse door in the map this page plays. */
+export const SAFEHOUSE: Spot = placeSafehouse();
 
 /** Payphones (one per quarter of the city), as [core block x, core block z, edge, t]. */
 const PHONE_SPOTS: ReadonlyArray<readonly [string, number, number, number, number]> = [
@@ -44,8 +55,8 @@ const PHONE_SPOTS: ReadonlyArray<readonly [string, number, number, number, numbe
   ['phone-docks', 10, 12, 2, 0.5],
 ];
 
-export function placePayphones(): Spot[] {
-  return PHONE_SPOTS.map(([id, bx, bz, edge, t]) => ({ id, ...corePavement(bx, bz, edge, t) }));
+export function placePayphones(edits: MapEdits = ACTIVE_MAP): Spot[] {
+  return PHONE_SPOTS.map(([id, bx, bz, edge, t]) => editSpot({ id, ...corePavement(bx, bz, edge, t) }, edits, false)!);
 }
 
 /** Frenzy tokens, spread round the city (ids match FRENZIES). */
@@ -60,8 +71,8 @@ const FRENZY_SPOTS: ReadonlyArray<readonly [string, number, number, number, numb
   ['fz-combo', 10, 8, 0, 0.5],
 ];
 
-export function placeFrenzyTokens(): Spot[] {
-  return FRENZY_SPOTS.map(([id, bx, bz, edge, t]) => ({ id, ...corePavement(bx, bz, edge, t) }));
+export function placeFrenzyTokens(edits: MapEdits = ACTIVE_MAP): Spot[] {
+  return FRENZY_SPOTS.map(([id, bx, bz, edge, t]) => editSpot({ id, ...corePavement(bx, bz, edge, t) }, edits, false)!);
 }
 
 /** The docks: an open lot in the industrial quarter (south-east), not a spray bay's (core blocks). */

@@ -15,7 +15,7 @@
  * (mission cars at the kerb, ramps) or on the outer ring road.
  */
 import { BLOCKS_PER_SIDE, CORE_BLOCKS, CORE_OFFSET, inCoreBlock, type City, type Rect } from './city';
-import { dirHeading, segmentKey, type Dir } from './roads';
+import { canLeave, dirHeading, segmentKey, type Dir } from './roads';
 import { blockSide, onRing, type BlockSide, type Placer } from './kerbs';
 import type { StreetPropKind } from './streetProps';
 import { len2 } from '../core/len';
@@ -105,6 +105,8 @@ function placeSites(sides: readonly BlockSide[], upTo: number, rand: () => numbe
     const layout = LAYOUTS[Math.floor(rand() * LAYOUTS.length)];
     const flip = rand() < 0.5 ? Math.PI : 0;
     if (quiet.has(segmentKey(s.fromX, s.fromZ, s.ix, s.iz))) continue;
+    // None on a closed road, or in the empty lane of a one-way (map edits).
+    if (!canLeave(s.fromX, s.fromZ, s.dir)) continue;
     const mid = s.at(s.tFor(from + 5 + length / 2), 7);
     if (out.some((w) => len2((w.area.minX + w.area.maxX) / 2 - mid.x, (w.area.minZ + w.area.maxZ) / 2 - mid.z) < SPACING)) continue;
 

@@ -17,7 +17,7 @@
 import { CORE_OFFSET, core, isCarPark, lotBytes, type Block, type City } from './city';
 import { keyedStream } from './random';
 import { KERB_LINE, WALK_LINE, blockSide, type BlockSide, type Placer } from './kerbs';
-import { dirHeading, laneKey, type Dir } from './roads';
+import { canLeave, dirHeading, laneKey, type Dir } from './roads';
 import type { Roadworks } from './roadworks';
 import { len2 } from '../core/len';
 import type { District } from './districts';
@@ -100,11 +100,25 @@ const LOT_LINE = 12.4;
 /** A block's own stream (by core block, so the core's stay put at any size): what one block draws can't move another's stops or carts. */
 const blockStream = (city: City, b: Block, salt: number) => keyedStream(city.seed, salt, b.bx - CORE_OFFSET, b.bz - CORE_OFFSET);
 
+/** The hand-placed stops' lanes (Pike's): a map edit that closes one, or turns it against a one-way, takes the stop away. */
+export function fixedStopLanes(city: City): Array<{ x: number; z: number; dir: Dir; fromX: number; fromZ: number; ix: number; iz: number }> {
+  const out: Array<{ x: number; z: number; dir: Dir; fromX: number; fromZ: number; ix: number; iz: number }> = [];
+  for (const [bx, bz, side, t] of FIXED_STOPS) {
+    const b = city.blocks.find((k) => k.bx === core(bx) && k.bz === core(bz));
+    if (!b) continue;
+    const s = blockSide(b, side);
+    out.push({ ...s.at(t, SHELTER_LINE), dir: s.dir, fromX: s.fromX, fromZ: s.fromZ, ix: s.ix, iz: s.iz });
+  }
+  return out;
+}
+
 export function placeBusStops(city: City, placer: Placer, works: readonly Roadworks[]): BusStop[] {
   const closed = new Set(works.map((w) => laneKey(w.ix, w.iz, w.dir)));
   const stops: BusStop[] = [];
   const tryStop = (s: BlockSide, t: number): boolean => {
     if (closed.has(laneKey(s.ix, s.iz, s.dir))) return false;
+    // No stop on a closed road or in a one-way's empty lane: no bus comes (map edits).
+    if (!canLeave(s.fromX, s.fromZ, s.dir)) return false;
     const along = (d: number) => s.at(t + d, SHELTER_LINE);
     const ends = [along(-1.3), along(0), along(1.3)];
     if (!ends.every((p) => placer.clear(p.x, p.z, 0.7))) return false;
