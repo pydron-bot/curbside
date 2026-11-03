@@ -15,6 +15,20 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.26.0',
+    date: '2026-11-03',
+    title: 'Day out',
+    notes: [
+      'Trees sway in the wind, harder when it rains, with sunlight dappling through their leaves onto the grass.',
+      'Plaza fountains spray, lit cyan at night, with a faint rainbow in the spray on sunny days.',
+      'Sprinklers sweep the lawns of the parks, most in the suburbs and the old town.',
+      'Morning mist drifts through the old town and the suburbs at dawn and burns off as the sun climbs.',
+      'Billboards: most of downtown\'s roof signs show painted adverts by day and switch to neon at night.',
+      'Seagulls wheel over the docks\' shore, their shadows sweeping the quay.',
+      'The street art is toned down: fewer, more faded painted crossings, roof murals, logos and bay numbers, and fewer basketball courts.',
+    ],
+  },
+  {
     version: '0.25.0',
     date: '2026-11-03',
     title: 'Sunny side',

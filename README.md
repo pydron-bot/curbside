@@ -2787,9 +2787,44 @@ the first time it comes into view.
       can't send a high sun up to a camera above).
     - *Street art by district*: crossings (`ground.ts` `gDistrict` from the
       block texture), roof murals (arts), logos (downtown), seven-segment bay
-      numbers (docks), basketball courts in half the parks.
+      numbers (docks), basketball courts. Toned down in 0.26.0: about one
+      crossing in four (hashed per crossing), weathered toward white; murals
+      on one flat arts roof in nine, faded; fewer, fainter logos and bay
+      numbers; courts in about a fifth of parks, in muted colours.
     - *Flyovers* (`render/flyovers.ts`, path tested): a plane or blimp every
       70-140 s by day, drawn as a shadow in `ubCloudShade` from `uFlyer`.
+  - *Day out (0.26.0)*:
+    - *Swaying trees* (`propBatch.ts` `SWAY`): the `trees` family (made
+      with `sway`, a per-family uniform, so still one program) bends
+      downwind in gusts rolling across the city, quadratic in height,
+      stronger in rain; green (leaf) vertices flutter. *Dappled light*: the
+      family's depth pass discards a noise on the ground followed up the
+      light's ray (`DAPPLE`), so sun comes through the canopy shadows.
+    - *Park water* (`world/parkWater.ts`, tested; `render/waterLook.ts`):
+      every open plaza's fountain throws a plume and eight rim arcs (soft
+      particles, the hose's stretched drops, started along their flight;
+      lit cyan at night), and a faint rainbow on the side away from the sun
+      in the ground shader. Oscillating sprinklers on park grass (most in
+      residential and old town parks), clear of trees and landmark solids,
+      by day while dry, 45 s on in every 75.
+    - *Morning mist* (`timeOfDay.morningMist`, tested; `shaderLib`
+      `uMist`/`ubMist`): 05:00-08:15, drifting low haze on the ground
+      (`ground.ts` `gMistWeight` blends the four nearest blocks' districts)
+      and the bottom 5 m of walls; full in the old town and residential
+      streets, a fifth elsewhere. The 06:24 fog key is hazier.
+    - *Painted billboards* (`BuildingPlan.roofNeon.sign.painted`, drawn last
+      on the neon stream; tested): most downtown signs. `aGlow` + 1000
+      flags them; `propMaterial` paints one of four adverts by day
+      (`BILLBOARD_GLSL`: stripes and roundel, a face, a logo, a sunset,
+      with frame and copy) and fades to the neon at dusk. They stand 2.4 m
+      (`BILLBOARD_HEIGHT`) so they read from above.
+    - *Seagulls* (`systems/gulls.ts`, tested; `render/gullMesh.ts`): small
+      flocks circling the water's edge on the industrial quarter's south
+      and east coasts, by day; a low-poly gull built in code (white, black
+      wing tips, yellow beak) whose wings bend at shoulder and wrist in the
+      vertex shader (`aWing`: gliding M, beating in bouts); one draw call
+      while any is in view; shadows cast down the sun's ray as contact
+      shadows.
   - *HUD*: a pink-cyan-violet radar rim, violet-navy map streets, a hot
     pink health bar, a cyan healthy-car ring. *Settings → Extras → Neon
     filter* (`screenFilter`, off by default): the title's edge light and

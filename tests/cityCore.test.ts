@@ -82,6 +82,8 @@ describe('the core city (today’s 16 × 16) at any size', () => {
     const plans = planBuildings(city).filter((_p, i) => centre(city.buildings[i]));
     expect.soft(hash(plans.map(({ roofNeon: _n, roofPool: _p, ...rest }) => rest))).toBe('be684bc5');
     expect.soft(hash(plans.map((p) => p.roofPool))).toBe('bf2f98e2');
-    expect.soft(hash(plans.map((p) => p.roofNeon))).toBe('fede67f1');
+    // Painted signs (0.26.0) were drawn last on the neon's stream: without them, the neon is as it was.
+    expect.soft(hash(plans.map((p) => p.roofNeon && { ...p.roofNeon, sign: p.roofNeon.sign && (({ painted: _x, ...r }) => r)(p.roofNeon.sign) }))).toBe('fede67f1');
+    expect.soft(hash(plans.map((p) => p.roofNeon))).toBe('0d380eb6');
   });
 });
