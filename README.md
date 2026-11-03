@@ -2829,6 +2829,27 @@ and every new program is compiled behind the current frame.
   shopfront furniture by where each building stands (`buildingStream`), so
   an edit moves nothing outside its own block (`tests/mapLocality.test.ts`)
   and the core's furniture is the same at any city size.
+  The rest of version 2 is live too. **Roads**: `generateCity` installs
+  the closures and one-ways (`world/roadRules.ts`, like `paintDistricts`)
+  and `roads.ts` `canLeave` reads them, so every router keeps them
+  (traffic's turns and spawns, `turnToward`/`routeToward` for pursuits,
+  jobs and buses, street races, kerb and scene spots; a car knocked onto a
+  closed road drives off it); no road works, bus stops or roadblocks on a
+  closed road or a one-way's empty lane; road-works barriers and barrels
+  across both ends of a closed road (knockable: the player isn't bound);
+  the radar hatches closed roads and arrows one-ways. **Spots**:
+  `placeSafehouse`, `placePayphones`, `placeFrenzyTokens`, `placeHangouts`
+  and `placeCityRamps` (ids `ramp-<n>`) apply moves, turns and removals
+  (`world/spotEdits.ts`), defaulting to `ACTIVE_MAP`; the dressing reads
+  `city.edits`. `spotRules(id)` says what may move or go. **Props**:
+  `placeStreetProps` removes a generated prop of the edit's kind within
+  `PROP_MATCH` (its room stays claimed) and adds props last
+  (`propEditable`: not lamps or traffic lights). **Checks**:
+  `checkMapEdits(city, edits, anchors, { street })` adds to `checkAnchors`
+  courses over closed roads or against one-ways, drive routes that can't
+  get round, bus stops cut off, crossings traffic can't reach or leave,
+  bad spot and prop edits, each naming the edit at fault; `editsOn` lists
+  the edits on a pick (`tests/mapEditsApply.test.ts`).
 - **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new

@@ -168,3 +168,95 @@ W3-A needs).
    lot, then props, ramps, payphones and spawn points (by anchor id), then
    roads (closures and one-way streets) last, as the plan says.
 5. **The rest of the inventory** (scene spots, test spots, packages).
+
+## Roads, spots and props in the game (2026-11-03, branch `claude/w3d-engine`)
+
+Every version 2 section now changes the game, not just the file. With the
+committed (empty) map the city is byte-identical: the `cityCore`
+fingerprints are untouched.
+
+**Roads.** `generateCity` installs the edits' closures and one-ways
+(`world/roadRules.ts`, module state like `paintDistricts`), and
+`roads.ts` `canLeave` reads them: the road graph is the one choke point.
+Audited every router: traffic's turns (`chooseTurn`), spawns (`spawnAi`,
+population, police, route-ahead), `rerouteAi` (on a closed road it drives
+off whichever way it can), pursuit and job routes and buses (`routeToward`
+→ `roads.ts turnToward`), street races (`raceRoute`), the lost police
+car's wrong turns (`smoke.ts`), kerb and scene spots (`segmentValid`:
+parking, ice cream, cash run, film shoot, funeral), road works and bus
+stops (none on a closed road or a one-way's empty lane), police roadblocks
+(none on a closed road) and the chaos run's start. A dead end turns
+traffic back (`chooseTurn`'s U-turn). The player isn't bound: a closed
+road gets six road-works barriers and two blinking barrels across each end
+(12 m from the crossing, past the stop line and the people's crossing),
+street props with solids and knockables like a works site's, so no new
+models or batches. The radar (`ui/cityMap.ts`) dims and hatches a closed
+road and draws arrows down a one-way.
+
+**Spots.** `world/spotEdits.ts` applies a spot edit; the placement
+functions take `edits` (default `ACTIVE_MAP`, so modes, markers and the
+radar agree with no wiring): `placeSafehouse` (`SAFEHOUSE` is the active
+map's), `placePayphones`, `placeFrenzyTokens`, `placeHangouts(gangs,
+edits)` (the crew moves with its hangout), `placeCityRamps(seed, edits)`
+(ramps then kickers, ids `ramp-<n>` by that order; a heading turns a ramp
+to the nearest quarter, ramps being axis-aligned). The dressing reads
+`city.edits` (`City` now carries the edits it was built with). The
+safehouse door faces whichever road its pavement runs along.
+
+| Spot | Move | Turn | Remove | Why not |
+|---|---|---|---|---|
+| `safehouse` | yes | no | no | the shop; jobs drop off at it |
+| `phone-*` | yes | no | no | story jobs ring them |
+| `fz-*` | yes | no | no | each frenzy counts toward 100% |
+| `vipers-<n>` (hangouts) | yes | no | yes | (a gang with none left is a check problem) |
+| `ramp-<n>` | yes | quarter turns | yes | |
+
+That's `spotRules(id)` in `game/mapAnchors.ts`; anything else (docks,
+spray bays, story spots) is null: not in the file's reach.
+
+**Props.** `placeStreetProps` takes the edits' props and closed roads. A
+removal takes out the first generated prop of its kind within
+`PROP_MATCH` and keeps its room claimed, so nothing else moves in; added
+props and the closure barriers come after everything generated.
+`STREET_PROP_KINDS` and `propEditable(kind)` are the palette (no lamps or
+traffic lights: the night lighting and the signals are planned from them).
+What couldn't be applied is in `street.propEditProblems`.
+
+**Checks.** `checkMapEdits(city, edits, anchors, { street })` returns
+`MapProblem { id, label, problem, edit?: { section, key }, at? }`
+(`checkAnchors`' findings included, so it's the one list to show):
+
+- a race course (or a job's race step) down a closed road or the wrong
+  way down a one-way;
+- a job's drive route (`via`) its car can't drive: a leg cut off, or the
+  game's own turn-by-turn steering circling a closure it can't see round
+  (simulated with `turnToward`);
+- a bus stop on a closed lane or a crossing cut off, and Pike's fixed stop
+  closed;
+- crossings traffic can't get to, or can get to but not leave (a one-way
+  trap), against the biggest strongly connected part of the network;
+- a spot edit naming no spot, or one the file can't edit; removing a spot
+  the game needs; a heading for a spot with no facing; a pavement spot
+  moved into the road or a ramp moved off it; a gang with every hangout
+  removed (a moved spot inside a building or off the map comes from
+  `checkAnchors`, blamed on the spot edit);
+- a prop removal that matched nothing, or a kind that can't be edited.
+
+`anchors` must come from `collectAnchors(city, { ramps, busStops, edits })`
+for the same edits. `editsOn(edits, pick)` lists the edits on a block,
+road or junction for the overlay's panel.
+
+**Inventory.** `collectAnchors` also takes vendor carts
+(`street.vendors`) and hydrants (any can burst), carries bus stops' lanes
+and ramps' ids, flags moved spots, and lists the TEST menu's Neon Mile
+teleport (the arts blocks' middle, snapped to the pavement). Not added:
+kebab, film-shoot and hydrant-scene spots are picked near the player at
+run time, not fixed; hidden packages stay out (owner's call).
+
+**Checked in the game:** a headless run on `vite preview` with `?map=local`
+closing (0, −1)–(0, 0) and (−1, 0)–(0, 0) by the spawn corner and making
+(0, 0)→(0, 1) one-way: 60 one-second samples, 1,556 AI car-samples
+around the player, none on either closed road (the barriers stood, 16
+props); on the one-way, 5 with the flow and 3 samples of one tow truck
+turning round to head south mid-block (its route was legal). Cars parked
+by the spawn corner's own placement stay where they're put.
