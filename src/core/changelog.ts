@@ -15,6 +15,16 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.20.0',
+    date: '2026-11-02',
+    title: 'Sticky charge',
+    notes: [
+      'New weapon, the STICKY CHARGE: throw it and it sticks to the first car it hits, then rides along wherever that car goes. Set it off when you choose with BOOM (on touch; the button shows while a charge is out), G on the keyboard or D-pad down on a controller, on foot or from your own car. Every charge you have out goes at once; three at most. A throw that misses lies on the road and still goes off.',
+      'Lionel hands you two in RIBBON CUTTING. Pass that job and STICKY CHARGES are on the safehouse shelf: two for $700.',
+      'New stamp, PARTING GIFT: set off a charge on a car someone else is driving while you are 30 m away or more, or on the cash van or the Mayor\'s limo from anywhere.',
+    ],
+  },
+  {
     version: '0.19.1',
     date: '2026-11-02',
     title: 'New weapon models',
