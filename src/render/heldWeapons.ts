@@ -1,5 +1,4 @@
 import {
-  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   Color,
@@ -44,27 +43,6 @@ const MUZZLE_HEIGHT_GUESS: Record<WeaponKind, number> = { pistol: 0.05, smg: 0.0
 /** Shots start this far ahead of the shooter (combat.ts), m: how a shot is matched to who fired it. */
 const SHOT_LEAD = 0.6;
 
-/**
- * Built here until weapons.glb has the root (BLENDER_TODO §15): the sticky
- * charge, a dark brick with a red detonator box on top, about life size.
- */
-const STAND_INS: Partial<Record<WeaponKind, () => BufferGeometry[]>> = {
-  charge: () => [
-    tint(new BoxGeometry(0.16, 0.07, 0.11).translate(0, 0.035, 0.02), 0.09, 0.1, 0.1),
-    tint(new BoxGeometry(0.06, 0.035, 0.05).translate(0.03, 0.085, 0.02), 0.85, 0.08, 0.05),
-  ],
-};
-
-/** One colour on every vertex, the attributes a weapons.glb part has (position, normal, colour). */
-function tint(geo: BufferGeometry, r: number, g: number, b: number): BufferGeometry {
-  const flat = geo.index ? geo.toNonIndexed() : geo;
-  flat.deleteAttribute('uv');
-  const n = flat.getAttribute('position').count;
-  const rgb = new Float32Array(n * 3);
-  for (let i = 0; i < n; i++) rgb.set([r, g, b], i * 3);
-  flat.setAttribute('color', new BufferAttribute(rgb, 3));
-  return flat;
-}
 const SHOOTER_MATCH = 0.9;
 
 const hand = new Matrix4();
@@ -203,13 +181,7 @@ export class HeldWeapons {
     const colour = new Color();
     for (const kind of HELD) {
       const root = scene.getObjectByName(ROOT[kind]);
-      if (!root) {
-        for (const geo of STAND_INS[kind]?.() ?? []) {
-          geo.setAttribute('aWeapon', new BufferAttribute(new Float32Array(geo.getAttribute('position').count).fill(HELD.indexOf(kind)), 1));
-          parts.push(geo);
-        }
-        continue;
-      }
+      if (!root) continue;
       const m = root.userData?.muzzle;
       if (typeof m === 'number') this.muzzle[kind] = m;
       // The extra is only the distance; the barrel sits above the grip.

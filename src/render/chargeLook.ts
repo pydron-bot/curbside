@@ -1,7 +1,7 @@
 /**
  * What the sticky charge (W3-B, systems/charges.ts) looks like out of the
- * hand: a dark brick with a red detonator box, built here until Blender's
- * `charge_stuck` arrives (BLENDER_TODO §15), drawn well above life size (a
+ * hand: a dark brick with a red detonator box, props.glb's `charge_stuck`
+ * (BLENDER_TODO §15; built here until it loads), drawn well above life size (a
  * real one is 16 cm: nothing at 30 m up) so it reads on a roof at 852×340.
  * A stuck one sits on its car as drawn this frame (the interpolated pose,
  * so it doesn't shiver on a fast car): on the roof over the cabin, else on
@@ -26,6 +26,8 @@ const CAPACITY = MAX_CHARGES + 2;
 const SCALE = 3;
 /** The brick, m (life size): across, high, along. */
 const BRICK = [0.16, 0.07, 0.11] as const;
+/** The detonator box's centre along the brick (local X), m (life size): the light sits over it. */
+const BOX_X = 0.032;
 /** The light blinks this often, Hz. */
 const BLINK = 1.6;
 
@@ -43,7 +45,7 @@ function paint(geo: BufferGeometry, rgb: readonly [number, number, number]): Buf
   return flat;
 }
 
-/** The charge at life size, sitting on y = 0, long side across (local X). */
+/** The charge at life size, sitting on y = 0, long side across (local X): the stand-in. */
 function chargeGeometry(): BufferGeometry {
   const [w, h, l] = BRICK;
   const parts = [
@@ -64,8 +66,8 @@ export class ChargeLook {
   private readonly e = new Euler(0, 0, 0, 'YXZ');
   private readonly pos = new Vector3();
   private readonly scale = new Vector3(SCALE, SCALE, SCALE);
-  /** Where each live charge was drawn this frame (x, y, z, yaw), for the glows. */
-  private readonly drawn = new Float32Array(CAPACITY * 4);
+  /** Where each live charge was drawn this frame (x, y, z, on a car, yaw), for the glows. */
+  private readonly drawn = new Float32Array(CAPACITY * 5);
   private drawnCount = 0;
 
   constructor(
@@ -80,6 +82,20 @@ export class ChargeLook {
     this.mesh.name = 'charges';
     scene.add(this.mesh);
     look.addGlowSource((glows, view) => this.drawGlows(glows, view));
+    look.props.onLoaded(() => this.useModel());
+  }
+
+  /** props.glb is in: draw `charge_stuck` (same attributes as the stand-in, so the same program). */
+  private useModel(): void {
+    const model = this.look.props.models?.geometry('charge_stuck');
+    if (!model) return;
+    const geo = new BufferGeometry();
+    geo.setAttribute('position', model.getAttribute('position'));
+    geo.setAttribute('normal', model.getAttribute('normal'));
+    geo.setAttribute('color', model.getAttribute('aColor'));
+    const old = this.mesh.geometry;
+    this.mesh.geometry = geo;
+    old.dispose();
   }
 
   /** Per frame, after the cars' render poses are set: charges on cars, on the road, in flight. */
@@ -114,11 +130,12 @@ export class ChargeLook {
       }
       this.e.set(0, yaw, 0);
       this.put(n++, x, y, z);
-      const k = lit++ * 4;
+      const k = lit++ * 5;
       this.drawn[k] = x;
       this.drawn[k + 1] = y;
       this.drawn[k + 2] = z;
       this.drawn[k + 3] = v ? 1 : 0;
+      this.drawn[k + 4] = yaw;
     }
     this.drawnCount = lit;
     for (const p of this.combat.projectiles.list) {
@@ -145,14 +162,19 @@ export class ChargeLook {
     const on = (t * BLINK) % 1 < 0.45;
     const shadows = this.look.contactShadows;
     for (let i = 0; i < n; i++) {
-      const k = i * 4;
+      const k = i * 5;
       const x = this.drawn[k];
       const y = this.drawn[k + 1];
       const z = this.drawn[k + 2];
       if (x < view.minX - 3 || x > view.maxX + 3 || z < view.minZ - 3 || z > view.maxZ + 3) continue;
       const onCar = this.drawn[k + 3] > 0;
       const top = y + BRICK[1] * SCALE * 1.45;
-      if (on) glows.addFlat(x, top, z, 0, 0.9, 0.9, 2.2, 0.25, 0.15, GLOW.disc);
+      if (on) {
+        // Over the detonator box, which sits off the brick's centre along its local X.
+        const yaw = this.drawn[k + 4];
+        const off = BOX_X * SCALE;
+        glows.addFlat(x + off * Math.cos(yaw), top, z - off * Math.sin(yaw), 0, 0.9, 0.9, 2.2, 0.25, 0.15, GLOW.disc);
+      }
       // A faint red ring on the road round the car (or the charge) so it's found at a glance.
       const pulse = 0.35 + 0.25 * Math.sin(t * BLINK * Math.PI * 2);
       glows.addFlat(x, 0.06, z, 0, onCar ? 4.2 : 1.8, onCar ? 4.2 : 1.8, 0.9 * pulse, 0.12 * pulse, 0.08 * pulse, GLOW.ring);

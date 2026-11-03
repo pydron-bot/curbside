@@ -142,8 +142,8 @@ to stick it on, the blast is the explosion crime (and copCarWrecked)
 through ignite → wreck → `vehicleExploded`; PARTING GIFT (weight 7) on a
 car someone else drives with you 30 m off, or the cash van or the Mayor's
 limo from anywhere. Pure logic in `systems/charges.ts`
-(`tests/charges.test.ts`); stand-in models built in code until BLENDER_TODO
-§15; the smoke test checks BOOM on the phones (in view, clear of the other
+(`tests/charges.test.ts`); models from Blender since 0.21.2 (BLENDER_TODO
+§15: `sticky_charge` in the hand, `charge_stuck` on cars and in flight); the smoke test checks BOOM on the phones (in view, clear of the other
 buttons on foot and in a car, a tap sets it off). `tests/cityCore.test.ts`
 re-pinned the mission data (s5's give and Lionel's line; the spots are
 the same). Merge note: `src/main.ts`, `core/input.ts`, `ui/frontDoor.ts`

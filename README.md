@@ -587,9 +587,10 @@ it. The cash van (`CASH_PAINT`) and the Mayor's pearl limo
 someone else was driving it and you were 30 m off or more
 (`partingGift`). It's a story reward: RIBBON CUTTING (`s5-ribbon`) hands
 you two, in hand, and passing it puts STICKY CHARGES in the shop; never
-in a crate. The look (`render/chargeLook.ts`) is built in code until
-Blender's `charge_stuck` arrives (BLENDER_TODO §15): a dark brick taped
-round the middle with a red detonator box, 3× life size, seated on the
+in a crate. The look (`render/chargeLook.ts`) is props.glb's
+`charge_stuck` (BLENDER_TODO §15; a code-built brick until props.glb
+loads): a dark brick taped round the middle with a red detonator box
+whose top face (`charge_glow`) the blinking light sits over, 3× life size, seated on the
 car as drawn this frame (on the roof over the cabin, else at the hood
 line, from `look.cars.dims`) so it doesn't shiver on a fast car; a
 blinking red light and a red ring on the road round its car (the shared
@@ -598,7 +599,7 @@ program) that draws only while one is out or flying. The sound is a wet
 thud and two arming beeps (`sfx.chargeStick`; a dud click when refused)
 and the plunger's clack and rising beep (`sfx.detonator`); the bangs are
 the car's or the grenade's own. In the hand, `weapons.glb`'s
-`sticky_charge` (a stand-in brick built in `heldWeapons.ts` until then).
+`sticky_charge`, held 1.4× life size like the other thrown weapons.
 
 **Stunts** (`world/ramps.ts`, `systems/stunts.ts`). Ten stunt ramps
 (6 × 3.2 m, 1.6 m lip, matching the `ramp` model in props.glb) on road

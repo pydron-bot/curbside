@@ -865,3 +865,11 @@ were rebuilt; every other root, bone, clip and empty in them is unchanged._
   makes his outline longer from above rather than less coat-like.
 - Run, Fall, Down, Arrested and Cower carry the halves with the legs too. In Arrested and
   Cower they lie back along the ground with the legs, which reads as a coat spread behind him.
+
+### Code side integrated: §15 (0.21.2, 2026-11-03)
+
+`chargeLook.ts` draws `charge_stuck` once props.glb is in (the code brick until then), one
+instanced mesh as before, with the blinking light moved 0.096 m along the charge's local X
+onto the detonator box (checked in game at headings 0°, 90° and 180°). `charge_glow` is drawn
+flat; the blinking sprite over it is the light. `STAND_INS.charge` is gone from
+`heldWeapons.ts`. The debris panels and Pike's coat needed no code change.

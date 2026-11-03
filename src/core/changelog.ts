@@ -15,6 +15,16 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.21.2',
+    date: '2026-11-03',
+    title: 'Sticky charge models',
+    notes: [
+      'The sticky charge has a proper model, in your hand and stuck to a car: a taped brick with a red detonator box and a stubby aerial. The blinking light now sits on the detonator.',
+      'Car panels thrown out of explosions have a folded edge, so they read as bits of car rather than flat chips (and show up better at night).',
+      'Deacon Pike\'s long coat now moves with his legs, so it no longer hangs through the seat when he rides a bike.',
+    ],
+  },
+  {
     version: '0.21.1',
     date: '2026-11-03',
     title: 'Fixes',
