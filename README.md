@@ -2850,6 +2850,20 @@ and every new program is compiled behind the current frame.
   get round, bus stops cut off, crossings traffic can't reach or leave,
   bad spot and prop edits, each naming the edit at fault; `editsOn` lists
   the edits on a pick (`tests/mapEditsApply.test.ts`).
+- **Map editor** (`ui/mapEditor.ts`, logic in `game/mapEditorState.ts`;
+  TEST → MAP → MAP EDITOR, desktop only): the city top-down on a canvas
+  (drag or arrows to pan, wheel to zoom), every anchor as a labelled icon
+  and, zoomed in, the street props. Click a block (kind, district, REROLL,
+  height), a road (open, closed, one-way, FLIP), a crossing, a spot (drag
+  to move, Del removes where `spotRule` allows, ramps turn) or a prop
+  (remove, put back; PLACE adds one). The selection's dependents
+  (`dependentsOf`) are drawn (courses and job routes as lines) and listed;
+  `problemsFor` runs every check after each edit and turns breakages red.
+  Ctrl+Z / Ctrl+Shift+Z, edits saved locally (`curbside.map.local`), CHANGES
+  against the shipped file with REVERT and RESET ALL, EXPORT (downloads and
+  copies `city.json` to commit as `src/world/maps/city.json`), VIEW IN 3D
+  (reloads on `?map=local&look=x,z`, observe mode over the selection). The
+  preview puts the game's district repaints back after every build.
 - **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new

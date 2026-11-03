@@ -116,7 +116,7 @@ import { enterGameMode } from './ui/titleScreen';
 import { WantedHud } from './ui/wantedHud';
 import { ScreenAwake } from './ui/wakeLock';
 import { generateCity, type Rect } from './world/city';
-import { ACTIVE_MAP } from './world/shippedMap';
+import { ACTIVE_MAP, SHIPPED_MAP } from './world/shippedMap';
 import { StaticGrid } from './world/collision';
 import { mulberry32 } from './world/random';
 import { Knockables, type KnockableItem } from './systems/knockables';
@@ -153,6 +153,10 @@ import { snapshotView } from './render/snapshot';
 import { worldUniforms } from './render/shaderLib';
 import { addBugReportButton, BugReportSheet } from './ui/bugReport';
 import { ObserveMode } from './ui/observeMode';
+import { MapEditor } from './ui/mapEditor';
+import { editorLookAt } from './game/mapEditorState';
+import { districtOf } from './world/districts';
+import { parseMapEdits } from './world/mapEdits';
 
 const app = document.getElementById('app')!;
 
@@ -1750,11 +1754,29 @@ const titleCam = new TitleCamera({
   vehicles,
   moved: () => maintainPopulation(true, false),
 });
+// MAP EDITOR (TEST → MAP, desktop): the city top-down, the map edits and what relies on what (ui/mapEditor.ts).
+const mapEditor = new MapEditor(document.body, {
+  audio,
+  shipped: SHIPPED_MAP,
+  gameMap: ACTIVE_MAP,
+  inputs: { pickups, ramps },
+  navigate: (url) => {
+    progress.progress.flush();
+    location.href = url;
+  },
+});
+function openMapEditor() {
+  if (mapEditor.isOpen) return;
+  if (!paused) setPaused(true);
+  frontDoor.openPanel(mapEditor);
+  mapEditor.open(() => frontDoor.closePanel(mapEditor));
+}
 mountTestMenu(testTools, frontDoor, audio, city, {
   resume: () => setPaused(false),
   showFocus: () => input.lastDevice !== 'touch',
   at: () => player.position,
   notice: (text) => hud.score.notice(text, 'progress'),
+  openEditor: openMapEditor,
 });
 // OBSERVE (title and pause menu): a free camera over the live city, no player, no HUD; incidents on demand.
 observe = new ObserveMode({
@@ -1789,6 +1811,20 @@ observe = new ObserveMode({
   moved: () => maintainPopulation(true, false),
   offered: () => progress.offer.observe,
 });
+// The map editor's VIEW IN 3D reloads on ?map=local&look=x,z: observe mode over that spot once the title is up.
+const editorLook = editorLookAt(location.search);
+if (editorLook) {
+  let tries = 0;
+  const land = () => {
+    if (!frontDoor.inTitle || !observe) {
+      if (++tries < 240) window.setTimeout(land, 250);
+      return;
+    }
+    rig.snapTo(editorLook.x, editorLook.z);
+    observe.enterFromTitle();
+  };
+  land();
+}
 // REPORT BUG (pause card corner and the Diagnostics sheet, with test tools or the perf overlay on).
 const bugReport = new BugReportSheet(document.body, {
   snapshot: (maxWidth) => snapshotView(look, rig.camera, renderer.domElement, renderer.getContext(), maxWidth),
@@ -1925,6 +1961,16 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
   /** Observe mode: enterFromTitle(), enterFromRun(), exit(), cam (height, yaw…), next(), spawn(id), held(v). */
   get observe() {
     return observe;
+  },
+  /**
+   * The map editor (TEST → MAP): open() pauses and opens it; editor.edits, changes, problems, undo(), back();
+   * districts() (what districtOf says now, block by block: the editor must leave it as it was); parse(text) reads a map file.
+   */
+  mapEditor: {
+    editor: mapEditor,
+    open: openMapEditor,
+    districts: () => city.blocks.map((b) => districtOf(b.bx, b.bz)).join(),
+    parse: (text: string) => parseMapEdits(JSON.parse(text)),
   },
   /** The PLAY button: closes the title and starts a fresh run. */
   startGame: () => frontDoor.play(),
