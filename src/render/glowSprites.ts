@@ -29,6 +29,8 @@ export const GLOW = {
   bar: 4,
   /** Vertical light shaft: bright at the bottom (v = 0), fading up. */
   beam: 5,
+  /** One soft cone from a point at v = 0 widening to the far end: a searchlight's beam. */
+  search: 6,
 } as const;
 export type GlowShape = (typeof GLOW)[keyof typeof GLOW];
 
@@ -194,8 +196,13 @@ function material(): ShaderMaterial {
           float d = length(max(q, 0.0));
           a = max(1.0 - d / 0.45, 0.0);
           a *= a;
-        } else {
+        } else if (vShape < 5.5) {
           a = (1.0 - vUv.y) * (1.0 - vUv.y) * (1.0 - smoothstep(0.2, 1.0, abs(p.x)));
+        } else {
+          // Searchlight: a cone from the lamp, soft-edged, fading with distance.
+          float v = clamp(vUv.y, 0.0, 1.0);
+          float x = abs(p.x) / (0.06 + 0.94 * v);
+          a = (1.0 - smoothstep(0.3, 1.0, x)) * pow(1.0 - v, 1.2) * smoothstep(0.0, 0.03, v);
         }
         gl_FragColor = vec4(vColor * a, 1.0);
       }`,

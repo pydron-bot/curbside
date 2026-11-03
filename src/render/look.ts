@@ -10,6 +10,10 @@ import { CharacterBodies } from './characterBodies';
 import { ContactShadows } from './contactShadows';
 import { GLOW, GlowSprites } from './glowSprites';
 import { SOURCE_STRIDE, glintOf, inView, neonSources, onRoad, type Glint } from './neonReflect';
+import { planSearchlights, searchlightHeading } from '../world/searchlights';
+
+/** A searchlight's beam reaches this far, m. */
+const SEARCH_REACH = 60;
 
 /** Adds faked lights for one frame (muzzle flashes, beacons, ...); `view` is the visible ground. */
 export type GlowSource = (glows: GlowSprites, view: Rect) => void;
@@ -115,6 +119,19 @@ export class Look {
       this.warmedUp = false;
     });
     this.addGlowSource((g, view) => this.props.drawGlows(g, view));
+    // Searchlights sweeping from downtown's tallest roofs at night (world/searchlights.ts).
+    const lights = planSearchlights(city.buildings, this.plans);
+    this.addGlowSource((g) => {
+      const night = worldUniforms.uNight.value;
+      if (night < 0.05) return;
+      const t = worldUniforms.uTime.value;
+      for (const s of lights) {
+        const h = searchlightHeading(s, t);
+        const k = 0.3 * night;
+        g.addFlat(s.x + Math.sin(h) * SEARCH_REACH * 0.5, s.y + 2, s.z + Math.cos(h) * SEARCH_REACH * 0.5, h, 16, SEARCH_REACH, 0.55 * k, 0.62 * k, 0.75 * k, GLOW.search);
+        g.addFlat(s.x, s.y + 0.6, s.z, 0, 2.4, 2.4, 1.2 * night, 1.25 * night, 1.35 * night, GLOW.disc);
+      }
+    });
     // Neon in the wet road at night (render/neonReflect.ts).
     const neon = neonSources(city.buildings, this.plans);
     const glint: Glint = { x: 0, z: 0, heading: 0, length: 0 };

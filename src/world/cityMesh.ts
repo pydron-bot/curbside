@@ -24,6 +24,7 @@ import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, type City, type Rect } from '
 import { AWNING_DEPTH, AWNING_HEIGHT, planBuildings, NEON_ANIM, type BuildingPlan, type NeonAnim, type RoofNeon, type RoofProp, type Side } from './buildingPlans';
 import { DISTRICTS, DISTRICT_STYLES, ROOF_TYPES, type District, type RoofType } from './districts';
 import { LAMP_ARM, LAMP_HEIGHT, generateStreetLamps } from './streetLamps';
+import { planSearchlights } from './searchlights';
 import { STRING_PALETTES, planStringLights, spanHeight, type StringSpan } from './stringLights';
 
 /** Blocks per render chunk along each axis (4 → 256 m chunks, 16 chunks). */
@@ -144,6 +145,12 @@ export function createCityMesh(city: City, plans: readonly BuildingPlan[] = plan
 
   for (const lamp of generateStreetLamps()) addLamp(chunkFor(lamp.x, lamp.z), lamp, m);
   for (const s of planStringLights(city.seed)) addStringLights(chunkFor((s.x0 + s.x1) / 2, (s.z0 + s.z1) / 2), s, m);
+  // Searchlight housings on downtown's tallest roofs (the beams are glows, render/look.ts).
+  for (const s of planSearchlights(city.buildings, plans)) {
+    const c = chunkFor(s.x, s.z);
+    c.add('boxes', m.makeScale(1.1, 0.6, 1.1).setPosition(s.x, s.y - 1.2, s.z), color.set('#2a2c33'), [0]);
+    c.add('boxes', m.makeScale(0.8, 0.8, 0.8).setPosition(s.x, s.y - 0.6, s.z), color.set('#dfe8ff'), [1.6]);
+  }
 
   for (const t of city.trees) {
     const c = chunkFor(t.x, t.z);
