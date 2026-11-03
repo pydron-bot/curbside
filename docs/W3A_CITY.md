@@ -157,6 +157,8 @@ over the whole city.
   checks every cart). At 32 it happens once in the ring, so that test fails
   at 32. Claiming the spots changes the core's furniture, so fix it when the
   ring's content is placed and the fingerprints are re-pinned on purpose.
+  (Since W3-D's per-block streams, 2026-11-03, the draws at 32 happen to
+  miss it and the test passes; the gap is still there.)
 - **On the iPhone:** open the dev server with `?city=24` (and 32). Check the
   Diagnostics report's boot line, memory, and draw calls in the ring and in
   observe at the widest zoom.

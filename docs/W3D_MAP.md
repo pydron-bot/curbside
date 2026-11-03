@@ -108,30 +108,60 @@ works, pickups and hidden packages. Packages are shuffled over every
 block, so any block edit moves them (and saves record them by index, the
 same problem W3-A has).
 
-## Found: furniture doesn't stay local
+## Furniture stays local (fixed 2026-11-03)
 
-The blocks stay local, but the dressing (`dressCity`: kerb furniture, bus
-stops, vendors, road works) draws from streams shared across the whole
-city. Measured on the shipped city: one block made a park moves about 750
-street props more than a block away; made buildings, about 640; made a car
-park, about 2,600 and adds 11 bus stops. So an edit today changes the
-whole city's furniture, not just its own block.
+**Found:** the blocks stayed local, but the dressing drew from streams
+shared across the whole city. One block made a park moved about 750 street
+props more than a block away; made buildings, about 640; made a car park,
+about 2,600, and it added 11 bus stops. The building plans (roof kit,
+shopfronts, awnings, neon) were seeded by each building's index in the
+city, so a block that gained or lost a building re-rolled every later
+building's look too.
 
-That has to change before the editor's "rebuild the touched 256 m chunk":
-give the dressing per-block (or per-block-side) streams. It changes every
-prop's position in the shipped city, so it's its own commit with the
-`cityCore` fingerprints re-pinned on purpose and a look on the iPhone.
+**Fixed:** everything placed per block now draws from a stream of its own
+(`keyedStream(seed, salt, bx, bz)` in `world/random.ts`, keyed by core
+block): kerb furniture, dumpsters, bus stops and food carts. Café tables,
+vending machines, ATMs and the building plans are keyed by where each
+building stands (`buildingStream`), not its index. Road works were already
+independent of block kinds (they pick from every kerb, whatever the block)
+and are unchanged. Keying by core block also keeps W3-A's guarantee for
+free: the core's furniture is the same at any city size.
+
+`tests/mapLocality.test.ts` pins it: six edits (buildings to park, to car
+park, park to buildings, a car park opened up, a reroll, a repaint), and
+every prop, bus stop, cart, road works site and building plan outside the
+edited block's cell is exactly as before. (An edit that changes which open
+lot is nearest a Pay 'n' Spray target or the docks moves that landmark and
+its keep-out zone, on purpose; the test picks blocks that don't.)
+
+**The one-time reshuffle:** every street prop, bus stop, cart, café table
+and rooftop in the shipped city is re-rolled once (same rules and
+densities, different draws): 93 bus stops instead of 86. The blocks,
+buildings, trees, hand-placed spots, ramps, pickups, landmark props and
+road works are unchanged. The `cityCore` fingerprints for props and stops
+are re-pinned, and new ones pin the carts and building plans.
+
+**The cold open moved:** it plays at the shelter nearest the safehouse
+that suits it, which is now at (74.5, −36.5), 66 m from the safehouse,
+instead of (117.5, −29.8), 100 m. It meets every rule the tests check
+(not a south-side shelter, room for the crash ahead, player, crash and
+getaway placed clear), but it's a different street: it needs a look on the
+iPhone (STEAL THIS CAR over the bus, the bus nose against the crash).
+
+Still not local: hidden packages are shuffled over every block, so any
+block edit moves them (and saves record them by index; the same decision
+W3-A needs).
 
 ## Next
 
-1. **Per-block dressing streams** (above), so an edit touches only its own
-   block's furniture; re-pin the fingerprints.
+1. ~~Per-block dressing streams~~ (done, above). Check the cold open's new
+   street on the iPhone.
 2. **The editor shell** (desktop, an EDIT entry with Test tools on, on
    observe mode's free camera): pick a block, set its kind, district and
    variant from a side panel; undo/redo over `withBlockEdit`; local edits in
    `localStorage`; EXPORT writes the canonical file; the diff list with
    revert. Rebuilding: the whole city at first (43 ms to generate at 16),
-   then only the touched chunk.
+   then only the touched block's chunk, now that edits are local.
 3. **The overlay**: draw `dependentsOf` for the pick and list it in the
    panel; run `checkAnchors` on every edit and turn breakages red.
 4. **More in the file** (version 2+): building height and style, an empty

@@ -2817,7 +2817,11 @@ and every new program is compiled behind the current frame.
   jobs' spawns and routes, races, hangouts, ramps, bus stops);
   `dependentsOf` says what relies on a block, road segment or junction and
   `checkAnchors` what an edit breaks. `tests/mapAnchors.test.ts` runs the
-  checks on the committed map.
+  checks on the committed map. The dressing is placed block by block from
+  streams keyed by core block (`keyedStream`), and the building plans and
+  shopfront furniture by where each building stands (`buildingStream`), so
+  an edit moves nothing outside its own block (`tests/mapLocality.test.ts`)
+  and the core's furniture is the same at any city size.
 - **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new

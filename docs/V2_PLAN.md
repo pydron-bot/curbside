@@ -613,9 +613,13 @@ districts), desktop first, and the edits **ship in the game**.
   stay identical; the inventory as code (`game/mapAnchors.ts`: 193
   anchors, what relies on a block/segment/junction, what an edit
   breaks), checked against the committed map in `npm test`. Found: one
-  block edit reshuffles 600–2,600 street props city-wide (shared random
-  streams in the dressing), so per-block dressing streams come before
-  chunk rebuilds. The shipped city is unchanged (empty map file).
+  block edit reshuffled 600–2,600 street props city-wide (shared random
+  streams in the dressing). Fixed with per-block and per-building streams
+  (`tests/mapLocality.test.ts`): an edit now changes its own block only.
+  That re-rolled the shipped city's furniture, stops, carts and rooftops
+  once, and moved the cold open to a shelter 66 m from the safehouse
+  (was 100 m); blocks, buildings and every hand-placed spot are
+  unchanged.
 
 ## Schedule
 

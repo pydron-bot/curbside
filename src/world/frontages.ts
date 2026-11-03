@@ -6,7 +6,7 @@
  * line people walk. Pure data from the city seed and the building plans
  * (world/buildingPlans.ts), via streetProps.ts.
  */
-import type { BuildingPlan, Side } from './buildingPlans';
+import { buildingStream, type BuildingPlan, type Side } from './buildingPlans';
 import { BLOCK_SIZE, type City } from './city';
 import type { District } from './districts';
 import { WALK_LINE, type Placer } from './kerbs';
@@ -21,8 +21,10 @@ const OUT = { cafe_table: [0.7, 0.4], vending_machine: [0.45, 0.4], atm: [0.35, 
 /** Café umbrellas' `paint` quarters: one fixed red for now (the other two quarters are cream). */
 const CAFE_RED = '#b8322e';
 
-export function placeFrontages(city: City, plans: readonly BuildingPlan[], rand: () => number, placer: Placer): void {
+/** Each building from its own stream (buildingStream), so a map edit elsewhere doesn't move its tables. */
+export function placeFrontages(city: City, plans: readonly BuildingPlan[], placer: Placer): void {
   city.buildings.forEach((b, i) => {
+    const rand = buildingStream(b, city.seed, 0xcafe);
     for (const shop of plans[i].shopfronts) {
       const cafe = shop.awning === null && rand() < CAFE[b.district];
       const vending = rand() < VENDING * (b.district === 'industrial' ? 2 : 1);

@@ -9,7 +9,7 @@
  */
 import { BLOCK_SIZE, HALF_EXTENT, blockInterior, type Building, type City, type Rect } from './city';
 import { DISTRICT_STYLES, pickWeighted, type District, type RoofType } from './districts';
-import { mulberry32 } from './random';
+import { keyedStream } from './random';
 
 export type PropKind = 'ac' | 'vent' | 'tank' | 'dish' | 'antenna' | 'chimney' | 'solar' | 'housing';
 
@@ -121,11 +121,15 @@ const PROP_SIZE: Readonly<Record<PropKind, (r: () => number) => [w: number, d: n
 
 /** Plan every building in the city, in the same order as city.buildings. */
 export function planBuildings(city: City): BuildingPlan[] {
-  return city.buildings.map((b, i) => planBuilding(b, i, city.seed));
+  return city.buildings.map((b) => planBuilding(b, city.seed));
 }
 
-export function planBuilding(b: Building, index: number, citySeed: number): BuildingPlan {
-  const rand = mulberry32((citySeed * 7919 + index * 104729) >>> 0);
+/** A building's own stream, keyed by where it stands (not its index, which a map edit elsewhere would shift). */
+export const buildingStream = (b: Rect, citySeed: number, salt: number): (() => number) =>
+  keyedStream(citySeed, salt, Math.round(b.minX * 16), Math.round(b.minZ * 16));
+
+export function planBuilding(b: Building, citySeed: number): BuildingPlan {
+  const rand = buildingStream(b, citySeed, 0x91a7);
   const style = DISTRICT_STYLES[b.district];
   const w = b.maxX - b.minX;
   const d = b.maxZ - b.minZ;

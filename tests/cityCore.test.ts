@@ -10,6 +10,7 @@ import { placeHangouts } from '../src/game/gangs';
 import { SAFEHOUSE, placeDocks, placeFrenzyTokens, placePayphones } from '../src/game/modes/places';
 import { buildMissions } from '../src/systems/missionsData';
 import { CORE_BLOCKS, CORE_OFFSET, generateCity } from '../src/world/city';
+import { planBuildings } from '../src/world/buildingPlans';
 import { dressCity } from '../src/world/dressing';
 import { placeSprayShops, placeStation } from '../src/world/landmarks';
 import { generatePickups } from '../src/world/pickups';
@@ -70,9 +71,12 @@ describe('the core city (today’s 16 × 16) at any size', () => {
     const d = dressCity(city, pickups, ramps);
     const props = d.street.props.filter((p) => inCore(p.x, p.z)).map((p) => [p.kind, p.x, p.z, p.heading, p.scale, p.tint ?? '']);
     props.sort((a, b) => (a[1] as number) - (b[1] as number) || (a[2] as number) - (b[2] as number) || String(a[0]).localeCompare(String(b[0])));
-    expect.soft(hash(props)).toBe('2db23677');
+    expect.soft(hash(props)).toBe('f41154ea');
     expect.soft(hash(d.landmarks.props.filter((p) => inCore(p.x, p.z)))).toBe('bac58205');
     expect.soft(hash(d.street.roadworks.filter((w) => centre(w.area)))).toBe('5076d9ad');
-    expect.soft(hash(d.street.busStops.filter((s) => inCore(s.x, s.z)))).toBe('c9179d91');
+    expect.soft(hash(d.street.busStops.filter((s) => inCore(s.x, s.z)))).toBe('a2b6ebf2');
+    expect.soft(hash(d.street.vendors.filter((v) => inCore(v.x, v.z)))).toBe('fbe0dd1a');
+    // Roofs and shopfronts: keyed by where each building stands (W3-D), so the core's hold at any size.
+    expect.soft(hash(planBuildings(city).filter((_p, i) => centre(city.buildings[i])))).toBe('be684bc5');
   });
 });

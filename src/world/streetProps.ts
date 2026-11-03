@@ -21,10 +21,10 @@
  * alone), nor on top of anything placed before it.
  */
 import { planBuildings, type BuildingPlan } from './buildingPlans';
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, blockInterior, inCoreBlock, type Block, type Building, type City, type Rect } from './city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, CORE_OFFSET, HALF_EXTENT, blockInterior, inCoreBlock, type Block, type Building, type City, type Rect } from './city';
 import type { District } from './districts';
 import { placeFrontages } from './frontages';
-import { mulberry32 } from './random';
+import { keyedStream, mulberry32 } from './random';
 import { placeRoadworks, type Roadworks } from './roadworks';
 import { signalPoles } from './signals';
 import { BENCH_LINE, KERB_LINE, blockSide, type Placer } from './kerbs';
@@ -327,19 +327,20 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
 
   // The bigger things first, each from its own stream, so they get their pick of the kerbs.
   const roadworks = placeRoadworks(city, mulberry32((city.seed * 2654435761) ^ 0x60ad), placer, opts.quietRoads ?? new Set());
-  const busStops = placeBusStops(city, mulberry32((city.seed * 2654435761) ^ 0xb05), placer, roadworks);
-  const vendors = placeVendors(city, mulberry32((city.seed * 2654435761) ^ 0xf00d), placer);
-  placeFrontages(city, opts.plans ?? planBuildings(city), mulberry32((city.seed * 2654435761) ^ 0xcafe), placer);
+  // Road works pick from every kerb but don't read block kinds, so a map edit
+  // leaves them be; everything after is placed block by block (or building by
+  // building), each from a stream of its own keyed by core block (W3-D), so an
+  // edited block moves nothing in any other and the core's furniture stays put
+  // at any city size (W3-A).
+  const busStops = placeBusStops(city, placer, roadworks);
+  const vendors = placeVendors(city, placer);
+  placeFrontages(city, opts.plans ?? planBuildings(city), placer);
 
-  // The core city's kerbs and alleys, then a bigger city's ring from a stream
-  // of its own, so the core's furniture stays put at any size (W3-A).
-  const coreRand = mulberry32((city.seed * 2654435761) ^ 0x7e11);
-  const ringRand = mulberry32((city.seed * 2654435761) ^ 0x7e12);
+  // The core city's kerbs and alleys, then a bigger city's ring.
   for (const ring of [false, true]) {
-    const rand = ring ? ringRand : coreRand;
     const blocks = city.blocks.filter((b) => inCoreBlock(b.bx, b.bz) !== ring);
-    dressBlocks(city, blocks, rand, clear, put);
-    placeDumpsters(city.buildings.filter((b) => inCoreBlock(...blockOf(b)) !== ring), rand, clear, put);
+    dressBlocks(city, blocks, clear, put);
+    placeDumpsters(city, city.buildings.filter((b) => inCoreBlock(...blockOf(b)) !== ring), clear, put);
   }
   return { props, solids, knockables, roadworks, vendors, busStops };
 }
@@ -348,8 +349,9 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
 const blockOf = (b: Rect): [number, number] => [Math.floor(((b.minX + b.maxX) / 2 + HALF_EXTENT) / BLOCK_SIZE), Math.floor(((b.minZ + b.maxZ) / 2 + HALF_EXTENT) / BLOCK_SIZE)];
 
 /** Kerbside furniture round each block, bollards round plazas, trees in parks. */
-function dressBlocks(city: City, blocks: readonly Block[], rand: () => number, clear: (x: number, z: number, r: number) => boolean, put: Put): void {
+function dressBlocks(city: City, blocks: readonly Block[], clear: (x: number, z: number, r: number) => boolean, put: Put): void {
   for (const b of blocks) {
+    const rand = keyedStream(city.seed, 0x7e11, b.bx - CORE_OFFSET, b.bz - CORE_OFFSET);
     for (let side = 0; side < 4; side++) {
       const s = blockSide(b, side);
       const { at, toRoad } = s;
@@ -429,7 +431,7 @@ function hash2(x: number, z: number): number {
  * along a shared stretch, about a third of those gaps get one against a
  * wall a few metres in from the pavement, long side along the alley.
  */
-function placeDumpsters(buildings: readonly Building[], rand: () => number, clear: (x: number, z: number, r: number) => boolean, put: Put): void {
+function placeDumpsters(city: City, buildings: readonly Building[], clear: (x: number, z: number, r: number) => boolean, put: Put): void {
   const byBlock = new Map<number, Building[]>();
   for (const b of buildings) {
     const [bx, bz] = blockOf(b);
@@ -439,7 +441,10 @@ function placeDumpsters(buildings: readonly Building[], rand: () => number, clea
     list.push(b);
   }
   for (const [key, list] of byBlock) {
-    const r = blockInterior(Math.floor(key / BLOCKS_PER_SIDE), key % BLOCKS_PER_SIDE);
+    const bx = Math.floor(key / BLOCKS_PER_SIDE);
+    const bz = key % BLOCKS_PER_SIDE;
+    const r = blockInterior(bx, bz);
+    const rand = keyedStream(city.seed, 0xd0b5, bx - CORE_OFFSET, bz - CORE_OFFSET);
     for (const a of list) {
       for (const b of list) {
         if (a === b) continue;

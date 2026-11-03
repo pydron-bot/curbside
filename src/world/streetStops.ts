@@ -14,7 +14,8 @@
  *   suburbs. One stands where Deacon Pike waits in Maple Flats
  *   (systems/missionsData.ts: pikeStop).
  */
-import { core, isCarPark, lotBytes, type City } from './city';
+import { CORE_OFFSET, core, isCarPark, lotBytes, type Block, type City } from './city';
+import { keyedStream } from './random';
 import { KERB_LINE, WALK_LINE, blockSide, type BlockSide, type Placer } from './kerbs';
 import { dirHeading, laneKey, type Dir } from './roads';
 import type { Roadworks } from './roadworks';
@@ -96,7 +97,10 @@ const SIZE: Readonly<Record<VendorKind, readonly [number, number]>> = {
 /** In a park or plaza, carts stand this far inside the lot's edge (from the road's centreline), m. */
 const LOT_LINE = 12.4;
 
-export function placeBusStops(city: City, rand: () => number, placer: Placer, works: readonly Roadworks[]): BusStop[] {
+/** A block's own stream (by core block, so the core's stay put at any size): what one block draws can't move another's stops or carts. */
+const blockStream = (city: City, b: Block, salt: number) => keyedStream(city.seed, salt, b.bx - CORE_OFFSET, b.bz - CORE_OFFSET);
+
+export function placeBusStops(city: City, placer: Placer, works: readonly Roadworks[]): BusStop[] {
   const closed = new Set(works.map((w) => laneKey(w.ix, w.iz, w.dir)));
   const stops: BusStop[] = [];
   const tryStop = (s: BlockSide, t: number): boolean => {
@@ -120,6 +124,7 @@ export function placeBusStops(city: City, rand: () => number, placer: Placer, wo
   }
   for (const b of city.blocks) {
     if (b.kind === 'plaza') continue;
+    const rand = blockStream(city, b, 0xb05);
     for (let side = 0; side < 4; side++) {
       const chance = rand() < STOP_CHANCE[b.district];
       const t = 26 + rand() * 12;
@@ -129,7 +134,7 @@ export function placeBusStops(city: City, rand: () => number, placer: Placer, wo
   return stops;
 }
 
-export function placeVendors(city: City, rand: () => number, placer: Placer): VendorSpot[] {
+export function placeVendors(city: City, placer: Placer): VendorSpot[] {
   const spots: VendorSpot[] = [];
   const bytes = lotBytes(city);
   /**
@@ -155,6 +160,7 @@ export function placeVendors(city: City, rand: () => number, placer: Placer): Ve
     return true;
   };
   city.blocks.forEach((b, i) => {
+    const rand = blockStream(city, b, 0xf00d);
     if (b.kind === 'buildings') {
       for (let side = 0; side < 4; side++) {
         const chance = rand() < CART_CHANCE[b.district];

@@ -52,7 +52,10 @@ describe('the cold open: where it plays', () => {
     expect(southSide(stop)).toBe(false);
     const d = (s: (typeof stops)[number]) => Math.hypot(s.waitX - SAFEHOUSE.x, s.waitZ - SAFEHOUSE.z);
     for (const s of stops) if (roomAhead(s) >= CRASH_AHEAD + 12 && !southSide(s)) expect(d(s)).toBeGreaterThanOrEqual(d(stop));
-    expect(stops.some((s) => southSide(s) && d(s) < d(stop))).toBe(true);
+    // A south-side shelter is never picked, even from right beside it.
+    const south = stops.find((s) => southSide(s) && roomAhead(s) >= CRASH_AHEAD + 12)!;
+    expect(south).toBeDefined();
+    expect(pickOpeningStop(stops, south.waitX, south.waitZ)).not.toBe(south);
     expect(d(stop)).toBeLessThan(120);
     expect(pickOpeningStop([], 0, 0)).toBeNull();
   });
