@@ -162,6 +162,8 @@ import { worldUniforms } from './render/shaderLib';
 import { addBugReportButton, BugReportSheet } from './ui/bugReport';
 import { ObserveMode } from './ui/observeMode';
 import { MapEditor } from './ui/mapEditor';
+import { LookPanel } from './ui/lookPanel';
+import { lookTuning } from './render/lookLive';
 import { editorLookAt } from './game/mapEditorState';
 import { districtOf } from './world/districts';
 import { parseMapEdits } from './world/mapEdits';
@@ -1817,12 +1819,35 @@ function openMapEditor() {
   frontDoor.openPanel(mapEditor);
   mapEditor.open(() => frontDoor.closePanel(mapEditor));
 }
+// LOOK panel (TEST → LOOK): sliders over the look, down one edge of live play (ui/lookPanel.ts, render/lookTuning.ts).
+let lookStore: Storage | null = null;
+try {
+  lookStore = localStorage;
+} catch {
+  // Storage blocked: the panel's changes last this session.
+}
+lookTuning.load(lookStore);
+const lookPanel = new LookPanel(document.body, lookTuning, audio, {
+  hour: () => testTools.hour,
+  holdClock: (hour) => testTools.holdClock(hour),
+  held: () => testTools.frozen,
+});
+const syncLook = () => {
+  lookTuning.setEnabled(settings.testTools);
+  if (!settings.testTools) lookPanel.close();
+};
+syncLook();
+onSettingsChange(syncLook);
 mountTestMenu(testTools, frontDoor, audio, city, {
   resume: () => setPaused(false),
   showFocus: () => input.lastDevice !== 'touch',
   at: () => player.position,
   notice: (text) => hud.score.notice(text, 'progress'),
   openEditor: openMapEditor,
+  openLook: () => {
+    setPaused(false);
+    lookPanel.open();
+  },
 });
 // OBSERVE (title and pause menu): a free camera over the live city, no player, no HUD; incidents on demand.
 observe = new ObserveMode({
@@ -1936,6 +1961,9 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
 
 // Debug hook for poking at the sim from the console / automated checks.
 (window as unknown as { __ub: unknown }).__ub = {
+  /** TEST → LOOK: the panel (open(), close()) and the live look (set(key, v), resetAll(), look). */
+  lookPanel,
+  lookTuning,
   /** Park water (render/waterLook.ts): fountains, sprinklers, and the look that sprays them. */
   parkWater,
   waterLook,

@@ -9,11 +9,12 @@ import { MenuNav, overlay, type Panel } from './menu';
 import { TeleportMap } from './teleportMap';
 import './testMenu.css';
 
-type Tab = 'player' | 'cars' | 'world' | 'map' | 'scenes' | 'save';
+type Tab = 'player' | 'cars' | 'world' | 'look' | 'map' | 'scenes' | 'save';
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ['player', 'PLAYER'],
   ['cars', 'CARS'],
   ['world', 'WORLD'],
+  ['look', 'LOOK'],
   ['map', 'MAP'],
   ['scenes', 'SCENES'],
   ['save', 'SAVE'],
@@ -33,6 +34,8 @@ export interface TestMenuHooks {
   notice(text: string): void;
   /** The map editor (desktop only), when the game has one. */
   openEditor?(): void;
+  /** The LOOK panel over live play (ui/lookPanel.ts). */
+  openLook?(): void;
 }
 
 /**
@@ -95,6 +98,7 @@ export class TestMenu implements Panel {
     this.buildPlayer();
     this.buildCars();
     this.buildWorld();
+    this.buildLook();
     this.buildMap();
     this.buildScenes();
     const save = this.pane('save');
@@ -319,6 +323,19 @@ export class TestMenu implements Panel {
     this.button(l, 'LABELS', () => t.labels(), { state: () => ({ on: settings.debugLabels, sub: settings.debugLabels ? 'ON' : 'OFF' }) });
   }
 
+  private buildLook(): void {
+    const pane = this.pane('look');
+    const openLook = this.hooks.openLook;
+    if (!openLook) return;
+    const g = this.section(pane, 'TUNE THE LOOK');
+    this.button(g, 'OPEN THE LOOK PANEL', () => openLook(), { sub: 'SLIDERS DOWN THE EDGE · THE GAME PLAYS ON', className: 'wide' });
+    const note = document.createElement('p');
+    note.className = 'test-note';
+    note.textContent =
+      'Sky and light, the colour grade, neon and night, daytime effects. Changes apply at once and are kept on this device; each slider shows how far it is from the shipped look. EXPORT downloads look.json to hand over and ship. Holding the clock marks the life, like FREEZE; the sliders do not.';
+    pane.append(note);
+  }
+
   private buildMap(): void {
     const t = this.tools;
     const pane = this.pane('map');
@@ -450,12 +467,13 @@ export function mountTestMenu(
   frontDoor: FrontDoor,
   audio: GameAudio,
   city: City,
-  d: { resume(): void; showFocus(): boolean; at(): { x: number; z: number }; notice(text: string): void; openEditor?(): void },
+  d: { resume(): void; showFocus(): boolean; at(): { x: number; z: number }; notice(text: string): void; openEditor?(): void; openLook?(): void },
 ): TestMenu {
   const menu: TestMenu = new TestMenu(document.body, audio, tools, {
     resume: d.resume,
     notice: d.notice,
     openEditor: d.openEditor,
+    openLook: d.openLook,
     openMap: () => {
       frontDoor.openPanel(map);
       map.open(() => frontDoor.closePanel(map), d.showFocus());

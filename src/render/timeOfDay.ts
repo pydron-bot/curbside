@@ -51,8 +51,12 @@ export interface SkyState {
   shadowStrength: number;
 }
 
-interface Key {
+/** Which part of the day a keyframe belongs to (the LOOK panel's sliders work per band). */
+export type SkyBand = 'night' | 'dawn' | 'day' | 'golden' | 'sunset' | 'dusk';
+
+export interface Key {
   h: number;
+  band: SkyBand;
   light: number;
   lightColor: Rgb;
   sky: Rgb;
@@ -78,24 +82,110 @@ const hex = (v: number): Rgb => [((v >> 16) & 255) / 255, ((v >> 8) & 255) / 255
  * must stay readable on a small screen for the third of the cycle that is night.
  * Sunset runs pink and magenta into a violet dusk.
  */
-const KEYS: readonly Key[] = [
-  { h: 0, light: 0.77, lightColor: hex(0x86c4f4), sky: hex(0x4a4490), ground: hex(0x22182c), hemi: 1.44, fog: hex(0x140f2a), fogNear: 46, fogFar: 150, exposure: 1.38, night: 1, env: 0.25 },
-  { h: 4.6, light: 0.7, lightColor: hex(0x86c4f4), sky: hex(0x46448a), ground: hex(0x21182a), hemi: 1.44, fog: hex(0x16122e), fogNear: 46, fogFar: 150, exposure: 1.38, night: 1, env: 0.25 },
-  { h: SUNRISE, light: 0, lightColor: hex(0xffa08a), sky: hex(0x6e6a9c), ground: hex(0x2c2228), hemi: 2.5, fog: hex(0x3e3258), fogNear: 60, fogFar: 190, exposure: 1.34, night: 0.55, env: 0.4 },
-  { h: 6.4, light: 1.6, lightColor: hex(0xffa968), sky: hex(0xa7a6c4), ground: hex(0x4a3a30), hemi: 0.9, fog: hex(0xa69aa8), fogNear: 62, fogFar: 225, exposure: 1.08, night: 0.1, env: 0.75 },
-  { h: 8, light: 2.5, lightColor: hex(0xffe2bd), sky: hex(0xb9cdf0), ground: hex(0x6b5a48), hemi: 0.9, fog: hex(0xa8bdd6), fogNear: 110, fogFar: 320, exposure: 1, night: 0, env: 1 },
-  { h: 12.5, light: 2.75, lightColor: hex(0xfff1dc), sky: hex(0xbfd3ff), ground: hex(0x6e5e4c), hemi: 0.95, fog: hex(0xaec4dd), fogNear: 120, fogFar: 340, exposure: 1, night: 0, env: 1 },
-  { h: 16.5, light: 2.75, lightColor: hex(0xffe4c0), sky: hex(0xb7c9ee), ground: hex(0x6d5a46), hemi: 0.92, fog: hex(0xb3bfd2), fogNear: 110, fogFar: 320, exposure: 1.02, night: 0, env: 1 },
+export const KEYS: readonly Key[] = [
+  { h: 0, band: 'night', light: 0.77, lightColor: hex(0x86c4f4), sky: hex(0x4a4490), ground: hex(0x22182c), hemi: 1.44, fog: hex(0x140f2a), fogNear: 46, fogFar: 150, exposure: 1.38, night: 1, env: 0.25 },
+  { h: 4.6, band: 'night', light: 0.7, lightColor: hex(0x86c4f4), sky: hex(0x46448a), ground: hex(0x21182a), hemi: 1.44, fog: hex(0x16122e), fogNear: 46, fogFar: 150, exposure: 1.38, night: 1, env: 0.25 },
+  { h: SUNRISE, band: 'dawn', light: 0, lightColor: hex(0xffa08a), sky: hex(0x6e6a9c), ground: hex(0x2c2228), hemi: 2.5, fog: hex(0x3e3258), fogNear: 60, fogFar: 190, exposure: 1.34, night: 0.55, env: 0.4 },
+  { h: 6.4, band: 'dawn', light: 1.6, lightColor: hex(0xffa968), sky: hex(0xa7a6c4), ground: hex(0x4a3a30), hemi: 0.9, fog: hex(0xa69aa8), fogNear: 62, fogFar: 225, exposure: 1.08, night: 0.1, env: 0.75 },
+  { h: 8, band: 'day', light: 2.5, lightColor: hex(0xffe2bd), sky: hex(0xb9cdf0), ground: hex(0x6b5a48), hemi: 0.9, fog: hex(0xa8bdd6), fogNear: 110, fogFar: 320, exposure: 1, night: 0, env: 1 },
+  { h: 12.5, band: 'day', light: 2.75, lightColor: hex(0xfff1dc), sky: hex(0xbfd3ff), ground: hex(0x6e5e4c), hemi: 0.95, fog: hex(0xaec4dd), fogNear: 120, fogFar: 340, exposure: 1, night: 0, env: 1 },
+  { h: 16.5, band: 'day', light: 2.75, lightColor: hex(0xffe4c0), sky: hex(0xb7c9ee), ground: hex(0x6d5a46), hemi: 0.92, fog: hex(0xb3bfd2), fogNear: 110, fogFar: 320, exposure: 1.02, night: 0, env: 1 },
   // Golden hour: the sun is low, so it lights the flat ground (most of the
   // screen, seen from above) at a grazing angle; it's made strong enough
   // that the streets stay about as bright as the afternoon, warm, with long
   // shadows and cool lavender fill in them.
-  { h: 18.2, light: 4.4, lightColor: hex(0xffc488), sky: hex(0xb8b4e6), ground: hex(0x6e5a4c), hemi: 1.0, fog: hex(0xe8a08c), fogNear: 90, fogFar: 280, exposure: 1.14, night: 0, env: 0.95 },
-  { h: 19, light: 3.2, lightColor: hex(0xff9668), sky: hex(0xa08ac8), ground: hex(0x5c3e46), hemi: 0.96, fog: hex(0xc46c82), fogNear: 75, fogFar: 240, exposure: 1.22, night: 0.25, env: 0.7 },
-  { h: SUNSET, light: 0, lightColor: hex(0xff4f8a), sky: hex(0x6a4f9c), ground: hex(0x3a2238), hemi: 2.8, fog: hex(0x5a2f66), fogNear: 60, fogFar: 200, exposure: 1.38, night: 0.62, env: 0.45 },
-  { h: 20.6, light: 0.59, lightColor: hex(0x8cbcf4), sky: hex(0x4c4290), ground: hex(0x26182e), hemi: 1.44, fog: hex(0x22163e), fogNear: 50, fogFar: 165, exposure: 1.38, night: 0.92, env: 0.28 },
-  { h: 22, light: 0.77, lightColor: hex(0x86c4f4), sky: hex(0x4a4490), ground: hex(0x22182c), hemi: 1.44, fog: hex(0x140f2a), fogNear: 46, fogFar: 150, exposure: 1.38, night: 1, env: 0.25 },
+  { h: 18.2, band: 'golden', light: 4.4, lightColor: hex(0xffc488), sky: hex(0xb8b4e6), ground: hex(0x6e5a4c), hemi: 1.0, fog: hex(0xe8a08c), fogNear: 90, fogFar: 280, exposure: 1.14, night: 0, env: 0.95 },
+  { h: 19, band: 'sunset', light: 3.2, lightColor: hex(0xff9668), sky: hex(0xa08ac8), ground: hex(0x5c3e46), hemi: 0.96, fog: hex(0xc46c82), fogNear: 75, fogFar: 240, exposure: 1.22, night: 0.25, env: 0.7 },
+  { h: SUNSET, band: 'dusk', light: 0, lightColor: hex(0xff4f8a), sky: hex(0x6a4f9c), ground: hex(0x3a2238), hemi: 2.8, fog: hex(0x5a2f66), fogNear: 60, fogFar: 200, exposure: 1.38, night: 0.62, env: 0.45 },
+  { h: 20.6, band: 'night', light: 0.59, lightColor: hex(0x8cbcf4), sky: hex(0x4c4290), ground: hex(0x26182e), hemi: 1.44, fog: hex(0x22163e), fogNear: 50, fogFar: 165, exposure: 1.38, night: 0.92, env: 0.28 },
+  { h: 22, band: 'night', light: 0.77, lightColor: hex(0x86c4f4), sky: hex(0x4a4490), ground: hex(0x22182c), hemi: 1.44, fog: hex(0x140f2a), fogNear: 46, fogFar: 150, exposure: 1.38, night: 1, env: 0.25 },
 ];
+
+/**
+ * The LOOK panel's sky sliders (render/lookTuning.ts), applied to KEYS by
+ * tuneKeys. Brightness multiplies a band's exposure; light and fill its sun
+ * (or moon) and sky fill; warmth / colour scale how far its colours sit from
+ * grey; hues turn them (degrees: night + is toward violet, sunset + toward
+ * magenta); haze scales the fog's distances. At the defaults (1, hues 0)
+ * the keys come out exactly as written.
+ */
+export interface SkyTuning {
+  nightBrightness: number;
+  moonlight: number;
+  nightFill: number;
+  nightHue: number;
+  dawnBrightness: number;
+  dawnWarmth: number;
+  dayBrightness: number;
+  sunlight: number;
+  skyBlue: number;
+  goldenBrightness: number;
+  goldenWarmth: number;
+  sunsetPink: number;
+  sunsetColour: number;
+  duskBrightness: number;
+  dayHaze: number;
+  nightHaze: number;
+  carShine: number;
+}
+
+/** The keys sampleSky reads: KEYS, or KEYS with the LOOK panel's sliders applied. */
+let activeKeys: readonly Key[] = KEYS;
+
+/** Use `keys` (from tuneKeys) for the sky from now on; KEYS again with no argument. */
+export function setSkyKeys(keys: readonly Key[] = KEYS): void {
+  activeKeys = keys;
+}
+
+/** KEYS with the sliders applied (a new array; KEYS untouched). */
+export function tuneKeys(t: SkyTuning, base: readonly Key[] = KEYS): Key[] {
+  return base.map((k) => {
+    const o: Key = { ...k, lightColor: [...k.lightColor], sky: [...k.sky], ground: [...k.ground], fog: [...k.fog] };
+    const night = k.band === 'night';
+    const sunset = k.band === 'sunset' || k.band === 'dusk';
+    o.exposure *= { night: t.nightBrightness, dawn: t.dawnBrightness, day: t.dayBrightness, golden: t.goldenBrightness, sunset: (t.goldenBrightness + t.duskBrightness) / 2, dusk: t.duskBrightness }[k.band];
+    if (night) {
+      o.light *= t.moonlight;
+      o.hemi *= t.nightFill;
+    }
+    if (k.band === 'day') o.light *= t.sunlight;
+    const haze = night || k.band === 'dusk' ? t.nightHaze : t.dayHaze;
+    o.fogNear *= haze;
+    o.fogFar *= haze;
+    o.env *= t.carShine;
+    const colours = [o.lightColor, o.sky, o.ground, o.fog] as [number, number, number][];
+    if (night) for (const c of colours) hueTurn(c, t.nightHue);
+    if (sunset) for (const c of colours) chroma(hueTurn(c, -t.sunsetPink), t.sunsetColour);
+    if (k.band === 'dawn') for (const c of [o.lightColor, o.fog]) chroma(c as [number, number, number], t.dawnWarmth);
+    if (k.band === 'golden') for (const c of [o.lightColor, o.fog]) chroma(c as [number, number, number], t.goldenWarmth);
+    if (k.band === 'day') for (const c of [o.sky, o.fog]) chroma(c as [number, number, number], t.skyBlue);
+    return o;
+  });
+}
+
+/** Scale how far a colour sits from its grey (luma), in place; 1 leaves it be. */
+export function chroma(c: [number, number, number], s: number): [number, number, number] {
+  if (s === 1) return c;
+  const l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  for (let i = 0; i < 3; i++) c[i] = clamp01(l + (c[i] - l) * s);
+  return c;
+}
+
+/** Turn a colour's hue by `deg` (red toward yellow is +), keeping its luma near; in place; 0 leaves it be. */
+export function hueTurn(c: [number, number, number], deg: number): [number, number, number] {
+  if (deg === 0) return c;
+  const a = Math.cos((deg * Math.PI) / 180);
+  const b = Math.sin((deg * Math.PI) / 180);
+  const [r, g, bl] = c;
+  c[0] = clamp01(r * (0.213 + a * 0.787 - b * 0.213) + g * (0.715 - a * 0.715 - b * 0.715) + bl * (0.072 - a * 0.072 + b * 0.928));
+  c[1] = clamp01(r * (0.213 - a * 0.213 + b * 0.143) + g * (0.715 + a * 0.285 + b * 0.14) + bl * (0.072 - a * 0.072 - b * 0.283));
+  c[2] = clamp01(r * (0.213 - a * 0.213 - b * 0.787) + g * (0.715 - a * 0.715 + b * 0.715) + bl * (0.072 + a * 0.928 + b * 0.072));
+  return c;
+}
+
+function clamp01(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
 
 export function createSkyState(): SkyState {
   return {
@@ -157,10 +247,11 @@ export function sunDirection(hour: number, out: [number, number, number] = [0, 0
 /** Fill `out` with the sky at `hour`. Allocation-free. */
 export function sampleSky(hour: number, out: SkyState): SkyState {
   const h = wrapHour(hour);
-  let i = KEYS.length - 1;
-  for (let k = 0; k < KEYS.length; k++) if (KEYS[k].h <= h) i = k;
-  const a = KEYS[i];
-  const b = KEYS[(i + 1) % KEYS.length];
+  const keys = activeKeys;
+  let i = keys.length - 1;
+  for (let k = 0; k < keys.length; k++) if (keys[k].h <= h) i = k;
+  const a = keys[i];
+  const b = keys[(i + 1) % keys.length];
   const span = (b.h <= a.h ? b.h + 24 : b.h) - a.h;
   const t = smooth((h - a.h) / span);
 

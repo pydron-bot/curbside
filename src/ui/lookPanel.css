@@ -1,0 +1,394 @@
+/* --- TEST → LOOK: the look tuning panel down one edge (src/ui/lookPanel.ts) --- */
+
+.lookp {
+  --lookp-w: min(252px, 34vw);
+  --thumb: 20px;
+  --shipf: 0.5;
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 44;
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  font-family: var(--hud-font);
+  color: var(--ink);
+  transition: transform 0.2s ease;
+}
+
+.lookp[hidden] {
+  display: none;
+}
+
+.lookp[data-side='left'] {
+  right: auto;
+  left: 0;
+  flex-direction: row-reverse;
+}
+
+/* Folded: the card slides off, the tab stays at the edge. */
+.lookp.folded {
+  transform: translateX(var(--lookp-w));
+}
+
+.lookp[data-side='left'].folded {
+  transform: translateX(calc(-1 * var(--lookp-w)));
+}
+
+.lookp-tab {
+  pointer-events: auto;
+  flex: none;
+  width: 26px;
+  height: 92px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+  background: rgb(12 12 18 / 0.86);
+  color: var(--neon-yellow);
+  font: 900 10px/1 var(--hud-font);
+  letter-spacing: 0.25em;
+  cursor: pointer;
+}
+
+.lookp[data-side='left'] .lookp-tab {
+  border: 1px solid var(--line);
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+}
+
+.lookp-tab span {
+  display: inline-block;
+  transform: rotate(-90deg);
+  white-space: nowrap;
+}
+
+.lookp-card {
+  pointer-events: auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  width: var(--lookp-w);
+  height: 100%;
+  padding: max(6px, var(--safe-t)) max(8px, var(--safe-r)) max(6px, var(--safe-b)) 8px;
+  background: linear-gradient(180deg, rgb(14 12 26 / 0.84), rgb(10 10 16 / 0.8));
+  border-left: 1px solid rgb(255 46 136 / 0.35);
+  box-shadow: -6px 0 18px rgb(0 0 0 / 0.35);
+}
+
+.lookp[data-side='left'] .lookp-card {
+  padding-left: max(8px, var(--safe-l));
+  padding-right: 8px;
+  border-left: 0;
+  border-right: 1px solid rgb(255 46 136 / 0.35);
+}
+
+.lookp-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+}
+
+.lookp-head h2 {
+  margin: 0;
+  font: 900 15px/1 var(--display-font);
+  letter-spacing: 0.08em;
+  color: var(--neon-yellow);
+  text-shadow: 0 0 12px rgb(255 210 63 / 0.4);
+}
+
+.lookp-count {
+  flex: 1;
+  font: 800 9px/1 var(--hud-font);
+  letter-spacing: 0.12em;
+  color: var(--ink-dim);
+}
+
+.lookp-count.on {
+  color: var(--neon-pink);
+}
+
+.lookp-icon {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--ink);
+  font: 700 13px/1 var(--hud-font);
+  cursor: pointer;
+}
+
+.lookp-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 4px 0 6px;
+}
+
+.lookp-btn {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.07);
+  color: var(--ink);
+  font: 900 10px/1 var(--hud-font);
+  letter-spacing: 0.12em;
+  cursor: pointer;
+}
+
+.lookp-btn.hot {
+  border-color: transparent;
+  background: linear-gradient(100deg, var(--neon-pink), #ff6a3d);
+}
+
+.lookp-btn.armed {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.lookp-btn.small {
+  min-height: 24px;
+  padding: 0 7px;
+  font-size: 9px;
+}
+
+.lookp-btn.on {
+  border-color: var(--neon-cyan);
+  color: var(--neon-cyan);
+}
+
+.lookp-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
+  padding: 0 4px 24px;
+}
+
+.lookp-clock {
+  --shipf: -1;
+  padding: 6px 7px 7px;
+  margin-bottom: 6px;
+  border: 1px solid rgb(46 230 255 / 0.3);
+  border-radius: 9px;
+  background: rgb(46 230 255 / 0.06);
+}
+
+.lookp-chips {
+  display: flex;
+  gap: 3px;
+  margin-top: 3px;
+}
+
+.lookp-chip {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 24px;
+  padding: 0 2px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.05);
+  color: var(--ink);
+  font: 800 8px/1 var(--hud-font);
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.lookp-group {
+  border-top: 1px solid var(--line);
+}
+
+.lookp-gh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  color: var(--neon-cyan);
+  font: 900 10px/1 var(--hud-font);
+  letter-spacing: 0.22em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.lookp-gh small {
+  flex: 1;
+  font-size: 8.5px;
+  letter-spacing: 0.1em;
+  color: var(--neon-pink);
+}
+
+.lookp-gh i {
+  font-style: normal;
+  color: var(--ink-dim);
+  transition: transform 0.15s;
+  transform: rotate(-90deg);
+}
+
+.lookp-group.open .lookp-gh i {
+  transform: none;
+}
+
+.lookp-rows {
+  display: none;
+}
+
+.lookp-group.open .lookp-rows {
+  display: block;
+}
+
+.lookp-row {
+  padding: 5px 2px 6px;
+  border-radius: 7px;
+}
+
+.lookp-row.changed {
+  background: rgb(255 46 136 / 0.09);
+}
+
+.lookp-top {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 22px;
+}
+
+.lookp-top b {
+  flex: 1;
+  min-width: 0;
+  font: 800 9.5px/1.15 var(--hud-font);
+  letter-spacing: 0.06em;
+}
+
+.lookp-val {
+  font: 800 11px/1 var(--hud-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.lookp-dist {
+  font: 800 9px/1 var(--hud-font);
+  font-variant-numeric: tabular-nums;
+  color: var(--neon-pink);
+}
+
+.lookp-reset {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.06);
+  color: var(--ink);
+  font: 700 13px/1 var(--hud-font);
+  cursor: pointer;
+}
+
+.lookp-reset:disabled {
+  opacity: 0.22;
+  cursor: default;
+}
+
+.lookp-row small {
+  display: block;
+  font: 600 8.5px/1.2 var(--hud-font);
+  color: var(--ink-dim);
+}
+
+/* The sliders: a thin track with a tick where the shipped value sits. */
+.lookp input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin: 0;
+  background: none;
+  touch-action: pan-y;
+  cursor: pointer;
+}
+
+.lookp input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background:
+    linear-gradient(
+      90deg,
+      transparent calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--shipf) - 1px),
+      var(--neon-cyan) 0 calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--shipf) + 1px),
+      transparent 0
+    ),
+    rgb(255 255 255 / 0.2);
+}
+
+.lookp input[type='range']::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(255 255 255 / 0.2);
+}
+
+.lookp input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: var(--thumb);
+  height: var(--thumb);
+  margin-top: calc(2px - var(--thumb) / 2);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--neon-pink);
+  box-shadow: 0 0 8px rgb(255 46 136 / 0.6);
+}
+
+.lookp input[type='range']::-moz-range-thumb {
+  width: var(--thumb);
+  height: var(--thumb);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: var(--neon-pink);
+}
+
+.lookp-clock input[type='range']::-webkit-slider-thumb {
+  background: var(--neon-cyan);
+  box-shadow: 0 0 8px rgb(46 230 255 / 0.6);
+}
+
+.lookp-notice {
+  margin-top: 4px;
+  padding: 6px 7px;
+  border-radius: 7px;
+  background: rgb(61 220 132 / 0.16);
+  color: var(--neon-green);
+  font: 800 9px/1.25 var(--hud-font);
+  letter-spacing: 0.06em;
+}
+
+.lookp-notice[hidden] {
+  display: none;
+}
+
+/* Short phone screens: tighter rows. */
+@media (max-height: 420px) {
+  .lookp {
+    --lookp-w: min(236px, 33vw);
+    --thumb: 22px;
+  }
+
+  .lookp-row {
+    padding: 3px 2px 4px;
+  }
+
+  .lookp input[type='range'] {
+    height: 26px;
+  }
+}

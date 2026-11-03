@@ -20,8 +20,9 @@ const SEARCH_REACH = 60;
 export type GlowSource = (glows: GlowSprites, view: Rect) => void;
 import { LowResFx, type LowResSource } from './lowResFx';
 import { PickupMesh } from './pickupMesh';
-import { PostEffects, mountNeonFilter, mountVignette, precompile } from './post';
+import { PostEffects, getExposure, mountNeonFilter, mountVignette, precompile, setExposure } from './post';
 import { getQuality, onQualityChange } from './quality';
+import { look } from './lookLive';
 import { SceneLighting } from './sceneLighting';
 import { worldUniforms } from './shaderLib';
 import { driveMarker, type DriveMarker } from './playerMarker';
@@ -92,7 +93,7 @@ export class Look {
   /**
    * Multiplier on the sky's exposure, for flashes (e.g. an explosion kicking
    * it to 1.8 and easing back). The sky sets exposure every frame, so set
-   * this rather than renderer.toneMappingExposure.
+   * this rather than the exposure (post.ts setExposure).
    */
   exposureBoost = 1;
   /** Metres added to the fog's near and far each frame (Observe mode's high camera; 0 in play). */
@@ -107,7 +108,7 @@ export class Look {
     overlayParent: HTMLElement,
     streetProps: StreetProps,
   ) {
-    this.lighting = new SceneLighting(renderer, scene);
+    this.lighting = new SceneLighting(scene);
     this.sunShadow = new SunShadow(renderer, this.lighting.sun);
     scene.add(createGround(city));
     const plans = planBuildings(city);
@@ -184,12 +185,12 @@ export class Look {
     worldUniforms.uTime.value += dt;
     this.flyovers.update(dt, this.time.hour, player?.x ?? 0, player?.z ?? 0);
     const sky = this.lighting.apply(this.time.hour);
-    this.renderer.toneMappingExposure *= this.exposureBoost;
+    setExposure(getExposure() * this.exposureBoost);
     // Observe mode's wide zoom: the haze starts as far over the street as it does from play height.
     const fog = this.lighting.fog;
     fog.near += this.fogPush;
     fog.far += this.fogPush;
-    this.sunShadow.setStrength(sky.shadowStrength);
+    this.sunShadow.setStrength(Math.min(1, sky.shadowStrength * look.shadowDarkness));
     this.cars.envIntensity = sky.envIntensity;
     this.post.setNight(sky.night);
     this.city.update(sky.night);

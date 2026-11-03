@@ -7,8 +7,9 @@ import {
   SRGBColorSpace,
   Vector3,
   type Scene,
-  type WebGLRenderer,
 } from 'three';
+import { look } from './lookLive';
+import { setExposure } from './post';
 import { worldUniforms } from './shaderLib';
 import { createSkyState, morningMist, sampleSky, type SkyState } from './timeOfDay';
 
@@ -37,10 +38,7 @@ export class SceneLighting {
   readonly toLight = new Vector3(0, 1, 0);
   private readonly background = new Color();
 
-  constructor(
-    private readonly renderer: WebGLRenderer,
-    scene: Scene,
-  ) {
+  constructor(scene: Scene) {
     scene.add(this.sun, this.sun.target, this.hemi, this.ambient);
     scene.fog = this.fog;
     scene.background = this.background;
@@ -60,7 +58,7 @@ export class SceneLighting {
     this.fog.near = s.fogNear;
     this.fog.far = s.fogFar;
     this.background.copy(this.fog.color);
-    this.renderer.toneMappingExposure = s.exposure;
+    setExposure(s.exposure * look.exposure);
     worldUniforms.uNight.value = s.night;
     worldUniforms.uLate.value = lateness(s.hour);
     worldUniforms.uMist.value = morningMist(s.hour);

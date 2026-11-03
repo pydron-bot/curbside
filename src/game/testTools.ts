@@ -229,6 +229,23 @@ export class TestTools {
     return t.speed === 0 ? 'TIME FROZEN' : 'TIME RUNNING';
   }
 
+  /** The clock now (the LOOK panel's clock slider). */
+  get hour(): number {
+    return this.d.time.hour;
+  }
+
+  /** The LOOK panel's clock: hold it at `hour`, or run it on from where it is (null). A cheat, like FREEZE. */
+  holdClock(hour: number | null): void {
+    this.cheat();
+    const t = this.d.time;
+    if (hour === null) t.speed = CLOCK_SPEED;
+    else {
+      t.set(hour);
+      t.speed = 0;
+    }
+    this.onChange();
+  }
+
   setRain(mode: RainMode): string {
     this.cheat();
     const w = this.d.weather;
