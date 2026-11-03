@@ -15,6 +15,19 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.23.0',
+    date: '2026-11-03',
+    title: 'Neon nights',
+    notes: [
+      'Neon and traffic lights now shine in the wet road at night: every shopfront tube, rooftop sign and signal streaks across the asphalt in its own colour, more so in the rain.',
+      'Police light bars wash the buildings and the street around them red and blue.',
+      'String lights hang across the arts quarter\'s streets: rows of warm and coloured bulbs over the traffic.',
+      'Rooftop neon signs come alive: some cycle through colours, some run chase lights, some light up along their length and go out again.',
+      'Searchlights sweep the night sky from downtown\'s tallest roofs.',
+      'Steam drifts up from vents in the road at night, lit pink, cyan or warm by the lights around it.',
+    ],
+  },
+  {
     version: '0.22.1',
     date: '2026-11-03',
     title: 'Fixes',

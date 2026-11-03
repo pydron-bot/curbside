@@ -70,6 +70,16 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
+**0.23.0 "Neon nights" (2026-11-03, branch `claude/neon-city-2`, stacked on
+`claude/glint-junctions` / 0.22.1; not merged, at the owner's request):**
+coloured neon/signal reflections in the wet road, police light wash on
+walls and road, string lights over the arts quarter, animated roof signs,
+downtown searchlights, steam vents (README → *Look → Neon city → Neon
+nights*). Still to come from the same list: living windows, rain upgrades,
+midnight fireworks, explosion shockwaves, wanted-level screen-edge glow,
+neon WASTED/BUSTED. **For the device pass:** do the searchlight beams wash
+too much of the screen close to their roofs; is the steam visible enough.
+
 **0.22.0 "Neon city" (2026-11-03, branch `claude/neon-polish`, stacked on
 `claude/sticky-charge-model` / 0.21.2; neither merged yet, at the owner's
 request):** the in-game look brought to the title screen's neon (README →

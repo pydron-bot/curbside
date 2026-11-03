@@ -2729,6 +2729,32 @@ the first time it comes into view.
   - *Headlights*: `CarDims.lampX` is where the model's `headlight`
     vertices sit; the cone is sized so its two lamps (`BEAM_LAMP`) land
     there, one spreading beam per lamp.
+  - *Neon nights (0.23.0)*, also no new draw call:
+    - *Coloured reflections* (`neonReflect.ts`, pure and tested): every
+      shopfront tube, rooftop tube (in ~7 m pieces) and roof sign is listed
+      once at load; each frame those in view are mirrored under the ground
+      as the camera sees them (`GlowSprites.eye`, set by `Look.render`) and
+      drawn as a streak in their colour toward the viewer, only where it
+      lands on a road (`onRoad`). Traffic lights do the same in the colour
+      they show (`WorldProps.drawGlows`). `GlowSprites` holds 640 a frame.
+    - *Siren wash* (`shaderLib` `ubSirenWash`): up to four light bars near
+      the view (`uSirens`, fed by `CarBatch.flush`) light buildings and the
+      road on the cars' strobe, over ~20 m.
+    - *String lights* (`world/stringLights.ts`, pure and tested): two
+      strings on about half the road segments between arts blocks, building
+      line to building line, sagging over the buses and clear of the lamps;
+      wire, bulbs and halos in the city mesh's existing batches.
+    - *Animated neon*: `BuildingPlan.roofNeon.sign.anim` (`NEON_ANIM`:
+      steady, cycle, chase, sweep) and `chase` on some arts edge tubes,
+      packed into `aGlow` as 100 × mode + brightness (`neonGlow`), read back
+      in `propMaterial`.
+    - *Searchlights* (`world/searchlights.ts`, pure and tested): up to six
+      of downtown's tallest roofs, 110 m apart; a housing in the city mesh
+      and at night a 60 m beam (`GLOW.search`) sweeping ±1.1 rad.
+    - *Steam* (`world/steamVents.ts`, pure and tested; `render/steamLook.ts`):
+      a grate in a lane on about a quarter of road segments; at night the
+      vents in view breathe soft particles (`Effects.emitSteam`) tinted by
+      district, scaled by the tier's particle budget.
   - *HUD*: a pink-cyan-violet radar rim, violet-navy map streets, a hot
     pink health bar, a cyan healthy-car ring. *Settings → Extras → Neon
     filter* (`screenFilter`, off by default): the title's edge light and
