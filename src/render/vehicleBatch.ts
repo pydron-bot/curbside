@@ -54,6 +54,9 @@ interface ArchetypeMesh {
 }
 
 /** Per-car render bookkeeping: motion (to light brake lights) and when it last moved. */
+/** Light bars that wash the walls at once (shaderLib uSirens). */
+const SIREN_SLOTS = 4;
+
 interface CarRecord {
   car: CarMesh;
   x: number;
@@ -82,6 +85,8 @@ export class CarBatch {
   /** The same meshes as a list, for allocation-free iteration every frame. */
   private readonly meshList: ArchetypeMesh[] = [];
   private readonly records: CarRecord[] = [];
+  /** The held light bars' squared distances from the view's middle (flush). */
+  private readonly sirenD2 = new Float64Array(SIREN_SLOTS);
   /** Rolls taken so far (roll()). */
   private rolls = 0;
   /** Cars shown, and drawn, at the last flush (diagnostics). */
@@ -210,6 +215,12 @@ export class CarBatch {
     const time = worldUniforms.uTime.value;
     let live = 0;
     let drawn = 0;
+    // The light bars nearest the view's middle, for the wash on walls and road (shaderLib uSirens).
+    const vx = (view.minX + view.maxX) / 2;
+    const vz = (view.minZ + view.maxZ) / 2;
+    const reach2 = ((view.maxX - view.minX) / 2 + 20) ** 2 + ((view.maxZ - view.minZ) / 2 + 20) ** 2;
+    const sirens = worldUniforms.uSirens.value;
+    for (let k = 0; k < SIREN_SLOTS; k++) this.sirenD2[k] = Infinity;
     for (const rec of this.records) {
       const car = rec.car;
       if (!isShown(car.root)) {
@@ -224,6 +235,18 @@ export class CarBatch {
       const sin = e[8];
       const cos = e[10];
       this.track(rec, x, z, sin, cos, dt);
+      if (car.siren && !car.charred) {
+        const d2 = (x - vx) ** 2 + (z - vz) ** 2;
+        if (d2 < reach2) {
+          // Keep the nearest SIREN_SLOTS: replace the farthest held.
+          let worst = 0;
+          for (let k = 1; k < SIREN_SLOTS; k++) if (this.sirenD2[k] > this.sirenD2[worst]) worst = k;
+          if (d2 < this.sirenD2[worst]) {
+            this.sirenD2[worst] = d2;
+            sirens[worst].set(x, z, 1, 0);
+          }
+        }
+      }
       if (x < view.minX - VIEW_MARGIN || x > view.maxX + VIEW_MARGIN || z < view.minZ - VIEW_MARGIN || z > view.maxZ + VIEW_MARGIN) continue;
 
       const am = this.meshFor(car.archetype);
@@ -245,6 +268,7 @@ export class CarBatch {
       this.addLights(glows, car, rec, d, x, z, sin, cos, heading, night * lights, time);
       if (car.underglow >= 0 && !car.charred) this.addUnderglow(glows, car.underglow, d, x, z, sin, cos, heading, mid, night, time);
     }
+    for (let k = 0; k < SIREN_SLOTS; k++) if (this.sirenD2[k] === Infinity) sirens[k].z = 0;
     for (let k = 0; k < list.length; k++) {
       const am = list[k];
       const n = am.count;

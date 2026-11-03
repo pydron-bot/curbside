@@ -9,7 +9,7 @@ import type { CameraRig } from './cameraRig';
 import { CharacterBodies } from './characterBodies';
 import { ContactShadows } from './contactShadows';
 import { GLOW, GlowSprites } from './glowSprites';
-import { SOURCE_STRIDE, glintOf, inView, neonSources, type Glint } from './neonReflect';
+import { SOURCE_STRIDE, glintOf, inView, neonSources, onRoad, type Glint } from './neonReflect';
 
 /** Adds faked lights for one frame (muzzle flashes, beacons, ...); `view` is the visible ground. */
 export type GlowSource = (glows: GlowSprites, view: Rect) => void;
@@ -128,7 +128,10 @@ export class Look {
         glintOf(neon[o], neon[o + 1], neon[o + 2], e.x, e.y, e.z, glint);
         const w = Math.min(2.4, Math.max(1, neon[o + 3] * 0.3));
         const s = glint.length;
-        g.addFlat(glint.x + Math.sin(glint.heading) * s * 0.5, 0.05, glint.z + Math.cos(glint.heading) * s * 0.5, glint.heading, w, s, neon[o + 4] * k, neon[o + 5] * k, neon[o + 6] * k, GLOW.beam);
+        const mx = glint.x + Math.sin(glint.heading) * s * 0.5;
+        const mz = glint.z + Math.cos(glint.heading) * s * 0.5;
+        if (!onRoad(mx, mz)) continue;
+        g.addFlat(mx, 0.05, mz, glint.heading, w, s, neon[o + 4] * k, neon[o + 5] * k, neon[o + 6] * k, GLOW.beam);
       }
     });
     this.characters = new CharacterBodies();

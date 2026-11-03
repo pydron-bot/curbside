@@ -70,7 +70,8 @@ export function createGround(city: City): Mesh {
       '#include <emissivemap_fragment>',
       `vec3 groundLamp = ubStreetLight(vec3(vGroundXZ.x, 0.0, vGroundXZ.y), vec3(0.0, 1.0, 0.0));
       // Damp road: a glossy share of the lamp light on top of the diffuse (gSheen, groundColour).
-      totalEmissiveRadiance += groundGlow + diffuseColor.rgb * groundLamp + gSheen * 0.3 * groundLamp;
+      vec3 groundSiren = ubSirenWash(vec3(vGroundXZ.x, 0.0, vGroundXZ.y), vec3(0.0, 1.0, 0.0));
+      totalEmissiveRadiance += groundGlow + diffuseColor.rgb * groundLamp + gSheen * 0.3 * groundLamp + (diffuseColor.rgb + gSheen * 0.25) * groundSiren;
       // Wet-look streaks of the lamp heads (only where the road is damp; rain makes the whole road a mirror).
       if (gSheen > 0.0) totalEmissiveRadiance += uLampColor * (gLampGlints(vGroundXZ) * gSheen * (0.55 + 0.6 * uWetness));`,
     );

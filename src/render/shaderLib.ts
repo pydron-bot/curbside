@@ -11,7 +11,7 @@
  *   analytically from the lamp layout in world/streetLamps.ts. Ground, walls,
  *   cars and people all pick it up at night with no real lights at all.
  */
-import { Color, type IUniform } from 'three';
+import { Color, Vector4, type IUniform } from 'three';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT } from '../world/city';
 import { LAMP_ARM, LAMP_HEIGHT, LAMP_OFFSET, LAMP_REACH2, LAMP_SPACING, lampsNear } from '../world/streetLamps';
 
@@ -26,6 +26,8 @@ export const worldUniforms = {
   uLampColor: { value: new Color('#ffb866') },
   /** Sky colour (linear), for faked reflections in glass and puddles. */
   uSkyTint: { value: new Color('#bcd2ff') },
+  /** Up to four police light bars near the view (x, z, strength 0..1, unused), washing walls and road (CarBatch sets them). */
+  uSirens: { value: [new Vector4(), new Vector4(), new Vector4(), new Vector4()] },
 } satisfies Record<string, IUniform>;
 
 /** Add the shared world uniforms to a shader being compiled. */
@@ -42,6 +44,7 @@ uniform float uNight;
 uniform float uWetness;
 uniform vec3 uLampColor;
 uniform vec3 uSkyTint;
+uniform vec4 uSirens[4];
 
 const float UB_HALF = ${f(HALF_EXTENT)};
 const float UB_BLOCK = ${f(BLOCK_SIZE)};
@@ -108,6 +111,29 @@ float ubLampTerm(vec3 wp, vec3 n, vec2 lamp) {
   float ndl = max(dot(n, L) * inversesqrt(d2), 0.0);
   float reach = max(1.0 - d2 / UB_LAMP_REACH2, 0.0);
   return ndl * reach * reach * (34.0 / (d2 + 7.0));
+}
+
+/**
+ * Police light bars washing what's round them red and blue (uSirens), on the
+ * cars' own strobe (CarBatch: blue the first half of each 0.4 s, red the
+ * second), fading out over about 20 m; brighter at night.
+ */
+vec3 ubSirenWash(vec3 wp, vec3 n) {
+  vec3 sum = vec3(0.0);
+  float phase = fract(uTime * 2.5);
+  float half_ = fract(phase * 2.0);
+  float strobe = smoothstep(0.0, 0.06, half_) * (1.0 - smoothstep(0.55, 0.85, half_));
+  vec3 col = phase < 0.5 ? vec3(0.12, 0.28, 1.0) : vec3(1.0, 0.07, 0.05);
+  for (int i = 0; i < 4; i++) {
+    vec4 s = uSirens[i];
+    if (s.z <= 0.0) continue;
+    vec3 L = vec3(s.x, 1.8, s.y) - wp;
+    float d2 = dot(L, L);
+    float ndl = max(dot(n, L) * inversesqrt(d2 + 1e-4), 0.0);
+    float reach = max(1.0 - d2 / 420.0, 0.0);
+    sum += ndl * reach * reach * s.z * (14.0 / (d2 + 10.0));
+  }
+  return col * sum * strobe * (0.3 + 0.7 * uNight);
 }
 
 /** Irradiance from nearby street lamps at world position wp with unit normal n (0 by day). */

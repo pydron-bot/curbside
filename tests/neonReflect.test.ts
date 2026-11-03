@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { SOURCE_STRIDE, glintOf, neonSources, type Glint } from '../src/render/neonReflect';
+import { SOURCE_STRIDE, glintOf, neonSources, onRoad, type Glint } from '../src/render/neonReflect';
 import { planBuildings } from '../src/world/buildingPlans';
-import { generateCity } from '../src/world/city';
+import { BLOCK_SIZE, HALF_EXTENT, generateCity } from '../src/world/city';
 
 describe('neon reflections', () => {
   const city = generateCity(1337);
@@ -36,5 +36,13 @@ describe('neon reflections', () => {
     expect(glintOf(0, -10, 100, 0, 30, 0, { ...g }).length).toBe(8);
     // East of the eye: the streak runs west.
     expect(glintOf(10, 0, 6, 0, 30, 0, g).heading).toBeCloseTo(-Math.PI / 2, 6);
+  });
+
+  it('knows a road from a block', () => {
+    const line = 8 * BLOCK_SIZE - HALF_EXTENT;
+    expect(onRoad(line + 3, line + 30)).toBe(true);
+    expect(onRoad(line + 30, line - 7)).toBe(true);
+    expect(onRoad(line + 30, line + 30)).toBe(false);
+    expect(onRoad(line + 9, line + 30)).toBe(false);
   });
 });

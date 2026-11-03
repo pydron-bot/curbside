@@ -8,7 +8,7 @@
  * with a bounds check and allocates nothing.
  */
 import { AWNING_DEPTH, AWNING_HEIGHT, type BuildingPlan } from '../world/buildingPlans';
-import type { Building, Rect } from '../world/city';
+import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, type Building, type Rect } from '../world/city';
 
 /** Floats per source: x, z, height, length, r, g, b (linear). */
 export const SOURCE_STRIDE = 7;
@@ -108,4 +108,12 @@ export function glintOf(x: number, z: number, h: number, ex: number, ey: number,
 /** Is (x, z) inside the view (with a margin)? */
 export function inView(view: Rect, x: number, z: number, margin: number): boolean {
   return x >= view.minX - margin && x <= view.maxX + margin && z >= view.minZ - margin && z <= view.maxZ + margin;
+}
+
+/** Is (x, z) on a road (within half a road's width of a centreline)? Neon streaks only show there: the damp is on the roads. */
+export function onRoad(x: number, z: number): boolean {
+  const half = ROAD_WIDTH / 2;
+  const lx = (((x + HALF_EXTENT) % BLOCK_SIZE) + BLOCK_SIZE) % BLOCK_SIZE;
+  const lz = (((z + HALF_EXTENT) % BLOCK_SIZE) + BLOCK_SIZE) % BLOCK_SIZE;
+  return lx < half || lx > BLOCK_SIZE - half || lz < half || lz > BLOCK_SIZE - half;
 }

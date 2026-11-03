@@ -721,7 +721,7 @@ function buildingMaterial(): MeshLambertMaterial {
     shader.fragmentShader = after(
       shader.fragmentShader,
       '#include <emissivemap_fragment>',
-      'totalEmissiveRadiance += bGlow + diffuseColor.rgb * ubStreetLight(vWorldB, bNormal);',
+      'totalEmissiveRadiance += bGlow + diffuseColor.rgb * (ubStreetLight(vWorldB, bNormal) + ubSirenWash(vWorldB, bNormal));',
     );
   };
   mat.customProgramCacheKey = () => 'curbside-buildings';
