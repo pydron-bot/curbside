@@ -100,6 +100,18 @@ const LOT_LINE = 12.4;
 /** A block's own stream (by core block, so the core's stay put at any size): what one block draws can't move another's stops or carts. */
 const blockStream = (city: City, b: Block, salt: number) => keyedStream(city.seed, salt, b.bx - CORE_OFFSET, b.bz - CORE_OFFSET);
 
+/** The hand-placed stops' lanes (Pike's): a map edit that closes one, or turns it against a one-way, takes the stop away. */
+export function fixedStopLanes(city: City): Array<{ x: number; z: number; dir: Dir; fromX: number; fromZ: number; ix: number; iz: number }> {
+  const out: Array<{ x: number; z: number; dir: Dir; fromX: number; fromZ: number; ix: number; iz: number }> = [];
+  for (const [bx, bz, side, t] of FIXED_STOPS) {
+    const b = city.blocks.find((k) => k.bx === core(bx) && k.bz === core(bz));
+    if (!b) continue;
+    const s = blockSide(b, side);
+    out.push({ ...s.at(t, SHELTER_LINE), dir: s.dir, fromX: s.fromX, fromZ: s.fromZ, ix: s.ix, iz: s.iz });
+  }
+  return out;
+}
+
 export function placeBusStops(city: City, placer: Placer, works: readonly Roadworks[]): BusStop[] {
   const closed = new Set(works.map((w) => laneKey(w.ix, w.iz, w.dir)));
   const stops: BusStop[] = [];
