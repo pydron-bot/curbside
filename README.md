@@ -2717,7 +2717,9 @@ the first time it comes into view.
     gets damp patches (`gSheen`, most along the gutters) that take a share
     of the lamp light and mirror each lamp head as a warm streak toward the
     viewer (`gLampGlints`: the head mirrored under the ground, seen from
-    `cameraPosition`); rain strengthens them. Tail lights smear red on the
+    `cameraPosition`); rain strengthens them. The lamps are picked by where
+    the fragment is along each road, not by its block cell: cell edges run
+    down the road centrelines and cut the streaks off across junctions (0.22.1). Tail lights smear red on the
     road behind cars.
   - *Car neon* (`carNeon.ts`, pure and tested): every sports car and some
     other civilian cars carry an underglow (rolled per car on create and

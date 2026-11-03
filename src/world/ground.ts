@@ -195,32 +195,40 @@ float gGlint(vec2 wp, vec2 lamp) {
   return exp(-a * a - (across * across) / 0.16);
 }
 
-/** The lamp heads' streaks on the damp road at wp (the same eight heads ubStreetLight walks). */
+/**
+ * The lamp heads' streaks on the damp road at wp: the lamps along the
+ * nearest north-south and east-west roads, both sides, the three nearest
+ * wp along each. Picked by where wp is along the road, not by its block cell:
+ * cell edges run down the road centrelines, and switching lamps there cut
+ * the streaks off in straight lines across every junction.
+ */
 float gLampGlints(vec2 wp) {
   vec2 g = wp + UB_HALF;
-  vec2 cell = floor(g / UB_BLOCK);
-  vec2 local = g - cell * UB_BLOCK;
   vec2 line = floor(g / UB_BLOCK + 0.5);
-  vec2 origin = cell * UB_BLOCK - UB_HALF;
+  // Lamp n along a road stands at n × spacing (from the city's corner); every
+  // fourth n is a junction, where there's none.
+  vec2 near = floor(g / UB_LAMP_SPACING + 0.5);
+  float per = UB_BLOCK / UB_LAMP_SPACING;
   float sum = 0.0;
-  if (cell.y >= 0.0 && cell.y < UB_BLOCKS) {
-    float za = origin.y + UB_LAMP_SPACING * clamp(floor(local.y / UB_LAMP_SPACING), 1.0, 2.0);
-    for (int s = 0; s < 2; s++) {
-      float side = s == 0 ? -1.0 : 1.0;
-      float col = line.x - (s == 0 ? 1.0 : 0.0);
-      if (col < 0.0 || col >= UB_BLOCKS) continue;
-      float lx = line.x * UB_BLOCK - UB_HALF + side * UB_LAMP_OFF;
-      sum += gGlint(wp, vec2(lx, za)) + gGlint(wp, vec2(lx, za + UB_LAMP_SPACING)) + gGlint(wp, vec2(lx, za - UB_LAMP_SPACING));
-    }
-  }
-  if (cell.x >= 0.0 && cell.x < UB_BLOCKS) {
-    float xa = origin.x + UB_LAMP_SPACING * clamp(floor(local.x / UB_LAMP_SPACING), 1.0, 2.0);
-    for (int s = 0; s < 2; s++) {
-      float side = s == 0 ? -1.0 : 1.0;
-      float row = line.y - (s == 0 ? 1.0 : 0.0);
-      if (row < 0.0 || row >= UB_BLOCKS) continue;
-      float lz = line.y * UB_BLOCK - UB_HALF + side * UB_LAMP_OFF;
-      sum += gGlint(wp, vec2(xa, lz)) + gGlint(wp, vec2(xa + UB_LAMP_SPACING, lz)) + gGlint(wp, vec2(xa - UB_LAMP_SPACING, lz));
+  for (int s = 0; s < 2; s++) {
+    float side = s == 0 ? -1.0 : 1.0;
+    float col = line.x - (s == 0 ? 1.0 : 0.0);
+    float row = line.y - (s == 0 ? 1.0 : 0.0);
+    float lx = line.x * UB_BLOCK - UB_HALF + side * UB_LAMP_OFF;
+    float lz = line.y * UB_BLOCK - UB_HALF + side * UB_LAMP_OFF;
+    for (int k = -1; k <= 1; k++) {
+      // Beside the north-south road: lamps along z.
+      float nz = near.y + float(k);
+      float bz = floor(nz / per);
+      if (col >= 0.0 && col < UB_BLOCKS && bz >= 0.0 && bz < UB_BLOCKS && nz - bz * per > 0.5) {
+        sum += gGlint(wp, vec2(lx, nz * UB_LAMP_SPACING - UB_HALF));
+      }
+      // Beside the east-west road: lamps along x.
+      float nx = near.x + float(k);
+      float bx = floor(nx / per);
+      if (row >= 0.0 && row < UB_BLOCKS && bx >= 0.0 && bx < UB_BLOCKS && nx - bx * per > 0.5) {
+        sum += gGlint(wp, vec2(nx * UB_LAMP_SPACING - UB_HALF, lz));
+      }
     }
   }
   return sum;

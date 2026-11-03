@@ -15,6 +15,12 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.22.1',
+    date: '2026-11-03',
+    title: 'Fixes',
+    notes: ['The street lamps\' reflections on the road at night no longer break up into cut-off wedges in the middle of junctions.'],
+  },
+  {
     version: '0.22.0',
     date: '2026-11-03',
     title: 'Neon city',
