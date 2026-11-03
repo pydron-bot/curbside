@@ -285,3 +285,73 @@ body:has(#radio.in) #wanted {
     animation: none;
   }
 }
+
+/* Red and blue light at the screen's edges while wanted (wantedHud.ts):
+   faster and stronger with every star, half as strong while they've lost
+   sight of you. A composited layer under the HUD, no GPU pass. */
+.w-edge {
+  --edge-speed: 1.4s;
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease-out;
+}
+
+.w-edge::before,
+.w-edge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: w-edge-flash var(--edge-speed) ease-in-out infinite;
+}
+
+.w-edge::before {
+  background: radial-gradient(ellipse 78% 72% at 50% 50%, transparent 60%, rgb(255 30 60 / 0.6) 100%);
+}
+
+.w-edge::after {
+  background: radial-gradient(ellipse 78% 72% at 50% 50%, transparent 60%, rgb(40 90 255 / 0.65) 100%);
+  animation-delay: calc(var(--edge-speed) / -2);
+}
+
+@keyframes w-edge-flash {
+  0%,
+  100% {
+    opacity: 0;
+  }
+  20%,
+  42% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 0;
+  }
+}
+
+.w-edge[data-level='1'] { opacity: 0.3; --edge-speed: 1.5s; }
+.w-edge[data-level='2'] { opacity: 0.42; --edge-speed: 1.15s; }
+.w-edge[data-level='3'] { opacity: 0.55; --edge-speed: 0.85s; }
+.w-edge[data-level='4'] { opacity: 0.68; --edge-speed: 0.62s; }
+.w-edge[data-level='5'] { opacity: 0.8; --edge-speed: 0.45s; }
+
+.w-edge.searching {
+  opacity: calc(0.5 * 0.55);
+}
+
+body:not([data-scene='play']) .w-edge {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .w-edge::before,
+  .w-edge::after {
+    animation: none;
+  }
+  .w-edge::before {
+    opacity: 0.5;
+    background: radial-gradient(ellipse 78% 72% at 50% 50%, transparent 60%, rgb(150 60 200 / 0.55) 100%);
+  }
+}

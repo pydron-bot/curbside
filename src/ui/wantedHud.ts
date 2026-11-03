@@ -39,6 +39,8 @@ const fill = (f: number) => FILLS[Math.round(Math.max(0, Math.min(1, f)) * 100)]
  */
 export class WantedHud {
   private readonly el: HTMLElement;
+  /** Red and blue light pulsing at the screen's edges, faster with every star (wanted.css .w-edge). */
+  private readonly edge: HTMLElement;
   private readonly stars: HTMLElement[] = [];
   private readonly pop: HTMLElement;
   private readonly arrest: HTMLElement;
@@ -66,7 +68,11 @@ export class WantedHud {
       <div class="w-pop" hidden></div>
       <div class="w-meter w-arrest" hidden><b>ARREST</b><span><i></i></span></div>
       <div class="w-meter w-spray" hidden><b>RESPRAY</b><span><i></i></span></div>`;
-    parent.append(el);
+    const edge = document.createElement('div');
+    edge.className = 'w-edge';
+    edge.dataset.level = '0';
+    parent.append(edge, el);
+    this.edge = edge;
     this.el = el;
     this.stars.push(...el.querySelectorAll<HTMLElement>('.w-star'));
     // Drop the pop once it has played: a finished animation held on every
@@ -95,6 +101,7 @@ export class WantedHud {
       this.linger = 0;
       this.popLeft = 0;
       this.pop.hidden = true;
+      this.edge.dataset.level = '0';
     };
     bus.on('busted', hide);
     bus.on('playerDied', hide);
@@ -108,6 +115,7 @@ export class WantedHud {
       const prev = this.shownLevel;
       this.shownLevel = level;
       this.el.dataset.level = String(level);
+      this.edge.dataset.level = String(level);
       for (let i = 0; i < 5; i++) {
         const s = this.stars[i];
         const on = i < level;
@@ -127,6 +135,7 @@ export class WantedHud {
     if (searching !== this.shownSearching) {
       this.shownSearching = searching;
       this.el.classList.toggle('searching', searching);
+      this.edge.classList.toggle('searching', searching);
     }
     if (this.linger > 0) this.linger -= dt;
     const show = level > 0 || this.linger > 0 || f.spray > 0;
