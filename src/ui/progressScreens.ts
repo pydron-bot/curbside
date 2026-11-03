@@ -240,8 +240,8 @@ export interface ShopEntry {
 }
 
 export interface ShopHooks {
-  /** 'ok', 'owned' or 'broke' for each entry. */
-  state(id: string): 'ok' | 'owned' | 'broke';
+  /** 'ok', 'owned' or 'broke' for each entry; 'locked' ones aren't shown. */
+  state(id: string): 'ok' | 'owned' | 'broke' | 'locked';
   /** Try to buy; true if it went through. */
   buy(id: string): boolean;
   cash(): number;
@@ -337,6 +337,8 @@ export class ShopSheet implements Panel {
     for (const [id, el] of this.items) {
       const state = h.state(id);
       el.dataset.state = state;
+      // Not on the shelf yet (a story reward): out of the list and the navigation.
+      el.style.display = state === 'locked' ? 'none' : '';
       if (state === 'owned') el.querySelector('.shop-price')!.textContent = 'OWNED';
     }
   }

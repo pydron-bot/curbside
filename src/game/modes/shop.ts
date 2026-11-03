@@ -18,7 +18,12 @@ export interface ShopItem {
   price: number;
   /** For ammo: which gun. */
   weapon?: WeaponKind;
+  /** Only on the shelf once this story job is passed (a mission id). */
+  after?: string;
 }
+
+/** The job that puts STICKY CHARGES on the shelf (it hands you the first two). */
+export const CHARGE_JOB = 's5-ribbon';
 
 /** Pay 'n' Spray's usual price (heat.ts), and with the spray card. */
 export const SPRAY_PRICE = SPRAY_COST;
@@ -58,12 +63,17 @@ export const SHOP_ITEMS: readonly ShopItem[] = [
   { id: 'ammo-taser', kind: 'ammo', name: 'TASER', blurb: '+4 cartridges: drops one person, no harm done', price: 450, weapon: 'taser' },
   { id: 'ammo-stinger', kind: 'ammo', name: 'STINGERS', blurb: '+2 spike strips: burst the tyres behind you', price: 500, weapon: 'stinger' },
   { id: 'ammo-smoke', kind: 'ammo', name: 'SMOKE GRENADES', blurb: '+2 canisters: the police lose you in the cloud', price: 600, weapon: 'smoke' },
+  { id: 'ammo-charge', kind: 'ammo', name: 'STICKY CHARGES', blurb: '+2 charges: stick one on, set it off when you like', price: 700, weapon: 'charge', after: CHARGE_JOB },
 ];
 
-export type BuyCheck = 'ok' | 'owned' | 'broke';
+export type BuyCheck = 'ok' | 'owned' | 'broke' | 'locked';
 
-/** Can `item` be bought with `cash`, given the unlocks held (for armour: a vest already full)? */
-export function canBuy(item: ShopItem, cash: number, owned: (id: string) => boolean): BuyCheck {
+/**
+ * Can `item` be bought with `cash`, given the unlocks held (for armour: a
+ * vest already full) and the story jobs passed? 'locked': not on the shelf yet.
+ */
+export function canBuy(item: ShopItem, cash: number, owned: (id: string) => boolean, passed: (job: string) => boolean = () => true): BuyCheck {
+  if (item.after !== undefined && !passed(item.after)) return 'locked';
   if ((item.kind === 'upgrade' || item.kind === 'armour') && owned(item.id)) return 'owned';
   return cash >= item.price ? 'ok' : 'broke';
 }

@@ -47,6 +47,8 @@ import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
 import { CombatLook } from './render/combatLook';
 import { StingerLook } from './render/stingerLook';
+import { ChargeLook } from './render/chargeLook';
+import { canDetonate, detonateHint } from './systems/charges';
 import { SmokeLook } from './render/smokeLook';
 import { PeoplePose } from './render/peoplePose';
 import { PigeonLook } from './render/pigeonMesh';
@@ -371,6 +373,8 @@ function maintainPopulation(seed = false, parked = seed) {
   const hooked = towHooked();
   if (hooked) keepVehicles.push(hooked);
   for (const v of activityCars) keepVehicles.push(v);
+  // A car with a sticky charge on it stays until the charge goes off (MAX_CHARGES cars at most).
+  chargedCars(keepVehicles);
   // A held run's cars (Observe from the pause menu) wait where they are.
   if (observe?.holdsRun) for (const v of observe.heldCars) keepVehicles.push(v);
   population.maintain({
@@ -397,6 +401,8 @@ const restoreProp = (k: KnockableItem) => look.props.restore(k.id);
 let maintainCity: (seed: boolean) => void = () => {};
 /** The car on a borrowed tow truck's hook (set once CityLife exists, below). */
 let towHooked: () => Vehicle | null = () => null;
+/** Push the cars carrying a sticky charge (set once Combat exists, below). */
+let chargedCars: (out: Array<Vehicle | null>) => void = () => {};
 maintainPopulation(true);
 
 // --- Score ---
@@ -467,6 +473,8 @@ const combat = new Combat({
 });
 const combatLook = new CombatLook(scene, look, effects, combat, population.crowd, player);
 const stingerLook = new StingerLook(scene, look, combat);
+const chargeLook = new ChargeLook(scene, look, combat);
+chargedCars = (out) => combat.charges.cars(out as Vehicle[]);
 const smokeLook = new SmokeLook(look, effects, smoke, heat.police.units);
 
 // --- The city's own life (game/cityLife.ts): ambient scenes, parking, dropped guns ---
@@ -488,7 +496,7 @@ const cityLife = new CityLife({
   tier: () => getQuality().name,
   stars: () => heat.wanted.level,
   opening: () => progress.opening.holding,
-  keep: (v) => activityCars.includes(v) || (observe?.held(v) ?? false),
+  keep: (v) => activityCars.includes(v) || (observe?.held(v) ?? false) || combat.charges.carries(v),
   avoid: [
     ...dressing.landmarks.props.map((p) => ({ x: p.x, z: p.z, r: 11 })),
     ...ramps.map((r) => ({ x: r.x, z: r.z, r: 9 })),
@@ -1254,6 +1262,12 @@ function frame(now: number) {
   const pressed = input.consumePunch();
   const cycle = input.consumeCycle();
   const acted = input.consumeAction();
+  // DETONATE (G, D-pad down, BOOM): drained every frame, acted on only in play (systems/charges.ts canDetonate).
+  if (
+    input.consumeDetonate() &&
+    canDetonate({ paused, title: attract.active || frontDoor.inTitle, observing: observe?.active ?? false, menu: frontDoor.menuUp, blocked: progress.blocksInput, alive: player.alive && !player.arrested })
+  )
+    combat.detonate();
   // A borrowed service vehicle's tool takes the fire slot (hose, chime, winch).
   const tool = control && player.driving ? toolFor(player.driving.archetype) : null;
   cityLife.tools.control(tool !== null && pressed, tool !== null && input.fireHeld, tool !== null ? aiming : null);
@@ -1337,6 +1351,7 @@ function frame(now: number) {
   streetLife.update(frameSeconds, focus.x, focus.z, !attract.active);
   combatLook.update(frameSeconds * fx.hitStop.scale * slow);
   stingerLook.update();
+  chargeLook.update();
   smokeLook.update(frameSeconds * fx.hitStop.scale * slow);
   stamps.step();
   updateHud(frameSeconds);
@@ -1431,6 +1446,7 @@ function updateHud(frameSeconds: number) {
   combatHud.update(player.armour, nitro.charge, nitro.boosting, nitro.charge >= NITRO_MIN);
   carButtons.update(v ? (gun && WEAPONS[gun].driveBy ? gun : player.arsenal.driveByGun()) : null, nitro.charge, nitro.charge >= NITRO_MIN || nitro.boosting, tool);
   touch.setWeapon(gun, gun !== null || ownsGun());
+  touch.setDetonate(combat.charges.live && !attract.active);
   touch.setMode(v ? 'car' : 'foot', nearCar !== null);
 }
 requestAnimationFrame(frame);
@@ -1456,6 +1472,12 @@ const hud = new Hud(document.body, score, events, {
   },
 });
 const combatHud = new CombatHud(document.getElementById('hud')!);
+// Sticky charges: how to set the first one off on this device, and a refused fourth throw.
+events.on('charge', (e) => {
+  if (!e.byPlayer) return;
+  if (e.what === 'full') hud.score.notice('CHARGES OUT · SET THEM OFF', 'weapon');
+  else if (combat.charges.count === 1) hud.score.notice(detonateHint(input.lastDevice), 'weapon');
+});
 new StampHud(document.getElementById('hud')!, events);
 // The life's best stamped moment, photographed as it lands and shown on WASTED / BUSTED (ui/momentCard.ts).
 const moment = new MomentCard(document.getElementById('wasted')!, {

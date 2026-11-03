@@ -58,6 +58,7 @@ import { CAR_NAMES } from './exports';
 import { SAFEHOUSE, placePayphones, type Spot } from './places';
 import { len2 } from '../../core/len';
 import type { LabelSink } from '../debugLabels';
+import { WEAPONS } from '../../systems/weapons';
 
 /** Answering: on foot this close, or stopped in a car this close, m. */
 const ANSWER_FOOT = 2.4;
@@ -530,7 +531,7 @@ export class MissionMode implements Mode {
         case 'give':
           player.arsenal.pickUp(a.weapon);
           player.arsenal.current = a.weapon;
-          ctx.notice(`+ ${a.weapon.toUpperCase()}`, 'weapon');
+          ctx.notice(`+ ${WEAPONS[a.weapon].label}`, 'weapon');
           break;
         case 'board': {
           const m = this.peds.get(a.tag);

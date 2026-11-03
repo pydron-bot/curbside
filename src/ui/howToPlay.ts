@@ -26,6 +26,7 @@ function touchRows(s: Settings): Binding[] {
     ['Punch / fire', 'The big button (punches combo: jab, jab, hook)'],
     ['Drive-by', 'The car FIRE button (pistol or SMG)'],
     ['Switch weapon', '[[⇄]]'],
+    ['Sticky charge', 'Throw it on a car, then BOOM (shown while one is out) sets it off'],
     ['Get in / out', 'The door button (it pulses next to a car)'],
     ['Pause', '[[❚❚]] top centre'],
   ];
@@ -45,6 +46,7 @@ const CONTROLS: Record<Exclude<InputDevice, 'touch'>, { title: string; rows: rea
       ['Punch / fire', 'Left click, [[Space]] or [[J]] — hold for SMG'],
       ['Drive-by', 'Left click or [[J]] in a car'],
       ['Switch weapon', 'Wheel, right click, [[Q]] / [[Tab]]'],
+      ['Set off sticky charges', '[[G]]'],
       ['Get in / out', '[[E]]'],
       ['Radio station', '[[R]]'],
       ['Pause', '[[P]] / [[Esc]]'],
@@ -60,6 +62,7 @@ const CONTROLS: Record<Exclude<InputDevice, 'touch'>, { title: string; rows: rea
       ['Nitro', '[[B]] in a car'],
       ['Fire / punch', '[[RT]] on foot, or [[X]] (drive-bys too)'],
       ['Switch weapon', '[[LB]] / [[RB]]'],
+      ['Set off sticky charges', 'D-pad [[↓]]'],
       ['Get in / out', '[[Y]]'],
       ['Pause', '[[Start]]'],
     ],

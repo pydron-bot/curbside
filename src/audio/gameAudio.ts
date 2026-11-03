@@ -670,6 +670,14 @@ export class GameAudio {
         return this.oneShot('impact', e, FALLOFF.crash, 0.9, 0.3, sfx.ignite, 0.5);
       case 'smoke':
         return this.oneShot('impact', e, FALLOFF.fire, e.byPlayer ? 0.9 : 0.7, 0.2, sfx.smokePop, 0.2);
+      case 'charge': {
+        const armed = e.what !== 'full';
+        return this.oneShot('impact', armed ? e : null, FALLOFF.punch, armed ? 0.8 : 0.6, 0.1, (v) => sfx.chargeStick(v, armed));
+      }
+      case 'detonate':
+        return this.oneShot('pickup', null, FALLOFF.near, 0.85, 0, sfx.detonator);
+      case 'chargeBlast':
+        return; // its car's explosion (or the grenade's) plays
       case 'cough':
         return this.oneShot('body', e, FALLOFF.punch, 0.6, 0.1, (v) => sfx.cough(v, e.cop));
       case 'boost':

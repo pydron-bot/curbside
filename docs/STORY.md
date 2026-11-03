@@ -224,12 +224,14 @@ point: YOU SCRATCHED DOREEN'S VAN) or, once it's yours, left behind.
 
 > **MAYOR LULL:** Mayor Lull. Today I open our first Silent Zone, in Glass Heights. Please don't clap.
 > **DOREEN:** She cuts her ribbon, then she's off in that limo. I want it in bits.
-> **LIONEL:** Take these. I call them fireworks. The council calls them evidence.
+> **LIONEL:** Take these. Fireworks. The sticky ones go off when you say. The council calls them evidence.
 
-1. **WRECK THE MAYOR'S LIMO.** You're given grenades. The pearl limo
+1. **WRECK THE MAYOR'S LIMO.** You're given grenades and two sticky
+   charges (W3-B; passing the job puts them in the shop). The pearl limo
    stands at the ribbon outside the Town Hall in Glass Heights until
    you're within 50 m (or it's hit), then drives off into traffic: ram it,
-   bomb it, chase it. Lull's in it, and is never seen.
+   bomb it, chase it, or stick a charge on it and pick your moment (that's
+   PARTING GIFT). Lull's in it, and is never seen.
 
 > **MAYOR LULL:** Mayor Lull. The Silent Zone is closed for repairs. As is my limo. Quietly.
 > **LIONEL:** That bang! The reverb! Glass Heights hasn't had applause like it since the eighties.

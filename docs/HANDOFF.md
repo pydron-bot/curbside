@@ -127,12 +127,38 @@ two clouds at most (`mayhem.mjs --scenario smoke`: peak smoke fill 1.46
 vs a car explosion's 5.05 on medium, 47–50 draw calls). Merge note: the
 projectile fuse runs for grenades and smoke, not stingers. Crate odds
 rebalanced to sum to 1 with the three new crates. No held models or
-crates yet (BLENDER_TODO §12–14). Device checks: the taser's wires and the
+crates in 0.18.0; 0.19.1 added them (BLENDER_TODO §11–14, done). Device checks: the taser's wires and the
 stinger's strip legible at 852×340, two smoke clouds' frame rate on the
 iPhone, the smoke confusion split reading as scattered in a real chase.
+**0.20.0 "Sticky charge"** (`claude/w3-sticky`, the last W3-B weapon;
+the map editor, `claude/w3-map`, follows as 0.21.0 after its iPhone check). Owner's calls (2026-11-02): RIBBON CUTTING gives two and opens
+the shop item (+2, $700), never in crates; FIRE throws, a separate
+DETONATE sets every charge off (G, D-pad down, touch BOOM shown only
+while one is out), on foot or in a car, play only (`canDetonate`: not on
+the title, paused, under the TEST menu, the map editor or Settings, in
+Observe, under a card); cars only, three out, a miss lies on the road (and
+is forgotten 400 m off); cars carrying one are in the keep guard; no crime
+to stick it on, the blast is the explosion crime (and copCarWrecked)
+through ignite → wreck → `vehicleExploded`; PARTING GIFT (weight 7) on a
+car someone else drives with you 30 m off, or the cash van or the Mayor's
+limo from anywhere. Pure logic in `systems/charges.ts`
+(`tests/charges.test.ts`); stand-in models built in code until BLENDER_TODO
+§15; the smoke test checks BOOM on the phones (in view, clear of the other
+buttons on foot and in a car, a tap sets it off). `tests/cityCore.test.ts`
+re-pinned the mission data (s5's give and Lionel's line; the spots are
+the same). Merge note: `src/main.ts`, `core/input.ts`, `ui/frontDoor.ts`
+(`menuUp`) and `tools/smoke.mjs` edits are additive; the map editor opens
+from TEST behind the pause, so `canDetonate`'s `paused` / `menu` already
+cover it. Device checks: the charge's legibility on a roof and on the road
+at 852×340 (3× life size, blinking light, red ring), BOOM's spot on touch
+at 852×393 and 852×340 on foot and in a car (and left-handed), that
+D-pad down in play doesn't fight anything, and the four-charge refusal
+notice reading clearly. Known gap: a police car retired by the police
+system takes its charge with it.
 **Next:** the iPhone device pass (V2-14) on 0.18.0, then 1.0.0. Wave 3
-candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B's last weapon,
-STICKY CHARGE (AIR HORN, TASER, STINGER and SMOKE GRENADE shipped). W3-C four new street scenes
+candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B is complete
+(AIR HORN, TASER, STINGER and SMOKE GRENADE shipped; STICKY CHARGE on
+`claude/w3-sticky`). W3-C four new street scenes
 the owner picked (QUIET PLEASE march, roadworks, bin day with a tipper
 for Borrowed Blues, delivery rush); W3-D a desktop map editor whose edits ship in the
 game (place things, blocks, roads, districts) with an overlay of what

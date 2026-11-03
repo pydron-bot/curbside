@@ -1,6 +1,7 @@
 """Guns and pickups: weapons.glb and pickups.glb.
 
-weapons.glb: `pistol`, `smg`, `shotgun`, `grenade`, `molotov`, `rocket_launcher` as loose models for the game to attach
+weapons.glb: `pistol`, `smg`, `shotgun`, `grenade`, `molotov`, `rocket_launcher`, and W3-B's `air_horn`,
+`taser`, `stinger` (the strip folded) and `smoke_grenade`, as loose models for the game to attach
 at the hand. Origin at the grip (where the fist closes), barrel toward Blender
 -Y (game +Z), up is up; `muzzle` (metres ahead of the grip, along the barrel)
 is exported as a custom property on each root for muzzle flashes (0 for thrown
@@ -9,7 +10,8 @@ the game flies: origin at its centre, nose toward game +Z, <= 60 tris.
 
 pickups.glb: things lying in the street, designed to read from above:
 `crate_pistol` / `crate_smg` / `crate_shotgun` / `crate_grenade` /
-`crate_molotov` / `crate_rocket` (the weapon on the lid and a coloured stripe
+`crate_molotov` / `crate_rocket` / `crate_horn` / `crate_taser` / `crate_stinger` /
+`crate_smoke` (the weapon on the lid and a coloured stripe
 per weapon), `health_kit`, `armour`, `ammo_box`, `package` (hidden-package
 collectible) and `cash`. Origin at ground centre. Budget <= 300 tris each.
 """
@@ -22,7 +24,10 @@ from lib.common import box, cylinder, export_glb, group, hull, material, render_
 THUMBS = Path(__file__).resolve().parents[1] / "thumbs"
 
 GUN_STRIPES = {"pistol": (240, 200, 40), "smg": (240, 120, 30), "shotgun": (210, 40, 40),
-               "grenade": (80, 170, 60), "molotov": (150, 70, 200), "rocket_launcher": (235, 235, 235)}
+               "grenade": (80, 170, 60), "molotov": (150, 70, 200), "rocket_launcher": (235, 235, 235),
+               # W3-B: the colours the game rings their crates with (src/render/pickupMesh.ts COLORS).
+               "air_horn": (255, 95, 180), "taser": (127, 140, 255), "stinger": (207, 216, 230),
+               "smoke_grenade": (184, 196, 204)}
 
 
 def mats():
@@ -44,6 +49,10 @@ def mats():
         "warhead": material("warhead", (110, 116, 80), 0.5),
         "vest": material("vest", (34, 40, 56), 0.8),
         "ammo_band": material("ammo_band", (230, 190, 40), 0.6),
+        "horn_red": material("horn_red", (200, 34, 40), 0.35),
+        "black": material("black", (26, 26, 30), 0.6),
+        "safety_yellow": material("safety_yellow", (240, 196, 30), 0.5),
+        "smoke_green": material("smoke_green", (104, 120, 96), 0.7),
     }
     for gun, rgb in GUN_STRIPES.items():
         m[f"stripe_{gun}"] = material(f"stripe_{gun}", rgb, 0.5)
@@ -130,15 +139,63 @@ def rocket(m, p="rocket"):
     ], 0.0
 
 
+# ---------------------------------------------------------------- W3-B (BLENDER_TODO §11-14)
+
+def air_horn(m, p="air_horn"):
+    # Held like a pistol round the canister (origin at the grip); the trumpet on its top points
+    # forward. `_barrel` (the trumpet) sets the blast's height in the game.
+    return [
+        cylinder(f"{p}_can", 0.034, 0.17, (0, 0, -0.01), m["horn_red"], verts=8),
+        cylinder(f"{p}_cap", 0.024, 0.03, (0, 0, 0.09), m["black"], verts=6),
+        box(f"{p}_button", (0.02, 0.02, 0.015), (0, 0.0, 0.11), m["black"]),
+        cylinder(f"{p}_barrel", 0.013, 0.16, (0, -0.1, 0.08), m["black"], verts=8, radius2=0.045, rotation=(90, 0, 0)),
+    ], 0.2
+
+
+def taser(m, p="taser"):
+    # A stubby pistol: yellow body, black grip, the square cartridge on its nose (`_barrel`), where
+    # the wires leave.
+    return [
+        box(f"{p}_body", (0.036, 0.13, 0.046), (0, -0.045, 0.05), m["safety_yellow"]),
+        box(f"{p}_barrel", (0.042, 0.035, 0.05), (0, -0.13, 0.05), m["black"]),
+        rotate(box(f"{p}_grip", (0.03, 0.045, 0.1), (0, 0.0, -0.01), m["black"]), (-15, 0, 0)),
+        box(f"{p}_guard", (0.012, 0.045, 0.012), (0, -0.04, 0.0), m["black"]),
+    ], 0.15
+
+
+def stinger(m, p="stinger"):
+    # The strip folded into a block, carried in the fist (origin at its centre): black sections with
+    # yellow hinge blocks and a row of spike tips along the top.
+    return [
+        box(f"{p}_body", (0.09, 0.28, 0.08), (0, 0, 0), m["black"]),
+        box(f"{p}_hinge_a", (0.1, 0.03, 0.09), (0, -0.1, 0), m["safety_yellow"]),
+        box(f"{p}_hinge_b", (0.1, 0.03, 0.09), (0, 0.0, 0), m["safety_yellow"]),
+        box(f"{p}_hinge_c", (0.1, 0.03, 0.09), (0, 0.1, 0), m["safety_yellow"]),
+        box(f"{p}_spikes", (0.05, 0.24, 0.02), (0, 0, 0.05), m["steel"]),
+    ], 0.0
+
+
+def smoke_grenade(m, p="smoke_grenade"):
+    # Held in the fist like the grenade (origin at its centre): a taller canister, lever and ring.
+    return [
+        cylinder(f"{p}_body", 0.032, 0.13, (0, 0, 0), m["smoke_green"], verts=8),
+        cylinder(f"{p}_band", 0.033, 0.025, (0, 0, 0.03), m["stripe_smoke_grenade"], verts=8),
+        cylinder(f"{p}_cap", 0.02, 0.025, (0, 0, 0.075), m["steel"], verts=6),
+        box(f"{p}_lever", (0.012, 0.02, 0.11), (0, 0.03, 0.03), m["steel"]),
+        cylinder(f"{p}_ring", 0.016, 0.005, (0.028, 0, 0.08), m["steel"], verts=6, rotation=(0, 90, 0)),
+    ], 0.0
+
+
 # Held in a hand the guns are drawn at 20-27 m: wider and taller than life (lengths kept), with
 # a stripe on top in the crate's colour; the thrown ones bigger than the fist that holds them.
 # Crates build the life-size models (their own scale table below).
-HELD_WIDEN = {"pistol": 1.45, "smg": 1.4, "shotgun": 1.35}
-HELD_SCALE = {"grenade": 1.7, "molotov": 1.25}
+HELD_WIDEN = {"pistol": 1.45, "smg": 1.4, "shotgun": 1.35, "air_horn": 1.35, "taser": 1.45}
+HELD_SCALE = {"grenade": 1.7, "molotov": 1.25, "stinger": 1.2, "smoke_grenade": 1.6}
 HELD_ACCENT = {  # top stripe: size, centre (before widening)
     "pistol": ((0.022, 0.15, 0.008), (0, -0.08, 0.072)),
     "smg": ((0.028, 0.2, 0.008), (0, -0.03, 0.097)),
     "shotgun": ((0.028, 0.16, 0.008), (0, -0.04, 0.097)),
+    "taser": ((0.022, 0.1, 0.008), (0, -0.045, 0.077)),
 }
 
 
@@ -161,13 +218,16 @@ def held(m, name):
 
 
 GUNS = {"pistol": pistol, "smg": smg, "shotgun": shotgun, "grenade": grenade, "molotov": molotov,
-        "rocket_launcher": rocket_launcher, "rocket": rocket}
+        "rocket_launcher": rocket_launcher, "rocket": rocket,
+        "air_horn": air_horn, "taser": taser, "stinger": stinger, "smoke_grenade": smoke_grenade}
+# The crate roots that don't follow `crate_<gun>` (the names the game asks pickups.glb for).
+CRATE_NAMES = {"rocket_launcher": "crate_rocket", "air_horn": "crate_horn", "smoke_grenade": "crate_smoke"}
 
 
 # ---------------------------------------------------------------- pickups (origin on the ground)
 
 def crate(m, gun):
-    name = f"crate_{gun}" if gun != "rocket_launcher" else "crate_rocket"
+    name = CRATE_NAMES.get(gun, f"crate_{gun}")
     length = 1.05 if gun == "rocket_launcher" else 0.7  # the launcher gets a long crate
     parts = [
         box(f"{name}_body", (length, 0.5, 0.32), (0, 0, 0.16), m["crate"], bevel=0.015),
@@ -177,7 +237,8 @@ def crate(m, gun):
     ]
     # The gun itself lying on the lid, turned sideways, scaled up a little to read from above.
     gun_parts, _ = GUNS[gun](m, f"{name}_gun")
-    scale = {"pistol": 1.6, "smg": 1.2, "shotgun": 0.62, "grenade": 2.6, "molotov": 1.35, "rocket_launcher": 0.82}[gun]
+    scale = {"pistol": 1.6, "smg": 1.2, "shotgun": 0.62, "grenade": 2.6, "molotov": 1.35, "rocket_launcher": 0.82,
+             "air_horn": 1.5, "taser": 1.8, "stinger": 1.5, "smoke_grenade": 2.4}[gun]
     for obj in gun_parts:
         obj.scale = (scale, scale, scale)
         rotate(obj, (0, -90, 0) if gun == "molotov" else (0, -90, 90), pivot=(0, 0, 0))  # lie along the crate
@@ -243,6 +304,10 @@ PICKUPS = {
     "crate_grenade": lambda m: crate(m, "grenade"),
     "crate_molotov": lambda m: crate(m, "molotov"),
     "crate_rocket": lambda m: crate(m, "rocket_launcher"),
+    "crate_horn": lambda m: crate(m, "air_horn"),
+    "crate_taser": lambda m: crate(m, "taser"),
+    "crate_stinger": lambda m: crate(m, "stinger"),
+    "crate_smoke": lambda m: crate(m, "smoke_grenade"),
     "armour": armour,
     "ammo_box": ammo_box,
     "health_kit": health_kit,

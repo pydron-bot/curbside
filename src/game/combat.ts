@@ -20,7 +20,11 @@
  * and bursts the tyres of every car that runs over it (systems/stinger.ts).
  * A smoke grenade is thrown like a grenade and pours a cloud
  * (systems/smoke.ts) that people cough their way out of and drivers stop
- * dead in; the police side is systems/police.ts's.
+ * dead in; the police side is systems/police.ts's. A sticky charge is
+ * thrown like a grenade (aimed at cars rather than people, leading a moving
+ * one), sticks to the first car it touches or lies where it lands, and
+ * waits for detonate(): every charge out goes at once, a stuck one through
+ * its car's own ignite → wreck → explosion sequence (systems/charges.ts).
  */
 import type { EventBus } from '../core/events';
 import { CAR_BODY, VEHICLE_SPECS, isPoliceArchetype } from '../entities/vehicle';
@@ -45,6 +49,7 @@ import {
 import { HORN_RANGE, hornClear, hornHit, startle, startleDriverByHorn } from '../systems/airHorn';
 import { TASER_HIT_RADIUS, TASER_RANGE, TASER_SCARE, TASER_SCARE_SECONDS, stun } from '../systems/taser';
 import { SMOKE_RADIUS, SMOKE_THICK, SmokeClouds, brakeInSmoke, cough } from '../systems/smoke';
+import { Charges, DETONATE_FUSE, MAX_CHARGES, STICK_MARGIN, partingGift, prizeOf, type Charge } from '../systems/charges';
 import { bodyDistance, bodyOf, carCircles } from '../systems/physics';
 import { DROP_BEHIND, STINGER_LENGTH, Stingers, burstTyres, stingerAcross, stingerTouches, stungDriver, type Stinger, type StingerPlace } from '../systems/stinger';
 import { FIRE_RADIUS, MIN_THROW, Projectiles, clampThrowToWalls, throwTarget, type ProjectileWorld } from '../systems/projectiles';
@@ -186,6 +191,10 @@ export class Combat {
   readonly stingers = new Stingers();
   /** Smoke grenades' clouds (systems/smoke.ts). */
   readonly smoke: SmokeClouds;
+  /** Sticky charges out, stuck to cars or lying on the road (systems/charges.ts). */
+  readonly charges = new Charges<Vehicle>();
+  private readonly detonated: Array<Charge<Vehicle>> = [];
+  private readonly present = (v: Vehicle) => this.d.vehicles.includes(v);
   /** Who the gun is locked on to (a ped), while firing. */
   lock: CrowdPed | null = null;
   /** Where a throw would land now (the landing marker), while one is ready; `blocked`: a wall cut it short. */
@@ -220,6 +229,10 @@ export class Combat {
       ignite: (x, z, byPlayer) => d.bus.emit({ type: 'ignite', x, z, radius: FIRE_RADIUS, byPlayer }),
       lay: (x, z, dirX, dirZ, byPlayer) => this.layStinger(x, z, dirX, dirZ, byPlayer, false),
       smoke: (x, z, byPlayer) => this.pourSmoke(x, z, byPlayer),
+      stickCharge: (x, y, z, byPlayer) => this.stickCharge(x, y, z, byPlayer),
+      layCharge: (x, z, byPlayer) => {
+        if (this.charges.lay(x, z, byPlayer)) d.bus.emit({ type: 'charge', what: 'laid', x, z, byPlayer });
+      },
     };
   }
 
@@ -228,6 +241,7 @@ export class Combat {
     this.projectiles.clear();
     this.stingers.clear();
     this.smoke.clear();
+    this.charges.clear();
     this.playerLit.clear();
     this.lock = null;
     this.marker.show = false;
@@ -243,6 +257,8 @@ export class Combat {
     this.projectiles.step(dt, this.world);
     this.stepFires(dt);
     this.stepStingers(dt);
+    const me = this.d.player.position;
+    this.charges.step(dt, me.x, me.z, this.present);
     this.smoke.step(dt);
     this.stepSmoke(dt);
   }
@@ -270,7 +286,7 @@ export class Combat {
     // Throwables always show where they'd land, aimed or not (a tap on FIRE
     // throws to the same spot, so touch players see it first too).
     if (spec.mode === 'throw') {
-      this.marker.blocked = this.throwPoint(spec.range, aim, this.target);
+      this.marker.blocked = this.throwPoint(spec.range, aim, this.target, kind === 'charge');
       this.marker.x = this.target.x;
       this.marker.z = this.target.z;
       this.marker.show = true;
@@ -313,7 +329,7 @@ export class Combat {
     const kind = p.arsenal.current;
     if (!kind || p.driving || !p.ready || !p.arsenal.ready) return false;
     const spec = WEAPONS[kind];
-    if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov' | 'stinger' | 'smoke', aim);
+    if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov' | 'stinger' | 'smoke' | 'charge', aim);
     if (spec.mode === 'horn') return this.blowHorn(aim);
     if (spec.mode === 'taser') return this.tase(aim);
     // Spread before this shot's bloom; running sprays more.
@@ -445,10 +461,15 @@ export class Combat {
     return true;
   }
 
-  private throwIt(kind: 'grenade' | 'molotov' | 'stinger' | 'smoke', aim: AimInput): boolean {
+  private throwIt(kind: 'grenade' | 'molotov' | 'stinger' | 'smoke' | 'charge', aim: AimInput): boolean {
     const p = this.d.player;
     const { x, z } = p.ped;
-    const blocked = this.throwPoint(WEAPONS[kind].range, aim, this.target);
+    // MAX_CHARGES out (or on their way) already: set them off first.
+    if (kind === 'charge' && this.charges.count + this.projectiles.flying('charge') >= MAX_CHARGES) {
+      this.d.bus.emit({ type: 'charge', what: 'full', x, z, byPlayer: true });
+      return false;
+    }
+    const blocked = this.throwPoint(WEAPONS[kind].range, aim, this.target, kind === 'charge');
     // Hugging a wall and throwing into it would drop it at your own feet: no throw (the ring shows red there).
     if (blocked && len2(this.target.x - x, this.target.z - z) < MIN_THROW) return false;
     if (!p.arsenal.tryFire()) return false;
@@ -466,14 +487,18 @@ export class Combat {
    * short): the marker shows what will really happen, not a spot behind a
    * building that the grenade would bounce back from.
    */
-  private throwPoint(range: number, aim: AimInput, out: { x: number; z: number }): boolean {
-    this.aimThrow(range, aim, out);
+  private throwPoint(range: number, aim: AimInput, out: { x: number; z: number }, cars = false): boolean {
+    this.aimThrow(range, aim, out, cars);
     const p = this.d.player.ped;
     return clampThrowToWalls(p.x, p.z, out, this.d.grid);
   }
 
-  /** Where a throw is aimed: the cursor, a locked or assisted target, the stick's reach, or ahead. */
-  private aimThrow(range: number, aim: AimInput, out: { x: number; z: number }): void {
+  /**
+   * Where a throw is aimed: the cursor, a locked or assisted target, the
+   * stick's reach, or ahead. `cars`: a sticky charge picks out cars rather
+   * than people, and leads one on the move by the throw's flight time.
+   */
+  private aimThrow(range: number, aim: AimInput, out: { x: number; z: number }, cars = false): void {
     const p = this.d.player.ped;
     if (aim.ground) {
       throwTarget(p.x, p.z, aim.ground.x, aim.ground.z, range, out);
@@ -483,12 +508,21 @@ export class Combat {
     // Without an aim it's a lob to a sensible distance (on screen, even
     // looking up a landscape phone), or onto someone in front within it.
     const lob = range * THROW_LOB;
-    // Someone near the aim line within reach: land on them.
-    this.gatherPeds();
+    // Someone (a charge: a car) near the aim line within reach: land on them.
+    if (cars) this.gatherCars();
+    else this.gatherPeds();
     const i = lockTarget(p.x, p.z, heading, this.candidates, this.candidateCount, aim.heading === null ? lob : range, aim.heading === null ? 0.5 : LOCK_AIM_CONE);
     if (i >= 0 && (aim.heading === null || aim.reach >= 0.9)) {
       const c = this.candidates[i];
-      throwTarget(p.x, p.z, c.x, c.z, range, out);
+      let tx = c.x;
+      let tz = c.z;
+      if (c.car) {
+        // Where it'll be when the charge gets there (throwVelocity's flight time).
+        const t = 0.45 + len2(tx - p.x, tz - p.z) * 0.03;
+        tx += c.car.sim.vx * t;
+        tz += c.car.sim.vz * t;
+      }
+      throwTarget(p.x, p.z, tx, tz, range, out);
       return;
     }
     const reach = aim.heading !== null ? 4 + (range - 4) * Math.min(1, aim.reach) : lob;
@@ -616,6 +650,61 @@ export class Combat {
     if (d.player.alive && !d.player.arrested) d.award(d.score.award('spiked'));
   }
 
+  // --- Sticky charges -----------------------------------------------------------
+
+  /** A charge in flight at (x, y, z): stuck to the first unwrecked car it touches (not the player's own). */
+  private stickCharge(x: number, y: number, z: number, byPlayer: boolean): boolean {
+    if (y > 1.7) return false;
+    for (const v of this.d.vehicles) {
+      if (v.damage.wrecked || v === this.d.player.driving || this.nearestPart(v, x, z) >= STICK_MARGIN) continue;
+      if (!this.charges.stick(v, x, y, z, byPlayer)) return false;
+      this.d.bus.emit({ type: 'charge', what: 'stuck', x, z, byPlayer });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * DETONATE: every charge out goes at once. One on a car blows the car
+   * (ignite on a breath of a fuse: the car's own wreck and explosion, the
+   * player's doing); one on the road goes off like a grenade. Returns how
+   * many went.
+   */
+  detonate(): number {
+    const d = this.d;
+    const list = this.charges.detonateAll(this.detonated);
+    if (list.length === 0) return 0;
+    const me = d.player.position;
+    d.bus.emit({ type: 'detonate', x: me.x, z: me.z, count: list.length });
+    for (const c of list) {
+      const v = c.car;
+      if (v) {
+        this.chargeBlast(v, c.byPlayer);
+        markPlayerHit(v.damage, d.now());
+        ignite(v.damage, DETONATE_FUSE);
+      } else {
+        d.bus.emit({ type: 'chargeBlast', x: c.x, z: c.z, onCar: false, gift: false, byPlayer: c.byPlayer });
+        this.blast('grenade', c.x, c.z, c.byPlayer);
+      }
+    }
+    return list.length;
+  }
+
+  /** A charge going up on `v`: reported, with whether it's a PARTING GIFT. */
+  private chargeBlast(v: Vehicle, byPlayer: boolean): void {
+    const d = this.d;
+    const me = d.player.position;
+    const gift =
+      byPlayer &&
+      d.playing() &&
+      partingGift({
+        driven: v !== d.player.driving && (v.ai !== null || !!v.pursuit || !!v.scene),
+        distance: len2(v.sim.x - me.x, v.sim.z - me.z),
+        prize: prizeOf(v.archetype, v.paint),
+      });
+    d.bus.emit({ type: 'chargeBlast', x: v.sim.x, z: v.sim.z, onCar: true, gift, byPlayer });
+  }
+
   // --- Punches --------------------------------------------------------------------
 
   /** Throw the next punch of the combo (jab, jab, hook). */
@@ -712,6 +801,12 @@ export class Combat {
    */
   vehicleExploded(v: Vehicle): void {
     const p = this.d.player;
+    // Wrecked some other way with a charge on it: the charge goes up too, and it's the player's.
+    if (this.charges.carries(v)) {
+      this.chargeBlast(v, true);
+      this.charges.release(v);
+      markPlayerHit(v.damage, this.d.now());
+    }
     const inside = p.driving === v;
     // Bailing out of your own burning car doesn't turn its blast into a wreck
     // you caused (no Chaos Run time, heat or frenzy credit to farm).
@@ -1049,6 +1144,16 @@ export class Combat {
   }
 
   /** Peds plus cars (not `except`, not wrecks): police cars are hostile while wanted. */
+  /** Cars a sticky charge could be thrown at (not wrecked). */
+  private gatherCars(): void {
+    this.candidateCount = 0;
+    const wanted = this.d.stars() > 0;
+    for (const v of this.d.vehicles) {
+      if (v.damage.wrecked || v === this.d.player.driving) continue;
+      this.push(v.sim.x, v.sim.z, wanted && (isPoliceArchetype(v.archetype) || v.police === true), null, v);
+    }
+  }
+
   private gatherAll(except: Vehicle | null = null, near = 0): void {
     this.gatherPeds(near);
     const wanted = this.d.stars() > 0;

@@ -476,16 +476,17 @@ export class ProgressDirector implements ModeCtx {
     const player = this.deps.player;
     const owned = (id: string) => (item(id).kind === 'armour' ? player.armour >= MAX_ARMOUR : progress.has(id));
     const item = (id: string) => SHOP_ITEMS.find((i) => i.id === id)!;
+    const passed = (job: string) => progress.data.missions.includes(job);
     if (fromStreet) this.openModal(this.shop);
     else this.deps.frontDoor.openPanel(this.shop);
     this.deps.audio.ui('confirm');
     this.shop.open(
       {
-        state: (id) => canBuy(item(id), progress.cash, owned),
+        state: (id) => canBuy(item(id), progress.cash, owned, passed),
         cash: () => progress.cash,
         buy: (id) => {
           const it = item(id);
-          if (canBuy(it, progress.cash, owned) !== 'ok' || !progress.spend(it.price, 'shop')) return false;
+          if (canBuy(it, progress.cash, owned, passed) !== 'ok' || !progress.spend(it.price, 'shop')) return false;
           if (it.kind === 'upgrade') {
             progress.unlock(it.id);
             this.applyUpgrades(true);

@@ -43,6 +43,8 @@ export interface InputSource {
   pausePresses: number;
   /** Next-radio-station presses (gamepad Select / View) not yet consumed; R and the radio card tune directly. */
   stationPresses: number;
+  /** DETONATE presses (G, the pad's D-pad down, the touch button) not yet consumed: main.ts acts on them only in play. */
+  detonatePresses: number;
   /** Driving: nitro held. */
   boost: boolean;
 }
@@ -70,6 +72,7 @@ export const emptySource = (): InputSource => ({
   cyclePrevPresses: 0,
   pausePresses: 0,
   stationPresses: 0,
+  detonatePresses: 0,
   boost: false,
 });
 
@@ -77,7 +80,7 @@ export const emptySource = (): InputSource => ({
 export function clearSource(s: InputSource): void {
   s.steer = s.throttle = s.moveX = s.moveY = s.aimX = s.aimY = 0;
   s.handbrake = s.sprint = s.fireHeld = s.aimFire = s.aimRelease = s.boost = false;
-  s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.pausePresses = s.stationPresses = 0;
+  s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.pausePresses = s.stationPresses = s.detonatePresses = 0;
 }
 
 /** Stick deadzone, as a fraction of full deflection (radial, then rescaled). */
@@ -153,7 +156,7 @@ const NAV_KEYS: Readonly<Record<string, NavCommand>> = {
   Backspace: 'back',
 };
 
-type PressKey = 'punchPresses' | 'cyclePresses' | 'cyclePrevPresses' | 'actionPresses' | 'pausePresses' | 'stationPresses';
+type PressKey = 'punchPresses' | 'cyclePresses' | 'cyclePrevPresses' | 'actionPresses' | 'pausePresses' | 'stationPresses' | 'detonatePresses';
 
 export class Input {
   readonly keyboard = emptySource();
@@ -222,6 +225,7 @@ export class Input {
           else kb.cyclePresses++;
         }
         if (e.code === 'KeyP' || e.code === 'Escape') kb.pausePresses++;
+        if (e.code === 'KeyG') kb.detonatePresses++;
       }
       this.keys.add(e.code);
       this.updateKeyboard();
@@ -444,6 +448,8 @@ export class Input {
       else if (i === PAD_LB) g.cyclePrevPresses++;
       else if (i === PAD_START) g.pausePresses++;
       else if (i === PAD_SELECT) g.stationPresses++;
+      // D-pad down also navigates menus; main.ts only sets charges off in play.
+      else if (i === PAD_DOWN) g.detonatePresses++;
       else if (i === PAD_A) this.pushNav('confirm');
       else if (i === PAD_B) this.pushNav('back');
     }
@@ -593,6 +599,11 @@ export class Input {
   /** True once per next-station press (gamepad Select / View). */
   consumeStation(): boolean {
     return this.drain('stationPresses') > 0;
+  }
+
+  /** DETONATE pressed since the last call (drain it every frame; act on it only in play). */
+  consumeDetonate(): boolean {
+    return this.drain('detonatePresses') > 0;
   }
 
   /** The connected gamepad, if any (for rumble). */

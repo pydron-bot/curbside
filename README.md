@@ -68,6 +68,7 @@ On hive1 the dev server runs as the user unit `curbside-dev` (enabled, starts on
 | Drive-by (pistol / SMG) | left click / J in a car | car FIRE button (inboard of the pedals) | X |
 | A stolen service vehicle's tool: hose (fire truck, hold; aim with the mouse), chime (ice cream van), winch (tow truck) | left click / J (instead of the drive-by) | the car FIRE button becomes HOSE / CHIME / WINCH; drag it to aim the hose | X (right stick aims the hose) |
 | Switch weapon (also in a car) | wheel, right click, Q / Tab (Shift+Tab back) | ⇄ | RB / LB |
+| Set off sticky charges (on foot or in a car, only in play) | G | BOOM (shows while a charge is out) | D-pad down |
 | Enter / exit car | E / F / Enter | door button (pulses next to a car) | Y |
 | Steer | A/D, ←/→ | **Point** (default): stick = where to go, push further = more gas; **Classic**: stick left/right | left stick |
 | Gas / brake-reverse | W/S, ↑/↓ | pedal pad: GAS / BRAKE — slide between them without lifting | RT / LT |
@@ -220,7 +221,7 @@ share sheet mocked.
   score points; anything within 3 s of the last event raises a ×2…×10
   combo. Best score is kept in localStorage (`curbside.best`).
 - **Weapons** (`src/systems/weapons.ts`, `src/world/pickups.ts`): pistol,
-  SMG, shotgun, grenades, molotovs, rockets, the air horn, the taser, the stinger and smoke grenades, plus health, armour and
+  SMG, shotgun, grenades, molotovs, rockets, the air horn, the taser, the stinger, smoke grenades and the sticky charge (shop only), plus health, armour and
   ammo crates on sidewalks (respawn 30 s); hitscan with lock-on and spread
   bloom, tracers, walls stop bullets, cars take damage; drive-bys.
 - **Fighting back** (`src/systems/crowd.ts`): peds are calm (70%),
@@ -405,7 +406,7 @@ first and is lost on death; health creeps back to 40 at 4/s after 6 s
 unhurt. Crates: health +50, armour +50, ammo (half a clip for each gun
 owned, 3 blasts for an air horn, 2 taser cartridges), weapons (capped: pistol 120, SMG 300,
 shotgun 48, grenades 12, molotovs 10, rockets 8, air horn 12, taser 8, stinger 4,
-smoke grenades 6).
+smoke grenades 6, sticky charges 6: never in a crate).
 
 **On foot** (`game/combat.ts`, `systems/crowd.ts`, `systems/weapons.ts`).
 Everyone, officers included, has 100 HP: pistol 34 (3 hits), SMG 15 (~7),
@@ -460,9 +461,8 @@ COMPLAINT IN …, 90 s cooldown). Heat: a public-order nuisance, +0.1 a
 witnessed blast, at most +0.2 per 5 s, so a whole canister never makes a
 star. The sound is a synthesised three-reed chord (`sfx.airHorn`); the look
 is three pale shock rings down the cone from Effects' pooled fake lights
-(no draw call of its own). Pickups: a pink-ringed crate (the ammo box
-model until `pickups.glb` has a `crate_horn`); in the hand, nothing shows
-until `weapons.glb` has an `air_horn` root.
+(no draw call of its own). Pickups: a pink-ringed `crate_horn`; in the
+hand, `weapons.glb`'s `air_horn` (a red canister, the trumpet forward).
 
 **The taser** (W3-B, `systems/taser.ts`, `Combat.tase`): held, aimed and
 locked on like a pistol (on foot only; with it in hand the lock-on flags a
@@ -491,9 +491,8 @@ hand to the darts, shooting out in 0.06 s and crackling blue-white for
 ground from Effects' pooled fake lights, so no draw call and no real
 light. The sound is the cartridge's pop, then ~0.8 s of the current's dry
 ticking over a thin buzz (`sfx.taser`, one gated noise source). Pickups:
-an electric-blue-ringed crate (the ammo box until `pickups.glb` has a
-`crate_taser`); in the hand, nothing shows until `weapons.glb` has a
-`taser` root.
+an electric-blue-ringed `crate_taser`; in the hand, `weapons.glb`'s
+`taser` (a stubby yellow pistol, the cartridge on its nose).
 
 **The stinger** (W3-B, `systems/stinger.ts`, `Combat.throwIt` /
 `dropStinger`): a folding spike strip, thrown like a grenade on foot (16 m
@@ -522,9 +521,8 @@ folded in flight, glints in headlights, and in hand a ghost shows where it
 would lie. Flats scrape rim streaks and sparks (`fxDriving`). The sound is
 the sections slapping out (`sfx`, ~0.45 s) and the burst's double bang,
 hiss and flapping rubber that slows with the car (~1.3 s). Pickups: a
-steel-ringed crate (the ammo box until `pickups.glb` has a
-`crate_stinger`); in the hand, nothing shows until `weapons.glb` has a
-`stinger` root.
+steel-ringed `crate_stinger`; in the hand, `weapons.glb`'s `stinger`
+(the strip folded into a block).
 
 **The smoke grenade** (W3-B, `systems/smoke.ts`, `Combat.pourSmoke` /
 `stepSmoke`): thrown like a grenade (20 m at most, the grenade's arc and
@@ -556,9 +554,51 @@ cloud stops being thick, so it thins as its effect ends. The budget check
 is `tools/tune/mayhem.mjs --scenario smoke --seconds 12` (two clouds on
 the player on foot). The sound is the cap's pop and ~3 s of gas hiss over
 a low rush (`sfx.smokePop`), and coughs (`sfx.cough`, deeper for an
-officer, one at a time). Pickups: a pale-grey-ringed crate (the grenade
-crate until `pickups.glb` has a `crate_smoke`); in the hand, nothing shows
-until `weapons.glb` has a `smoke_grenade` root.
+officer, one at a time). Pickups: a pale-grey-ringed `crate_smoke`; in
+the hand, `weapons.glb`'s `smoke_grenade`.
+
+**The sticky charge** (W3-B, `systems/charges.ts` pure and tested in
+`tests/charges.test.ts`; `Combat.detonate`, `stickCharge`): thrown like a
+grenade (16 m at most), but its aim picks out cars, not people, and leads
+one on the move by the throw's flight time. In flight it **sticks** to the
+first unwrecked car it comes within 0.25 m of (below 1.7 m; not the one
+you're in) and rides along in that car's frame wherever it goes, a tow
+truck's hook included; one that touches no car lies where it lands, or
+against the wall it hits, and can still be set off. **DETONATE** (G,
+D-pad down, the touch BOOM button) sets every charge out off at once, from
+anywhere, on foot or in a car, and only in play (`canDetonate`: never on
+the title, paused, under a menu or panel (TEST, the map editor,
+Settings), in Observe, under a card, or WASTED / BUSTED; the presses are
+drained every frame either way, and a pause's `resetAll` drops any
+pending). One on a car **blows the car** through its own sequence:
+`markPlayerHit` then `ignite` on a 0.05 s fuse, so the car wrecks on the
+next damage step and `vehicleExploded` does the rest (the car's blast,
+fire chain, debris, KABOOM, heat), the player's doing; one on the road
+goes off as a grenade's blast. A car wrecked some other way first takes
+its charge with it and the wreck is yours. **Three** out at most (stuck,
+lying or in flight); a fourth throw is refused, nothing spent, with a
+CHARGES OUT notice; the first one out says how to set it off on the
+device in use. A car carrying one is never recycled (`charges.cars` into
+`maintainPopulation`'s keep list and city life's `keep`), so it's there
+when you press; one lying on the road is forgotten once you're 400 m
+away, and one on a car its own system retires (a police unit) goes with
+it. The cash van (`CASH_PAINT`) and the Mayor's pearl limo
+(`LULL_LIMO_PAINT`) always earn **PARTING GIFT**, any other car only when
+someone else was driving it and you were 30 m off or more
+(`partingGift`). It's a story reward: RIBBON CUTTING (`s5-ribbon`) hands
+you two, in hand, and passing it puts STICKY CHARGES in the shop; never
+in a crate. The look (`render/chargeLook.ts`) is built in code until
+Blender's `charge_stuck` arrives (BLENDER_TODO §15): a dark brick taped
+round the middle with a red detonator box, 3× life size, seated on the
+car as drawn this frame (on the roof over the cabin, else at the hood
+line, from `look.cars.dims`) so it doesn't shiver on a fast car; a
+blinking red light and a red ring on the road round its car (the shared
+glow mesh), one instanced mesh with the stingers' material (no new
+program) that draws only while one is out or flying. The sound is a wet
+thud and two arming beeps (`sfx.chargeStick`; a dud click when refused)
+and the plunger's clack and rising beep (`sfx.detonator`); the bangs are
+the car's or the grenade's own. In the hand, `weapons.glb`'s
+`sticky_charge` (a stand-in brick built in `heldWeapons.ts` until then).
 
 **Stunts** (`world/ramps.ts`, `systems/stunts.ts`). Ten stunt ramps
 (6 × 3.2 m, 1.6 m lip, matching the `ramp` model in props.glb) on road
@@ -700,7 +740,8 @@ down (an officer +1), a civilian's tyres on your stinger as a nuisance
 (a patrol car's as shooting at the police; nothing while you're wanted),
 an explosion you
 caused +0.6 (not your own car going up, even after you bail out of it
-burning: `explosion.ownCar`), clearly ramming a police car
+burning: `explosion.ownCar`; a sticky charge's is its car's explosion or a
+grenade's, seen where it goes up, and sticking one on is no crime), clearly ramming a police car
 +0.6 (bumps in a chase don't count, nor does smashing through a roadblock
 or a chasing cop driving into you), bullets into one +0.15 (capped),
 knocking down an officer +1 (at most +1 per 5 s), wrecking a police car
@@ -1945,7 +1986,9 @@ are `src/game/modes/*Mode.ts`.
   PAY 'N' SPRAY CARD $1,500; PACKAGE SCANNER $2,000; pistol / SMG / shotgun
   ammo $150 / $400 / $300, BODY ARMOUR $600, GRENADES $500, and a crate's
   worth of the W3-B weapons: AIR HORN $200, TASER $450, STINGERS $500,
-  SMOKE GRENADES $600 (`arsenal.pickUp`, drawn as you buy). Something you can't afford
+  SMOKE GRENADES $600 (`arsenal.pickUp`, drawn as you buy); STICKY CHARGES
+  (+2) $700 once RIBBON CUTTING is passed (`ShopItem.after`: `canBuy`
+  says 'locked' and the sheet leaves it out until then). Something you can't afford
   shakes and flashes the cash red (and a haptic tick).
 - **CHAOS RUN** (title, once the side modes are open; `modes/chaosRun.ts`, `chaosRunMode.ts`): a sports
   car at a random crossing and the same loadout every run (`CHAOS_LOADOUT`:
@@ -3256,6 +3299,7 @@ the screen, and passers-by in view stop and film it. Rules and table in
 | TAKE THE HEAT | the chase handoff (V2-03, via `show`) | 8 |
 | CITIZEN'S ARREST | the chase handoff (V2-03, via `show`) | 8 |
 | ENDANGERED PANDAS | three police cars wrecked in one pursuit | 7 |
+| PARTING GIFT | a sticky charge of yours going off on a car someone else was driving with you 30 m off, or on the cash van or the Mayor's limo (W3-B, `chargeBlast.gift`) | 7 |
 | HEALTH AND SAFETY | a blast of yours within 20 m of a fire crew hosing | 7 |
 | BARBECUE SEASON | three cars going up in a chain (each within 2.5 s of the last) | 6 |
 | FARES PLEASE | three people knocked down by your bus within 3 s | 6 |
@@ -3272,7 +3316,7 @@ the screen, and passers-by in view stop and film it. Rules and table in
 | LAST ORDERS | three people punched down within 6 s | 3 |
 
 - **Detector** (`StampDetector`): reads `explosion`, `award`, `crash`,
-  `pedDown`, `wanted`, `stunt` and `street` (hose / fireOut) for the
+  `pedDown`, `wanted`, `stunt`, `chargeBlast` and `street` (hose / fireOut) for the
   player's own doing only, with fixed-size windows (`Burst`: n within a
   span, fires once and re-arms after a gap; `Chain`: links within a gap).
   Car explosions only count toward a chain (a grenade on an empty road

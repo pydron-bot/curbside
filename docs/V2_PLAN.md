@@ -532,7 +532,10 @@ smoke grenade. Not scheduled yet.
   brief wire effect (no real light).
 - **STICKY CHARGE**: stick it to a car (cash van, the Mayor's limo) and
   set it off when you choose; a new stamp (PARTING GIFT). Explosion
-  sequence, debris, stamps. A story-job reward.
+  sequence, debris, stamps. A story-job reward. **Built** (`claude/w3-sticky`):
+  RIBBON CUTTING gives two and opens the shop item (no crates); DETONATE
+  on G / D-pad down / touch BOOM sets every charge off, play only; three
+  out at most; carrying cars kept; README *Driving and combat*.
 
 ### W3-C · Four new street scenes (owner picked, 2026-11-02)
 
