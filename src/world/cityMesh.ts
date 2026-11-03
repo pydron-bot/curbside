@@ -896,6 +896,24 @@ void wallSurface(inout vec3 col, inout vec3 glow, vec3 l, float px) {
 }
 
 /** Roofs by type, with a parapet rim and its shadow (except pitched tiles). */
+/** A seven-segment digit d (0-9) at p, the digit filling [0,1] x [0,2]: 1 on a lit segment (painted warehouse numbers). */
+float sevenSeg(vec2 p, int d) {
+  const int SEG[10] = int[10](0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F);
+  int m = SEG[clamp(d, 0, 9)];
+  float t = 0.13;
+  float s = 0.0;
+  // a (top), g (middle), d (bottom): bars across.
+  if ((m & 1) != 0) s = max(s, step(abs(p.x - 0.5), 0.42) * step(abs(p.y - 1.88), t));
+  if ((m & 64) != 0) s = max(s, step(abs(p.x - 0.5), 0.42) * step(abs(p.y - 1.0), t));
+  if ((m & 8) != 0) s = max(s, step(abs(p.x - 0.5), 0.42) * step(abs(p.y - 0.12), t));
+  // f, b (upper left, right), e, c (lower left, right): bars down.
+  if ((m & 32) != 0) s = max(s, step(abs(p.x - 0.1), t) * step(abs(p.y - 1.45), 0.5));
+  if ((m & 2) != 0) s = max(s, step(abs(p.x - 0.9), t) * step(abs(p.y - 1.45), 0.5));
+  if ((m & 16) != 0) s = max(s, step(abs(p.x - 0.1), t) * step(abs(p.y - 0.55), 0.5));
+  if ((m & 4) != 0) s = max(s, step(abs(p.x - 0.9), t) * step(abs(p.y - 0.55), 0.5));
+  return s;
+}
+
 void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float px) {
   vec3 wallC = col;
   vec2 rp = l.xz;
@@ -1003,6 +1021,49 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     glow += spot * vec3(1.0, 0.3, 0.15) * blink * (0.4 + 2.0 * uNight);
   }
 
+  // Arts quarter: a third of the flat roofs carry a painted mural, seen from above.
+  bool flatRoof = type < ${ROOF.gravel} + 0.5 || abs(type - ${ROOF.membrane}) < 0.5;
+  if (flatRoof && abs(vInfo.w - ${DISTRICTS.indexOf('arts')}.0) < 0.5 && fract(seed * 13.7) < 0.36 && e > 1.0) {
+    float pick = fract(seed * 5.3);
+    vec3 pinkM = bSrgb(1.0, 0.31, 0.63);
+    vec3 cyanM = bSrgb(0.18, 0.83, 0.9);
+    vec3 yellowM = bSrgb(1.0, 0.82, 0.25);
+    vec3 violetM = bSrgb(0.54, 0.36, 1.0);
+    vec3 mural;
+    if (pick < 0.34) {
+      // Bold diagonal stripes in three colours.
+      float k = mod(floor((rp.x + rp.y) / 2.2), 3.0);
+      mural = k < 0.5 ? pinkM : k < 1.5 ? cyanM : yellowM;
+    } else if (pick < 0.67) {
+      // A sunburst: rings out from the middle.
+      float k = mod(floor(length(rp) / 1.6), 4.0);
+      mural = k < 0.5 ? yellowM : k < 1.5 ? pinkM : k < 2.5 ? violetM : cyanM;
+    } else {
+      // A zigzag band across a cyan field.
+      float zz = abs(fract(along / 4.0) - 0.5) * 4.0 - 1.0;
+      mural = abs(across - zz * 1.4) < 1.1 ? pinkM : abs(across - zz * 1.4) < 1.6 ? yellowM : cyanM;
+    }
+    float inset = smoothstep(0.9, 1.1, e);
+    c = mix(c, mural * (0.9 + 0.1 * ubNoise(sp * 0.7)), inset * 0.92);
+  } else if (flatRoof && abs(vInfo.w - ${DISTRICTS.indexOf('downtown')}.0) < 0.5 && fract(seed * 13.7) < 0.28 && e > 1.0) {
+    // Downtown: a company's logo on the roof, a ring round a chevron, in cool colours.
+    float r = min(hs.x, hs.y) * 0.62;
+    float d = length(rp);
+    float ring = step(abs(d - r * 0.82), r * 0.12);
+    vec2 q = rp / r;
+    float chev = step(abs(q.y + abs(q.x) * 0.9 - 0.15), 0.16) * step(abs(q.x), 0.55);
+    vec3 logoA = fract(seed * 3.7) < 0.5 ? bSrgb(0.18, 0.83, 0.9) : bSrgb(0.54, 0.36, 1.0);
+    c = mix(c, logoA, ring * 0.92);
+    c = mix(c, bSrgb(0.95, 0.95, 0.97), chev * 0.92);
+  } else if (abs(vInfo.w - ${DISTRICTS.indexOf('industrial')}.0) < 0.5 && abs(type - ${ROOF.terracotta}) > 0.5 && type < ${ROOF.helipad} - 0.5 && fract(seed * 13.7) < 0.7 && e > 1.2) {
+    // The docks: a big yellow bay number painted on the shed roof, and a border line.
+    int n = 10 + int(fract(seed * 91.3) * 89.0);
+    float sz = min(hs.x, hs.y) * 0.42;
+    vec2 q = vec2(longX ? rp.x : rp.y, longX ? -rp.y : rp.x) / sz;
+    float digits = sevenSeg(q - vec2(-1.15, -1.0), n / 10) + sevenSeg(q - vec2(0.15, -1.0), n - (n / 10) * 10);
+    float border = ubBand(e, 1.2, 1.45, px);
+    c = mix(c, bSrgb(0.98, 0.78, 0.12), min(1.0, digits + border) * 0.9);
+  }
   if (type < ${ROOF.helipad} - 0.5) c *= 0.88 + 0.14 * smoothstep(0.25, 0.75, ubFbm(sp * 0.16)); // water stains
   if (abs(type - ${ROOF.terracotta}) > 0.5) {
     float rim = 1.0 - smoothstep(0.34 - px, 0.34 + px, e);
