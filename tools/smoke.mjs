@@ -505,6 +505,8 @@ async function mapEditorCheck(page, label) {
     edited.parsed.problems.length === 0 && edited.parsed.blocks.length === 1 && block.kind === 'park' && block.district === 'arts',
     `${label}: EXPORT writes a clean map file (${JSON.stringify(edited.parsed)})`,
   );
+  // Two edits, two undo steps.
+  await page.keyboard.press('Control+z');
   await page.keyboard.press('Control+z');
   await page.keyboard.press('Escape'); // the selection
   await page.keyboard.press('Escape'); // the editor
@@ -514,7 +516,10 @@ async function mapEditorCheck(page, label) {
     u.setPaused(false);
     return r;
   });
-  check(!after.open && after.paused && after.saved === null, `${label}: Ctrl+Z undoes it (no local edits left) and Esc closes the editor to the paused run`);
+  check(
+    !after.open && after.paused && after.saved === null,
+    `${label}: Ctrl+Z undoes it (no local edits left) and Esc closes the editor to the paused run (${JSON.stringify({ open: after.open, paused: after.paused, saved: after.saved })})`,
+  );
   check(after.districts === before.districts, `${label}: closing the map editor leaves the game's districts as they were`);
 }
 
