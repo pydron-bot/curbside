@@ -263,6 +263,56 @@ async function stampCheck(page, label, chaos) {
   await page.screenshot({ path: path.join(opt.out, `${label}${chaos ? '-chaos' : ''}-stamp.png`), timeout: 120000 });
 }
 
+/**
+ * The sticky charge's BOOM (DETONATE) button (W3-B), phones: with a charge
+ * out it shows, inside the view and clear of every other button, the
+ * radar and the pedal pad, on foot and in a car; a tap sets the charge off.
+ */
+async function chargeCheck(page, label) {
+  const r = await page.evaluate(async () => {
+    const u = window.__ub;
+    const frames = async (n) => {
+      for (let i = 0; i < n; i++) await new Promise((res) => requestAnimationFrame(() => res()));
+    };
+    if (u.paused) u.setPaused(false);
+    const me = u.player.position;
+    u.combat.charges.lay(me.x + 3, me.z, true);
+    await frames(3);
+    const boom = document.querySelector('.btn-detonate');
+    const rect = (el) => el.getBoundingClientRect();
+    const measure = (mode) => {
+      // main.ts sets the mode again next frame: measured straight away.
+      u.touch.setMode(mode, true);
+      const b = rect(boom);
+      const hits = [];
+      for (const sel of ['.tbtn', '.pedal-pad', '#radar']) {
+        for (const el of document.querySelectorAll(sel)) {
+          if (el === boom || getComputedStyle(el).visibility === 'hidden' || getComputedStyle(el).display === 'none') continue;
+          const o = rect(el);
+          if (o.width === 0 || o.height === 0) continue;
+          if (b.left < o.right && o.left < b.right && b.top < o.bottom && o.top < b.bottom) hits.push(`${sel}${el.className ? `.${String(el.className).split(' ').join('.')}` : ''}`);
+        }
+      }
+      return { shown: getComputedStyle(boom).visibility === 'visible', inside: b.left >= 0 && b.right <= innerWidth && b.top >= 0 && b.bottom <= innerHeight, hits, at: `${Math.round(b.left)},${Math.round(b.top)} ${Math.round(b.width)}×${Math.round(b.height)}` };
+    };
+    const car = measure('car');
+    const foot = measure('foot');
+    return { live: u.combat.charges.live, foot, car };
+  });
+  for (const m of ['foot', 'car']) {
+    const x = r[m];
+    check(r.live && x.shown && x.inside, `${label}: BOOM shows inside the view ${m === 'car' ? 'in a car' : 'on foot'} while a charge is out (${x.at})`);
+    check(x.hits.length === 0, `${label}: BOOM clear of the other buttons ${m === 'car' ? 'in a car' : 'on foot'}${x.hits.length ? ` (covers ${x.hits.join(', ')})` : ''}`);
+  }
+  await page.screenshot({ path: path.join(opt.out, `${label}-charge.png`), timeout: 120000 });
+  await page.tap('.btn-detonate');
+  const gone = await page.evaluate(async () => {
+    for (let i = 0; i < 10 && window.__ub.combat.charges.live; i++) await new Promise((res) => requestAnimationFrame(() => res()));
+    return !window.__ub.combat.charges.live && getComputedStyle(document.querySelector('.btn-detonate')).visibility === 'hidden';
+  });
+  check(gone, `${label}: tapping BOOM sets the charge off and the button goes`);
+}
+
 /** What the scanner's subtitle must stay clear of: the stamp's list, the stamp itself, the radio's card, the prompts, the thumbs. */
 const SCANNER_CLEAR_OF = [...STAMP_CLEAR_OF, '#stamp .stamp-box', '#radio', '#act-prompt', '.hud-prompt', '.speedo', '.pedal-pad', '.stick-base', '.aim-base'];
 
@@ -589,6 +639,7 @@ try {
       await scannerCheck(page, label);
       // The phones: the Chaos Run's card and stars up too (stamps stay on there).
       if (label.startsWith('iphone')) await stampCheck(page, label, true);
+      if (label.startsWith('iphone')) await chargeCheck(page, label);
       await observeCheck(page, label);
       await momentCheck(page, label);
     } catch (e) {

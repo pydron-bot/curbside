@@ -775,3 +775,28 @@ crate. The cloud is particles and needs no model.
   canister on the lid (the game rings it pale grey, `#b8c4cc`); then point
   `PICKUP_MODELS.smoke` (`src/render/pickupMesh.ts`) and the `things`
   family's list (`src/render/worldProps.ts`) at it.
+
+## 15. The sticky charge (W3-B, requested 2026-11-02)
+
+The sticky charge is in the game (README → *Driving and combat*, the
+sticky charge) with code-built stand-ins: the held brick in
+`src/render/heldWeapons.ts` (`STAND_INS`) and the charge stuck to a car or
+lying on the road in `src/render/chargeLook.ts`. Both swap for models:
+
+- **`weapons.glb` root `sticky_charge`**: a dark grey brick ~0.16 × 0.07 ×
+  0.11 m (long side across, local X), a band of buff tape round it, a small
+  red detonator box on top with a stubby aerial, carried in one hand like
+  the grenade (thrown, so no `muzzle`). ≤ 120 tris. It replaces the
+  stand-in by name; nothing else to change.
+- **`props.glb` root `charge_stuck`**: the same charge as it sits on a car,
+  flat on its base at y = 0, the red box's top face a separate material
+  ending `_glow` (the game blinks a red light over it, so the face only
+  needs to read as the lamp), ≤ 80 tris. The game draws it 3× life size
+  so it reads on a roof from the camera's height at 852×340; keep the
+  silhouette chunky (no thin wires). Code side: draw `chargeLook`'s
+  instances from the prop instead of `chargeGeometry()`, keeping one
+  instanced mesh.
+- **No crate.** The sticky charge is a story reward (RIBBON CUTTING) and a
+  shop item, never in the street, so it has no `crate_charge`
+  (`PICKUP_MODELS.charge` points at `crate_grenade` only to fill the
+  table).
