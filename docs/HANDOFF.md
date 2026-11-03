@@ -70,6 +70,38 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
+**Where the look work stands (2026-11-03, end of session):** `main` =
+**0.25.0, live** (the 0.22–0.25 neon/day releases are all deployed). Every
+look change is documented in README → *Look → Neon city*. Screenshot
+harnesses for visual work: `tools/look/` (README there).
+
+**Next, agreed with the owner: the rest of the daytime list (6–10), as
+0.26.0, with preview images per feature (the owner wants previews every
+time), then deploy when asked.** Spread them across districts (the owner
+noticed earlier flourishes leaned on the arts quarter). Plans:
+6. *Swaying trees*: palms and trees bend gently in the wind (vertex sway in
+   the props' `trees` family shader, scaled by height; canopy only), plus
+   dappled light under them by day (a noise term in `ubCloudShade`-style near
+   tree positions, or a soft dapple in the canopy's contact shadow).
+7. *Park fountains and sprinklers*: the plaza fountain (ground.ts `lot`,
+   kind 2) gets spray particles (Effects soft pool, near the view only) and a
+   small rainbow arc by day (an additive glow band); sprinklers in some parks
+   on a slow sweep (particles), residential and old-town parks too.
+8. *Morning mist*: 05:30–08:00, low haze drifting through the streets in the
+   old town and residential districts (fog tint/near pull in `timeOfDay`
+   keys, plus a few large soft drifting particles at street level), burning
+   off as the sun climbs.
+9. *Painted billboards*: roof signs (`RoofNeon.sign`) show a painted ad by day
+   (stripes/blocks/a face-like circle in sign colours, in `propMaterial` from
+   world position) and switch to neon at night; most downtown.
+10. *Seagulls at the docks*: reuse the pigeon flock (`render/pigeonMesh.ts`,
+   `Flap` clip) as white gulls circling over the industrial district's
+   water edge, with shadows sweeping the ground.
+
+**Unconfirmed on a real phone (ask the owner):** lamp streaks / neon
+reflections strength, cloud shadow darkness, whether sun glints read, the
+5-star wanted edge glow, the VHS glitch on WASTED/BUSTED.
+
 **0.25.0 "Sunny side" (2026-11-03, branch `claude/daytime-1`):** cloud
 shadows, rooftop pools, sun glints, street art by district (crossings, roof
 murals/logos/bay numbers, park courts), plane and blimp shadow flyovers
