@@ -71,9 +71,10 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 ## To do (in priority order)
 
 **Where the look work stands (2026-11-03, LOOK panel session):** `main` =
-**0.26.0 "Day out", live**. Branch `claude/look-panel` = **0.27.0 "Look
-book"**, not deployed (the owner asked to hold it until they say so): the
-LOOK tuning panel, TEST → LOOK (README → *Look → Tuning*). All four slider
+**0.27.0 "Look book", live** (from branch `claude/look-panel`): the LOOK
+tuning panel, TEST → LOOK (README → *Look → Tuning*). Not yet tried on a
+real iPhone (headless Chromium only): ask the owner how the panel and
+the sliders feel in Safari. All four slider
 groups agreed with the owner are in: sky and light by part of the day, the
 colour grade, neon and night, daytime (about fifty sliders); clock hold;
 saved locally; distance from shipped, reset per slider, RESET ALL; EXPORT
