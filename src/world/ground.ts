@@ -439,6 +439,17 @@ vec3 lot(vec2 w, vec2 lp, float kind, float seed, float px, inout vec3 glow) {
     c = mix(c, srgb(0.78, 0.76, 0.72), ubBand(rr, 4.4, 5.0, px));
     c = mix(c, srgb(0.12, 0.3, 0.38) * (0.85 + 0.25 * ripple), water);
     glow += water * (uSkyTint * 0.05 * (1.0 - uNight) + vec3(0.1, 0.35, 0.45) * 0.25 * uNight) * (0.7 + 0.3 * ripple);
+    // A faint rainbow in the spray by day (render/waterLook.ts), on the side
+    // away from the sun, red outside; gone under a cloud or in the rain.
+    float day = 1.0 - uNight;
+    if (day > 0.05 && rr < 4.6) {
+      float side = smoothstep(0.15, 0.8, dot(lp / max(rr, 0.001), -normalize(uSunDir.xz + vec2(0.0001))));
+      float bt = (rr - 1.6) / 2.8;
+      float band = smoothstep(0.0, 0.15, bt) * (1.0 - smoothstep(0.9, 1.0, bt));
+      vec3 bow = clamp(abs(fract(max(0.78 * (1.0 - bt * 1.15), 0.0) + vec3(0.0, 0.6667, 0.3333)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+      float shimmer = 0.75 + 0.25 * sin(uTime * 1.7 + rr * 3.0);
+      glow += bow * band * side * shimmer * day * (1.0 - uWetness) * 0.26 * smoothstep(0.8, 0.97, ubCloudShade(w));
+    }
     return c;
   }
   // Car park: asphalt with white bays in double rows either side of aisles.
