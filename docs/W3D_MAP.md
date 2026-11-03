@@ -168,3 +168,59 @@ W3-A needs).
    lot, then props, ramps, payphones and spawn points (by anchor id), then
    roads (closures and one-way streets) last, as the plan says.
 5. **The rest of the inventory** (scene spots, test spots, packages).
+
+## The editor (branch `claude/w3d-editor`)
+
+A desktop 2D editor rather than a live 3D rebuild: TEST → MAP → MAP EDITOR
+(hidden on touch screens) pauses the run and opens the whole city top-down.
+`ui/mapEditor.ts` draws and wires; the logic is in `game/mapEditorState.ts`
+(no DOM, no three.js; `tests/mapEditorState.test.ts`).
+
+- **Preview:** every edit rebuilds the edited city (`generateCity`,
+  `dressCity`, `collectAnchors`, spot edits applied, then the checks), about
+  90 ms after the last change (a slider drag is one undo step, on release).
+  ~45 ms for the city, ~140 ms in all on a slow machine. `generateCity`
+  installs its district repaints for the whole game, so `buildPreview` puts
+  back the running game's (`paintDistricts(ACTIVE_MAP.blocks)`) before it
+  returns; the tests and the smoke test check `districtOf` is unchanged
+  after the editor closes.
+- **Controls:** drag (or arrows / WASD) to pan, wheel (or + / −) to zoom, 0
+  to fit; click to select; drag a selected movable spot or added prop to
+  move it; Del removes it; R / Shift+R turns a ramp or added prop; Esc stops
+  placing, then deselects, then closes; Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y). The
+  editor takes the keyboard while open, so the game's Input never sees it
+  (Backspace would back out of the menu).
+- **Panel:** a block's kind, district, REROLL (variant + 1) and GENERATED
+  LAYOUT, height ×0.4–1.6, AS GENERATED; a road's OPEN / CLOSED / ONE-WAY
+  either way and FLIP; a crossing's four roads; a spot's REMOVE, PUT BACK,
+  AS GENERATED and (ramps) TURN; a prop's REMOVE / PUT BACK / TURN. A field
+  set back to what the city generates is cleared, so a block set back is
+  no edit at all. PLACE (street prop kinds) then click the map.
+- **Overlay:** `dependentsOf(anchors, pick)` for the selected block, road
+  or crossing: ringed in cyan, courses as lines through every crossing,
+  job drive routes dashed through the crossings they steer for, listed with
+  labels (click one to go to it). A selected spot shows its own course and
+  what shares its place.
+- **Problems:** `problemsFor(city, edits, anchors)` is the one place the
+  checks come from: `checkAnchors`, plus a course over a closed road or the
+  wrong way up a one-way street, a spot on a closed road, a drive route
+  heading for a crossing every road into is closed, a removed spot the game
+  needs, an edit to a spot the map can't move, an added prop inside a
+  building. Red on the map (rings, roads) and in the list.
+- **Files:** local edits auto-save to `curbside.map.local` (cleared when
+  they match the shipped file). CHANGES is `diffMapEdits(SHIPPED_MAP,
+  local)` with REVERT per entry and RESET ALL; EXPORT downloads `city.json`,
+  copies it and shows it in a box ("commit as src/world/maps/city.json").
+  VIEW IN 3D saves and reloads on `?map=local&look=x,z`: the game boots on
+  the local edits and enters observe mode over the selection (or the view's
+  centre); SHIPPED MAP goes back.
+- **Seams for the map engine:** `spotRule(id)` (a conservative stand-in:
+  the safehouse and payphones move but stay; frenzy tokens, hangouts and
+  ramps move and go; nothing else is a spot) and `problemsFor` (to call
+  `checkMapEdits`). The preview shows prop edits and spot moves itself
+  (removed props as red crosses, added ones green); both are idempotent
+  once the engine applies them in `dressCity` / `collectAnchors`.
+- **Not yet:** the 3D view (VIEW IN 3D) shows block edits only; road,
+  spot and prop edits reach the game with the engine half. Undo keeps up to
+  200 MapEdits snapshots.
+
