@@ -686,7 +686,8 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
       c *= 1.0 - 0.2 * uNight;
     }
   } else if (max(abs(lotP.x) - lotHalf.x, abs(lotP.y) - lotHalf.y) > 0.0) {
-    c = paving(w, p, blk.a, kerb, px);
+    // With street edits the paving's pattern runs on across block edges (a merge's or a pedestrian street's pavement has no seam).
+    c = paving(w, uStreets > 0.5 ? g : p, blk.a, kerb, px);
     // A pedestrian street: the paving runs across it, with a drainage channel down the middle.
     if (ped >= 0.0) c *= 1.0 - 0.3 * ubLine(ped, 0.2, px) - 0.08 * ubLine(ped - 0.45, 0.05, px);
     // Kerb lip: a lighter edge with a thin shadow line at the drop.
