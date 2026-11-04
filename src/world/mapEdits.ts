@@ -61,6 +61,10 @@ export interface RoadEdit {
   closed?: boolean;
   /** Traffic only from a to b. */
   oneWay?: boolean;
+  /** Paved over as a pedestrian street: no traffic, bollards across both ends, people walk down it (round 3). */
+  pedestrian?: boolean;
+  /** Taken out: the road becomes land and the blocks either side one block (world/blockMerge.ts; round 3). */
+  removed?: boolean;
 }
 
 /** Spots the map can add (game/mapAnchors.ts spotRules: what each is and its id). */
@@ -238,7 +242,13 @@ export function parseMapEdits(raw: unknown): ParsedMapEdits {
   const roads = entries('roads', (e, where) => {
     if (!isNode(e.a) || !isNode(e.b)) return void problems.push(`${where}: "a" and "b" must be crossings [ix, iz]`), null;
     if (Math.abs(e.a[0] - e.b[0]) + Math.abs(e.a[1] - e.b[1]) !== 1) return void problems.push(`${where}: ${e.a} and ${e.b} aren't neighbouring crossings`), null;
-    unknownFields(where, e, ['a', 'b', 'closed', 'oneWay']);
+    unknownFields(where, e, ['a', 'b', 'closed', 'oneWay', 'pedestrian', 'removed']);
+    // Round 3: a pedestrian street or a removed road is one state of its own (removed, then pedestrian, then closed, then one-way wins).
+    const street = streetFlag(e, where, problems);
+    if (street) {
+      const [p, q] = roadKey(e.a, e.b).split('|').map((n) => n.split(',').map(Number) as [number, number]);
+      return { key: roadKey(p, q), entry: { a: p, b: q, [street]: true } as RoadEdit };
+    }
     const closed = e.closed === true;
     const oneWay = e.oneWay === true && !closed;
     if (e.oneWay === true && closed) problems.push(`${where}: closed and one-way; closed wins`);
@@ -295,6 +305,15 @@ export function parseMapEdits(raw: unknown): ParsedMapEdits {
   };
 }
 
+/** A road entry's round-3 state ('removed' or 'pedestrian'), reporting what it overrides. */
+function streetFlag(e: Record<string, unknown>, where: string, problems: string[]): 'removed' | 'pedestrian' | null {
+  const flag = e.removed === true ? 'removed' : e.pedestrian === true ? 'pedestrian' : null;
+  if (!flag) return null;
+  const also = (['pedestrian', 'closed', 'oneWay'] as const).filter((k) => k !== flag && e[k] === true);
+  if (also.length) problems.push(`${where}: ${flag} and ${also.join(' and ')}; ${flag} wins`);
+  return flag;
+}
+
 const blockChanges = (e: Omit<BlockEdit, 'at'>) => e.kind !== undefined || e.district !== undefined || e.style !== undefined || e.variant !== undefined || e.height !== undefined;
 
 const byNode = (p: Node, q: Node) => p[1] - q[1] || p[0] - q[0];
@@ -331,7 +350,7 @@ function oneLine(v: unknown): string {
 /** Entries with their keys in the file's fixed order. */
 const ORDER: Readonly<Record<MapSection, readonly string[]>> = {
   blocks: ['at', 'kind', 'district', 'style', 'variant', 'height'],
-  roads: ['a', 'b', 'closed', 'oneWay'],
+  roads: ['a', 'b', 'closed', 'oneWay', 'pedestrian', 'removed'],
   spots: ['id', 'add', 'x', 'z', 'heading', 'removed'],
   props: ['kind', 'x', 'z', 'heading', 'removed'],
 };
@@ -454,4 +473,12 @@ export function withPropEdit(edits: MapEdits, prop: PropEdit, undo = false): Map
     ? { kind: prop.kind, x: tenth(prop.x), z: tenth(prop.z), removed: true }
     : { kind: prop.kind, x: tenth(prop.x), z: tenth(prop.z), ...(prop.heading !== undefined ? { heading: hundredth(prop.heading) } : {}) };
   return withEntry(edits, 'props', propKey(entry), undo ? undefined : entry);
+}
+
+/** Pave a road over as a pedestrian street (round 3); with `on` false, open it as generated. Removing a road merges blocks: world/blockMerge.ts removeRoad. */
+export function withPedestrianRoad(edits: MapEdits, a: Node, b: Node, on = true): MapEdits {
+  const key = roadKey(a, b);
+  if (!on) return withEntry(edits, 'roads', key);
+  const [p, q] = key.split('|').map((n) => n.split(',').map(Number) as [number, number]);
+  return withEntry(edits, 'roads', key, { a: p, b: q, pedestrian: true });
 }
