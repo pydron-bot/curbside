@@ -3130,6 +3130,25 @@ and every new program is compiled behind the current frame.
   rings, a phone both arcs ring, a frenzy outside its goal's limits
   (`frenzyLimits.ts`), a parked car off the road or a pavement spot in
   it, a landmark that doesn't fit where it's moved.
+- **Streets** (map edits round 3; `docs/W3D_MAP.md` *Round 3: streets*): a
+  road entry `{ "a", "b", "pedestrian": true }` paves it over (no traffic:
+  `RoadRules` shuts both lanes, so every router keeps off; bollards across
+  both ends, planters, benches, bins and café tables down the middle from
+  a stream of its own; people stroll down it, `crowd.ts strollCorner`; the
+  ground draws the district's paving with a drainage channel; the end
+  junctions lose that arm's signal poles, and their lights if fewer than
+  three roads are left). `"removed": true` makes it land: the blocks either
+  side merge (`world/blockMerge.ts planMerges`: whole rectangles only, never
+  the outer ring; the rest play as closed and the checks say why), taking
+  the north-west block's kind, district and look (`Block.merge`,
+  `mergedAway`, `blockSpan`), filled from a stream of their own so the rest
+  of the city is unchanged. The ground reads a per-block road map
+  (`uRoadMap`, skipped by a uniform with no street edits); the lamps along
+  a removed road go, posts and light (`uDarkLamps`, 8 merges). Editor: the
+  road panel's STREET row (PEDESTRIAN, REMOVE; REMOVE refused with a reason
+  on the ring or for an L, and putting a removed road back cuts its merge
+  along that whole line: `removeRoad`, `restoreRoad`); a merged block is
+  selected and edited as one (`tests/mapStreets.test.ts`).
 - **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new

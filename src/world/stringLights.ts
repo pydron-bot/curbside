@@ -6,6 +6,7 @@
  * over the traffic. cityMesh draws the bulbs, wire and night halos.
  */
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK } from './city';
+import { STREET_REMOVED, roadRules } from './roadRules';
 import { districtOf } from './districts';
 import { keyedStream } from './random';
 
@@ -42,14 +43,17 @@ export function planStringLights(citySeed: number): StringSpan[] {
   const out: StringSpan[] = [];
   const reach = ROAD_WIDTH / 2 + SIDEWALK;
   const arts = (bx: number, bz: number) => bx >= 0 && bz >= 0 && bx < BLOCKS_PER_SIDE && bz < BLOCKS_PER_SIDE && districtOf(bx, bz) === 'arts';
+  // Not over a removed road (round 3: land now); a pedestrian street keeps its strings.
+  const n = BLOCKS_PER_SIDE / 2;
+  const gone = (ax: number, az: number, bx: number, bz: number) => roadRules().merges.length > 0 && roadRules().streetOf(ax, az, bx, bz) === STREET_REMOVED;
   for (let line = 1; line < BLOCKS_PER_SIDE; line++) {
     const c = line * BLOCK_SIZE - HALF_EXTENT;
     for (let b = 0; b < BLOCKS_PER_SIDE; b++) {
       const o = b * BLOCK_SIZE - HALF_EXTENT;
       // A north-south road between columns line-1 and line, along row b: strings run across x.
-      if (arts(line - 1, b) && arts(line, b)) addSegment(out, keyedStream(citySeed, 0x5711, line, b), (along) => [c - reach, o + along, c + reach, o + along]);
+      if (arts(line - 1, b) && arts(line, b) && !gone(line - n, b - n, line - n, b - n + 1)) addSegment(out, keyedStream(citySeed, 0x5711, line, b), (along) => [c - reach, o + along, c + reach, o + along]);
       // An east-west road between rows line-1 and line, along column b: strings run across z.
-      if (arts(b, line - 1) && arts(b, line)) addSegment(out, keyedStream(citySeed, 0x5712, b, line), (along) => [o + along, c - reach, o + along, c + reach]);
+      if (arts(b, line - 1) && arts(b, line) && !gone(b - n, line - n, b - n + 1, line - n)) addSegment(out, keyedStream(citySeed, 0x5712, b, line), (along) => [o + along, c - reach, o + along, c + reach]);
     }
   }
   return out;

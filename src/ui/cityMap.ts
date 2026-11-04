@@ -8,6 +8,7 @@
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, WORLD_LIMIT, type City } from '../world/city';
 import type { District } from '../world/districts';
 import type { RoadEdit } from '../world/mapEdits';
+import { RoadRules } from '../world/roadRules';
 
 /** Dark ground drawn beyond the walls, m. */
 export const MAP_MARGIN = 30;
@@ -94,7 +95,18 @@ export function renderCityMap(city: City, pxPerM = MAP_PX_PER_M): HTMLCanvasElem
     ctx.fill();
   }
 
-  for (const r of city.edits?.roads ?? []) drawRoadRule(ctx, r);
+  // The road rules as the game plays them (a removal that can't apply is a closure; an applied one is land, under the blocks above).
+  const rules = new RoadRules(city.edits?.roads ?? [], BLOCKS_PER_SIDE / 2);
+  for (const r of [...rules.closed, ...rules.oneWay]) drawRoadRule(ctx, r);
+  for (const r of rules.pedestrian) drawPedestrianStreet(ctx, r);
+  // A crossing with no road left (pedestrian streets all round): paved.
+  if (rules.streets) {
+    const n = BLOCKS_PER_SIDE / 2;
+    ctx.fillStyle = PEDESTRIAN;
+    for (let ix = -n; ix <= n; ix++) {
+      for (let iz = -n; iz <= n; iz++) if (!rules.crossingStands(ix, iz)) ctx.fillRect(ix * BLOCK_SIZE - ROAD_WIDTH / 2, iz * BLOCK_SIZE - ROAD_WIDTH / 2, ROAD_WIDTH, ROAD_WIDTH);
+    }
+  }
 
   ctx.strokeStyle = WALL;
   ctx.lineWidth = 3;
@@ -105,6 +117,42 @@ export function renderCityMap(city: City, pxPerM = MAP_PX_PER_M): HTMLCanvasElem
 const CLOSED = 'rgba(9, 11, 16, 0.6)';
 const CLOSED_HATCH = 'rgba(232, 92, 72, 0.75)';
 const ONE_WAY = 'rgba(240, 240, 240, 0.7)';
+/** A pedestrian street (round 3): paved, a pale line down the middle, bollards across the ends. */
+const PEDESTRIAN = '#57506c';
+const PEDESTRIAN_LINE = 'rgba(214, 206, 236, 0.45)';
+
+function drawPedestrianStreet(ctx: CanvasRenderingContext2D, r: RoadEdit): void {
+  const ax = r.a[0] * BLOCK_SIZE;
+  const az = r.a[1] * BLOCK_SIZE;
+  const vx = Math.sign(r.b[0] - r.a[0]);
+  const vz = Math.sign(r.b[1] - r.a[1]);
+  const half = ROAD_WIDTH / 2;
+  const len = BLOCK_SIZE - ROAD_WIDTH;
+  const at = (along: number, across: number): [number, number] => [ax + vx * (half + along) - vz * across, az + vz * (half + along) + vx * across];
+  const [x0, z0] = at(0, -half);
+  const [x1, z1] = at(len, half);
+  ctx.fillStyle = PEDESTRIAN;
+  ctx.fillRect(Math.min(x0, x1), Math.min(z0, z1), Math.abs(x1 - x0), Math.abs(z1 - z0));
+  ctx.strokeStyle = PEDESTRIAN_LINE;
+  ctx.lineWidth = 0.8;
+  ctx.setLineDash([2, 2]);
+  ctx.beginPath();
+  ctx.moveTo(...at(2, 0));
+  ctx.lineTo(...at(len - 2, 0));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  for (const t of [1.6, len - 1.6]) {
+    // Bollards across the end, with the gap in the middle.
+    for (const [a, b] of [[-half + 1, -1.2], [1.2, half - 1]]) {
+      ctx.moveTo(...at(t, a));
+      ctx.lineTo(...at(t, b));
+    }
+  }
+  ctx.stroke();
+}
+
 /** One-way arrows this far apart along the road, m. */
 const ARROW_EVERY = 16;
 

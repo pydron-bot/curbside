@@ -12,9 +12,9 @@
  *   cars and people all pick it up at night with no real lights at all.
  */
 import { Color, Vector3, Vector4, type IUniform } from 'three';
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT } from '../world/city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, type City } from '../world/city';
 import { SHADER_LOOK_FLOATS, shaderLookGlsl } from './lookTuning';
-import { LAMP_ARM, LAMP_HEIGHT, LAMP_OFFSET, LAMP_REACH2, LAMP_SPACING, lampsNear } from '../world/streetLamps';
+import { DARK_LAMP_SLOTS, LAMP_ARM, LAMP_HEIGHT, LAMP_OFFSET, LAMP_REACH2, LAMP_SPACING, lampsNear } from '../world/streetLamps';
 
 export const worldUniforms = {
   /** Seconds since start (animated water, blinking lights, neon flicker). */
@@ -41,6 +41,10 @@ export const worldUniforms = {
   uMist: { value: 0 },
   /** The last two explosions' flashes (x, z, strength fading from 1, unused), lighting walls and road (Effects sets them). */
   uBlasts: { value: [new Vector4(), new Vector4()] },
+  /** Merged blocks' interiors (round 3: minX, minZ, maxX, maxZ): the lamps that stood along a removed road inside one are gone, so the lattice skips them. */
+  uDarkLamps: { value: Array.from({ length: DARK_LAMP_SLOTS }, () => new Vector4()) },
+  /** How many of uDarkLamps are in use (0: the lattice as ever). */
+  uDarkCount: { value: 0 },
   /** The LOOK panel's shader sliders (lookTuning SHADER_LOOK): each the distance from the code's value, read through LK_* macros. */
   uLook: { value: new Float32Array(SHADER_LOOK_FLOATS) },
 } satisfies Record<string, IUniform>;
@@ -51,6 +55,19 @@ export function useWorldUniforms(shader: { uniforms: Record<string, IUniform> })
 }
 
 const f = (n: number) => n.toFixed(4);
+
+
+/** Round 3: put out the lamps inside the city's merged blocks (the dressing places no posts there). */
+export function setDarkLamps(city: City): void {
+  const rects = worldUniforms.uDarkLamps.value;
+  let n = 0;
+  for (const b of city.blocks) {
+    if (!b.merge || b.merge.bx !== b.bx || b.merge.bz !== b.bz || n >= DARK_LAMP_SLOTS) continue;
+    const r = b.interior;
+    rects[n++].set(r.minX, r.minZ, r.maxX, r.maxZ);
+  }
+  worldUniforms.uDarkCount.value = n;
+}
 
 /** Declarations + helpers; include once per shader stage that needs them. */
 export const UB_COMMON = /* glsl */ `
@@ -66,6 +83,8 @@ uniform vec4 uBlasts[2];
 uniform vec3 uSunDir;
 uniform vec4 uFlyer;
 uniform float uMist;
+uniform vec4 uDarkLamps[${DARK_LAMP_SLOTS}];
+uniform int uDarkCount;
 ${shaderLookGlsl()}
 const float UB_HALF = ${f(HALF_EXTENT)};
 const float UB_BLOCK = ${f(BLOCK_SIZE)};
@@ -191,6 +210,16 @@ const float UB_LAMP_SPACING = ${f(LAMP_SPACING)};
 const float UB_LAMP_H = ${f(LAMP_HEIGHT - 0.25)};
 const float UB_LAMP_REACH2 = ${f(LAMP_REACH2)};
 
+/** Is the lamp at head position lamp one a removed road took (inside a merged block: uDarkLamps)? */
+bool ubLampGone(vec2 lamp) {
+  for (int i = 0; i < ${DARK_LAMP_SLOTS}; i++) {
+    if (i >= uDarkCount) break;
+    vec4 r = uDarkLamps[i];
+    if (lamp.x > r.x && lamp.x < r.z && lamp.y > r.y && lamp.y < r.w) return true;
+  }
+  return false;
+}
+
 float ubLampTerm(vec3 wp, vec3 n, vec2 lamp) {
   vec3 L = vec3(lamp.x, UB_LAMP_H, lamp.y) - wp;
   float d2 = dot(L, L);
@@ -254,6 +283,7 @@ vec3 ubStreetLight(vec3 wp, vec3 n) {
       float col = line.x - (s == 0 ? 1.0 : 0.0);
       if (col < 0.0 || col >= UB_BLOCKS) continue;
       float lx = line.x * UB_BLOCK - UB_HALF + side * UB_LAMP_OFF;
+      if (uDarkCount > 0 && ubLampGone(vec2(lx, za + UB_LAMP_SPACING * 0.5))) continue;
       sum += ubLampTerm(wp, n, vec2(lx, za)) + ubLampTerm(wp, n, vec2(lx, za + UB_LAMP_SPACING));
     }
   }
@@ -265,6 +295,7 @@ vec3 ubStreetLight(vec3 wp, vec3 n) {
       float row = line.y - (s == 0 ? 1.0 : 0.0);
       if (row < 0.0 || row >= UB_BLOCKS) continue;
       float lz = line.y * UB_BLOCK - UB_HALF + side * UB_LAMP_OFF;
+      if (uDarkCount > 0 && ubLampGone(vec2(xa + UB_LAMP_SPACING * 0.5, lz))) continue;
       sum += ubLampTerm(wp, n, vec2(xa, lz)) + ubLampTerm(wp, n, vec2(xa + UB_LAMP_SPACING, lz));
     }
   }

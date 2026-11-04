@@ -10,7 +10,8 @@
  * each other so the city doesn't change in unison.
  */
 import { BLOCK_SIZE, HALF_EXTENT } from './city';
-import { DIRS, DIR_VEC, MAX_NODE, laneKey, nodeValid, type Dir } from './roads';
+import { DIRS, DIR_VEC, MAX_NODE, laneKey, nodeValid, reverse, type Dir } from './roads';
+import { STREET_ROAD, roadRules } from './roadRules';
 
 export type Signal = 'red' | 'amber' | 'green';
 
@@ -33,10 +34,15 @@ function junctionHash(ix: number, iz: number, salt: number): number {
   return (h >>> 0) / 4294967296;
 }
 
-/** Does junction (ix, iz) have traffic lights? Inner junctions only, most of them. */
+/** Does junction (ix, iz) have traffic lights? Inner junctions only, most of them; none where fewer than three roads are left (round 3: pedestrian streets and removed roads). */
 export function hasSignals(ix: number, iz: number): boolean {
   if (Math.abs(ix) >= MAX_NODE || Math.abs(iz) >= MAX_NODE) return false;
-  return junctionHash(ix, iz, 0x5151) < SIGNAL_SHARE;
+  if (junctionHash(ix, iz, 0x5151) >= SIGNAL_SHARE) return false;
+  const rules = roadRules();
+  if (!rules.streets) return true;
+  let roads = 0;
+  for (const d of DIRS) if (rules.streetAt(ix, iz, d) === STREET_ROAD) roads++;
+  return roads >= 3;
 }
 
 /** Junction (ix, iz)'s offset into the cycle, s. */
@@ -80,6 +86,8 @@ export function signalPoles(): SignalPole[] {
         const v = DIR_VEC[d];
         // Traffic arriving in direction d comes from the neighbour behind.
         if (!nodeValid(ix - v.x, iz - v.z)) continue;
+        // None facing a pedestrian street or a removed road (no traffic comes from it).
+        if (roadRules().streetAt(ix, iz, reverse(d)) !== STREET_ROAD) continue;
         // Right of travel is (-v.z, v.x).
         const x = ix * BLOCK_SIZE - v.x * SIGNAL_BACK - v.z * SIGNAL_SIDE;
         const z = iz * BLOCK_SIZE - v.z * SIGNAL_BACK + v.x * SIGNAL_SIDE;

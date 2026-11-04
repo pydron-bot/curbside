@@ -22,7 +22,8 @@ import { GANGS, placeHangouts } from './gangs';
 import { districtCentre, snapOnFoot } from './testSpots';
 import { buildMissions } from '../systems/missionsData';
 import type { MissionDef } from '../systems/missions';
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, core, type City } from '../world/city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, CORE_OFFSET, HALF_EXTENT, ROAD_WIDTH, core, type City } from '../world/city';
+import { DARK_LAMP_SLOTS } from '../world/streetLamps';
 import { DISTRICT_NAMES, districtAt, type District } from '../world/districts';
 import { placeStation, sprayShopSlots } from '../world/landmarks';
 import { NO_EDITS, entryKey, propKey, roadKey, type AddedSpotKind, type LandmarkId, type MapEdits, type MapSection } from '../world/mapEdits';
@@ -30,7 +31,7 @@ import { placePickups } from '../world/pickups';
 import { storySpots } from '../systems/storyEdits';
 import { checkRound3, collectRound3, storyRule } from './mapSpots';
 import { placeCityRamps } from '../world/ramps';
-import { RoadRules } from '../world/roadRules';
+import { RoadRules, STREET_PEDESTRIAN, STREET_ROAD, roadRules } from '../world/roadRules';
 import { DIRS, DIR_VEC, MAX_NODE, reverse, turnToward, type Dir } from '../world/roads';
 import { idNumber, spotEdit } from '../world/spotEdits';
 import { placeHospital } from '../world/streetSpots';
@@ -203,8 +204,23 @@ function storyAnchors(m: MissionDef, out: Anchor[]): void {
 /** Half the carriageway: a point this close to a road's centreline is on the road. */
 const ROAD_HALF = ROAD_WIDTH / 2;
 
-/** The block (indices as city.blocks number them) whose pavement or lot holds (x, z); null on a road or off the map. */
-export function blockAt(x: number, z: number): { bx: number; bz: number } | null {
+/**
+ * The merged block (round 3) whose pavement or lot holds (x, z), from a
+ * road's kerb round its outside to the other's: the removed roads and
+ * crossings inside it are land. Null where there's none.
+ */
+function mergeHolding(x: number, z: number, rules: RoadRules): { ix: number; iz: number; w: number; h: number } | null {
+  if (rules.merges.length === 0) return null;
+  const m = rules.mergeAt(Math.floor(x / BLOCK_SIZE), Math.floor(z / BLOCK_SIZE));
+  if (!m) return null;
+  const inside = (v: number, n0: number, n: number) => v >= n0 * BLOCK_SIZE + ROAD_HALF && v <= (n0 + n) * BLOCK_SIZE - ROAD_HALF;
+  return inside(x, m.ix, m.w) && inside(z, m.iz, m.h) ? m : null;
+}
+
+/** The block (indices as city.blocks number them) whose pavement or lot holds (x, z); null on a road or off the map. A merged block (round 3) is its north-west block's (`rules`: the road rules in force, by default the installed ones). */
+export function blockAt(x: number, z: number, rules: RoadRules = roadRules()): { bx: number; bz: number } | null {
+  const merged = mergeHolding(x, z, rules);
+  if (merged) return { bx: merged.ix + BLOCKS_PER_SIDE / 2, bz: merged.iz + BLOCKS_PER_SIDE / 2 };
   const bx = Math.floor((x + HALF_EXTENT) / BLOCK_SIZE);
   const bz = Math.floor((z + HALF_EXTENT) / BLOCK_SIZE);
   if (bx < 0 || bz < 0 || bx >= BLOCKS_PER_SIDE || bz >= BLOCKS_PER_SIDE) return null;
@@ -215,13 +231,18 @@ export function blockAt(x: number, z: number): { bx: number; bz: number } | null
 }
 
 /** The block districtAt reads for (x, z) (a road goes with the block to its south-east): a district claim relies on it. */
-export function districtBlockAt(x: number, z: number): { bx: number; bz: number } {
+export function districtBlockAt(x: number, z: number, rules: RoadRules = roadRules()): { bx: number; bz: number } {
   const clamp = (v: number) => Math.max(0, Math.min(BLOCKS_PER_SIDE - 1, v));
-  return { bx: clamp(Math.floor((x + HALF_EXTENT) / BLOCK_SIZE)), bz: clamp(Math.floor((z + HALF_EXTENT) / BLOCK_SIZE)) };
+  const b = { bx: clamp(Math.floor((x + HALF_EXTENT) / BLOCK_SIZE)), bz: clamp(Math.floor((z + HALF_EXTENT) / BLOCK_SIZE)) };
+  // In a merged block (round 3), its north-west block's (whose district it took).
+  const m = rules.merges.length > 0 ? rules.mergeAt(b.bx - BLOCKS_PER_SIDE / 2, b.bz - BLOCKS_PER_SIDE / 2) : null;
+  return m ? { bx: m.ix + BLOCKS_PER_SIDE / 2, bz: m.iz + BLOCKS_PER_SIDE / 2 } : b;
 }
 
 /** The road (x, z) is on: a junction's box, a segment between two crossings, or null off the carriageway. */
-export function roadAt(x: number, z: number): MapPick | null {
+export function roadAt(x: number, z: number, rules: RoadRules = roadRules()): MapPick | null {
+  // A removed road, and the crossing or half of one inside a merged block, is land (round 3).
+  if (mergeHolding(x, z, rules)) return null;
   const ix = Math.round(x / BLOCK_SIZE);
   const iz = Math.round(z / BLOCK_SIZE);
   const onNS = Math.abs(x - ix * BLOCK_SIZE) <= ROAD_HALF && Math.abs(ix) <= MAX_NODE;
@@ -254,12 +275,12 @@ export function routeNodes(route: readonly Node[]): Node[] | null {
 const sameSegment = (a1: Node, b1: Node, a2: Node, b2: Node) =>
   (a1[0] === a2[0] && a1[1] === a2[1] && b1[0] === b2[0] && b1[1] === b2[1]) || (a1[0] === b2[0] && a1[1] === b2[1] && b1[0] === a2[0] && b1[1] === a2[1]);
 
-function pointOn(p: Point, pick: MapPick): boolean {
+function pointOn(p: Point, pick: MapPick, rules: RoadRules = roadRules()): boolean {
   if (pick.kind === 'block') {
-    const b = blockAt(p.x, p.z);
+    const b = blockAt(p.x, p.z, rules);
     return b !== null && b.bx === pick.bx && b.bz === pick.bz;
   }
-  const r = roadAt(p.x, p.z);
+  const r = roadAt(p.x, p.z, rules);
   if (!r) return false;
   if (pick.kind === 'junction') return r.kind === 'junction' && r.ix === pick.ix && r.iz === pick.iz;
   return r.kind === 'segment' && sameSegment(r.a, r.b, pick.a, pick.b);
@@ -276,16 +297,16 @@ function routeUses(a: Anchor, pick: MapPick): boolean {
 }
 
 /** Does `a` rely on the picked block, road segment or junction? */
-export function dependsOn(a: Anchor, pick: MapPick): boolean {
-  if (a.points.some((p) => pointOn(p, pick)) || routeUses(a, pick)) return true;
+export function dependsOn(a: Anchor, pick: MapPick, rules: RoadRules = roadRules()): boolean {
+  if (a.points.some((p) => pointOn(p, pick, rules)) || routeUses(a, pick)) return true;
   if (!a.district || pick.kind !== 'block' || a.points.length === 0) return false;
-  const d = districtBlockAt(a.points[0].x, a.points[0].z);
+  const d = districtBlockAt(a.points[0].x, a.points[0].z, rules);
   return d.bx === pick.bx && d.bz === pick.bz;
 }
 
 /** Everything that relies on the pick: what the overlay draws and lists. */
-export function dependentsOf(anchors: readonly Anchor[], pick: MapPick): Anchor[] {
-  return anchors.filter((a) => dependsOn(a, pick));
+export function dependentsOf(anchors: readonly Anchor[], pick: MapPick, rules: RoadRules = roadRules()): Anchor[] {
+  return anchors.filter((a) => dependsOn(a, pick, rules));
 }
 
 // --- What an edit breaks ---
@@ -481,7 +502,7 @@ export interface MapCheckInputs {
  */
 export function checkMapEdits(city: City, edits: MapEdits, anchors: readonly Anchor[], inputs: MapCheckInputs = {}): MapProblem[] {
   const out: MapProblem[] = [];
-  const rules = new RoadRules(edits.roads);
+  const rules = new RoadRules(edits.roads, MAX_NODE);
   const leave = (ix: number, iz: number, d: Dir) => {
     const v = DIR_VEC[d];
     return Math.abs(ix + v.x) <= MAX_NODE && Math.abs(iz + v.z) <= MAX_NODE && rules.allows(ix, iz, d);
@@ -507,7 +528,9 @@ export function checkMapEdits(city: City, edits: MapEdits, anchors: readonly Anc
         for (let i = 1; nodes && i < nodes.length; i++) {
           const [p, q] = [nodes[i - 1], nodes[i]];
           const d = dirOf(p, q);
-          if (rules.isClosed(p[0], p[1], q[0], q[1])) out.push({ id: a.id, label: a.label, problem: `its course runs down the closed road ${n(p)} – ${n(q)}`, edit: roadEdit(p, q), at: mid(p, q) });
+          const street = rules.streetOf(p[0], p[1], q[0], q[1]);
+          if (street !== STREET_ROAD) out.push({ id: a.id, label: a.label, problem: `its course runs down ${street === STREET_PEDESTRIAN ? 'the pedestrian street' : 'the removed road'} ${n(p)} – ${n(q)}`, edit: roadEdit(p, q), at: mid(p, q) });
+          else if (rules.isClosed(p[0], p[1], q[0], q[1])) out.push({ id: a.id, label: a.label, problem: `its course runs down the closed road ${n(p)} – ${n(q)}`, edit: roadEdit(p, q), at: mid(p, q) });
           else if (!rules.allows(p[0], p[1], d)) out.push({ id: a.id, label: a.label, problem: `its course runs the wrong way down the one-way ${n(p)} – ${n(q)}`, edit: roadEdit(p, q), at: mid(p, q) });
         }
       }
@@ -516,7 +539,7 @@ export function checkMapEdits(city: City, edits: MapEdits, anchors: readonly Anc
         if (broken) out.push({ id: a.id, label: a.label, problem: broken.problem, at: nodePoint(broken.from) });
       }
     }
-    const net = network(leave);
+    const net = network(leave, (ix, iz) => rules.crossingStands(ix, iz));
     for (const a of anchors) {
       if (!a.lane) continue;
       const { ix, iz, dir } = a.lane;
@@ -559,7 +582,7 @@ export function checkMapEdits(city: City, edits: MapEdits, anchors: readonly Anc
     if (e.heading !== undefined && !rule.turnable) out.push({ id: e.id, label: rule.label, problem: 'has no facing to turn', edit });
     if (e.x === undefined || e.z === undefined) continue;
     const at = { x: e.x, z: e.z };
-    const road = roadAt(e.x, e.z);
+    const road = roadAt(e.x, e.z, rules);
     if (rule.group === 'ramp' && !road) out.push({ id: e.id, label: rule.label, problem: 'a ramp must stand on a road', edit, at });
     else if (rule.group !== 'ramp' && rule.group !== 'story' && road) out.push({ id: e.id, label: rule.label, problem: `stands in the road at ${e.x.toFixed(1)}, ${e.z.toFixed(1)} (it belongs on a pavement)`, edit, at });
   }
@@ -576,6 +599,7 @@ export function checkMapEdits(city: City, edits: MapEdits, anchors: readonly Anc
 
   // Round 3: jobs' phones, added frenzies and pickups, story spots, landmarks (game/mapSpots.ts).
   out.push(...checkRound3(city, edits, anchors));
+  out.push(...streetProblems(edits, anchors, rules));
 
   // Props.
   for (const p of inputs.street?.propEditProblems ?? []) {
@@ -593,9 +617,10 @@ const dirOf = (p: Node, q: Node): Dir => (q[0] > p[0] ? 1 : q[0] < p[0] ? 3 : q[
  * traffic can get from any one to any other, `reach` what traffic leaving
  * it can get to, `cut` every crossing outside it.
  */
-function network(leave: (ix: number, iz: number, d: Dir) => boolean): { main: Set<number>; reach: Set<number>; cut: Node[] } {
+function network(leave: (ix: number, iz: number, d: Dir) => boolean, stands: (ix: number, iz: number) => boolean = () => true): { main: Set<number>; reach: Set<number>; cut: Node[] } {
   const all: Node[] = [];
-  for (let ix = -MAX_NODE; ix <= MAX_NODE; ix++) for (let iz = -MAX_NODE; iz <= MAX_NODE; iz++) all.push([ix, iz]);
+  // Crossings with no road left (round 3: pedestrian streets or removed roads all round) aren't in the network.
+  for (let ix = -MAX_NODE; ix <= MAX_NODE; ix++) for (let iz = -MAX_NODE; iz <= MAX_NODE; iz++) if (stands(ix, iz)) all.push([ix, iz]);
   const walk = (start: Node, back: boolean): Set<number> => {
     const seen = new Set<number>([nodeKey(start[0], start[1])]);
     const todo: Node[] = [start];
@@ -685,4 +710,42 @@ function reachable(a: Node, b: Node, leave: (ix: number, iz: number, d: Dir) => 
     }
   }
   return false;
+}
+
+/** Round 3 (streets): what pedestrian streets and removed roads break. */
+function streetProblems(edits: MapEdits, anchors: readonly Anchor[], rules: RoadRules): MapProblem[] {
+  const out: MapProblem[] = [];
+  if (rules.refused.length + rules.removed.length === 0) return out;
+  const n = (p: Node) => `${p[0]}, ${p[1]}`;
+  for (const { road, why } of rules.refused) {
+    out.push({ id: `road:${roadKey(road.a, road.b)}`, label: 'Removed road', problem: `${n(road.a)} – ${n(road.b)} can't be removed: ${why} (it plays as a closed road)`, edit: { section: 'roads', key: roadKey(road.a, road.b) }, at: mid(road.a, road.b) });
+  }
+  /** On the carriageway of a road that's gone (a removed road or a crossing inside a merge)? */
+  const plain = new RoadRules();
+  const onRemoved = (x: number, z: number) => roadAt(x, z, plain) !== null && mergeHolding(x, z, rules) !== null;
+  for (const a of anchors) {
+    const p = a.points.find((q) => onRemoved(q.x, q.z));
+    if (p) out.push({ id: a.id, label: a.label, problem: `stands on a removed road at ${p.x.toFixed(1)}, ${p.z.toFixed(1)} (it's inside a merged block now)`, ...(a.moved ? { edit: { section: 'spots' as const, key: a.id } } : {}), at: p });
+    if (a.via?.some(([x, z]) => mergeHolding(x * BLOCK_SIZE, z * BLOCK_SIZE, rules))) {
+      const v = a.via.find(([x, z]) => mergeHolding(x * BLOCK_SIZE, z * BLOCK_SIZE, rules))!;
+      out.push({ id: a.id, label: a.label, problem: `its drive route heads for crossing ${n(v)}, inside a merged block now`, at: nodePoint(v) });
+    }
+  }
+  for (const pr of edits.props) {
+    if (!pr.removed && onRemoved(pr.x, pr.z)) out.push({ id: `prop:${propKey(pr)}`, label: `Prop ${pr.kind.replace(/_/g, ' ')}`, problem: 'stands on a removed road (inside a merged block)', edit: { section: 'props', key: propKey(pr) }, at: { x: pr.x, z: pr.z } });
+  }
+  // Block edits on a merged block's other blocks don't apply: the north-west block's edit is the merge's.
+  for (const b of edits.blocks) {
+    const ix = b.at[0] + CORE_OFFSET - BLOCKS_PER_SIDE / 2;
+    const iz = b.at[1] + CORE_OFFSET - BLOCKS_PER_SIDE / 2;
+    const m = rules.mergeAt(ix, iz);
+    if (m && (m.ix !== ix || m.iz !== iz)) {
+      const lead = [m.ix + BLOCKS_PER_SIDE / 2 - CORE_OFFSET, m.iz + BLOCKS_PER_SIDE / 2 - CORE_OFFSET];
+      out.push({ id: `block:${b.at[0]},${b.at[1]}`, label: `Block ${b.at[0]},${b.at[1]}`, problem: `is part of the merged block ${lead.join(',')}: its own edit doesn't apply (edit the merged block)`, edit: { section: 'blocks', key: `${b.at[0]},${b.at[1]}` } });
+    }
+  }
+  if (rules.merges.length > DARK_LAMP_SLOTS) {
+    out.push({ id: 'merges', label: 'Merged blocks', problem: `${rules.merges.length} merged blocks: the lamps' light only goes out in the first ${DARK_LAMP_SLOTS} (pools of light with no lamp in the rest)` });
+  }
+  return out;
 }

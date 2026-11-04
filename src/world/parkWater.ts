@@ -4,7 +4,7 @@
  * sprinklers on the grass of some parks, most in the residential streets
  * and the old town. render/waterLook.ts makes them spray.
  */
-import { BLOCK_SIZE, HALF_EXTENT, isCarPark, lotBytes, type City, type Rect } from './city';
+import { BLOCK_SIZE, HALF_EXTENT, isCarPark, lotBytes, mergedAway, type City, type Rect } from './city';
 import type { District } from './districts';
 import { keyedStream } from './random';
 
@@ -47,8 +47,10 @@ export function planParkWater(city: City, solids: readonly Rect[] = []): { fount
   const fountains: Fountain[] = [];
   const sprinklers: Sprinkler[] = [];
   city.blocks.forEach((b, i) => {
-    const cx = -HALF_EXTENT + (b.bx + 0.5) * BLOCK_SIZE;
-    const cz = -HALF_EXTENT + (b.bz + 0.5) * BLOCK_SIZE;
+    // A merged block (round 3): one fountain or set of sprinklers, in the middle of the whole merge.
+    if (mergedAway(b)) return;
+    const cx = b.merge ? (b.interior.minX + b.interior.maxX) / 2 : -HALF_EXTENT + (b.bx + 0.5) * BLOCK_SIZE;
+    const cz = b.merge ? (b.interior.minZ + b.interior.maxZ) / 2 : -HALF_EXTENT + (b.bz + 0.5) * BLOCK_SIZE;
     if (b.kind === 'plaza' && !isCarPark(city, bytes, i)) fountains.push({ x: cx, z: cz });
     if (b.kind !== 'park') return;
     const rand = keyedStream(city.seed, 0x5a71, b.bx, b.bz);

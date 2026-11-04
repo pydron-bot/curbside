@@ -21,13 +21,14 @@
  * alone), nor on top of anything placed before it.
  */
 import { planBuildings, type BuildingPlan } from './buildingPlans';
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, CORE_OFFSET, HALF_EXTENT, blockInterior, inCoreBlock, type Block, type Building, type City, type Rect } from './city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, CORE_OFFSET, HALF_EXTENT, blockInterior, blockSpan, inCoreBlock, mergedAway, spanInterior, type Block, type Building, type City, type Rect } from './city';
 import type { District } from './districts';
 import { placeFrontages } from './frontages';
 import { keyedStream, mulberry32 } from './random';
 import { placeRoadworks, type Roadworks } from './roadworks';
 import { signalPoles } from './signals';
-import { BENCH_LINE, KERB_LINE, blockSide, type Placer } from './kerbs';
+import { BENCH_LINE, KERB_LINE, blockSide, sideRemoved, type Placer } from './kerbs';
+import { roadRules } from './roadRules';
 import { generateStreetLamps } from './streetLamps';
 import { placeBusStops, placeVendors, type BusStop, type VendorSpot } from './streetStops';
 import { len2 } from '../core/len';
@@ -140,6 +141,8 @@ export interface StreetPropOptions {
   closedRoads?: readonly RoadEdit[];
   /** Map edits: props added, and generated ones removed (by kind, within PROP_MATCH). */
   propEdits?: readonly PropEdit[];
+  /** Map edits (round 3): pedestrian streets (bollards across both ends, benches, planters and tables down the middle). */
+  pedestrianRoads?: readonly RoadEdit[];
 }
 
 /** Furniture slots along a block side (m from the block's corner), 3 m apart and clear of the lamps at 16, 32, 48. */
@@ -387,6 +390,7 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
     closeRoadEnd(r.a[0], r.a[1], r.b[0], r.b[1], put);
     closeRoadEnd(r.b[0], r.b[1], r.a[0], r.a[1], put);
   }
+  for (const r of opts.pedestrianRoads ?? []) dressPedestrianStreet(city.seed, r, clear, put);
   for (const e of opts.propEdits ?? []) {
     if (!propEditable(e.kind)) {
       const known = (STREET_PROP_KINDS as readonly string[]).includes(e.kind);
@@ -414,8 +418,74 @@ function closeRoadEnd(ix: number, iz: number, tx: number, tz: number, put: (kind
   for (const o of CLOSURE_BARRELS) put('traffic_barrel', cx - vz * o, cz + vx * o, heading, 1, 0.5);
 }
 
-/** Block (bx, bz) a building stands in. */
-const blockOf = (b: Rect): [number, number] => [Math.floor(((b.minX + b.maxX) / 2 + HALF_EXTENT) / BLOCK_SIZE), Math.floor(((b.minZ + b.maxZ) / 2 + HALF_EXTENT) / BLOCK_SIZE)];
+/**
+ * Bollards across each end of a pedestrian street (m into it from its
+ * crossing's centre, and across from its centreline): 1.5 m gaps people walk
+ * through, too narrow for a car, but for one in the middle (2.4 m) a car can
+ * just squeeze through (traffic never tries: the road rules shut it).
+ */
+const PED_BOLLARDS_ALONG = 9.6;
+const PED_BOLLARDS = [-7.2, -5.4, -3.6, -1.35, 1.35, 3.6, 5.4, 7.2];
+/** What stands down a pedestrian street's middle (|across| < 2.5 m; people walk either side of it). */
+const PED_DRESSING: ReadonlyArray<readonly [StreetPropKind | 'terrace' | null, number]> = [
+  ['planter', 3],
+  ['bench', 3],
+  ['terrace', 1.6],
+  ['trash_bin', 1.2],
+  ['bike_rack', 0.8],
+  [null, 1.2],
+];
+
+/**
+ * A pedestrian street (round 3): bollards across both ends (where a road
+ * still meets it), then planters, benches, bins, bike racks and café tables
+ * down the middle, from a stream of its own (keyed by the street), so it's
+ * the same every time and moves nothing elsewhere.
+ */
+function dressPedestrianStreet(seed: number, r: RoadEdit, clear: (x: number, z: number, r: number) => boolean, put: Put): void {
+  const [a, b] = r.a[0] < r.b[0] || r.a[1] < r.b[1] ? [r.a, r.b] : [r.b, r.a];
+  const vx = b[0] - a[0];
+  const vz = b[1] - a[1];
+  const rand = keyedStream(seed, vx !== 0 ? 0x9ed5 : 0x9ed6, a[0], a[1]);
+  const point = (along: number, across: number) => ({ x: a[0] * BLOCK_SIZE + vx * along - vz * across, z: a[1] * BLOCK_SIZE + vz * along + vx * across });
+  const along = Math.atan2(vx, vz);
+  const rules = roadRules();
+  for (const [end, from] of [
+    [a, PED_BOLLARDS_ALONG],
+    [b, BLOCK_SIZE - PED_BOLLARDS_ALONG],
+  ] as const) {
+    if (!rules.crossingStands(end[0], end[1])) continue;
+    for (const o of PED_BOLLARDS) {
+      const p = point(from, o);
+      put('bollard', p.x, p.z, along);
+    }
+  }
+  for (let t = 15; t <= BLOCK_SIZE - 15; t += 5.5 + rand() * 2) {
+    const kind = pick(PED_DRESSING, rand());
+    const side = rand() < 0.5 ? -1 : 1;
+    if (kind === null) continue;
+    if (kind === 'terrace') {
+      // Two café tables side by side across the middle.
+      for (const o of [-1.1, 1.1]) {
+        const p = point(t, o);
+        if (clear(p.x, p.z, 0.9)) put('cafe_table', p.x, p.z, along + Math.PI / 2);
+      }
+      continue;
+    }
+    const p = point(t, kind === 'bench' || kind === 'trash_bin' ? side * 1.4 : 0);
+    // Benches face out to the people walking past; planters and racks run along the street.
+    const heading = kind === 'bench' ? along + (side > 0 ? -Math.PI / 2 : Math.PI / 2) : kind === 'trash_bin' ? along + Math.PI / 2 : along;
+    if (clear(p.x, p.z, ROOM[kind] ?? 0.4)) put(kind, p.x, p.z, heading);
+  }
+}
+
+/** Block (bx, bz) a building stands in (a merged block's north-west one). */
+const blockOf = (b: Rect): [number, number] => {
+  const bx = Math.floor(((b.minX + b.maxX) / 2 + HALF_EXTENT) / BLOCK_SIZE);
+  const bz = Math.floor(((b.minZ + b.maxZ) / 2 + HALF_EXTENT) / BLOCK_SIZE);
+  const span = blockSpan(bx, bz);
+  return span ? [span.bx, span.bz] : [bx, bz];
+};
 
 /** A waste lot's junk, by weight: what gets dumped on an empty plot. */
 const LOT_JUNK: ReadonlyArray<readonly [StreetPropKind, number]> = [
@@ -433,6 +503,8 @@ function dressBlocks(city: City, blocks: readonly Block[], clear: (x: number, z:
     for (let side = 0; side < 4; side++) {
       const s = blockSide(b, side);
       const { at, toRoad } = s;
+      // Round 3: no kerb along a removed road (it's the middle of a merged block).
+      if (sideRemoved(s)) continue;
       if (b.kind === 'plaza') {
         // A row of bollards along the kerb, keeping the plaza's middle open to the street.
         for (let t = 16; t <= 48; t += 2.4) {
@@ -469,7 +541,9 @@ function dressBlocks(city: City, blocks: readonly Block[], clear: (x: number, z:
         put(kind, p.x, p.z, facing);
       }
     }
-    if (b.kind === 'park') plantTrees(city, b.bx, b.bz, b.district, put);
+    // A merged block's inside is dressed once, from its north-west block.
+    if (mergedAway(b)) continue;
+    if (b.kind === 'park') plantTrees(city, b.interior, b.district, put);
     if (b.kind === 'lot') {
       const r = b.interior;
       const n = 4 + Math.floor(rand() * 5);
@@ -507,8 +581,7 @@ function pick<T>(list: ReadonlyArray<readonly [T, number]>, r: number): T {
 type Put = (kind: StreetPropKind, x: number, z: number, heading: number, scale?: number) => number;
 
 /** The park's trees (city.trees, already colliding) as models: the kind by district, sized to the canopy. */
-function plantTrees(city: City, bx: number, bz: number, district: District, put: Put): void {
-  const r = blockInterior(bx, bz);
+function plantTrees(city: City, r: Rect, district: District, put: Put): void {
   const [round, tall] = TREES[district];
   for (const t of city.trees) {
     if (t.x < r.minX || t.x > r.maxX || t.z < r.minZ || t.z > r.maxZ) continue;
@@ -542,7 +615,8 @@ function placeDumpsters(city: City, buildings: readonly Building[], clear: (x: n
   for (const [key, list] of byBlock) {
     const bx = Math.floor(key / BLOCKS_PER_SIDE);
     const bz = key % BLOCKS_PER_SIDE;
-    const r = blockInterior(bx, bz);
+    const span = blockSpan(bx, bz);
+    const r = span ? spanInterior(span) : blockInterior(bx, bz);
     const rand = keyedStream(city.seed, 0xd0b5, bx - CORE_OFFSET, bz - CORE_OFFSET);
     for (const a of list) {
       for (const b of list) {

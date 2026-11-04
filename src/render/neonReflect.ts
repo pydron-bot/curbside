@@ -9,6 +9,7 @@
  */
 import { AWNING_DEPTH, AWNING_HEIGHT, type BuildingPlan } from '../world/buildingPlans';
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, type Building, type Rect } from '../world/city';
+import { STREET_ROAD, roadRules } from '../world/roadRules';
 
 /** Floats per source: x, z, height, length, r, g, b (linear). */
 export const SOURCE_STRIDE = 7;
@@ -115,5 +116,19 @@ export function onRoad(x: number, z: number): boolean {
   const half = ROAD_WIDTH / 2;
   const lx = (((x + HALF_EXTENT) % BLOCK_SIZE) + BLOCK_SIZE) % BLOCK_SIZE;
   const lz = (((z + HALF_EXTENT) % BLOCK_SIZE) + BLOCK_SIZE) % BLOCK_SIZE;
-  return lx < half || lx > BLOCK_SIZE - half || lz < half || lz > BLOCK_SIZE - half;
+  if (!(lx < half || lx > BLOCK_SIZE - half || lz < half || lz > BLOCK_SIZE - half)) return false;
+  // A removed road (round 3) is a merged block's land; a pedestrian street's paving isn't damp road either.
+  const rules = roadRules();
+  if (!rules.streets) return true;
+  if (rules.mergeAt(Math.floor(x / BLOCK_SIZE), Math.floor(z / BLOCK_SIZE))) {
+    const m = rules.mergeAt(Math.floor(x / BLOCK_SIZE), Math.floor(z / BLOCK_SIZE))!;
+    if (x > m.ix * BLOCK_SIZE + half && x < (m.ix + m.w) * BLOCK_SIZE - half && z > m.iz * BLOCK_SIZE + half && z < (m.iz + m.h) * BLOCK_SIZE - half) return false;
+  }
+  const ix = Math.round(x / BLOCK_SIZE);
+  const iz = Math.round(z / BLOCK_SIZE);
+  const onNS = Math.abs(x - ix * BLOCK_SIZE) < half;
+  const onEW = Math.abs(z - iz * BLOCK_SIZE) < half;
+  if (onNS && !onEW) return rules.streetOf(ix, Math.floor(z / BLOCK_SIZE), ix, Math.floor(z / BLOCK_SIZE) + 1) === STREET_ROAD;
+  if (onEW && !onNS) return rules.streetOf(Math.floor(x / BLOCK_SIZE), iz, Math.floor(x / BLOCK_SIZE) + 1, iz) === STREET_ROAD;
+  return true;
 }

@@ -18,6 +18,7 @@ import { PLAYER_ON_FOOT, createPedState, stepPedestrian, type PedSpec, type PedS
 import { type VehicleState } from '../entities/vehicle';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK } from '../world/city';
 import { PED_RADIUS, bodyOf, carCircles } from './physics';
+import { STREET_PEDESTRIAN, roadRules } from '../world/roadRules';
 import { len2 } from '../core/len';
 
 export type PedMode = 'walk' | 'flee' | 'down' | 'fight' | 'shoot' | 'arrest';
@@ -135,15 +136,72 @@ const CROSS_CHANCE = 0.3;
  */
 export function cornerPoint(bx: number, bz: number, corner: number, out: { x: number; z: number } = { x: 0, z: 0 }): { x: number; z: number } {
   const c = corner & 3;
-  const x0 = -HALF_EXTENT + bx * BLOCK_SIZE;
-  const z0 = -HALF_EXTENT + bz * BLOCK_SIZE;
-  out.x = c === 1 || c === 2 ? x0 + BLOCK_SIZE - WALK_INSET : x0 + WALK_INSET;
-  out.z = c >= 2 ? z0 + BLOCK_SIZE - WALK_INSET : z0 + WALK_INSET;
+  let x0 = -HALF_EXTENT + bx * BLOCK_SIZE;
+  let z0 = -HALF_EXTENT + bz * BLOCK_SIZE;
+  let w = BLOCK_SIZE;
+  let h = BLOCK_SIZE;
+  // A merged block (round 3): the corners of the whole merge, one pavement ring round the outside.
+  const rules = roadRules();
+  if (rules.merges.length > 0) {
+    const m = rules.mergeAt(bx - BLOCKS_PER_SIDE / 2, bz - BLOCKS_PER_SIDE / 2);
+    if (m) {
+      x0 = m.ix * BLOCK_SIZE;
+      z0 = m.iz * BLOCK_SIZE;
+      w = m.w * BLOCK_SIZE;
+      h = m.h * BLOCK_SIZE;
+    }
+  }
+  out.x = c === 1 || c === 2 ? x0 + w - WALK_INSET : x0 + WALK_INSET;
+  out.z = c >= 2 ? z0 + h - WALK_INSET : z0 + WALK_INSET;
   return out;
+}
+
+/** Round 3: people walk down a pedestrian street, not just its pavements; each keeps to their own line across it (0..this, m in from the pavement's walking line). */
+const STROLL_WIDTH = 7;
+/** ...and their corner there is this far along the street, past the bollards across its end. */
+const STROLL_IN = 4;
+
+/**
+ * A corner on a pedestrian street (either side of it), moved out into the
+ * street by the ped's own stroll line (from their pace, so no draw) and
+ * along it past the end's bollards. Allocates nothing.
+ */
+function strollCorner(p: PedAgent, out: { x: number; z: number }): void {
+  const rules = roadRules();
+  const n = BLOCKS_PER_SIDE / 2;
+  const c = p.corner & 3;
+  let ix = p.bx - n;
+  let iz = p.bz - n;
+  let w = 1;
+  let h = 1;
+  const m = rules.merges.length > 0 ? rules.mergeAt(ix, iz) : null;
+  if (m) {
+    ix = m.ix;
+    iz = m.iz;
+    w = m.w;
+    h = m.h;
+  }
+  const stroll = ((p.pace * 3711.7) % 1) * STROLL_WIDTH;
+  const east = c === 1 || c === 2;
+  const south = c >= 2;
+  // The north or south side at this corner (the stretch of it in the corner's own block), then east or west.
+  const ns = rules.sideStreet(east ? ix + w - 1 : ix, south ? iz + h - 1 : iz, south ? 2 : 0) === STREET_PEDESTRIAN;
+  const ew = rules.sideStreet(east ? ix + w - 1 : ix, south ? iz + h - 1 : iz, east ? 1 : 3) === STREET_PEDESTRIAN;
+  if (ns) {
+    out.z += south ? stroll : -stroll;
+    out.x += east ? -STROLL_IN : STROLL_IN;
+  }
+  if (ew) {
+    out.x += east ? stroll : -stroll;
+    out.z += south ? -STROLL_IN : STROLL_IN;
+  }
 }
 
 /** cornerPoint's scratch for the per-step walk (read at once, never kept). */
 const cornerAt = { x: 0, z: 0 };
+const crossFrom = { x: 0, z: 0 };
+/** A crossing at a corner is straight over a road: the corner across is this close, m. */
+const CROSS_REACH = 24;
 
 export function blockAt(x: number, z: number): { bx: number; bz: number } {
   const clamp = (v: number) => Math.max(0, Math.min(BLOCKS_PER_SIDE - 1, v));
@@ -425,6 +483,7 @@ export function stepCrowdPed(
 
   // --- Walking the sidewalk loop ---
   cornerPoint(p.bx, p.bz, p.corner, cornerAt);
+  if (roadRules().streets) strollCorner(p, cornerAt);
   const dx = cornerAt.x - p.s.x;
   const dz = cornerAt.z - p.s.z;
   const d = Math.sqrt(dx * dx + dz * dz);
@@ -596,7 +655,24 @@ function arriveAtCorner(p: PedAgent, rand: () => number) {
       nbz += south ? 1 : -1;
       nc = [3, 2, 1, 0][c];
     }
-    if (nbx >= 0 && nbx < BLOCKS_PER_SIDE && nbz >= 0 && nbz < BLOCKS_PER_SIDE) {
+    // A merged block (round 3): across from the merge's own corner, to the block there.
+    const rules = roadRules();
+    const m = rules.merges.length > 0 ? rules.mergeAt(p.bx - BLOCKS_PER_SIDE / 2, p.bz - BLOCKS_PER_SIDE / 2) : null;
+    if (m) {
+      const bx0 = m.ix + BLOCKS_PER_SIDE / 2;
+      const bz0 = m.iz + BLOCKS_PER_SIDE / 2;
+      const east = c === 1 || c === 2;
+      const south = c === 2 || c === 3;
+      nbx = horizontal ? (east ? bx0 + m.w : bx0 - 1) : east ? bx0 + m.w - 1 : bx0;
+      nbz = horizontal ? (south ? bz0 + m.h - 1 : bz0) : south ? bz0 + m.h : bz0 - 1;
+    }
+    // Only straight over the road (the corner across may be a merged block's, further along).
+    const near = () => {
+      const here = cornerPoint(p.bx, p.bz, c, crossFrom);
+      const there = cornerPoint(nbx, nbz, nc, cornerAt);
+      return len2(there.x - here.x, there.z - here.z) < CROSS_REACH;
+    };
+    if (nbx >= 0 && nbx < BLOCKS_PER_SIDE && nbz >= 0 && nbz < BLOCKS_PER_SIDE && (rules.merges.length === 0 || near())) {
       p.bx = nbx;
       p.bz = nbz;
       p.corner = nc;

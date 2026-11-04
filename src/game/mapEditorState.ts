@@ -12,7 +12,7 @@
 import { checkMapEdits, collectAnchors, blockAt, newSpotId, roadAt, routeNodes, spotRules, type Anchor, type AnchorGroup, type MapPick, type Node } from './mapAnchors';
 import { GANGS } from './gangs';
 import { BLOCK_SIZE, CORE_OFFSET, HALF_EXTENT, generateCity, isCarPark, lotBytes, type City } from '../world/city';
-import { paintDistricts, type District } from '../world/districts';
+import type { District } from '../world/districts';
 import { dressCity, type Dressing } from '../world/dressing';
 import {
   HEIGHT_SCALE_MAX,
@@ -38,7 +38,10 @@ import {
 } from '../world/mapEdits';
 import { MAX_NODE } from '../world/roads';
 import { placeCityRamps, type Ramp } from '../world/ramps';
-import { setRoadRules } from '../world/roadRules';
+import { installMap } from '../world/city';
+import { RoadRules } from '../world/roadRules';
+import { removeRoad, restoreRoad } from '../world/blockMerge';
+import { withPedestrianRoad } from '../world/mapEdits';
 import type { StreetPropKind, StreetProps } from '../world/streetProps';
 import { PICKUP_ITEMS, landmarkEdit, withJobPhone, withLandmark, withStorySpotEdit, type JobEdit, type LandmarkEdit, type LandmarkId } from '../world/mapEdits';
 import { placePickups, type PickupKind } from '../world/pickups';
@@ -120,6 +123,8 @@ export interface Preview {
   hosts: Map<string, SceneHost[]>;
   /** How long the build took, ms. */
   ms: number;
+  /** The edits' road rules (round 3: picks on a merged block or a removed road read them; the game's stay installed). */
+  rules?: RoadRules;
 }
 
 const editKind = (city: City, bytes: Uint8Array, i: number): BlockEditKind =>
@@ -151,13 +156,14 @@ export function buildPreview(edits: MapEdits, inputs: PreviewInputs, gameMap: Ma
     const { moved, removed } = applySpotEdits(collectAnchors(city, { ...more, ramps: rawRamps, edits: NO_EDITS }), edits);
     // Checked with the preview's districts and road rules installed (districtAt and the router read them).
     const problems = problemsFor(city, edits, anchors, street);
+    const rules = new RoadRules(edits.roads, MAX_NODE);
     // Shop doors and road works (thousands; zoomed in only): listed apart from the spots.
     const extras: Anchor[] = [];
     const shops = shopSpots(city);
     collectRound3({ shops, roadworks: street.roadworks }, extras);
     // What the run-time scenes could pick on each block and road (with this city's districts and road rules installed).
     const hosts = sceneHosts(city, shops, more.hydrants);
-    return { edits, city, kinds, props: propsOnMap(dressing, edits), anchors, moved, removed, rawRamps, ramps, problems, extras, hosts, ms: performance.now() - t0 };
+    return { edits, city, kinds, props: propsOnMap(dressing, edits), anchors, moved, removed, rawRamps, ramps, problems, extras, hosts, ms: performance.now() - t0, rules };
   } finally {
     restoreGameMap(gameMap);
   }
@@ -169,8 +175,8 @@ export function buildPreview(edits: MapEdits, inputs: PreviewInputs, gameMap: Ma
  * with) so it never plays the editor's draft.
  */
 export function restoreGameMap(gameMap: MapEdits): void {
-  paintDistricts(gameMap.blocks);
-  setRoadRules(gameMap.roads);
+  // Districts, road rules and (round 3) merged blocks, as generateCity installs them.
+  installMap(gameMap);
 }
 
 /** The unedited city's blocks (kind and district), for telling an edit from a no-op. Restores `gameMap`'s districts. */
@@ -251,6 +257,8 @@ export function problemsFor(city: City, edits: MapEdits, anchors: readonly Ancho
   const byId = new Map(anchors.map((a) => [a.id, a]));
   const roads = new Map<string, RoadEdit>(edits.roads.map((r) => [roadKey(r.a, r.b), r]));
   const closed = (a: Node, b: Node) => roads.get(roadKey(a, b))?.closed === true;
+  /** Round 3: a pedestrian street or a removed road (no traffic either). */
+  const gone = (a: Node, b: Node) => roads.get(roadKey(a, b))?.pedestrian === true || roads.get(roadKey(a, b))?.removed === true;
   const against = (a: Node, b: Node) => {
     const r = roads.get(roadKey(a, b));
     return r?.oneWay === true && r.a[0] === b[0] && r.a[1] === b[1];
@@ -259,7 +267,7 @@ export function problemsFor(city: City, edits: MapEdits, anchors: readonly Ancho
   const badLegs = (a: Anchor | undefined): Array<[Node, Node]> => {
     const nodes = a?.route && roads.size > 0 ? routeNodes(a.route) : null;
     const out: Array<[Node, Node]> = [];
-    if (nodes) for (let i = 1; i < nodes.length; i++) if (closed(nodes[i - 1], nodes[i]) || against(nodes[i - 1], nodes[i])) out.push([nodes[i - 1], nodes[i]]);
+    if (nodes) for (let i = 1; i < nodes.length; i++) if (closed(nodes[i - 1], nodes[i]) || gone(nodes[i - 1], nodes[i]) || against(nodes[i - 1], nodes[i])) out.push([nodes[i - 1], nodes[i]]);
     return out;
   };
   const out: EditorProblem[] = checkMapEdits(city, edits, anchors, { street }).map((p) => {
@@ -272,6 +280,7 @@ export function problemsFor(city: City, edits: MapEdits, anchors: readonly Ancho
       for (const p of a.points) {
         const r = roadAt(p.x, p.z);
         if (r?.kind === 'segment' && closed(r.a, r.b)) out.push({ id: a.id, label: a.label, problem: 'stands on a closed road', points: [p], segments: [[r.a, r.b]] });
+        if (r?.kind === 'segment' && roads.get(roadKey(r.a, r.b))?.pedestrian) out.push({ id: a.id, label: a.label, problem: 'stands on a pedestrian street (bollards keep traffic out)', points: [p], segments: [[r.a, r.b]] });
       }
     }
   }
@@ -420,7 +429,7 @@ export const HIT_PX = 9;
  * are in screen px). Clicking again in the same place steps down this
  * list (nextPick), so stacked icons can all be reached.
  */
-export function picksAt(p: Point, anchors: readonly Anchor[], props: readonly PropRef[], scale: number): Selection[] {
+export function picksAt(p: Point, anchors: readonly Anchor[], props: readonly PropRef[], scale: number, rules?: RoadRules): Selection[] {
   const reach = HIT_PX / scale;
   const out: Selection[] = [];
   const near: Array<{ d: number; i: number; sel: Selection }> = [];
@@ -440,19 +449,19 @@ export function picksAt(p: Point, anchors: readonly Anchor[], props: readonly Pr
     hits.sort((x, y) => x.d - y.d);
     for (const h of hits) out.push({ kind: 'prop', prop: h.q });
   }
-  const r = roadAt(p.x, p.z);
+  const r = roadAt(p.x, p.z, rules);
   if (r?.kind === 'junction') out.push({ kind: 'junction', ix: r.ix, iz: r.iz });
   else if (r?.kind === 'segment') out.push({ kind: 'segment', a: r.a, b: r.b });
   else {
-    const b = blockAt(p.x, p.z);
+    const b = blockAt(p.x, p.z, rules);
     if (b) out.push({ kind: 'block', bx: b.bx, bz: b.bz });
   }
   return out;
 }
 
 /** What's at world point p: the top of picksAt's list. */
-export function pickAt(p: Point, anchors: readonly Anchor[], props: readonly PropRef[], scale: number): Selection | null {
-  return picksAt(p, anchors, props, scale)[0] ?? null;
+export function pickAt(p: Point, anchors: readonly Anchor[], props: readonly PropRef[], scale: number, rules?: RoadRules): Selection | null {
+  return picksAt(p, anchors, props, scale, rules)[0] ?? null;
 }
 
 /** A click again where the last one landed: the next thing down the stack after `current` (round to the top), else the top. */
@@ -471,12 +480,12 @@ export function selectionPick(sel: Selection | null): MapPick | null {
 }
 
 /** Where an anchor stands, as a place (its first point's block, road or junction). */
-export function anchorPlace(a: Anchor): MapPick | null {
+export function anchorPlace(a: Anchor, rules?: RoadRules): MapPick | null {
   const p = a.points[0];
   if (!p) return null;
-  const r = roadAt(p.x, p.z);
+  const r = roadAt(p.x, p.z, rules);
   if (r) return r;
-  const b = blockAt(p.x, p.z);
+  const b = blockAt(p.x, p.z, rules);
   return b ? { kind: 'block', bx: b.bx, bz: b.bz } : null;
 }
 
@@ -537,18 +546,27 @@ export function rerollBlock(edits: MapEdits, bx: number, bz: number, base: Block
   return editBlock(edits, bx, bz, { variant: v === undefined ? 1 : v + 1 }, base);
 }
 
-export type RoadMode = 'open' | 'closed' | 'oneWay' | 'oneWayBack';
+export type RoadMode = 'open' | 'closed' | 'oneWay' | 'oneWayBack' | 'pedestrian' | 'removed';
 
 /** The road's state in the edits: open, closed, or one-way (with `forward` true if traffic runs a → b as given). */
-export function roadState(edits: MapEdits, a: Node, b: Node): { mode: 'open' | 'closed' | 'oneWay'; from?: Node; to?: Node } {
+export function roadState(edits: MapEdits, a: Node, b: Node): { mode: 'open' | 'closed' | 'oneWay' | 'pedestrian' | 'removed'; from?: Node; to?: Node } {
   const r = edits.roads.find((e) => roadKey(e.a, e.b) === roadKey(a, b));
   if (!r) return { mode: 'open' };
+  if (r.removed) return { mode: 'removed' };
+  if (r.pedestrian) return { mode: 'pedestrian' };
   if (r.closed) return { mode: 'closed' };
   return { mode: 'oneWay', from: r.a, to: r.b };
 }
 
 /** Open, close, or make one-way (a → b, or `oneWayBack` b → a). */
 export function setRoad(edits: MapEdits, a: Node, b: Node, mode: RoadMode): MapEdits {
+  // Round 3: removing merges the blocks either side (refused: no change; removeRefusal says why); a removed road put back cuts its merge along the line.
+  if (mode === 'removed') {
+    const r = removeRoad(edits, a, b, MAX_NODE);
+    return 'edits' in r ? r.edits : edits;
+  }
+  if (roadState(edits, a, b).mode === 'removed') return setRoad(restoreRoad(edits, a, b, MAX_NODE), a, b, mode);
+  if (mode === 'pedestrian') return withPedestrianRoad(edits, a, b);
   if (mode === 'closed') return withRoadEdit(edits, a, b, { closed: true });
   if (mode === 'oneWay') return withRoadEdit(edits, a, b, { oneWay: true });
   if (mode === 'oneWayBack') return withRoadEdit(edits, b, a, { oneWay: true });
@@ -719,6 +737,8 @@ export function describeChange(c: MapEditChange): string {
       const r = e as RoadEdit;
       if (!c.after) return `Road ${nodeText(r.a)}–${nodeText(r.b)}: open${back}`;
       const a = c.after as RoadEdit;
+      if (a.removed) return `Road ${nodeText(a.a)}–${nodeText(a.b)}: removed (blocks merged)`;
+      if (a.pedestrian) return `Road ${nodeText(a.a)}–${nodeText(a.b)}: pedestrian street`;
       return a.closed ? `Road ${nodeText(a.a)}–${nodeText(a.b)}: closed` : `Road ${nodeText(a.a)}→${nodeText(a.b)}: one-way ${compass(a.a, a.b)}`;
     }
     case 'spots': {
@@ -873,4 +893,15 @@ export function landmarkHomes(anchors: readonly Anchor[]): Map<LandmarkId, reado
   const out = new Map<LandmarkId, readonly [number, number]>();
   for (const a of anchors) if (a.landmark && !out.has(a.landmark)) out.set(a.landmark, anchorBlock(a)!);
   return out;
+}
+
+/** Why REMOVE can't apply to road a–b (round 3: the outer ring road, or an L-shaped merge), or null if it can. */
+export function removeRefusal(edits: MapEdits, a: Node, b: Node): string | null {
+  const r = removeRoad(edits, a, b, MAX_NODE);
+  return 'refused' in r ? r.refused : null;
+}
+
+/** The merged block (round 3) holding city block (bx, bz): its north-west block and size, or null. */
+export function mergeOf(city: City, bx: number, bz: number): { bx: number; bz: number; w: number; h: number } | null {
+  return city.blocks.find((b) => b.bx === bx && b.bz === bz)?.merge ?? null;
 }

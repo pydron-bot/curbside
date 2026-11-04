@@ -17,7 +17,8 @@ import { placeSprayShops, placeStation, shopRect } from './landmarks';
 import { placeLandmarkProps, type Landmarks } from './landmarkProps';
 import type { KnockableItem } from '../systems/knockables';
 import type { Ramp } from './ramps';
-import { dirHeading, segmentKey } from './roads';
+import { MAX_NODE, dirHeading, segmentKey } from './roads';
+import { RoadRules } from './roadRules';
 import { placeStreetProps, type StreetProps } from './streetProps';
 import { buildMissions } from '../systems/missionsData';
 
@@ -86,7 +87,9 @@ export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: num
       }
     }
   }
-  const street = placeStreetProps(city, { avoid, keepOut, reserve, quietRoads, closedRoads: edits.roads.filter((r) => r.closed), propEdits: edits.props });
+  // Closures (and removals that can't apply, played as closed) and pedestrian streets (round 3), as the road rules read them.
+  const rules = new RoadRules(edits.roads, MAX_NODE);
+  const street = placeStreetProps(city, { avoid, keepOut, reserve, quietRoads, closedRoads: rules.closed, propEdits: edits.props, pedestrianRoads: rules.pedestrian });
   const knockables: KnockableItem[] = [
     ...street.knockables.map((k) => ({ id: k.prop, kind: street.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius, hx: k.hx, hz: k.hz })),
     ...landmarks.knockables.map((k) => ({ id: LANDMARK_KNOCK_ID + k.prop, kind: landmarks.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius })),

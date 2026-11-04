@@ -672,6 +672,89 @@ async function mapSpotsCheck(page, label) {
   await page.waitForFunction(() => window.__ub, null, { timeout: 90000 });
 }
 
+/**
+ * Round 3 (streets): in the map editor, a road made a pedestrian street and
+ * another removed (two blocks merged); REMOVE refused on the outer ring;
+ * VIEW IN 3D rebuilds them live with no new shader programs; over 20 s no
+ * car drives on either, and the draw calls stay in budget. Then the shipped
+ * city back.
+ */
+async function streetsCheck(page, label) {
+  // Each click named, so a timeout says which (SwiftShader on a shared runner can be slow to settle the editor).
+  const click = (what, sel) =>
+    page.locator(sel).click({ timeout: 90000 }).catch((e) => {
+      throw new Error(`streets: ${what}: ${e.message.split('\n')[0]}`);
+    });
+  const programs = await page.evaluate(async () => {
+    const u = window.__ub;
+    localStorage.removeItem('curbside.map.local');
+    if (u.observe?.active) u.observe.exit();
+    u.startGame();
+    u.fastForward(1);
+    await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+    const n = u.renderer.info.programs.length;
+    u.mapEditor.open();
+    u.mapEditor.editor.select({ kind: 'segment', a: [1, 1], b: [2, 1] }, true);
+    return n;
+  });
+  await click('PEDESTRIAN', '#mapeditor [data-act="road"][data-arg="pedestrian"]');
+  await page.evaluate(() => window.__ub.mapEditor.editor.select({ kind: 'segment', a: [1, -1], b: [1, 0] }, true));
+  await click('REMOVE', '#mapeditor [data-act="road"][data-arg="removed"]');
+  const edited = await page.evaluate(() => {
+    const u = window.__ub;
+    const changes = [...document.querySelectorAll('#mapeditor .me-changes-list .me-item')].map((el) => el.textContent);
+    u.mapEditor.editor.select({ kind: 'segment', a: [8, 0], b: [8, 1] }, true);
+    const ring = document.querySelector('#mapeditor [data-act="road"][data-arg="removed"]');
+    return { changes, ringRefused: !!ring?.disabled };
+  });
+  check(
+    edited.changes.some((c) => c.includes('pedestrian street')) && edited.changes.some((c) => c.includes('removed (blocks merged)')) && edited.ringRefused,
+    `${label}: a pedestrian street and a removed road in CHANGES, REMOVE refused on the outer ring (${edited.changes.join('; ')})`,
+  );
+  await page.evaluate(() => window.__ub.mapEditor.editor.select({ kind: 'segment', a: [1, 1], b: [2, 1] }, true));
+  await click('VIEW IN 3D', '#mapeditor [data-act="view3d"]');
+  const live = await page.evaluate(async () => {
+    const u = window.__ub;
+    let calls = 0;
+    for (let i = 0; i < 5; i++) {
+      await new Promise((res) => requestAnimationFrame(res));
+      if (i >= 2) calls = Math.max(calls, u.renderer.info.render.calls);
+    }
+    const merged = u.city.blocks.filter((b) => b.merge).length;
+    const bollards = u.dressing.street.props.filter((p) => p.kind === 'bollard' && Math.abs(p.z - 64) < 8 && p.x > 70 && p.x < 122).length;
+    // Traffic round them for 20 s: nothing drives onto the pedestrian street or the removed road. (The live
+    // rebuild leaves the cars already there where they are, parked or finishing the block: those are left out.)
+    const onEdited = (p) => (Math.abs(p.z - 64) < 7 && p.x > 74 && p.x < 118) || (Math.abs(p.x - 64) < 7 && p.z > -54 && p.z < -10);
+    const before = new Set(u.vehicles.filter((v) => onEdited(v.sim)));
+    let samples = 0;
+    let on = 0;
+    for (let s = 0; s < 20; s++) {
+      u.player.ped.x = 64;
+      u.player.ped.z = 30;
+      u.fastForward(1);
+      for (const v of u.vehicles) {
+        const p = v.sim;
+        if (before.has(v) || Math.hypot(p.x - 64, p.z - 30) > 150) continue;
+        samples++;
+        if (onEdited(p)) on++;
+      }
+    }
+    const r = { observe: !!u.observe?.active, merged, bollards, samples, on, leftThere: before.size, calls, programs: u.renderer.info.programs.length, url: location.search };
+    u.mapEditor.live.apply(u.mapEditor.shipped);
+    u.mapEditor.live.dirty = false;
+    localStorage.removeItem('curbside.map.local');
+    u.observe.exit();
+    if (u.paused) u.setPaused(false);
+    return r;
+  });
+  check(
+    live.observe && live.merged === 2 && live.bollards === 16 && live.programs === programs && !live.url.includes('map=local'),
+    `${label}: VIEW IN 3D rebuilds the streets live: 2 blocks merged, 16 bollards, no new programs (${JSON.stringify({ ...live, before: programs })})`,
+  );
+  check(live.samples > 0 && live.on === 0, `${label}: no traffic onto the pedestrian street or the removed road over 20 s (${live.on} of ${live.samples} car samples; ${live.leftThere} already there at the rebuild left out)`);
+  check(live.calls > 0 && live.calls < DRAW_BUDGET, `${label}: ${live.calls} draw calls over the edited streets (budget ${DRAW_BUDGET})`);
+}
+
 /** What the best-moment card must stay clear of on WASTED: its title, numbers and timer, the pause button, the corners' HUD and the thumbs. */
 const MOMENT_CLEAR_OF = ['.wasted-title', '.wasted-stats', '.wasted-timer', '.hud-pause', '#radar', '#score', '#wanted', '.tbtn', '.stick-base', '.aim-base', '.pedal-pad'];
 
@@ -850,6 +933,7 @@ try {
       if (label.startsWith('desktop')) await mapEditorCheck(page, label);
       await momentCheck(page, label);
       if (label.startsWith('desktop')) await mapSpotsCheck(page, label);
+      if (label.startsWith('desktop')) await streetsCheck(page, label);
     } catch (e) {
       check(false, `${label}: ${e.message.split('\n')[0]}`);
     }

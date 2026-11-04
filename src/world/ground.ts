@@ -13,6 +13,8 @@ import {
 import { UB_COMMON, UB_STREET_LIGHT, after, replace, useWorldUniforms } from '../render/shaderLib';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, isCarPark, lotBytes, type City } from './city';
 import { DISTRICTS, DISTRICT_STYLES, PAVINGS } from './districts';
+import { roadRules } from './roadRules';
+import { setDarkLamps } from '../render/shaderLib';
 
 /** Ground extends one block past the city on every side (ring road, walls, then the water). */
 const GROUND_SIZE = 2 * HALF_EXTENT + 2 * BLOCK_SIZE;
@@ -39,11 +41,16 @@ const LOT_KIND = { buildings: 0, park: 1, plaza: 2, parking: 3, lot: 4 } as cons
 export function createGround(city: City): Mesh {
   const blocks = blockTexture(city);
   const ao = contactShadowTexture(city);
+  const roadMap = roadMapTexture(city);
+  const streets = { value: hasStreets(city) ? 1 : 0 };
+  setDarkLamps(city);
   const mat = new MeshLambertMaterial({ color: '#ffffff' });
   mat.onBeforeCompile = (shader) => {
     useWorldUniforms(shader);
     shader.uniforms.uBlocks = { value: blocks };
     shader.uniforms.uAo = { value: ao };
+    shader.uniforms.uRoadMap = { value: roadMap };
+    shader.uniforms.uStreets = streets;
     shader.vertexShader = after(shader.vertexShader, '#include <common>', 'varying vec2 vGroundXZ;');
     shader.vertexShader = after(
       shader.vertexShader,
@@ -56,6 +63,8 @@ export function createGround(city: City): Mesh {
       `varying vec2 vGroundXZ;
       uniform sampler2D uBlocks;
       uniform sampler2D uAo;
+      uniform sampler2D uRoadMap;
+      uniform float uStreets;
       ${UB_COMMON}
       ${UB_STREET_LIGHT}
       ${GROUND_GLSL}`,
@@ -89,17 +98,21 @@ export function createGround(city: City): Mesh {
   // the screen, so early depth rejection skips it under roofs and cars.
   ground.renderOrder = 1;
   ground.name = 'ground';
-  ground.userData.textures = { blocks, ao };
+  ground.userData.textures = { blocks, ao, roadMap };
+  ground.userData.streets = streets;
   return ground;
 }
 
 /** The map editor's live rebuild: the ground's per-block facts and contact shadows for `city`, in the textures it has. */
 export function refreshGround(ground: Mesh, city: City): void {
-  const t = ground.userData.textures as { blocks: DataTexture; ao: DataTexture } | undefined;
+  const t = ground.userData.textures as { blocks: DataTexture; ao: DataTexture; roadMap: DataTexture } | undefined;
   if (!t) return;
+  (ground.userData.streets as { value: number }).value = hasStreets(city) ? 1 : 0;
+  setDarkLamps(city);
   for (const [tex, next] of [
     [t.blocks, blockTexture(city)],
     [t.ao, contactShadowTexture(city)],
+    [t.roadMap, roadMapTexture(city)],
   ] as const) {
     (tex.image.data as Uint8Array).set(next.image.data as Uint8Array);
     tex.needsUpdate = true;
@@ -125,6 +138,41 @@ function blockTexture(city: City): DataTexture {
     data[i + 2] = r;
     data[i + 3] = PAVINGS.indexOf(DISTRICT_STYLES[b.style ?? b.district].paving);
   });
+  const tex = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
+  tex.minFilter = tex.magFilter = NearestFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** Does the city have pedestrian streets or removed roads (round 3)? The road rules generateCity installed for it. */
+function hasStreets(_city: City): boolean {
+  return roadRules().streets;
+}
+
+/**
+ * Round 3 (streets): per block, R its four sides (N, E, S, W; 2 bits each:
+ * world/roadRules.ts STREET_*), G and B where it sits in a merged block (low
+ * 4 bits: blocks from the merge's north-west one; high: its size − 1). All
+ * zero for an unedited city (the shader doesn't read it then: uStreets).
+ */
+function roadMapTexture(city: City): DataTexture {
+  const n = BLOCKS_PER_SIDE;
+  const data = new Uint8Array(n * n * 4);
+  const rules = roadRules();
+  if (rules.streets) {
+    for (const b of city.blocks) {
+      const i = (b.bz * n + b.bx) * 4;
+      const ix = b.bx - n / 2;
+      const iz = b.bz - n / 2;
+      let sides = 0;
+      for (let side = 0; side < 4; side++) sides |= rules.sideStreet(ix, iz, side) << (side * 2);
+      data[i] = sides;
+      if (b.merge) {
+        data[i + 1] = Math.min(15, b.bx - b.merge.bx) | (Math.min(15, b.merge.w - 1) << 4);
+        data[i + 2] = Math.min(15, b.bz - b.merge.bz) | (Math.min(15, b.merge.h - 1) << 4);
+      }
+    }
+  }
   const tex = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
   tex.minFilter = tex.magFilter = NearestFilter;
   tex.needsUpdate = true;
@@ -192,6 +240,8 @@ const float G_HALF_ROAD = ${f(HALF_ROAD)};
 const float G_LOT = ${f(BLOCK_SIZE / 2 - LOT_EDGE)};
 const float G_KERB = ${f(BLOCK_SIZE / 2 - HALF_ROAD)};
 const float G_CORNER = 2.6;
+/** A side that's no longer a road: the kerb this far out, past the cell's edge and its corner's rounding. */
+const float G_OPEN = 48.0;
 const float G_GROUND = ${f(GROUND_SIZE / 2)};
 /** How glossy the road is here at night (damp patches that take the lamps' light): set by groundColour. */
 float gSheen = 0.0;
@@ -204,6 +254,7 @@ float gDistrict = -1.0;
  * the lamp; it's smeared along that line (toward the viewer) into a streak.
  */
 float gGlint(vec2 wp, vec2 lamp) {
+  if (uDarkCount > 0 && ubLampGone(lamp)) return 0.0;
   float t = cameraPosition.y / (cameraPosition.y + UB_LAMP_H);
   vec2 at = cameraPosition.xz + (lamp - cameraPosition.xz) * t;
   vec2 toward = cameraPosition.xz - at;
@@ -400,9 +451,11 @@ vec3 paving(vec2 w, vec2 p, float style, float d, float px) {
   return c * (0.92 + 0.12 * ubNoise(w * 0.35 + 9.0));
 }
 
-/** Block interior by lot kind; lp = position from the block centre. */
-vec3 lot(vec2 w, vec2 lp, float kind, float seed, float px, inout vec3 glow) {
+/** Block interior by lot kind; lp = position from the lot's centre, hl = its half-size (G_LOT both ways, more for a merged block). */
+vec3 lot(vec2 w, vec2 lp, vec2 hl, float kind, float seed, float px, inout vec3 glow) {
   vec2 q = abs(lp);
+  // How far inside the lot's edge (negative inside): max(q.x, q.y) - G_LOT for one block.
+  float edge = max(q.x - hl.x, q.y - hl.y);
   if (kind < 0.5) {
     // Between buildings: grubby concrete yard with joints.
     vec2 fr = fract(w / 4.0);
@@ -414,8 +467,8 @@ vec3 lot(vec2 w, vec2 lp, float kind, float seed, float px, inout vec3 glow) {
     // Park: two-tone mown grass, gravel paths (a ring and the diagonals), a flower bed.
     float stripe = step(0.5, fract(lp.x / 5.0));
     vec3 c = srgb(0.30, 0.46, 0.18) * (0.82 + 0.3 * ubFbm(w * 0.25)) * (0.95 + 0.07 * stripe);
-    float ring = ubBand(max(q.x, q.y), G_LOT - 3.4, G_LOT - 1.8, px);
-    float diag = ubLine(abs(lp.x) - abs(lp.y), 1.1, px) * step(max(q.x, q.y), G_LOT - 2.0);
+    float ring = ubBand(edge, -3.4, -1.8, px);
+    float diag = ubLine(abs(lp.x) - abs(lp.y), 1.1, px) * step(edge, -2.0);
     float path = max(ring, diag) * step(5.6, length(lp));
     vec3 gravel = srgb(0.66, 0.6, 0.48) * (0.9 + 0.15 * ubNoise(w * 3.0));
     c = mix(c, gravel, path);
@@ -449,7 +502,7 @@ vec3 lot(vec2 w, vec2 lp, float kind, float seed, float px, inout vec3 glow) {
     float slab = ubLine(fr.x - 0.5, 0.485, px / 2.0) * ubLine(fr.y - 0.5, 0.485, px / 2.0);
     vec3 c = mod(cell.x + cell.y, 2.0) < 0.5 ? srgb(0.72, 0.68, 0.6) : srgb(0.6, 0.56, 0.5);
     c *= (0.95 + 0.08 * ubHash(cell)) * (1.0 - (1.0 - slab) * 0.25);
-    c = mix(c, srgb(0.42, 0.4, 0.38), ubBand(max(q.x, q.y), G_LOT - 1.2, G_LOT + 1.0, px));
+    c = mix(c, srgb(0.42, 0.4, 0.38), ubBand(edge, -1.2, 1.0, px));
     float rr = length(lp);
     float spokes = 0.6 + 0.4 * step(0.5, fract(atan(lp.y, lp.x) * 3.8197));
     c = mix(c, srgb(0.5, 0.5, 0.52), ubBand(rr, 6.0, 8.0, px) * spokes);
@@ -495,17 +548,17 @@ vec3 lot(vec2 w, vec2 lp, float kind, float seed, float px, inout vec3 glow) {
   }
   // Car park: asphalt with white bays in double rows either side of aisles.
   vec3 c = srgb(0.32, 0.33, 0.35) * (0.9 + 0.15 * ubFbm(w * 0.2));
-  float span = G_LOT - 1.5;
-  float inside = step(max(q.x, q.y), span);
-  float rowCoord = mod(lp.y + span, 16.0); // [bays 5][aisle 6][bays 5]
+  vec2 span = hl - 1.5;
+  float inside = step(edge, -1.5);
+  float rowCoord = mod(lp.y + span.y, 16.0); // [bays 5][aisle 6][bays 5]
   float inBays = ubBand(rowCoord, 0.0, 5.0, px) + ubBand(rowCoord, 11.0, 16.0, px);
-  float sep = ubLine(fract((lp.x + span) / 2.6) - 0.5, 0.48, px / 2.6);
+  float sep = ubLine(fract((lp.x + span.x) / 2.6) - 0.5, 0.48, px / 2.6);
   float ends = ubLine(rowCoord - 5.0, 0.06, px) + ubLine(rowCoord - 11.0, 0.06, px);
   float paint = clamp((1.0 - sep) * inBays + ends, 0.0, 1.0) * inside * (0.75 + 0.25 * ubNoise(w * 3.0));
   // Cars park nose-in: the engine (and its drip) sits 1.3 m in from the aisle end of the bay.
-  float bayU = (fract((lp.x + span) / 2.6) - 0.5) * 2.6;
+  float bayU = (fract((lp.x + span.x) / 2.6) - 0.5) * 2.6;
   float bayV = rowCoord < 8.0 ? rowCoord - 3.7 : rowCoord - 12.3;
-  vec2 bay = vec2(floor((lp.x + span) / 2.6), floor((lp.y + span) / 8.0));
+  vec2 bay = vec2(floor((lp.x + span.x) / 2.6), floor((lp.y + span.y) / 8.0));
   float stain = 1.0 - smoothstep(0.3, 1.0, length(vec2(bayU / 0.55, bayV / 0.8)) + 0.2 * ubNoise(w * 3.0));
   stain *= step(ubHash(bay + seed * 61.0), 0.55) * inBays * inside;
   c *= 1.0 - 0.2 * stain;
@@ -548,6 +601,37 @@ float gMistWeight(vec2 w) {
   return mix(mix(m[0], m[1], f.x), mix(m[2], m[3], f.x), f.y);
 }
 
+/**
+ * Round 3 (streets): a pedestrian street or removed road beside this cell
+ * (uRoadMap, per block: R its four sides' STREET_* two bits each, N E S W;
+ * G and B its place in a merged block, 4 bits each: blocks from the merge's
+ * north-west one, then size − 1). A side that's no longer a road moves the
+ * kerb out past the cell's edge (its junction corners stay road unless both
+ * sides there are gone), and a merged block's lot spans the whole merge.
+ * ped comes back as the distance across a pedestrian street from its
+ * centreline (-1 elsewhere).
+ */
+void gStreets(vec2 cell, vec2 g, vec2 lp, vec2 r, inout float kerb, inout vec4 blk, inout vec2 lotP, inout vec2 lotHalf, inout float ped) {
+  uvec4 sm = uvec4(texelFetch(uRoadMap, ivec2(cell), 0) * 255.0 + 0.5);
+  if (sm.r == 0u) return;
+  vec4 ext = vec4((sm.r & 3u) != 0u ? G_OPEN : G_KERB, ((sm.r >> 2u) & 3u) != 0u ? G_OPEN : G_KERB,
+    ((sm.r >> 4u) & 3u) != 0u ? G_OPEN : G_KERB, ((sm.r >> 6u) & 3u) != 0u ? G_OPEN : G_KERB);
+  vec2 bc = vec2(ext.y - ext.w, ext.z - ext.x) * 0.5;
+  vec2 bh = vec2(ext.y + ext.w, ext.z + ext.x) * 0.5;
+  vec2 kk = abs(lp - bc) - (bh - G_CORNER);
+  float k2 = length(max(kk, 0.0)) + min(max(kk.x, kk.y), 0.0) - G_CORNER;
+  vec2 q = abs(lp);
+  if (kerb > 0.0 && k2 <= 0.0) ped = q.x > G_KERB && q.y > G_KERB ? 99.0 : (q.x > G_KERB ? abs(r.x) : abs(r.y));
+  kerb = k2;
+  if (((sm.g | sm.b) >> 4u) != 0u) {
+    vec2 size = vec2(float(sm.g >> 4u), float(sm.b >> 4u)) + 1.0;
+    vec2 lead = cell - vec2(float(sm.g & 15u), float(sm.b & 15u));
+    lotP = g - (lead + size * 0.5) * UB_BLOCK;
+    lotHalf = vec2(G_LOT) + (size - 1.0) * (UB_BLOCK * 0.5);
+    blk = texelFetch(uBlocks, ivec2(lead), 0) * 255.0;
+  }
+}
+
 vec3 groundColour(vec2 w, inout vec3 glow) {
   // Derivatives first, outside any branch.
   vec2 dw = fwidth(w);
@@ -568,6 +652,11 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
   vec2 k = q - vec2(G_KERB - G_CORNER);
   float kerb = inCity ? length(max(k, 0.0)) + min(max(k.x, k.y), 0.0) - G_CORNER : 1.0;
   vec4 blk = inCity ? texelFetch(uBlocks, ivec2(cell), 0) * 255.0 : vec4(0.0);
+  // Round 3: pedestrian streets and removed roads (uStreets 0 with none: the road layout as ever).
+  vec2 lotP = lp;
+  vec2 lotHalf = vec2(G_LOT);
+  float ped = -1.0;
+  if (uStreets > 0.5 && inCity) gStreets(cell, g, lp, r, kerb, blk, lotP, lotHalf, ped);
   gDistrict = inCity ? blk.g : -1.0;
   vec3 c;
 
@@ -596,13 +685,16 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
       gSheen = uNight * (0.3 + 0.7 * damp) * gutterBias * LK_WET;
       c *= 1.0 - 0.2 * uNight;
     }
-  } else if (max(q.x, q.y) > G_LOT) {
-    c = paving(w, p, blk.a, kerb, px);
+  } else if (max(abs(lotP.x) - lotHalf.x, abs(lotP.y) - lotHalf.y) > 0.0) {
+    // With street edits the paving's pattern runs on across block edges (a merge's or a pedestrian street's pavement has no seam).
+    c = paving(w, uStreets > 0.5 ? g : p, blk.a, kerb, px);
+    // A pedestrian street: the paving runs across it, with a drainage channel down the middle.
+    if (ped >= 0.0) c *= 1.0 - 0.3 * ubLine(ped, 0.2, px) - 0.08 * ubLine(ped - 0.45, 0.05, px);
     // Kerb lip: a lighter edge with a thin shadow line at the drop.
     c = mix(c, srgb(0.74, 0.73, 0.7), ubBand(kerb, -0.3, -0.02, px));
     c *= 1.0 - 0.45 * ubBand(kerb, -0.02, 0.0, px);
   } else {
-    c = lot(w, lp, blk.r, blk.b / 255.0, px, glow);
+    c = lot(w, lotP, lotHalf, blk.r, blk.b / 255.0, px, glow);
   }
 
   c *= mix(0.5, 1.0, ao);
