@@ -45,6 +45,7 @@ import { placePickups, type PickupKind } from '../world/pickups';
 import { shopSpots } from '../world/shopSpots';
 import { FRENZY_DEFAULTS, clampSeconds, clampTarget, frenzyTitle, type FrenzySpec } from './modes/frenzyLimits';
 import { anchorBlock, collectRound3, phoneJobs } from './mapSpots';
+import { sceneHosts, type SceneHost } from './sceneHosts';
 
 export type Point = { x: number; z: number };
 
@@ -115,6 +116,8 @@ export interface Preview {
   problems: EditorProblem[];
   /** Round 3: shop doors and road works sites (detail anchors: drawn and picked zoomed in, listed as dependents). */
   extras: Anchor[];
+  /** Round 3: what the run-time scenes could pick, by block and road (sceneHosts' hostKey). */
+  hosts: Map<string, SceneHost[]>;
   /** How long the build took, ms. */
   ms: number;
 }
@@ -150,8 +153,11 @@ export function buildPreview(edits: MapEdits, inputs: PreviewInputs, gameMap: Ma
     const problems = problemsFor(city, edits, anchors, street);
     // Shop doors and road works (thousands; zoomed in only): listed apart from the spots.
     const extras: Anchor[] = [];
-    collectRound3({ shops: shopSpots(city), roadworks: street.roadworks }, extras);
-    return { edits, city, kinds, props: propsOnMap(dressing, edits), anchors, moved, removed, rawRamps, ramps, problems, extras, ms: performance.now() - t0 };
+    const shops = shopSpots(city);
+    collectRound3({ shops, roadworks: street.roadworks }, extras);
+    // What the run-time scenes could pick on each block and road (with this city's districts and road rules installed).
+    const hosts = sceneHosts(city, shops, more.hydrants);
+    return { edits, city, kinds, props: propsOnMap(dressing, edits), anchors, moved, removed, rawRamps, ramps, problems, extras, hosts, ms: performance.now() - t0 };
   } finally {
     restoreGameMap(gameMap);
   }

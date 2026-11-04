@@ -9,7 +9,9 @@ import { checkRound3, landmarkBlocks, landmarkFit, phoneJobs, storyRule } from '
 import { FRENZIES, customFrenzy, frenzyList } from '../src/game/modes/frenzies';
 import { FRENZY_LIMITS, frenzySpecProblems, frenzyTitle } from '../src/game/modes/frenzyLimits';
 import { corePavement, placeDocks, placeFrenzyTokens, placePayphones, placeSafehouse } from '../src/game/modes/places';
+import { hostKey } from '../src/game/sceneHosts';
 import {
+  buildPreview,
   describeChange,
   moveLandmark,
   moveStoryHandle,
@@ -381,5 +383,24 @@ describe('the committed map', () => {
   it('every spot edit kind the editor writes is a valid entry', () => {
     const spots: SpotEdit[] = [placeSpot(NO_EDITS, 'frenzy', 1, 2).edits.spots[0], placeSpot(NO_EDITS, 'phone', 1, 2).edits.spots[0]];
     expect(parseMapEdits(JSON.parse(serializeMapEdits(edits({ spots })))).problems).toEqual([]);
+  });
+});
+
+describe('what the run-time scenes can pick (the editor’s "can host")', () => {
+  it('lists kerb scenes on a road, awnings, neon and kebab shops on a block, and drops a closed road’s', () => {
+    const inputs = { pickups: generatePickups(1337), ramps: placeCityRamps(1337, NO_EDITS) };
+    const p = buildPreview(NO_EDITS, inputs, NO_EDITS);
+    const road = hostKey({ kind: 'segment', a: [0, 1], b: [0, 2] })!;
+    expect(p.hosts.get(road)!.map((h) => h.scene)).toContain('ice cream van, cash run, funeral (kerb)');
+    expect(p.hosts.get(road)!.find((h) => h.scene.startsWith('ice cream'))!.count).toBe(2);
+    const kebab = [...p.hosts.entries()].find(([k, v]) => k.startsWith('block:') && v.some((h) => h.scene.startsWith('kebab')));
+    expect(kebab).toBeDefined();
+    expect([...p.hosts.values()].some((v) => v.some((h) => h.scene.startsWith('film shoot')))).toBe(true);
+    // Closed: no kerb scenes there.
+    const closed = buildPreview(edits({ roads: [{ a: [0, 1], b: [0, 2], closed: true }] }), inputs, NO_EDITS);
+    expect(closed.hosts.get(road)).toBeUndefined();
+    // Shop doors and road works are listed apart (zoomed in only).
+    expect(p.extras.filter((a) => a.group === 'shop').length).toBeGreaterThan(100);
+    expect(p.extras.filter((a) => a.group === 'roadworks').length).toBeGreaterThan(5);
   });
 });
