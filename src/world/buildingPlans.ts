@@ -7,7 +7,7 @@
  * Pure data (no three.js); cityMesh.ts turns it into instanced meshes and
  * shader attributes. Deterministic, so the same city always looks the same.
  */
-import { BLOCK_SIZE, HALF_EXTENT, blockInterior, type Building, type City, type Rect } from './city';
+import { BLOCK_SIZE, HALF_EXTENT, blockInterior, blockSpan, spanInterior, type Building, type City, type Rect } from './city';
 import { DISTRICT_STYLES, pickWeighted, type District, type RoofType } from './districts';
 import { keyedStream } from './random';
 
@@ -319,11 +319,12 @@ function overlaps(a: Rect, b: Rect, gap: number): boolean {
   return a.minX < b.maxX + gap && b.minX < a.maxX + gap && a.minZ < b.maxZ + gap && b.minZ < a.maxZ + gap;
 }
 
-/** Block interior containing (x, z). */
+/** Block interior containing (x, z) (a merged block's whole interior: its street faces are round the outside). */
 function interiorAt(x: number, z: number): Rect {
   const bx = Math.floor((x + HALF_EXTENT) / BLOCK_SIZE);
   const bz = Math.floor((z + HALF_EXTENT) / BLOCK_SIZE);
-  return blockInterior(bx, bz);
+  const span = blockSpan(bx, bz);
+  return span ? spanInterior(span) : blockInterior(bx, bz);
 }
 
 /**

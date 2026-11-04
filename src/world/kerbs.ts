@@ -7,6 +7,7 @@
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type Block } from './city';
 import type { Dir } from './roads';
 import type { StreetPropKind } from './streetProps';
+import { STREET_REMOVED, roadRules, type StreetKind } from './roadRules';
 
 /** Kerb line (lamps, hydrants, bins): this far from the road centreline, m. */
 export const KERB_LINE = ROAD_WIDTH / 2 + 0.5;
@@ -85,3 +86,13 @@ export function onRing(s: BlockSide): boolean {
   return (s.side === 0 && b.bz === 0) || (s.side === 2 && b.bz === BLOCKS_PER_SIDE - 1) || (s.side === 3 && b.bx === 0) || (s.side === 1 && b.bx === BLOCKS_PER_SIDE - 1);
 }
 
+
+/** The road along this side (round 3): roadRules STREET_ROAD, STREET_PEDESTRIAN or STREET_REMOVED. */
+export function sideStreet(s: BlockSide): StreetKind {
+  return roadRules().sideStreet(s.block.bx - BLOCKS_PER_SIDE / 2, s.block.bz - BLOCKS_PER_SIDE / 2, s.side);
+}
+
+/** Is there no road along this side any more (removed: it's the inside of a merged block, no kerb)? */
+export function sideRemoved(s: BlockSide): boolean {
+  return roadRules().merges.length > 0 && sideStreet(s) === STREET_REMOVED;
+}

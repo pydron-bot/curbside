@@ -14,9 +14,9 @@
  *   suburbs. One stands where Deacon Pike waits in Maple Flats
  *   (systems/missionsData.ts: pikeStop).
  */
-import { CORE_OFFSET, core, isCarPark, lotBytes, type Block, type City } from './city';
+import { CORE_OFFSET, core, isCarPark, lotBytes, mergedAway, type Block, type City } from './city';
 import { keyedStream } from './random';
-import { KERB_LINE, WALK_LINE, blockSide, type BlockSide, type Placer } from './kerbs';
+import { KERB_LINE, WALK_LINE, blockSide, sideRemoved, type BlockSide, type Placer } from './kerbs';
 import { canLeave, dirHeading, laneKey, type Dir } from './roads';
 import type { Roadworks } from './roadworks';
 import { len2 } from '../core/len';
@@ -181,12 +181,14 @@ export function placeVendors(city: City, placer: Placer): VendorSpot[] {
         const mix = KERB_MIX[b.district];
         const kind = mix[Math.floor(rand() * mix.length)];
         const t = 21 + rand() * 22;
-        if (chance) tryCart(blockSide(b, side), t, KERB_LINE + 0.05, kind, 'kerb');
+        if (chance && !sideRemoved(blockSide(b, side))) tryCart(blockSide(b, side), t, KERB_LINE + 0.05, kind, 'kerb');
       }
       return;
     }
     // No trade on a car park or waste ground.
     if (b.kind === 'lot' || isCarPark(city, bytes, i)) return;
+    // A merged park or plaza (round 3) gets its carts from its north-west block, on its outer sides.
+    if (mergedAway(b)) return;
     // Parks get one or two, open plazas two, on sides of their own and clear of the trees' canopies.
     const n = b.kind === 'plaza' ? 2 : 1 + (rand() < 0.6 ? 1 : 0);
     const first = Math.floor(rand() * 4);
@@ -194,7 +196,7 @@ export function placeVendors(city: City, placer: Placer): VendorSpot[] {
       const side = (first + k * 2 + (k > 1 ? 1 : 0)) % 4;
       const kind = LOT_MIX[Math.floor(rand() * LOT_MIX.length)];
       const s = blockSide(b, side);
-      for (let attempt = 0; attempt < 4; attempt++) {
+      for (let attempt = 0; attempt < 4 && !sideRemoved(s); attempt++) {
         const t = 20 + rand() * 24;
         const p = s.at(t, LOT_LINE);
         if (city.trees.some((tr) => len2(tr.x - p.x, tr.z - p.z) < tr.radius + 1.3)) continue;

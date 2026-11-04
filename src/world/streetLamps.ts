@@ -6,6 +6,7 @@
  * Pure data, no three.js.
  */
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH } from './city';
+import { STREET_REMOVED, roadRules } from './roadRules';
 
 /**
  * Posts stand this far from the road centreline: 0.5 m in from the kerb, so
@@ -14,6 +15,8 @@ import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH } from './city';
 export const LAMP_OFFSET = ROAD_WIDTH / 2 + 0.5;
 /** Spacing along a block side; the posts sit at 1, 2 and 3 × this from the block's corner. */
 export const LAMP_SPACING = 16;
+/** Merged blocks (round 3) whose lamps the shaders put out (render/shaderLib.ts uDarkLamps); past this many, the rest keep a pool of light with no post. */
+export const DARK_LAMP_SLOTS = 8;
 /** Height of the lamp head's underside, m (props.glb `streetlamp`: the `lamp` face at 5.87 m). */
 export const LAMP_HEIGHT = 5.87;
 /** How far the arm reaches out over the road, m (the model's head is 1.85 m out from the pole). */
@@ -28,19 +31,26 @@ export interface StreetLamp {
   dz: number;
 }
 
-/** Every lamp in the city: three per block side, all four sides of every block. */
+/** Is there no road along side `side` (0 N, 1 E, 2 S, 3 W) of block (bx, bz) any more (round 3: removed, so its lamps went with it)? */
+function sideGone(bx: number, bz: number, side: number): boolean {
+  const rules = roadRules();
+  return rules.merges.length > 0 && rules.sideStreet(bx - BLOCKS_PER_SIDE / 2, bz - BLOCKS_PER_SIDE / 2, side) === STREET_REMOVED;
+}
+
+/** Every lamp in the city: three per block side, all four sides of every block (but along a removed road). */
 export function generateStreetLamps(): StreetLamp[] {
   const out: StreetLamp[] = [];
   for (let bx = 0; bx < BLOCKS_PER_SIDE; bx++) {
     for (let bz = 0; bz < BLOCKS_PER_SIDE; bz++) {
       const x0 = -HALF_EXTENT + bx * BLOCK_SIZE;
       const z0 = -HALF_EXTENT + bz * BLOCK_SIZE;
+      const [n, e, s, w] = [0, 1, 2, 3].map((side) => !sideGone(bx, bz, side));
       for (let k = 1; k * LAMP_SPACING < BLOCK_SIZE; k++) {
         const a = k * LAMP_SPACING;
-        out.push({ x: x0 + LAMP_OFFSET, z: z0 + a, dx: -1, dz: 0 }); // west side
-        out.push({ x: x0 + BLOCK_SIZE - LAMP_OFFSET, z: z0 + a, dx: 1, dz: 0 }); // east side
-        out.push({ x: x0 + a, z: z0 + LAMP_OFFSET, dx: 0, dz: -1 }); // north side
-        out.push({ x: x0 + a, z: z0 + BLOCK_SIZE - LAMP_OFFSET, dx: 0, dz: 1 }); // south side
+        if (w) out.push({ x: x0 + LAMP_OFFSET, z: z0 + a, dx: -1, dz: 0 }); // west side
+        if (e) out.push({ x: x0 + BLOCK_SIZE - LAMP_OFFSET, z: z0 + a, dx: 1, dz: 0 }); // east side
+        if (n) out.push({ x: x0 + a, z: z0 + LAMP_OFFSET, dx: 0, dz: -1 }); // north side
+        if (s) out.push({ x: x0 + a, z: z0 + BLOCK_SIZE - LAMP_OFFSET, dx: 0, dz: 1 }); // south side
       }
     }
   }
@@ -85,6 +95,7 @@ export function lampsNear(x: number, z: number, radius: number, out: Float32Arra
         const b0 = Math.max(0, Math.floor((v - r + HALF_EXTENT) / BLOCK_SIZE));
         const b1 = Math.min(BLOCKS_PER_SIDE - 1, Math.floor((v + r + HALF_EXTENT) / BLOCK_SIZE));
         for (let b = b0; b <= b1; b++) {
+          if (dir === 0 ? sideGone(block, b, side < 0 ? 1 : 3) : sideGone(b, block, side < 0 ? 2 : 0)) continue;
           for (let k = 1; k * LAMP_SPACING < BLOCK_SIZE; k++) {
             const dv = b * BLOCK_SIZE - HALF_EXTENT + k * LAMP_SPACING - v;
             if (du * du + dv * dv >= r2) continue;

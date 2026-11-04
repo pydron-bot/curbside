@@ -16,7 +16,7 @@
 import { MAX_HEIGHT, buildingHeight, districtOf, paintDistricts, type District } from './districts';
 import { NO_EDITS, blockEditKey, blockSeed, type BlockEdit, type MapEdits } from './mapEdits';
 import { mulberry32 } from './random';
-import { setRoadRules } from './roadRules';
+import { roadRules, setRoadRules } from './roadRules';
 import { len2 } from '../core/len';
 
 export const BLOCK_SIZE = 64;
@@ -88,6 +88,42 @@ export interface Block {
   style?: District;
   /** A plaza the map edits made a car park (true) or an open plaza (false); else the lot byte decides (lotBytes). */
   carPark?: boolean;
+  /**
+   * Part of a merged block (round 3: a removed road between blocks): the
+   * north-west block's indices and the merge's size in blocks. Every block
+   * in it carries the merge's kind, district, style and interior (the whole
+   * rectangle); the north-west one holds its buildings or trees, and the
+   * placing modules dress only that one (`mergedAway`).
+   */
+  merge?: BlockSpan;
+}
+
+/** A rectangle of blocks: the north-west one's indices (bx, bz) and its size. */
+export interface BlockSpan {
+  bx: number;
+  bz: number;
+  w: number;
+  h: number;
+}
+
+/** Is this block part of a merge but not its north-west block (whose entry stands for the merge)? */
+export function mergedAway(b: Block): boolean {
+  return b.merge !== undefined && (b.merge.bx !== b.bx || b.merge.bz !== b.bz);
+}
+
+/** The merged block holding block (bx, bz), in block indices (round 3; module state generateCity installs), or null. */
+export function blockSpan(bx: number, bz: number): BlockSpan | null {
+  const rules = roadRules();
+  if (rules.merges.length === 0) return null;
+  const m = rules.mergeAt(bx - BLOCKS_PER_SIDE / 2, bz - BLOCKS_PER_SIDE / 2);
+  return m && { bx: m.ix + BLOCKS_PER_SIDE / 2, bz: m.iz + BLOCKS_PER_SIDE / 2, w: m.w, h: m.h };
+}
+
+/** A merged block's interior: from its north-west block's interior to its south-east one's. */
+export function spanInterior(m: BlockSpan): Rect {
+  const a = blockInterior(m.bx, m.bz);
+  const b = blockInterior(m.bx + m.w - 1, m.bz + m.h - 1);
+  return { minX: a.minX, minZ: a.minZ, maxX: b.maxX, maxZ: b.maxZ };
 }
 
 export interface City {
@@ -137,8 +173,9 @@ export function blockInterior(bx: number, bz: number): Rect {
  * generated is the one the game plays.
  */
 export function generateCity(seed = 1337, edits: MapEdits = NO_EDITS): City {
-  paintDistricts(edits.blocks);
-  setRoadRules(edits.roads);
+  const spans = installMap(edits);
+  const spanOf = new Map<number, BlockSpan>();
+  for (const m of spans) for (let x = m.bx; x < m.bx + m.w; x++) for (let z = m.bz; z < m.bz + m.h; z++) spanOf.set(blockEditKey(x, z), m);
   const byBlock = new Map<number, BlockEdit>();
   for (const e of edits.blocks) byBlock.set(blockEditKey(e.at[0], e.at[1]), e);
   const blocks: Block[] = [];
@@ -162,7 +199,18 @@ export function generateCity(seed = 1337, edits: MapEdits = NO_EDITS): City {
     blocks.push(block);
 
     const first = buildings.length;
-    if (kind === generated && edit?.variant === undefined) {
+    const span = spanOf.get(blockEditKey(bx, bz));
+    if (span) {
+      // Merged (round 3): the stream draws this block's content as usual and throws it away (so every other block
+      // comes out as before); the north-west block fills the whole merge from a stream of its own.
+      fillBlock(interior, generated, district, rand, scrapBuildings, scrapTrees);
+      block.merge = span;
+      if (bx === span.bx && bz === span.bz) {
+        const whole = spanInterior(span);
+        block.interior = whole;
+        fillBlock(whole, kind, look, mulberry32(blockSeed(seed, bx - CORE_OFFSET, bz - CORE_OFFSET, edit?.variant ?? 0) ^ MERGE_SALT), buildings, trees, span.w * span.h);
+      }
+    } else if (kind === generated && edit?.variant === undefined) {
       // As generated (a repaint keeps the footprints and takes the new district's heights and colours).
       fillBlock(interior, kind, look, rand, buildings, trees);
     } else {
@@ -184,6 +232,35 @@ export function generateCity(seed = 1337, edits: MapEdits = NO_EDITS): City {
     for (let bz = 0; bz < BLOCKS_PER_SIDE; bz++) if (!inCoreBlock(bx, bz)) addBlock(bx, bz, ringRand);
   }
 
+  // Every block of a merge takes the north-west one's kind, look and interior (whichever was built first).
+  if (spans.length > 0) {
+    const at = new Map(blocks.map((b, i) => [blockEditKey(b.bx, b.bz), i]));
+    for (const m of spans) {
+      const lead = blocks[at.get(blockEditKey(m.bx, m.bz))!];
+      for (let x = m.bx; x < m.bx + m.w; x++) {
+        for (let z = m.bz; z < m.bz + m.h; z++) {
+          const b = blocks[at.get(blockEditKey(x, z))!];
+          if (b === lead) continue;
+          b.kind = lead.kind;
+          b.district = lead.district;
+          b.interior = lead.interior;
+          if (lead.style) b.style = lead.style;
+          else delete b.style;
+          if (lead.carPark !== undefined) b.carPark = lead.carPark;
+          else delete b.carPark;
+        }
+      }
+    }
+    // A merged plaza is a car park or not as its north-west block's byte says: every block of it agrees.
+    const bytes = lotBytes({ seed, blocks, buildings, trees, obstacles: [] });
+    for (const m of spans) {
+      const li = at.get(blockEditKey(m.bx, m.bz))!;
+      if (blocks[li].kind !== 'plaza' || blocks[li].carPark !== undefined) continue;
+      const car = bytes[li] < 128;
+      for (let x = m.bx; x < m.bx + m.w; x++) for (let z = m.bz; z < m.bz + m.h; z++) blocks[at.get(blockEditKey(x, z))!].carPark = car;
+    }
+  }
+
   const obstacles: Rect[] = [
     ...buildings,
     ...trees.map((t) => ({ minX: t.x - 0.4, minZ: t.z - 0.4, maxX: t.x + 0.4, maxZ: t.z + 0.4 })),
@@ -192,12 +269,42 @@ export function generateCity(seed = 1337, edits: MapEdits = NO_EDITS): City {
   return { seed, blocks, buildings, trees, obstacles, edits };
 }
 
-/** A block's buildings or trees (a plaza has neither). */
-function fillBlock(interior: Rect, kind: BlockKind, district: District, rand: () => number, buildings: Building[], trees: Tree[]): void {
+/**
+ * Install what the edits change for the whole game (module state the last
+ * city generated sets): district repaints for districtOf, road rules for
+ * canLeave, and (round 3) the merged blocks, which take their north-west
+ * block's district. Returns the merges in block indices.
+ */
+export function installMap(edits: MapEdits): BlockSpan[] {
+  paintDistricts(edits.blocks);
+  setRoadRules(edits.roads, BLOCKS_PER_SIDE / 2);
+  const spans = mergeSpans();
+  if (spans.length > 0) {
+    const extra: Array<{ at: [number, number]; district: District }> = [];
+    for (const m of spans) {
+      const district = districtOf(m.bx, m.bz);
+      for (let x = m.bx; x < m.bx + m.w; x++) for (let z = m.bz; z < m.bz + m.h; z++) if (x !== m.bx || z !== m.bz) extra.push({ at: [x - CORE_OFFSET, z - CORE_OFFSET], district });
+    }
+    paintDistricts([...edits.blocks, ...extra]);
+  }
+  return spans;
+}
+
+/** Salt for a merged block's own stream (so a merge's layout isn't the north-west block's reroll). */
+const MERGE_SALT = 0x3e76e;
+
+/** The merges the installed road rules make, in block indices. */
+function mergeSpans(): BlockSpan[] {
+  const n = BLOCKS_PER_SIDE / 2;
+  return roadRules().merges.map((m) => ({ bx: m.ix + n, bz: m.iz + n, w: m.w, h: m.h }));
+}
+
+/** A block's buildings or trees (a plaza has neither); `blocks`: how many blocks it covers (a merge's park gets more trees). */
+function fillBlock(interior: Rect, kind: BlockKind, district: District, rand: () => number, buildings: Building[], trees: Tree[], blocks = 1): void {
   if (kind === 'buildings') {
     for (const lot of subdivide(interior, rand, 0)) buildings.push(makeBuilding(lot, district, rand));
   } else if (kind === 'park') {
-    plantTrees(interior, rand, trees);
+    plantTrees(interior, rand, trees, blocks);
   }
 }
 
@@ -253,8 +360,8 @@ function makeBuilding(lot: Rect, district: District, rand: () => number): Buildi
   return b;
 }
 
-function plantTrees(r: Rect, rand: () => number, out: Tree[]): void {
-  const count = 6 + Math.floor(rand() * 8);
+function plantTrees(r: Rect, rand: () => number, out: Tree[], blocks = 1): void {
+  const count = (6 + Math.floor(rand() * 8)) * blocks;
   const placed: Tree[] = [];
   for (let attempt = 0; attempt < count * 6 && placed.length < count; attempt++) {
     const radius = 1.6 + rand() * 1.4;
