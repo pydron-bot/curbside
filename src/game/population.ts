@@ -619,7 +619,9 @@ export class Population {
     let edge = 0;
     for (let e = 1; e < 4; e++) if (gaps[e] < gaps[edge]) edge = e;
     // Edges run clockwise: 0 NW→NE, 1 NE→SE, 2 SE→SW, 3 SW→NW.
-    let t = [cx - nw.x, cz - nw.z, se.x - cx, se.z - cz][edge] / EDGE_LENGTH;
+    // (A merged block's edges are longer: round 3.)
+    const edgeLength = edge % 2 === 0 ? se.x - nw.x : se.z - nw.z;
+    let t = [cx - nw.x, cz - nw.z, se.x - cx, se.z - cz][edge] / edgeLength;
     if (this.rand() < CORNER_SHARE) t = t < 0.5 ? 0.04 : 0.96; // gather at the corner
     const from = cornerPoint(bx, bz, edge);
     const to = cornerPoint(bx, bz, edge + 1);

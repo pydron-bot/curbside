@@ -7,7 +7,7 @@
  * away from the scare; new flocks settle somewhere out of view. Pure ambient life: nothing in
  * the game reacts to them. No three.js (render/pigeonMesh.ts draws them).
  */
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type BlockKind, type Rect } from '../world/city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, blockSpan, type BlockKind, type Rect } from '../world/city';
 import { len2 } from '../core/len';
 
 /** Pecking about, flying, or gliding back down to land. */
@@ -397,21 +397,25 @@ export class Pigeons {
     const bx = Math.floor((x + HALF_EXTENT) / BLOCK_SIZE);
     const bz = Math.floor((z + HALF_EXTENT) / BLOCK_SIZE);
     if (bx < 0 || bz < 0 || bx >= BLOCKS_PER_SIDE || bz >= BLOCKS_PER_SIDE) return null;
-    const x0 = -HALF_EXTENT + bx * BLOCK_SIZE;
-    const z0 = -HALF_EXTENT + bz * BLOCK_SIZE;
+    // A merged block (round 3): the whole merge, its pavements round the outside.
+    const span = blockSpan(bx, bz);
+    const x0 = -HALF_EXTENT + (span ? span.bx : bx) * BLOCK_SIZE;
+    const z0 = -HALF_EXTENT + (span ? span.bz : bz) * BLOCK_SIZE;
+    const w = span ? span.w * BLOCK_SIZE : BLOCK_SIZE;
+    const h = span ? span.h * BLOCK_SIZE : BLOCK_SIZE;
     if (this.ground.kindAt(bx, bz) !== 'buildings') {
       const inset = ROAD_WIDTH / 2 + SIDEWALK + 4;
-      const px = Math.min(x0 + BLOCK_SIZE - inset, Math.max(x0 + inset, x));
-      const pz = Math.min(z0 + BLOCK_SIZE - inset, Math.max(z0 + inset, z));
+      const px = Math.min(x0 + w - inset, Math.max(x0 + inset, x));
+      const pz = Math.min(z0 + h - inset, Math.max(z0 + inset, z));
       return this.ground.blocked(px, pz, 2.5) ? null : { x: px, z: pz, open: true, alongX: true };
     }
     // The pavement edge nearest (x, z), on the kerb side of the walking line.
     const kerb = WALK_INSET - 0.9;
     const edges = [
       { x, z: z0 + kerb, alongX: true },
-      { x, z: z0 + BLOCK_SIZE - kerb, alongX: true },
+      { x, z: z0 + h - kerb, alongX: true },
       { x: x0 + kerb, z, alongX: false },
-      { x: x0 + BLOCK_SIZE - kerb, z, alongX: false },
+      { x: x0 + w - kerb, z, alongX: false },
     ];
     let best = edges[0];
     let bestD = Infinity;
@@ -424,9 +428,8 @@ export class Pigeons {
     }
     // Not at a corner (crossings), and nothing solid there.
     const lo = WALK_INSET + 4;
-    const hi = BLOCK_SIZE - WALK_INSET - 4;
-    if (best.alongX) best.x = Math.min(x0 + hi, Math.max(x0 + lo, best.x));
-    else best.z = Math.min(z0 + hi, Math.max(z0 + lo, best.z));
+    if (best.alongX) best.x = Math.min(x0 + w - lo, Math.max(x0 + lo, best.x));
+    else best.z = Math.min(z0 + h - lo, Math.max(z0 + lo, best.z));
     return this.ground.blocked(best.x, best.z, 1.2) ? null : { x: best.x, z: best.z, open: false, alongX: best.alongX };
   }
 }

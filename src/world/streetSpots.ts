@@ -11,7 +11,7 @@
  * right. Parked cars stand against that kerb mid-block (clear of the
  * junctions, their crossings and the lane traffic drives in).
  */
-import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, core, lotBytes, type Block, type City } from './city';
+import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, core, lotBytes, mergedAway, type Block, type City } from './city';
 import { DIR_VEC, canLeave, dirHeading, nodeValid, type Dir } from './roads';
 import { len2 } from '../core/len';
 
@@ -88,7 +88,8 @@ export function placeHospital(city: City): Hospital {
   let best = city.blocks[0];
   let bestD = Infinity;
   for (const b of city.blocks) {
-    if (b.kind !== 'buildings') continue;
+    // A merged block by its north-west block, whose north side is on a road (round 3).
+    if (b.kind !== 'buildings' || mergedAway(b)) continue;
     const d = len2(b.bx - tx, b.bz - tz);
     if (d < bestD) {
       bestD = d;

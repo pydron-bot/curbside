@@ -9,7 +9,7 @@
  */
 import type { SceneHold } from '../../systems/cityScenes';
 import { BLOCK_SIZE, isCarPark, lotBytes } from '../../world/city';
-import { blockSide } from '../../world/kerbs';
+import { blockSide, sideRemoved } from '../../world/kerbs';
 import type { CrowdPed } from '../population';
 import { watch, type Scene, type SceneCtx, type Subject } from '../cityLife';
 import { secs, labelMembers, type LabelSink } from '../debugLabels';
@@ -77,6 +77,8 @@ export class Buskers implements Scene {
       if (b.kind === 'buildings' || b.kind === 'lot' || isCarPark(city, bytes, i)) return;
       for (let side = 0; side < 4; side++) {
         const s = blockSide(b, side);
+        // Not along a removed road: it's the middle of a merged park or plaza (round 3).
+        if (sideRemoved(s)) continue;
         for (const t of [BLOCK_SIZE * 0.3, BLOCK_SIZE * 0.7]) {
           const p = s.at(t, SPOT_INSET);
           if (city.trees.some((tr) => len2(tr.x - p.x, tr.z - p.z) < tr.radius + 2)) continue;

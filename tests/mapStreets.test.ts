@@ -246,3 +246,18 @@ describe('checks', () => {
     expect(blockEdit.problems.some((x) => x.problem.includes('part of the merged block'))).toBe(true);
   });
 });
+
+describe('live rebuild', () => {
+  it("VIEW IN 3D's in-place rebuild takes a merge and a pedestrian street (the changed chunks only)", async () => {
+    const { createCityMesh } = await import('../src/world/cityMesh');
+    const { planBuildings } = await import('../src/world/buildingPlans');
+    const plain = generateCity(1337);
+    const mesh = createCityMesh(plain, planBuildings(plain));
+    const edited = generateCity(1337, edits([gone([1, -1], [1, 0]), ped([1, 1], [2, 1])]));
+    const n = mesh.rebuild(edited, planBuildings(edited));
+    expect(n).toBeGreaterThan(0);
+    expect(n).toBeLessThanOrEqual(4);
+    generateCity(1337);
+    expect(mesh.rebuild(generateCity(1337), planBuildings(generateCity(1337)))).toBe(n);
+  });
+});

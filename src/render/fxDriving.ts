@@ -13,7 +13,7 @@ import { worldUniforms } from './shaderLib';
 import { VEHICLE_SPECS, forwardSpeed, lateralSpeed, speed, type VehicleArchetype, type VehicleControls } from '../entities/vehicle';
 import type { Vehicle } from '../game/population';
 import { damageStage } from '../systems/damage';
-import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type City } from '../world/city';
+import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, type City, type Rect } from '../world/city';
 import type { Effects } from './effects';
 import { RAMP_HEIGHT, RAMP_LENGTH } from '../world/ramps';
 import { CarBody, applyBody } from './fxCarBody';
@@ -120,9 +120,15 @@ export function driftTint(points: number, out: { r: number; g: number; b: number
 /** Grass lots (parks) by block, for dust under the wheels. */
 export class GrassMap {
   private readonly park = new Uint8Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE);
+  /** Merged parks' lawns (round 3), by block: their whole interior. */
+  private readonly merged = new Map<number, Rect>();
 
   constructor(city: Pick<City, 'blocks'>) {
-    for (const b of city.blocks) if (b.kind === 'park') this.park[b.bz * BLOCKS_PER_SIDE + b.bx] = 1;
+    for (const b of city.blocks) {
+      if (b.kind !== 'park') continue;
+      this.park[b.bz * BLOCKS_PER_SIDE + b.bx] = 1;
+      if (b.merge) this.merged.set(b.bz * BLOCKS_PER_SIDE + b.bx, b.interior);
+    }
   }
 
   /** Is (x, z) on a park's lawn (inside the sidewalks)? */
@@ -133,6 +139,8 @@ export class GrassMap {
     const bz = Math.floor(gz / BLOCK_SIZE);
     if (bx < 0 || bz < 0 || bx >= BLOCKS_PER_SIDE || bz >= BLOCKS_PER_SIDE) return false;
     if (!this.park[bz * BLOCKS_PER_SIDE + bx]) return false;
+    const m = this.merged.size > 0 ? this.merged.get(bz * BLOCKS_PER_SIDE + bx) : undefined;
+    if (m) return x > m.minX && x < m.maxX && z > m.minZ && z < m.maxZ;
     const inset = ROAD_WIDTH / 2 + SIDEWALK;
     const lx = gx - bx * BLOCK_SIZE;
     const lz = gz - bz * BLOCK_SIZE;

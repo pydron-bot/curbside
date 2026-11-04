@@ -8,7 +8,7 @@
  * else a park with nothing in the way), so you drive off the street,
  * across the pavement and straight in.
  */
-import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, CORE_OFFSET, blockInterior, core, type City, type Rect } from './city';
+import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, CORE_OFFSET, blockInterior, core, mergedAway, type City, type Rect } from './city';
 import { len2 } from '../core/len';
 
 export interface SprayShop {
@@ -53,7 +53,7 @@ export function placeSprayShops(city: City): SprayShop[] {
     const tx = core(cx);
     const tz = core(cz);
     const blocks = [...city.blocks]
-      .filter((b) => b.kind !== 'buildings' && !used.has(`${b.bx},${b.bz}`))
+      .filter((b) => b.kind !== 'buildings' && !mergedAway(b) && !used.has(`${b.bx},${b.bz}`))
       .sort((a, b) => len2(a.bx - tx, a.bz - tz) - len2(b.bx - tx, b.bz - tz));
     for (const b of blocks) {
       const shop = bayFor(b.bx, b.bz, city);
@@ -72,7 +72,8 @@ export function placeSprayShops(city: City): SprayShop[] {
  * (Also places the docks' export garage, src/game/modes/places.ts.)
  */
 export function bayFor(bx: number, bz: number, city: City): SprayShop | null {
-  const r = blockInterior(bx, bz);
+  // A merged block's whole interior (round 3): its sides are all on roads.
+  const r = city.blocks.find((b) => b.bx === bx && b.bz === bz && b.merge)?.interior ?? blockInterior(bx, bz);
   const cx = (r.minX + r.maxX) / 2;
   const cz = (r.minZ + r.maxZ) / 2;
   // Sides as [outward x, outward z]; try the one facing the centre first.
@@ -132,7 +133,7 @@ export function placeStation(city: City): Station {
   let best = city.blocks[0];
   let bestD = Infinity;
   for (const b of city.blocks) {
-    if (b.kind !== 'buildings') continue;
+    if (b.kind !== 'buildings' || mergedAway(b)) continue;
     const d = len2(b.bx - tx, b.bz - tz);
     if (d < bestD) {
       bestD = d;
@@ -140,7 +141,8 @@ export function placeStation(city: City): Station {
     }
   }
   const x0 = -HALF_EXTENT + best.bx * BLOCK_SIZE;
-  const z0 = -HALF_EXTENT + best.bz * BLOCK_SIZE;
+  // A merged block's south side is its last row's (round 3).
+  const z0 = -HALF_EXTENT + (best.bz + (best.merge ? best.merge.h - 1 : 0)) * BLOCK_SIZE;
   // Between two street lamps (they stand every 16 m along the block side).
   return { x: x0 + BLOCK_SIZE * 0.375, z: z0 + BLOCK_SIZE - WALK_INSET, heading: 0 };
 }
