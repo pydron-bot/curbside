@@ -7,7 +7,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import { checkMapEdits, collectAnchors, blockAt, roadAt } from '../src/game/mapAnchors';
-import { describeChange, removeRefusal, roadState, setRoad } from '../src/game/mapEditorState';
+import { describeChange, removeRefusal, roadState, roadsInsideMerge, setRoad } from '../src/game/mapEditorState';
 import { cornerPoint } from '../src/systems/crowd';
 import { blocksBeside, innerRoads, planMerges, removeRoad, restoreRoad } from '../src/world/blockMerge';
 import { BLOCK_SIZE, CORE_OFFSET, blockSpan, generateCity, mergedAway, type City } from '../src/world/city';
@@ -259,5 +259,20 @@ describe('live rebuild', () => {
     expect(n).toBeLessThanOrEqual(4);
     generateCity(1337);
     expect(mesh.rebuild(generateCity(1337), planBuildings(generateCity(1337)))).toBe(n);
+  });
+});
+
+describe('roadsInsideMerge (the merged block panel’s PUT BACK list)', () => {
+  it('lists the removed roads inside the merge, not those on its edge or elsewhere', () => {
+    const map: MapEdits = {
+      ...NO_EDITS,
+      roads: [
+        { a: [1, 0], b: [1, 1], removed: true },
+        { a: [0, 0], b: [1, 0], closed: true },
+        { a: [5, 5], b: [5, 6], removed: true },
+      ],
+    };
+    // City blocks 8..9 × 8 (the 16-block city): world x 0..128, z 0..64.
+    expect(roadsInsideMerge(map, { bx: 8, bz: 8, w: 2, h: 1 })).toEqual([{ a: [1, 0], b: [1, 1] }]);
   });
 });

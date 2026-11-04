@@ -83,7 +83,7 @@ import {
 import { LOCAL_MAP_KEY, loadLocalMap, previewingLocalMap } from '../world/shippedMap';
 import type { StreetPropKind } from '../world/streetProps';
 import type { AddedSpotKind } from '../world/mapEdits';
-import { removeRefusal } from '../game/mapEditorState';
+import { removeRefusal, roadsInsideMerge } from '../game/mapEditorState';
 import { roadKey, type RoadEdit } from '../world/mapEdits';
 import { DISTRICT_HUE } from './cityMap';
 import { ICONS } from './icons';
@@ -478,6 +478,11 @@ export class MapEditor implements Panel {
       case 'flip':
         if (sel?.kind === 'segment') this.commit(flipRoad(e, sel.a, sel.b));
         return this.d.audio.ui('confirm');
+      case 'restoreRoad': {
+        const [a, b2] = arg.split('|').map((n) => n.split(',').map(Number) as [number, number]);
+        this.commit(setRoad(e, a, b2, 'open'));
+        return this.d.audio.ui('confirm');
+      }
       case 'pickRoad': {
         const [a, b2] = arg.split('|').map((n) => n.split(',').map(Number) as [number, number]);
         return this.select({ kind: 'segment', a, b: b2 }, false);
@@ -1078,6 +1083,7 @@ export class MapEditor implements Panel {
       return `<h3>BLOCK ${cx},${cz} <span class="me-sub">${DISTRICT_NAMES[block.district]}</span></h3>
         ${edit ? `<p class="me-note edited">Edited: ${esc(describeBlock(edit))}</p>` : ''}
         ${block.merge ? `<p class="me-note">Merged block, ${block.merge.w}×${block.merge.h} blocks (roads removed): everything here applies to all of it.</p>` : ''}
+        ${block.merge ? `<h4>ROADS REMOVED HERE <span class="me-sub">PUT BACK reopens the whole line</span></h4><div class="me-row">${roadsInsideMerge(e, block.merge).map((r) => btn('restoreRoad', `PUT BACK ${r.a[0]},${r.a[1]}–${r.b[0]},${r.b[1]}`, { arg: `${r.a[0]},${r.a[1]}|${r.b[0]},${r.b[1]}` })).join('')}</div>` : ''}
         <div class="me-row">${BLOCK_EDIT_KINDS.map((k) => btn('kind', KIND_LABEL[k], { arg: k, on: kind === k })).join('')}</div>
         <h4>DISTRICT</h4>
         <div class="me-row">${DISTRICTS.map((dname) => `<button type="button" class="me-btn me-dist${block.district === dname ? ' on' : ''}" data-act="district" data-arg="${dname}" style="--hue:${DISTRICT_HUE[dname]}">${DISTRICT_NAMES[dname]}</button>`).join('')}</div>

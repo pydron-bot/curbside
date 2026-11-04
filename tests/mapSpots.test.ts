@@ -189,9 +189,18 @@ describe('payphones and the jobs that ring them', () => {
     ]);
   });
 
-  it('an added phone can go, a generated one can’t', () => {
-    expect(spotRules('phone-docks')).toMatchObject({ removable: false });
+  it('any phone can go once no job rings it', () => {
+    expect(spotRules('phone-docks')).toMatchObject({ removable: true });
     expect(spotRules('phone-3')).toMatchObject({ removable: true });
+    // Removed with its jobs still on it: a problem, and the phone's gone from the game.
+    let map = edits({ spots: [{ id: 'phone-arts', removed: true }] });
+    expect(placePayphones(map).some((p) => p.id === 'phone-arts')).toBe(false);
+    const ringing = phoneJobs(NO_EDITS).filter((j) => j.phone === 'phone-arts');
+    expect(ringing.length).toBeGreaterThan(0);
+    expect(about(built(map).problems, 'phone-arts')[0]).toMatch(/^removed, but (a job still rings|\d+ jobs still ring) it \(move them to another phone first\)/);
+    // Its jobs moved to another phone of the same arc first: no problem.
+    for (const j of ringing) map = setJobPhone(map, j.id, phoneJobs(NO_EDITS).find((o) => o.arc === j.arc && o.phone !== 'phone-arts')!.phone);
+    expect(about(built(map).problems, 'phone-arts')).toEqual([]);
   });
 });
 

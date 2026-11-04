@@ -152,10 +152,10 @@ describe('the preview', () => {
 });
 
 describe('spot rules (the engine table, mapAnchors spotRules)', () => {
-  it('keeps the safehouse, payphones and frenzy tokens, lets hangouts and ramps go, turns ramps, and nothing else moves', () => {
+  it('keeps the safehouse and frenzy tokens, lets payphones, hangouts and ramps go, turns ramps, and nothing else moves', () => {
     const fixed = { movable: true, removable: false, turnable: false };
     expect(spotRule('safehouse')).toEqual(fixed);
-    expect(spotRule('phone-docks')).toEqual(fixed);
+    expect(spotRule('phone-docks')).toEqual({ movable: true, removable: true, turnable: false });
     expect(spotRule('fz-drift')).toEqual(fixed);
     expect(spotRule('vipers-0')).toEqual({ movable: true, removable: true, turnable: false });
     expect(spotRule('ramp-3')).toEqual({ movable: true, removable: true, turnable: true });

@@ -59,6 +59,7 @@ function phonePanel(a: Anchor, d: SpotPanelInputs): string {
   const here = d.jobs.filter((j) => j.phone === a.id);
   const others = d.jobs.filter((j) => j.phone !== a.id);
   return `<h4>RINGS FOR <b>${here.length}</b></h4>
+    ${here.length ? '<p class="me-note">To remove this phone, move its jobs to another phone first.</p>' : ''}
     ${
       here.length
         ? `<ul class="me-list">${here

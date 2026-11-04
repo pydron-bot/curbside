@@ -19,8 +19,8 @@ export const CHANGELOG: readonly Release[] = [
     date: '2026-11-04',
     title: 'Street plans',
     notes: [
-      'Map editor: a street can be paved over as a pedestrian street (bollards at each end, benches and planters down the middle, people strolling on it, no traffic) or removed outright, merging the blocks either side into one bigger block.',
-      'Add payphones and choose which phone each story job rings from.',
+      'Map editor: a street can be paved over as a pedestrian street (bollards at each end, benches and planters down the middle, people strolling on it, no traffic) or removed outright, merging the blocks either side into one bigger block. A merged block\'s panel lists the roads removed inside it, each with PUT BACK.',
+      'Add payphones and choose which phone each story job rings from; any payphone, the original four too, can be removed once no job rings from it.',
       'Make your own frenzies: pick the goal, the target, the time limit and a gift weapon. They count toward 100%.',
       'Story jobs\' spots, drive routes and race steps can be moved; so can the docks yard, the Pay \'n\' Spray bays, the police station and the hospital, and pickups can be moved, removed or added.',
       'The editor shows shop doors and road works up close, and lists which street scenes a block or road can host.',

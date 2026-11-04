@@ -379,7 +379,8 @@ export function spotRules(id: string, seed = 1337): SpotRule | null {
     case 'safehouse':
       return { group, label: 'Safehouse', movable: true, removable: false, turnable: false, why: 'the shop, and jobs drop off at it', generated };
     case 'payphone':
-      return { group, label: `Payphone ${id.slice(6)}`, movable: true, removable: !generated, turnable: false, why: 'story jobs ring it', generated };
+      // Any phone can go once no job rings it (checkRound3 flags one removed while jobs still do).
+      return { group, label: `Payphone ${id.slice(6)}`, movable: true, removable: true, turnable: false, why: 'story jobs ring it', generated };
     case 'frenzy':
       return { group, label: `Frenzy token ${id.slice(3)}`, movable: true, removable: !generated, turnable: false, why: 'its frenzy counts toward 100%', generated };
     case 'story':

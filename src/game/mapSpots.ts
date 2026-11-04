@@ -146,6 +146,12 @@ export function checkRound3(city: City, edits: MapEdits, anchors: readonly Ancho
   }
   const ringing = new Map<string, PhoneJob[]>();
   for (const j of phoneJobs(edits)) ringing.set(j.phone, [...(ringing.get(j.phone) ?? []), j]);
+  // A phone taken out while jobs still ring it: they'd never ring.
+  for (const [id, list] of ringing) {
+    if (phones.has(id) || !edits.spots.some((s) => s.id === id && s.removed)) continue;
+    const titles = list.map((j) => j.title).join(', ');
+    out.push({ id, label: `Payphone ${id.slice(6)}`, problem: `removed, but ${list.length === 1 ? 'a job still rings' : `${list.length} jobs still ring`} it (move them to another phone first): ${titles}`, edit: { section: 'spots', key: id } });
+  }
   for (const a of phones.values()) {
     const list = ringing.get(a.id) ?? [];
     if (a.added && list.length === 0) out.push({ id: a.id, label: a.label, problem: 'no job rings it (move a job to it, or remove it)', edit: { section: 'spots', key: a.id }, at: a.points[0] });

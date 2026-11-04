@@ -57,7 +57,8 @@ const PHONE_SPOTS: ReadonlyArray<readonly [string, number, number, number, numbe
 ];
 
 export function placePayphones(edits: MapEdits = ACTIVE_MAP): Spot[] {
-  const phones = PHONE_SPOTS.map(([id, bx, bz, edge, t]) => editSpot({ id, ...corePavement(bx, bz, edge, t) }, edits, false)!);
+  // A phone the edits remove is gone (the checks make sure no job still rings it).
+  const phones = PHONE_SPOTS.flatMap(([id, bx, bz, edge, t]) => editSpot({ id, ...corePavement(bx, bz, edge, t) }, edits, true) ?? []);
   // Round 3: payphones the map adds (`phone-<n>`), after the city's own.
   for (const s of addedSpots(edits, 'phone')) phones.push({ id: s.id, x: s.x!, z: s.z! });
   return phones;

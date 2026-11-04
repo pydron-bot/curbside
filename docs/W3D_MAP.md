@@ -783,3 +783,13 @@ on its edits, leaves observe mode for play and finds, in the same page,
 the job ringing from the new phone, the custom frenzy's token, the spray
 bay and booth on the new lot, the added rocket and the TEST menu's docks
 teleport at the new docks.
+
+**Owner's calls (2026-11-04):** the frenzy limits, rectangles only and the
+pedestrian streets' 2.4 m bollard gap stay as they are. Any payphone, the
+four generated ones too, can now be removed once no job rings it
+(`spotRules`: phones are removable; `checkRound3` flags a phone removed
+while jobs still ring it, naming them, and its panel says to move them
+first). A merged block's panel lists the roads removed inside it
+(`roadsInsideMerge`) with PUT BACK each (the road reopens, and the merge
+is cut along that whole line: `restoreRoad`); the crossing panel and
+CHANGES' REVERT still work too.

@@ -135,7 +135,7 @@ describe('the dressing with road and prop edits', () => {
 });
 
 describe('spot edits', () => {
-  it('move the safehouse, payphones and tokens (never remove them), move or remove hangouts and ramps', () => {
+  it('move the safehouse, payphones and tokens (phones can go too), move or remove hangouts and ramps', () => {
     const spots: SpotEdit[] = [
       { id: 'safehouse', x: 100, z: 41 },
       { id: 'phone-docks', x: 200, z: 41 },
@@ -149,7 +149,7 @@ describe('spot edits', () => {
     const map = edits({ spots });
     expect(placeSafehouse(map)).toEqual({ id: 'safehouse', x: 100, z: 41 });
     expect(placePayphones(map).find((p) => p.id === 'phone-docks')).toEqual({ id: 'phone-docks', x: 200, z: 41 });
-    expect(placePayphones(map).length).toBe(placePayphones(NO_EDITS).length);
+    expect(placePayphones(map).length).toBe(placePayphones(NO_EDITS).length - 1);
     expect(placeFrenzyTokens(map)).toEqual(placeFrenzyTokens(NO_EDITS));
     const h = placeHangouts(GANGS, map);
     expect(h.length).toBe(placeHangouts(GANGS, NO_EDITS).length - 1);
@@ -171,7 +171,7 @@ describe('spot edits', () => {
 
   it('the rule table', () => {
     expect(spotRules('safehouse')).toMatchObject({ movable: true, removable: false });
-    expect(spotRules('phone-oldtown')).toMatchObject({ movable: true, removable: false });
+    expect(spotRules('phone-oldtown')).toMatchObject({ movable: true, removable: true });
     expect(spotRules('fz-brawl')).toMatchObject({ movable: true, removable: false });
     expect(spotRules(`${GANGS[0].id}-1`)).toMatchObject({ group: 'hangout', movable: true, removable: true });
     expect(spotRules('ramp-0')).toMatchObject({ movable: true, removable: true, turnable: true });
@@ -305,7 +305,7 @@ describe('what the map edits break', () => {
     const about = (id: string) => problems.filter((p) => p.id === id).map((p) => p.problem);
     expect(about('phone-moon')).toEqual(['no spot has the id "phone-moon"']);
     expect(about('docks')).toEqual(["isn't a spot the map file moves or removes"]);
-    expect(about('phone-docks')).toEqual(["can't be removed (story jobs ring it)"]);
+    expect(about('phone-docks')[0]).toMatch(/^removed, but (a job still rings|\d+ jobs still ring) it/);
     expect(about('fz-brawl')[0]).toMatch(/^inside a building/);
     expect(about('fz-drift')[0]).toMatch(/^stands in the road/);
     expect(about('safehouse')[0]).toMatch(/^off the map/);

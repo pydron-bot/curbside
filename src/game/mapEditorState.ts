@@ -895,6 +895,26 @@ export function landmarkHomes(anchors: readonly Anchor[]): Map<LandmarkId, reado
   return out;
 }
 
+/**
+ * The removed roads inside a merged block (`merge` in city blocks, as
+ * Block.merge), west to east then north to south: what its panel offers
+ * to PUT BACK (each one cuts the merge along its whole line, restoreRoad).
+ */
+export function roadsInsideMerge(edits: MapEdits, merge: { bx: number; bz: number; w: number; h: number }): Array<{ a: Node; b: Node }> {
+  const x0 = -HALF_EXTENT + merge.bx * BLOCK_SIZE;
+  const z0 = -HALF_EXTENT + merge.bz * BLOCK_SIZE;
+  const x1 = x0 + merge.w * BLOCK_SIZE;
+  const z1 = z0 + merge.h * BLOCK_SIZE;
+  return edits.roads
+    .filter((r) => {
+      if (!r.removed) return false;
+      const mx = ((r.a[0] + r.b[0]) / 2) * BLOCK_SIZE;
+      const mz = ((r.a[1] + r.b[1]) / 2) * BLOCK_SIZE;
+      return mx > x0 && mx < x1 && mz > z0 && mz < z1;
+    })
+    .map((r) => ({ a: r.a, b: r.b }));
+}
+
 /** Why REMOVE can't apply to road a–b (round 3: the outer ring road, or an L-shaped merge), or null if it can. */
 export function removeRefusal(edits: MapEdits, a: Node, b: Node): string | null {
   const r = removeRoad(edits, a, b, MAX_NODE);
