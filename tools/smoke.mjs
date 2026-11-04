@@ -786,6 +786,41 @@ async function streetsCheck(page, label) {
   check(live.calls > 0 && live.calls < DRAW_BUDGET, `${label}: ${live.calls} draw calls over the edited streets (budget ${DRAW_BUDGET})`);
 }
 
+/**
+ * The map editor's IMPORT (desktop): a city.json picked in its file input
+ * loads as the local edits (what it can't read listed, not loaded), UNDO
+ * goes back, and a file that isn't a map is refused.
+ */
+async function mapImportCheck(page, label) {
+  await page.evaluate(() => {
+    const u = window.__ub;
+    localStorage.removeItem('curbside.map.local');
+    u.mapEditor.open();
+  });
+  const file = JSON.stringify({ version: 2, seed: 1337, blocks: [{ at: [9, 3], kind: 'carpark' }, { at: [1, 1], kind: 'volcano' }], roads: [{ a: [1, 1], b: [2, 1], pedestrian: true }], spots: [], props: [] });
+  await page.setInputFiles('#mapeditor .me-file', { name: 'city.json', mimeType: 'application/json', buffer: Buffer.from(file) });
+  await page.waitForFunction(() => window.__ub.mapEditor.editor.edits.roads.length === 1, null, { timeout: 30000 });
+  const r = await page.evaluate(() => {
+    const e = window.__ub.mapEditor.editor;
+    const out = { blocks: e.edits.blocks.length, roads: e.edits.roads.length, skipped: document.querySelectorAll('#mapeditor .me-import-list li').length, saved: !!localStorage.getItem('curbside.map.local') };
+    e.undo();
+    out.undone = e.edits.blocks.length + e.edits.roads.length;
+    return out;
+  });
+  await page.setInputFiles('#mapeditor .me-file', { name: 'notes.txt', mimeType: 'text/plain', buffer: Buffer.from('hello') });
+  await page.waitForFunction(() => document.querySelector('#mapeditor .me-toast')?.textContent.startsWith('NOT IMPORTED'), null, { timeout: 30000 });
+  await page.evaluate(() => {
+    const u = window.__ub;
+    localStorage.removeItem('curbside.map.local');
+    u.mapEditor.editor.back();
+    if (u.paused) u.setPaused(false);
+  });
+  check(
+    r.blocks === 1 && r.roads === 1 && r.skipped > 0 && r.saved && r.undone === 0,
+    `${label}: IMPORT loads a city.json (a bad entry listed, not loaded), UNDO goes back, a non-map file is refused (${JSON.stringify(r)})`,
+  );
+}
+
 /** What the best-moment card must stay clear of on WASTED: its title, numbers and timer, the pause button, the corners' HUD and the thumbs. */
 const MOMENT_CLEAR_OF = ['.wasted-title', '.wasted-stats', '.wasted-timer', '.hud-pause', '#radar', '#score', '#wanted', '.tbtn', '.stick-base', '.aim-base', '.pedal-pad'];
 
@@ -965,6 +1000,7 @@ try {
       await momentCheck(page, label);
       if (label.startsWith('desktop')) await mapSpotsCheck(page, label);
       if (label.startsWith('desktop')) await streetsCheck(page, label);
+      if (label.startsWith('desktop')) await mapImportCheck(page, label);
     } catch (e) {
       check(false, `${label}: ${e.message.split('\n')[0]}`);
     }

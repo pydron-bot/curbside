@@ -83,7 +83,7 @@ import {
 import { LOCAL_MAP_KEY, loadLocalMap, previewingLocalMap } from '../world/shippedMap';
 import type { StreetPropKind } from '../world/streetProps';
 import type { AddedSpotKind } from '../world/mapEdits';
-import { removeRefusal, roadsInsideMerge } from '../game/mapEditorState';
+import { importMapText, removeRefusal, roadsInsideMerge } from '../game/mapEditorState';
 import { roadKey, type RoadEdit } from '../world/mapEdits';
 import { DISTRICT_HUE } from './cityMap';
 import { ICONS } from './icons';
@@ -145,6 +145,7 @@ export class MapEditor implements Panel {
   private readonly statusEl: HTMLElement;
   private readonly toastEl: HTMLElement;
   private readonly exportEl: HTMLTextAreaElement;
+  private readonly fileEl: HTMLInputElement;
   private readonly placeEl: HTMLSelectElement;
   private readonly undoBtn: HTMLButtonElement;
   private readonly redoBtn: HTMLButtonElement;
@@ -195,6 +196,7 @@ export class MapEditor implements Panel {
           <label class="me-place" title="Pick a spot or a street prop, then click the map to place it (Esc stops)">PLACE
             <select><option value="">—</option><optgroup label="SPOTS">${PLACEABLE_SPOTS.map((k) => `<option value="${placeValue(k)}">${k.label}</option>`).join('')}</optgroup>${pickupOptions()}<optgroup label="STREET PROPS">${PLACEABLE_PROPS.map((k) => `<option value="${k}">${k.replace(/_/g, ' ').toUpperCase()}</option>`).join('')}</optgroup></select>
           </label>
+          <button type="button" class="me-btn" data-act="import" title="Load a city.json (or drop one on the editor): it replaces your local edits, UNDO brings them back">IMPORT</button>
           <button type="button" class="me-btn" data-act="export" title="Download city.json and copy it">EXPORT</button>
           <button type="button" class="me-btn hot" data-act="view3d" title="Rebuild the city on your edits and look at the selection in observe mode (no reload)">VIEW IN 3D</button>
           <button type="button" class="me-btn" data-act="play" title="Reload the game on your local edits, to play on them">PLAY ON EDITS</button>
@@ -215,6 +217,11 @@ export class MapEditor implements Panel {
           <section class="me-sec me-deps"></section>
           <section class="me-sec me-problems"></section>
           <section class="me-sec me-changes"></section>
+          <section class="me-sec me-import-sec" hidden>
+            <h3>IMPORT: SKIPPED</h3>
+            <p class="me-note">The file had entries this game can't read; the rest loaded.</p>
+            <ul class="me-import-list"></ul>
+          </section>
           <section class="me-sec me-export-sec" hidden>
             <h3>EXPORTED</h3>
             <p class="me-note">Commit as <code>src/world/maps/city.json</code>.</p>
@@ -222,7 +229,8 @@ export class MapEditor implements Panel {
           </section>
         </aside>
       </div>
-      <div class="me-toast" hidden></div>`;
+      <div class="me-toast" hidden></div>
+      <input type="file" class="me-file" accept=".json,application/json" hidden>`;
     this.canvas = root.querySelector('canvas')!;
     this.ctx = this.canvas.getContext('2d')!;
     this.side = root.querySelector('.me-side')!;
@@ -233,6 +241,23 @@ export class MapEditor implements Panel {
     this.statusEl = root.querySelector('.me-status')!;
     this.toastEl = root.querySelector('.me-toast')!;
     this.exportEl = root.querySelector('.me-export')!;
+    // IMPORT: a city.json picked or dropped on the editor replaces the local edits (one undo step).
+    const file = root.querySelector<HTMLInputElement>('.me-file')!;
+    this.fileEl = file;
+    file.addEventListener('change', () => {
+      const f = file.files?.[0];
+      file.value = '';
+      if (f) void this.importFile(f);
+    });
+    root.addEventListener('dragover', (e) => {
+      if (e.dataTransfer?.types.includes('Files')) e.preventDefault();
+    });
+    root.addEventListener('drop', (e) => {
+      const f = e.dataTransfer?.files[0];
+      if (!f) return;
+      e.preventDefault();
+      void this.importFile(f);
+    });
     this.placeEl = root.querySelector('.me-place select')!;
     this.undoBtn = root.querySelector('[data-act="undo"]')!;
     this.redoBtn = root.querySelector('[data-act="redo"]')!;
@@ -438,6 +463,8 @@ export class MapEditor implements Panel {
         return this.undo();
       case 'redo':
         return this.redo();
+      case 'import':
+        return this.fileEl.click();
       case 'export':
         return this.exportFile();
       case 'view3d':
@@ -678,6 +705,32 @@ export class MapEditor implements Panel {
     this.exportEl.scrollIntoView?.({ block: 'nearest' });
     this.say('CITY.JSON SAVED & COPIED · COMMIT AS src/world/maps/city.json');
     this.d.audio.ui('success');
+  }
+
+  /** Load a map file: its edits replace the local ones as one undo step; what it couldn't read is listed. */
+  private async importFile(f: File): Promise<void> {
+    if (!this.history) return;
+    let text: string;
+    try {
+      text = await f.text();
+    } catch {
+      return this.importFailed(`couldn't read ${f.name}`);
+    }
+    const r = importMapText(text);
+    if ('error' in r) return this.importFailed(`${f.name}: ${r.error}`);
+    this.commit(r.edits, true);
+    const sec = this.root.querySelector<HTMLElement>('.me-import-sec')!;
+    const list = sec.querySelector('.me-import-list')!;
+    list.innerHTML = r.skipped.map((s) => `<li>${esc(s)}</li>`).join('');
+    sec.hidden = r.skipped.length === 0;
+    const n = diffMapEdits(this.d.shipped, r.edits).length;
+    this.say(`IMPORTED ${f.name.toUpperCase()} · ${n} CHANGE${n === 1 ? '' : 'S'}${r.skipped.length ? ` · ${r.skipped.length} SKIPPED` : ''} · UNDO TO GO BACK`);
+    this.d.audio.ui('success');
+  }
+
+  private importFailed(why: string): void {
+    this.say(`NOT IMPORTED · ${why}`);
+    this.d.audio.ui('back');
   }
 
   private view3d(): void {

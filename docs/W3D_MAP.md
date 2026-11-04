@@ -793,3 +793,8 @@ first). A merged block's panel lists the roads removed inside it
 (`roadsInsideMerge`) with PUT BACK each (the road reopens, and the merge
 is cut along that whole line: `restoreRoad`); the crossing panel and
 CHANGES' REVERT still work too.
+
+**IMPORT (0.30.0):** the editor's bar has IMPORT next to EXPORT (or drop a
+file on the editor): a city.json loads as the local edits, one undo step,
+with the entries it couldn't read listed and skipped; a file that isn't a
+map (not JSON, no or an unknown `version`) is refused with the reason.

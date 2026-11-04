@@ -2123,7 +2123,7 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
     parse: (text: string) => parseMapEdits(JSON.parse(text)),
     /** The committed map file. */
     shipped: SHIPPED_MAP,
-    /** VIEW IN 3D's live rebuild: edits (what the city shows), dirty (play reloads), apply(edits). */
+    /** VIEW IN 3D's live rebuild: edits (what the city shows), dirty (rebuilt live), apply(edits). */
     get live() {
       return liveMap;
     },

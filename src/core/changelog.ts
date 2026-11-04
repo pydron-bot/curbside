@@ -15,6 +15,14 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.30.0',
+    date: '2026-11-04',
+    title: 'Open files',
+    notes: [
+      'Map editor: IMPORT loads a city.json (or drop the file onto the editor). It replaces your local edits as one step, so UNDO brings them back; anything in the file the game can\'t read is listed and skipped.',
+    ],
+  },
+  {
     version: '0.29.0',
     date: '2026-11-04',
     title: 'Street plans',

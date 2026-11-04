@@ -3119,6 +3119,12 @@ and every new program is compiled behind the current frame.
   go, and upkeep fills the streets again. So play goes on on the edits with
   no reload, and the URL says `?map=local` (a reload keeps them). PLAY ON
   EDITS still reloads on them.
+- **IMPORT** (map editor bar, or a file dropped on the editor): a city.json
+  read by `importMapText` (`game/mapEditorState.ts`: not JSON, no
+  `version` or an unknown one is refused with the reason; anything else
+  goes through `parseMapEdits`) replaces the local edits as one undo step;
+  the entries it skipped are listed under IMPORT: SKIPPED
+  (`tests/mapImport.test.ts`).
 - **Map editor, round 3: spots** (`game/mapSpots.ts`, `systems/storyEdits.ts`,
   `game/sceneHosts.ts`, `ui/mapEditorSpots.ts`; `tests/mapSpots.test.ts`;
   docs/W3D_MAP.md *Round 3*): PLACE adds payphones (`phone-<n>`), frenzy

@@ -35,6 +35,8 @@ import {
   type PropEdit,
   type RoadEdit,
   type SpotEdit,
+  MAP_EDITS_VERSION,
+  parseMapEdits,
 } from '../world/mapEdits';
 import { MAX_NODE } from '../world/roads';
 import { placeCityRamps, type Ramp } from '../world/ramps';
@@ -924,4 +926,23 @@ export function removeRefusal(edits: MapEdits, a: Node, b: Node): string | null 
 /** The merged block (round 3) holding city block (bx, bz): its north-west block and size, or null. */
 export function mergeOf(city: City, bx: number, bz: number): { bx: number; bz: number; w: number; h: number } | null {
   return city.blocks.find((b) => b.bx === bx && b.bz === bz)?.merge ?? null;
+}
+
+/**
+ * A map file loaded into the editor (IMPORT, or a file dropped on it): its
+ * edits as parseMapEdits reads them (anything it can't read is dropped,
+ * with the reasons in `skipped`), or why it isn't a map file at all.
+ */
+export function importMapText(text: string): { edits: MapEdits; skipped: readonly string[] } | { error: string } {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return { error: "it isn't JSON" };
+  }
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw) || !('version' in raw)) return { error: 'it has no "version": not a map file' };
+  const version = (raw as { version: unknown }).version;
+  if (version !== 1 && version !== MAP_EDITS_VERSION) return { error: `it's version ${JSON.stringify(version)}, and this game reads versions 1 and ${MAP_EDITS_VERSION}` };
+  const { edits, problems } = parseMapEdits(raw);
+  return { edits, skipped: problems };
 }
