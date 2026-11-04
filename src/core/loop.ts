@@ -11,7 +11,7 @@ export class FixedStep {
   constructor(
     readonly stepSeconds = 1 / 60,
     /** Cap on steps per frame so a long stall can't snowball (spiral of death). */
-    readonly maxStepsPerFrame = 5,
+    public maxStepsPerFrame = 5,
   ) {}
 
   /**

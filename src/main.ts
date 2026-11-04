@@ -43,6 +43,7 @@ import { FxDirector } from './render/fxDirector';
 import { CameraRig } from './render/cameraRig';
 import { DynamicResolution } from './render/dynamicResolution';
 import { GpuLayers } from './render/gpuLayers';
+import { crowdTestScale, loadPerfTests, perfTests, perfTestsLabel, simStepCap, trafficTestScale } from './core/perfTests';
 import { emptySummary, FrameStats, formatFps, formatFrameStats } from './core/frameStats';
 import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
@@ -382,6 +383,13 @@ const cityMood = new CityMood();
  * Recycle and top up traffic and crowd; `seed` fills the streets from scratch
  * and puts the spawn point's parked cars back.
  */
+// Diagnostics → LOW POWER TESTS (core/perfTests.ts), saved from the last session: before the first
+// street is filled, so CROWD ½ / TRAFFIC ½ start a fresh launch thinned.
+try {
+  loadPerfTests(localStorage);
+} catch {
+  // Blocked storage: all off.
+}
 function maintainPopulation(seed = false, parked = seed) {
   // Behind the title the streets follow the attract camera instead.
   const at = attract.active ? attract : player.position;
@@ -405,8 +413,8 @@ function maintainPopulation(seed = false, parked = seed) {
     // Observe's wide zoom: spawns kept out of a smaller patch round the camera.
     spawnView: observe?.spawnView(viewRect),
     keep: keepVehicles,
-    trafficScale: getQuality().trafficScale,
-    crowdScale: getQuality().crowdScale * cityMood.densityAt(at.x, at.z),
+    trafficScale: getQuality().trafficScale * trafficTestScale(),
+    crowdScale: getQuality().crowdScale * cityMood.densityAt(at.x, at.z) * crowdTestScale(),
     spawnWeight: cityMood.weight,
     seed,
     parked: parked ? PARKED : undefined,
@@ -540,7 +548,7 @@ const cityLife = new CityLife({
   avoid: cityAvoid(),
   busStops: dressing.street.busStops,
   vendors: dressing.street.vendors,
-  trafficScale: () => getQuality().trafficScale,
+  trafficScale: () => getQuality().trafficScale * trafficTestScale(),
   npcShoot: (x, z, dx, dz) => npcShoot(x, z, dx, dz),
   collect: (kind) => combat.collect(kind),
   focus: () => (attract.active ? attract : player.position),
@@ -1353,6 +1361,7 @@ function frame(now: number) {
   const slow = testTools.timeScale;
   // The best-moment picture's share sheet holds WASTED, like a card.
   const simDt = frameSeconds * fx.simScale(frameSeconds) * (observe?.holdsRun ? 1 : progress.simScale()) * slow * moment.simScale();
+  loop.maxStepsPerFrame = simStepCap(5);
   const alpha = loop.advance(simDt, simulate);
 
   // Interpolate render state between the last two sim steps.
@@ -1510,7 +1519,8 @@ const hud = new Hud(document.body, score, events, {
   debugText: (full) => {
     const f = frameStats.summarize(frameSummary);
     const head = full ? `${formatFrameStats(f)}\n` : `${formatFps(f.fps)} fps · `;
-    const line = `${head}${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc${full ? destruction.overlayText() : ''}`;
+    const tests = perfTestsLabel(perfTests);
+    const line = `${head}${resolution.summary()} · ${viewW}×${viewH} · ${renderer.info.render.calls} dc${full ? destruction.overlayText() : ''}${tests ? ` · TEST ${tests}` : ''}`;
     return full ? `${line}\n${formatCounts(census.fill(censusOut))}` : line;
   },
 });

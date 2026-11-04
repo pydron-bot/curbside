@@ -11,6 +11,8 @@ import { ICONS } from './icons';
 import { breakdownLines } from '../core/gpuBreakdown';
 import { DestructionProbe, destructionSummary, type DestructionProbeDeps } from './destructionProbe';
 import { GpuProbe, type GpuProbeDeps } from './gpuProbe';
+import { loadPerfTests, perfTests, perfTestsLabel } from '../core/perfTests';
+import { PerfTestProbe } from './perfTestProbe';
 import { InputProbes } from './inputProbes';
 import { MenuNav, overlay, type Panel } from './menu';
 import { safeInsets } from './safeArea';
@@ -89,6 +91,7 @@ export class Diagnostics implements Panel {
   private readonly probes: InputProbes | null = null;
   private readonly destruction: DestructionProbe | null = null;
   private readonly gpu: GpuProbe | null = null;
+  private readonly perf: PerfTestProbe;
   private readonly tuning: TuningProbe;
   private readonly frameOut = emptySummary();
   private readonly countsOut = emptyCounts();
@@ -149,6 +152,9 @@ export class Diagnostics implements Panel {
       this.gpu = new GpuProbe(deps.gpu, this.nav);
       this.summaryEl.before(this.gpu.el);
     }
+    loadPerfTests(storage());
+    this.perf = new PerfTestProbe(this.nav, storage, () => this.mark('perftests', perfTestsLabel(perfTests) || 'off'));
+    this.summaryEl.before(this.perf.el);
     if (deps.haptics) {
       this.probes = new InputProbes(deps.haptics, this.nav);
       this.summaryEl.before(this.probes.el);
@@ -158,6 +164,8 @@ export class Diagnostics implements Panel {
     parent.append(root);
 
     this.log.addEvent(performance.now(), 'boot', BUILD_ID);
+    // Saved test switches still on from last time: the log says so from the start.
+    if (perfTestsLabel(perfTests)) this.log.addEvent(performance.now(), 'perftests', perfTestsLabel(perfTests));
     if (this.previous) this.log.addEvent(performance.now(), 'previous-log', `${this.previous.samples.length} samples from ${this.previous.started}`);
     window.setInterval(() => this.poll(), POLL_MS);
     deps.canvas.addEventListener('webglcontextlost', () => this.mark('contextlost'));
@@ -276,6 +284,7 @@ export class Diagnostics implements Panel {
       tune: changedTune(),
       destruction: this.deps.destruction?.stats() ?? null,
       gpuBreakdown: this.gpu?.last ?? null,
+      perfTests: { ...perfTests },
       rapierFiles: rapierFiles(),
       session: this.log.data(),
       previous: this.previous,
@@ -299,6 +308,7 @@ export class Diagnostics implements Panel {
       `FRAMES ${f.fps.toFixed(1)} fps · p50 ${f.p50.toFixed(1)} p95 ${f.p95.toFixed(1)} p99 ${f.p99.toFixed(1)} ms · js p95 ${f.jsP95.toFixed(1)} · tail ${f.tailP50.toFixed(1)}/${f.tailP95.toFixed(1)} · ${f.hitchesPerMin.toFixed(1)} hitch/min`,
       `SESSION ${this.log.seconds(performance.now()).toFixed(0)} s · ${d.samples.length} samples (every ${SAMPLE_EVERY_MS / 1000} s) · ${this.log.eventCount} events · ${this.log.dipCount} dips`,
       tuneSummary(),
+      `LOW POWER TESTS ${perfTestsLabel(perfTests) || 'off'}`,
       ...(this.gpu?.last ? breakdownLines(this.gpu.last) : []),
       `PREVIOUS ${this.previous ? `${this.previous.samples.length} samples from ${this.previous.started}` : 'none'}`,
     ].join('\n');

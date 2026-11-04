@@ -190,6 +190,19 @@ report (`gpuBreakdown`, and its lines in the summary). Pause on the busy
 moment you want measured; closing the sheet stops a run and puts
 everything back.
 
+**Low Power tests** (Diagnostics → LOW POWER TESTS; `core/perfTests.ts`,
+`ui/perfTestProbe.ts`): three switches, each taking away one kind of
+processor work, to find what iOS Low Power Mode is short of (the GPU
+breakdown showed the graphics chip isn't: 11–14 ms a busy frame there).
+SIM 1 STEP caps the fixed 60 Hz sim at one step a frame (`FixedStep.
+maxStepsPerFrame`; at 30 fps it plays in slow motion, physics untouched,
+the sim's cost per frame halved); CROWD ½ and TRAFFIC ½ halve the
+population's targets (and the city's traffic scale), thinning as people
+and cars leave range. Saved in `curbside.perftests` until switched off
+(read before the first street is filled, so a relaunch starts thinned);
+each change is a `perftests` event in the session log, the overlay says
+`TEST …`, the report carries `perfTests`.
+
 **Report bug** (`ui/bugReport.ts`): with test tools on
 (`settings.testTools`), the Perf overlay on or `?debug`, a bug button sits
 in the pause card's top corner (the Diagnostics sheet has a REPORT BUG tab
