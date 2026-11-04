@@ -40,6 +40,11 @@ import { MAX_NODE } from '../world/roads';
 import { placeCityRamps, type Ramp } from '../world/ramps';
 import { setRoadRules } from '../world/roadRules';
 import type { StreetPropKind, StreetProps } from '../world/streetProps';
+import { PICKUP_ITEMS, landmarkEdit, withJobPhone, withLandmark, withStorySpotEdit, type JobEdit, type LandmarkEdit, type LandmarkId } from '../world/mapEdits';
+import { placePickups, type PickupKind } from '../world/pickups';
+import { shopSpots } from '../world/shopSpots';
+import { FRENZY_DEFAULTS, clampSeconds, clampTarget, frenzyTitle, type FrenzySpec } from './modes/frenzyLimits';
+import { anchorBlock, collectRound3, phoneJobs } from './mapSpots';
 
 export type Point = { x: number; z: number };
 
@@ -62,7 +67,12 @@ export const PLACEABLE_SPOTS: ReadonlyArray<{ kind: AddedSpotKind; label: string
   { kind: 'kicker', label: 'KICKER' },
   ...GANGS.map((g) => ({ kind: 'hangout' as const, label: `${g.name} HANGOUT`, gang: g.id })),
   { kind: 'package', label: 'HIDDEN PACKAGE' },
+  { kind: 'phone', label: 'PAYPHONE' },
+  { kind: 'frenzy', label: 'FRENZY TOKEN' },
 ];
+
+/** PLACE's pickups, one per kind (`spot:pickup:<kind>`). */
+export const PLACEABLE_PICKUPS: ReadonlyArray<{ kind: 'pickup'; label: string; item: PickupKind }> = PICKUP_ITEMS.map((item) => ({ kind: 'pickup', label: `PICKUP: ${item.toUpperCase()}`, item }));
 
 // --- The preview: the edited city and everything on it ---
 
@@ -103,6 +113,8 @@ export interface Preview {
   /** The ramps as the edits leave them (an added one's turn base). */
   ramps: readonly Ramp[];
   problems: EditorProblem[];
+  /** Round 3: shop doors and road works sites (detail anchors: drawn and picked zoomed in, listed as dependents). */
+  extras: Anchor[];
   /** How long the build took, ms. */
   ms: number;
 }
@@ -125,7 +137,9 @@ export function buildPreview(edits: MapEdits, inputs: PreviewInputs, gameMap: Ma
     // The edited ramps (the dressing keeps clear of them) and the generated ones (where a moved ramp came from, and a turn's base).
     const ramps = placeCityRamps(edits.seed, edits);
     const rawRamps = placeCityRamps(edits.seed, NO_EDITS);
-    const dressing = dressCity(city, inputs.pickups, ramps);
+    // The pickups as the edits leave them (round 3: they move, go and come), else the game's own.
+    const pickupEdits = edits.spots.some((sp) => sp.id.startsWith('pickup-'));
+    const dressing = dressCity(city, pickupEdits ? placePickups(edits.seed, edits) : inputs.pickups, ramps);
     const street = dressing.street;
     const more = { busStops: street.busStops, vendors: street.vendors, hydrants: street.props.filter((p) => p.kind === 'hydrant') };
     // Placed where the edits put them (what the game plays and the checks read)...
@@ -134,7 +148,10 @@ export function buildPreview(edits: MapEdits, inputs: PreviewInputs, gameMap: Ma
     const { moved, removed } = applySpotEdits(collectAnchors(city, { ...more, ramps: rawRamps, edits: NO_EDITS }), edits);
     // Checked with the preview's districts and road rules installed (districtAt and the router read them).
     const problems = problemsFor(city, edits, anchors, street);
-    return { edits, city, kinds, props: propsOnMap(dressing, edits), anchors, moved, removed, rawRamps, ramps, problems, ms: performance.now() - t0 };
+    // Shop doors and road works (thousands; zoomed in only): listed apart from the spots.
+    const extras: Anchor[] = [];
+    collectRound3({ shops: shopSpots(city), roadworks: street.roadworks }, extras);
+    return { edits, city, kinds, props: propsOnMap(dressing, edits), anchors, moved, removed, rawRamps, ramps, problems, extras, ms: performance.now() - t0 };
   } finally {
     restoreGameMap(gameMap);
   }
@@ -340,7 +357,7 @@ export const SCALE_MAX = 12;
 /** Street props (as dots) from this zoom in, px per m. */
 export const PROPS_FROM_SCALE = 1.6;
 /** Street-level groups (hundreds of hydrants and carts) that draw and pick only from PROPS_FROM_SCALE, like the props. */
-export const DETAIL_GROUPS: ReadonlySet<AnchorGroup> = new Set<AnchorGroup>(['hydrant', 'vendor']);
+export const DETAIL_GROUPS: ReadonlySet<AnchorGroup> = new Set<AnchorGroup>(['hydrant', 'vendor', 'shop', 'roadworks']);
 
 /** Is anchor `a` on the map at this zoom? Detail groups only zoomed in, unless `keep` holds them (a dependent, a problem, the selection). */
 export function anchorShown(a: Anchor, scale: number, keep?: ReadonlySet<string>): boolean {
@@ -552,7 +569,7 @@ function spotEditOf(edits: MapEdits, id: string): SpotEdit | undefined {
 /** Move a spot to (x, z); back within 0.1 m of where it was generated clears the move (a turn stays). An added spot just moves. */
 export function moveSpot(edits: MapEdits, id: string, x: number, z: number, generated: Point): MapEdits {
   const old = spotEditOf(edits, id);
-  if (old?.add) return withAddedSpot(edits, id, { add: old.add, x, z, heading: old.heading });
+  if (old?.add) return withAddedSpot(edits, id, { add: old.add, x, z, heading: old.heading, frenzy: old.frenzy, pickup: old.pickup });
   const home = Math.abs(x - generated.x) < 0.1 && Math.abs(z - generated.z) < 0.1;
   return withSpotEdit(edits, id, { ...(home ? {} : { x, z }), ...(old?.heading !== undefined ? { heading: old.heading } : {}) });
 }
@@ -562,7 +579,7 @@ export function turnSpot(edits: MapEdits, id: string, delta: number, base: numbe
   const old = spotEditOf(edits, id);
   let h = (old?.heading ?? base) + delta;
   h = Math.atan2(Math.sin(h), Math.cos(h));
-  if (old?.add) return withAddedSpot(edits, id, { add: old.add, x: old.x!, z: old.z!, heading: h });
+  if (old?.add) return withAddedSpot(edits, id, { add: old.add, x: old.x!, z: old.z!, heading: h, frenzy: old.frenzy, pickup: old.pickup });
   const same = Math.abs(Math.atan2(Math.sin(h - base), Math.cos(h - base))) < 0.01;
   return withSpotEdit(edits, id, { ...(old?.x !== undefined ? { x: old.x, z: old.z } : {}), ...(same ? {} : { heading: h }) });
 }
@@ -581,7 +598,9 @@ export function resetSpot(edits: MapEdits, id: string): MapEdits {
 /** Add a new spot of `kind` at (x, z) (a hangout for `gang`); returns the edits and the new spot's id. */
 export function placeSpot(edits: MapEdits, kind: AddedSpotKind, x: number, z: number, gang?: string): { edits: MapEdits; id: string } {
   const id = newSpotId(edits, kind, gang);
-  return { edits: withAddedSpot(edits, id, { add: kind, x, z }), id };
+  // Round 3: a new frenzy starts as a knock-down (the panel sets it); a pickup's kind comes from PLACE (`gang` carries it).
+  const extra = kind === 'frenzy' ? { frenzy: { goal: 'knockdown' as const, ...FRENZY_DEFAULTS.knockdown } } : kind === 'pickup' ? { pickup: (PICKUP_ITEMS.includes(gang as PickupKind) ? gang : 'health') as PickupKind } : {};
+  return { edits: withAddedSpot(edits, id, { add: kind, x, z, ...extra }), id };
 }
 
 export function spotEdited(edits: MapEdits, id: string): SpotEdit | undefined {
@@ -672,6 +691,9 @@ export const GROUP_STYLE: Readonly<Record<AnchorGroup, { letter: string; color: 
   hydrant: { letter: 'W', color: '#5aa8ff', name: 'Hydrants' },
   package: { letter: '?', color: '#6dff5a', name: 'Hidden packages' },
   test: { letter: 'T', color: '#b0b0b0', name: 'Test teleports' },
+  pickup: { letter: 'I', color: '#ffe08a', name: 'Pickups' },
+  shop: { letter: 'K', color: '#e07ab8', name: 'Shop doors' },
+  roadworks: { letter: 'X', color: '#ff9a2e', name: 'Road works' },
 };
 
 // --- Wording ---
@@ -698,9 +720,20 @@ export function describeChange(c: MapEditChange): string {
       if (!c.after) return s.add ? `Spot ${s.id}: no longer added` : `Spot ${s.id}: back where generated`;
       const a = c.after as SpotEdit;
       if (a.removed) return `Spot ${a.id}: removed`;
+      if (a.add === 'frenzy' && a.frenzy) return `Spot ${a.id}: frenzy added, ${frenzyTitle(a.frenzy.goal, a.frenzy.target)} in ${a.frenzy.seconds} s${a.frenzy.gift ? ` with a ${a.frenzy.gift}` : ''}`;
+      if (a.add === 'pickup') return `Spot ${a.id}: ${a.pickup ?? 'pickup'} pickup added at ${a.x!.toFixed(0)}, ${a.z!.toFixed(0)}`;
+      if (a.nodes || a.points) return `Spot ${a.id}: ${a.nodes ? 'crossings' : 'points'} moved`;
       if (a.add) return `Spot ${a.id}: ${a.add} added at ${a.x!.toFixed(0)}, ${a.z!.toFixed(0)}`;
       const bits = [a.x !== undefined ? `moved to ${a.x.toFixed(0)}, ${a.z!.toFixed(0)}` : '', a.heading !== undefined ? 'turned' : ''].filter(Boolean);
       return `Spot ${a.id}: ${bits.join(', ')}`;
+    }
+    case 'jobs': {
+      const j = e as JobEdit;
+      return c.after ? `Job ${j.id}: rings from ${j.phone}` : `Job ${j.id}: rings from its own phone${back}`;
+    }
+    case 'landmarks': {
+      const l = e as LandmarkEdit;
+      return c.after ? `Landmark ${l.id}: moved to block ${l.at[0]},${l.at[1]}` : `Landmark ${l.id}: where the city puts it${back}`;
     }
     default: {
       const p = e as PropEdit;
@@ -759,4 +792,79 @@ export function selectionCentre(sel: Selection, anchors: readonly Anchor[]): Poi
     default:
       return { x: sel.prop.x, z: sel.prop.z };
   }
+}
+
+// --- Round 3: phones and jobs, frenzies, pickups, story spots, landmarks ---
+
+/** Ring job `id` from `phone`; its own phone clears the edit. */
+export function setJobPhone(edits: MapEdits, id: string, phone: string): MapEdits {
+  const job = phoneJobs(NO_EDITS).find((j) => j.id === id);
+  if (!job) return edits;
+  return withJobPhone(edits, id, phone === job.written ? undefined : phone);
+}
+
+/** An added frenzy's goal, target, time or gift (`gift: null` takes it away); a new goal starts from its defaults. Clamped to the goal's limits. */
+export function setFrenzy(edits: MapEdits, id: string, patch: { goal?: FrenzySpec['goal']; target?: number; seconds?: number; gift?: FrenzySpec['gift'] | null }): MapEdits {
+  const old = spotEditOf(edits, id);
+  if (old?.add !== 'frenzy') return edits;
+  const was = old.frenzy ?? { goal: 'knockdown' as const, ...FRENZY_DEFAULTS.knockdown };
+  const goal = patch.goal ?? was.goal;
+  const base = goal !== was.goal ? { goal, ...FRENZY_DEFAULTS[goal], gift: was.gift } : was;
+  const gift = patch.gift === null ? undefined : (patch.gift ?? base.gift);
+  const frenzy: FrenzySpec = { goal, target: clampTarget(goal, patch.target ?? base.target), seconds: clampSeconds(goal, patch.seconds ?? base.seconds), ...(gift ? { gift } : {}) };
+  return withAddedSpot(edits, id, { add: 'frenzy', x: old.x!, z: old.z!, heading: old.heading, frenzy });
+}
+
+/** An added pickup's kind. */
+export function setPickupKind(edits: MapEdits, id: string, kind: PickupKind): MapEdits {
+  const old = spotEditOf(edits, id);
+  if (old?.add !== 'pickup' || !PICKUP_ITEMS.includes(kind)) return edits;
+  return withAddedSpot(edits, id, { add: 'pickup', x: old.x!, z: old.z!, pickup: kind });
+}
+
+/** The crossing nearest world point p. */
+export function nearestNode(p: Point): Node {
+  const clamp = (v: number) => Math.max(-MAX_NODE, Math.min(MAX_NODE, v));
+  return [clamp(Math.round(p.x / BLOCK_SIZE)), clamp(Math.round(p.z / BLOCK_SIZE))];
+}
+
+/**
+ * The handles a story list spot drags by (world m): a drive route's
+ * crossings, a race step's checkpoints, a collect step's points. Null for
+ * anything else (a point drags as a whole).
+ */
+export function storyHandles(a: Anchor): Point[] | null {
+  if (a.group !== 'story') return null;
+  if (a.via) return a.via.map(nodePoint);
+  if (a.route) return a.route.map(nodePoint);
+  return a.points.length > 1 || a.id.endsWith('.points') ? [...a.points] : null;
+}
+
+/**
+ * Handle `index` of story list spot `a` dragged to p: a crossing snaps to
+ * the nearest one, a collect point goes where it's dropped. The list back
+ * as written (`written`) clears the edit.
+ */
+export function moveStoryHandle(edits: MapEdits, a: Anchor, index: number, p: Point, written: ReadonlyArray<readonly [number, number]>): MapEdits {
+  const crossings = a.via ?? a.route;
+  const now: Array<readonly [number, number]> = crossings ? crossings.map((n) => [n[0], n[1]] as const) : a.points.map((q) => [q.x, q.z] as const);
+  if (index < 0 || index >= now.length) return edits;
+  now[index] = crossings ? nearestNode(p) : [Math.round(p.x * 10) / 10, Math.round(p.z * 10) / 10];
+  const same = now.length === written.length && now.every((q, i) => Math.abs(q[0] - written[i][0]) < 0.05 && Math.abs(q[1] - written[i][1]) < 0.05);
+  if (same) return withStorySpotEdit(edits, a.id);
+  return withStorySpotEdit(edits, a.id, crossings ? { nodes: now } : { points: now });
+}
+
+/** Move landmark `id` to core block `at`; back to `generated` (where the city puts it) clears the edit. */
+export function moveLandmark(edits: MapEdits, id: LandmarkId, at: readonly [number, number], generated: readonly [number, number] | null): MapEdits {
+  const home = generated !== null && generated[0] === at[0] && generated[1] === at[1];
+  if (home && !landmarkEdit(edits, id)) return edits;
+  return withLandmark(edits, id, home ? undefined : at);
+}
+
+/** Where the city puts each landmark with no landmark edits (core blocks), for a move back home. */
+export function landmarkHomes(anchors: readonly Anchor[]): Map<LandmarkId, readonly [number, number]> {
+  const out = new Map<LandmarkId, readonly [number, number]>();
+  for (const a of anchors) if (a.landmark && !out.has(a.landmark)) out.set(a.landmark, anchorBlock(a)!);
+  return out;
 }

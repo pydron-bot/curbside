@@ -13,9 +13,9 @@ import { cornerPoint } from '../../systems/crowd';
 import { core, type City } from '../../world/city';
 import { bayFor, placeSprayShops, type SprayShop } from '../../world/landmarks';
 import { len2 } from '../../core/len';
-import type { MapEdits } from '../../world/mapEdits';
+import { landmarkEdit, type MapEdits } from '../../world/mapEdits';
 import { ACTIVE_MAP } from '../../world/shippedMap';
-import { editSpot } from '../../world/spotEdits';
+import { addedSpots, editSpot } from '../../world/spotEdits';
 
 export interface Spot {
   id: string;
@@ -56,7 +56,10 @@ const PHONE_SPOTS: ReadonlyArray<readonly [string, number, number, number, numbe
 ];
 
 export function placePayphones(edits: MapEdits = ACTIVE_MAP): Spot[] {
-  return PHONE_SPOTS.map(([id, bx, bz, edge, t]) => editSpot({ id, ...corePavement(bx, bz, edge, t) }, edits, false)!);
+  const phones = PHONE_SPOTS.map(([id, bx, bz, edge, t]) => editSpot({ id, ...corePavement(bx, bz, edge, t) }, edits, false)!);
+  // Round 3: payphones the map adds (`phone-<n>`), after the city's own.
+  for (const s of addedSpots(edits, 'phone')) phones.push({ id: s.id, x: s.x!, z: s.z! });
+  return phones;
 }
 
 /** Frenzy tokens, spread round the city (ids match FRENZIES). */
@@ -72,7 +75,10 @@ const FRENZY_SPOTS: ReadonlyArray<readonly [string, number, number, number, numb
 ];
 
 export function placeFrenzyTokens(edits: MapEdits = ACTIVE_MAP): Spot[] {
-  return FRENZY_SPOTS.map(([id, bx, bz, edge, t]) => editSpot({ id, ...corePavement(bx, bz, edge, t) }, edits, false)!);
+  const tokens = FRENZY_SPOTS.map(([id, bx, bz, edge, t]) => editSpot({ id, ...corePavement(bx, bz, edge, t) }, edits, false)!);
+  // Round 3: the map's own frenzies (`fz-<n>`, frenzies.ts frenzyList), after the shipped eight.
+  for (const s of addedSpots(edits, 'frenzy')) tokens.push({ id: s.id, x: s.x!, z: s.z! });
+  return tokens;
 }
 
 /** The docks: an open lot in the industrial quarter (south-east), not a spray bay's (core blocks). */
@@ -84,6 +90,9 @@ const DOCKS_TARGET = [13, 12] as const;
  */
 export function placeDocks(city: City): SprayShop {
   const taken = new Set(placeSprayShops(city).map((s) => s.id));
+  // Moved by the map edits (round 3): that block's bay, if it's an open lot with room and no spray bay.
+  const moved = docksAt(city, taken);
+  if (moved) return moved;
   const tx = core(DOCKS_TARGET[0]);
   const tz = core(DOCKS_TARGET[1]);
   const blocks = city.blocks
@@ -96,4 +105,14 @@ export function placeDocks(city: City): SprayShop {
   // No open lot anywhere (not with the shipped seed): a pavement spot instead.
   const p = corePavement(13, 12, 0, 0.5);
   return { id: 'docks', x: p.x, z: p.z, heading: 0, halfWidth: 3.6, halfLength: 4.6 };
+}
+
+/** The docks' bay on the block the map edits move it to, or null (no edit, or it doesn't fit there: the checks say why). */
+function docksAt(city: City, taken: ReadonlySet<string>): SprayShop | null {
+  const e = landmarkEdit(city.edits, 'docks');
+  if (!e) return null;
+  const b = city.blocks.find((q) => q.bx === core(e.at[0]) && q.bz === core(e.at[1]));
+  if (!b || b.kind === 'buildings') return null;
+  const bay = bayFor(b.bx, b.bz, city);
+  return bay && !taken.has(bay.id) ? { ...bay, id: 'docks' } : null;
 }

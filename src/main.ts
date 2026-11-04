@@ -67,7 +67,7 @@ import { LOD_FAR, LOD_NEAR, SimLod, newSimClock } from './systems/simLod';
 import { holdsFire } from './systems/police';
 import { WEAPONS, WEAPON_ORDER, type WeaponKind } from './systems/weapons';
 import { toolFor } from './systems/serviceTools';
-import { PICKUP_RESPAWN, generatePickups, pickupAt, respawnPickups } from './world/pickups';
+import { PICKUP_RESPAWN, placePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
   PLAYER_CRASH_SHARE,
   applyDamage,
@@ -214,7 +214,7 @@ const [P_SCENES, P_HEAT, P_COMBAT, P_MAINTAIN, P_PEOPLE, P_PIGEONS, P_FRAME] = [
 // --- Scene ---
 const scene = new Scene();
 const city = generateCity(1337, ACTIVE_MAP);
-const pickups = generatePickups(1337);
+const pickups = placePickups(1337, ACTIVE_MAP);
 /** Stunt ramps and kickers: their sides and backs are solid. */
 const ramps = placeCityRamps(1337, ACTIVE_MAP);
 /** Street furniture and landmark models: lamp posts, signal poles, bollards, booth walls... collide. */

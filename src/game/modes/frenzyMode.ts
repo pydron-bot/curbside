@@ -11,7 +11,7 @@ import { MARK, beacon, groundRing, nearView, type ProgressProps } from '../../re
 import { fmt } from '../../ui/scoreHud';
 import type { Rect } from '../../world/city';
 import { KeyedText, type Mode, type ModeCtx } from './context';
-import { FRENZIES, FRENZY_PAY, FRENZY_REPLAY, FrenzyRun, type FrenzyDef } from './frenzies';
+import { ACTIVE_FRENZIES, FRENZY_PAY, FRENZY_REPLAY, FrenzyRun, type FrenzyDef } from './frenzies';
 import { placeFrenzyTokens, type Spot } from './places';
 import { len2 } from '../../core/len';
 
@@ -43,7 +43,7 @@ export class FrenzyMode implements Mode {
 
   constructor(private readonly ctx: ModeCtx) {
     const spots = placeFrenzyTokens();
-    this.tokens = FRENZIES.map((def) => {
+    this.tokens = ACTIVE_FRENZIES.map((def) => {
       const prompt = `FRENZY · ${def.title} IN ${def.seconds} S`;
       return { def, spot: spots.find((s) => s.id === def.id)!, armed: true, prompt, promptOnFoot: def.needsCar ? `${prompt} · NEEDS A CAR` : prompt };
     });
@@ -127,8 +127,8 @@ export class FrenzyMode implements Mode {
       const pay = ctx.pay(first ? FRENZY_PAY : FRENZY_REPLAY, 'frenzy', 'FRENZY');
       ctx.ui.banner('FRENZY PASSED!', 'pass', `+$${fmt(pay)}`);
       ctx.deps.audio.ui('success');
-      const left = FRENZIES.filter((f) => !this.beaten(f)).length;
-      if (first) ctx.notice(left === 0 ? 'ALL FRENZIES BEATEN!' : `FRENZIES ${FRENZIES.length - left}/${FRENZIES.length}`, 'progress');
+      const left = ACTIVE_FRENZIES.filter((f) => !this.beaten(f)).length;
+      if (first) ctx.notice(left === 0 ? 'ALL FRENZIES BEATEN!' : `FRENZIES ${ACTIVE_FRENZIES.length - left}/${ACTIVE_FRENZIES.length}`, 'progress');
       ctx.progress.flush();
     } else if (ctx.live || why) {
       ctx.ui.banner('FRENZY FAILED', 'fail', why ?? 'TOUCH THE TOKEN TO RETRY');

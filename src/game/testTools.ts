@@ -23,7 +23,7 @@ import { DISTRICT_NAMES, districtAt } from '../world/districts';
 import type { CityLife } from './cityLife';
 import type { Heat } from './heat';
 import { CAR_NAMES } from './modes/exports';
-import { FRENZIES } from './modes/frenzies';
+import { ACTIVE_FRENZIES } from './modes/frenzies';
 import { knownPackageIndices } from './modes/packages';
 import { SAFEHOUSE, placePayphones } from './modes/places';
 import { MAX_ARMOUR, type Player } from './player';
@@ -400,7 +400,7 @@ export class TestTools {
     const pd = this.d.progress;
     const r = importSave(text, {
       packages: knownPackageIndices(),
-      frenzies: FRENZIES.map((f) => f.id),
+      frenzies: ACTIVE_FRENZIES.map((f) => f.id),
       missions: pd.missions.missions.map((j) => j.id),
     });
     if (!r.ok) return r.error;

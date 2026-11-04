@@ -8,6 +8,10 @@
  */
 import type { GameEvent } from '../../core/events';
 import type { WeaponKind } from '../../systems/weapons';
+import type { MapEdits, SpotEdit } from '../../world/mapEdits';
+import { ACTIVE_MAP } from '../../world/shippedMap';
+import { addedSpots } from '../../world/spotEdits';
+import { FRENZY_DEFAULTS, NEEDS_CAR_GOALS, frenzyTitle } from './frenzyLimits';
 
 export type FrenzyGoal = 'knockdown' | 'wreck' | 'drift' | 'nearMiss' | 'carjack' | 'hitAndRun' | 'smash' | 'combo';
 
@@ -39,6 +43,29 @@ export const FRENZIES: readonly FrenzyDef[] = [
   { id: 'fz-smash', title: 'SMASH ×12', goal: 'smash', target: 12, seconds: 50, needsCar: true },
   { id: 'fz-combo', title: 'HIT A ×8 COMBO', goal: 'combo', target: 8, seconds: 45 },
 ];
+
+/** A frenzy the map edits add (an `add: 'frenzy'` spot): its spot's id, the spec's goal, target, time and gift; needsCar and the title follow from the goal. */
+export function customFrenzy(s: Pick<SpotEdit, 'id' | 'frenzy'>): FrenzyDef {
+  const f = s.frenzy ?? { goal: 'knockdown' as const, ...FRENZY_DEFAULTS.knockdown };
+  return {
+    id: s.id,
+    title: frenzyTitle(f.goal, f.target),
+    goal: f.goal,
+    target: f.target,
+    seconds: f.seconds,
+    ...(NEEDS_CAR_GOALS.has(f.goal) ? { needsCar: true } : {}),
+    ...(f.gift ? { gift: f.gift } : {}),
+  };
+}
+
+/** Every frenzy on a map: the shipped eight, then the ones its edits add (by id). Everything that counts frenzies reads this. */
+export function frenzyList(edits: MapEdits = ACTIVE_MAP): readonly FrenzyDef[] {
+  const added = addedSpots(edits, 'frenzy');
+  return added.length === 0 ? FRENZIES : [...FRENZIES, ...added.map(customFrenzy)];
+}
+
+/** The frenzies on the map this page plays. */
+export const ACTIVE_FRENZIES: readonly FrenzyDef[] = frenzyList();
 
 /**
  * How much a bus event counts toward `goal`: 1 per knockdown / wreck /

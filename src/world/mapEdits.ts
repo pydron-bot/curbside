@@ -28,6 +28,8 @@
  * reads as the edits it made.
  */
 import { DISTRICTS, type District } from './districts';
+import { FRENZY_GIFTS, FRENZY_GOALS, clampSeconds, clampTarget, frenzySpecProblems, type FrenzySpec } from '../game/modes/frenzyLimits';
+import type { PickupKind } from './pickups';
 
 export const MAP_EDITS_VERSION = 2;
 
@@ -64,8 +66,11 @@ export interface RoadEdit {
 }
 
 /** Spots the map can add (game/mapAnchors.ts spotRules: what each is and its id). */
-export type AddedSpotKind = 'ramp' | 'kicker' | 'hangout' | 'package';
-export const ADDED_SPOT_KINDS: readonly AddedSpotKind[] = ['ramp', 'kicker', 'hangout', 'package'];
+export type AddedSpotKind = 'ramp' | 'kicker' | 'hangout' | 'package' | 'phone' | 'frenzy' | 'pickup';
+export const ADDED_SPOT_KINDS: readonly AddedSpotKind[] = ['ramp', 'kicker', 'hangout', 'package', 'phone', 'frenzy', 'pickup'];
+
+/** What an added pickup can be (world/pickups.ts PICKUP_KINDS, which a test keeps equal). */
+export const PICKUP_ITEMS: readonly PickupKind[] = ['pistol', 'smg', 'shotgun', 'health', 'armour', 'ammo', 'grenade', 'molotov', 'rocket', 'horn', 'taser', 'stinger', 'smoke'];
 
 export interface SpotEdit {
   /** An anchor id (game/mapAnchors.ts): 'safehouse', 'phone-docks', 'fz-drift', 'vipers-0', 'ramp-3', 'pkg-12'... */
@@ -79,6 +84,36 @@ export interface SpotEdit {
   heading?: number;
   /** Taken out of the city (only spots the game can do without: mapAnchors decides). */
   removed?: boolean;
+  /** A story job's drive route or race step moved: its crossings [ix, iz], in order (as many as it had). */
+  nodes?: ReadonlyArray<readonly [number, number]>;
+  /** A story job's collect step moved: its points [x, z] (world m), in order. */
+  points?: ReadonlyArray<readonly [number, number]>;
+  /** An added frenzy token's frenzy (`add: 'frenzy'`): goal, target, seconds and gift (game/modes/frenzyLimits.ts). */
+  frenzy?: FrenzySpec;
+  /** An added pickup's kind (`add: 'pickup'`). */
+  pickup?: PickupKind;
+}
+
+/** A story job rung from another payphone (round 3): `phone` is a payphone's anchor id, generated or added. */
+export interface JobEdit {
+  /** The job's id (systems/missionsData.ts: 's2-noise', 'm3'...). */
+  id: string;
+  phone: string;
+}
+
+/** The landmarks the map moves (round 3), each to another block of the same shape. */
+export type LandmarkId = 'docks' | 'hospital' | 'spray-ne' | 'spray-nw' | 'spray-se' | 'spray-sw' | 'station';
+/** In file order. The spray bays by the quarter of the city they serve (world/landmarks.ts SPRAY_SLOTS). */
+export const LANDMARK_IDS: readonly LandmarkId[] = ['docks', 'hospital', 'spray-ne', 'spray-nw', 'spray-se', 'spray-sw', 'station'];
+
+/**
+ * A landmark moved to core block `at`: the docks yard and the spray bays to
+ * an open lot's road edge (bayFor), the station and the hospital to a
+ * built-up block's pavement, carrying their props and keep-out zones.
+ */
+export interface LandmarkEdit {
+  id: LandmarkId;
+  at: readonly [number, number];
 }
 
 export interface PropEdit {
@@ -103,10 +138,16 @@ export interface MapEdits {
   roads: readonly RoadEdit[];
   spots: readonly SpotEdit[];
   props: readonly PropEdit[];
+  /** Round 3 (optional, written only when there are some): which payphone a job rings from. */
+  jobs?: readonly JobEdit[];
+  /** Round 3 (optional, likewise): landmarks moved to another block. */
+  landmarks?: readonly LandmarkEdit[];
 }
 
-export type MapSection = 'blocks' | 'roads' | 'spots' | 'props';
-export const MAP_SECTIONS: readonly MapSection[] = ['blocks', 'roads', 'spots', 'props'];
+export type MapSection = 'blocks' | 'roads' | 'spots' | 'props' | 'jobs' | 'landmarks';
+export const MAP_SECTIONS: readonly MapSection[] = ['blocks', 'roads', 'spots', 'props', 'jobs', 'landmarks'];
+/** Sections a file leaves out when empty (so a map from before them writes the same bytes). */
+const OPTIONAL_SECTIONS: ReadonlySet<MapSection> = new Set<MapSection>(['jobs', 'landmarks']);
 
 export const NO_EDITS: MapEdits = Object.freeze({
   version: MAP_EDITS_VERSION,
@@ -251,14 +292,17 @@ export function parseMapEdits(raw: unknown): ParsedMapEdits {
 
   const spots = entries('spots', (e, where) => {
     if (typeof e.id !== 'string' || !/^[a-z0-9][a-z0-9:/._-]*$/i.test(e.id)) return void problems.push(`${where}: "id" must be an anchor id`), null;
-    unknownFields(where, e, ['id', 'add', 'x', 'z', 'heading', 'removed']);
+    unknownFields(where, e, ['id', 'add', 'x', 'z', 'heading', 'removed', 'nodes', 'points', 'frenzy', 'pickup']);
     const edit: { -readonly [K in keyof SpotEdit]: SpotEdit[K] } = { id: e.id };
     if (e.add !== undefined) {
       if (!ADDED_SPOT_KINDS.includes(e.add as AddedSpotKind)) return void problems.push(`${where}: can't add a spot of kind ${JSON.stringify(e.add)}`), null;
       if (!isNum(e.x) || !isNum(e.z) || Math.abs(e.x) > WORLD_REACH || Math.abs(e.z) > WORLD_REACH) return void problems.push(`${where}: an added spot needs "x" and "z" on the map`), null;
       if (e.removed !== undefined) problems.push(`${where}: an added spot can't be removed (drop its entry); "removed" ignored`);
       edit.add = e.add as AddedSpotKind;
-    }
+      const extra = addedSpotExtra(edit.add, e, where, problems);
+      if (extra === null) return null;
+      Object.assign(edit, extra);
+    } else if (e.frenzy !== undefined || e.pickup !== undefined) problems.push(`${where}: "frenzy" and "pickup" only go with an added spot; ignored`);
     if (e.removed === true && !edit.add) edit.removed = true;
     else {
       if (e.x !== undefined || e.z !== undefined) {
@@ -271,8 +315,16 @@ export function parseMapEdits(raw: unknown): ParsedMapEdits {
         if (isNum(e.heading)) edit.heading = hundredth(e.heading);
         else problems.push(`${where}: heading must be a number`);
       }
+      if (e.nodes !== undefined) {
+        if (isNodeList(e.nodes)) edit.nodes = e.nodes.map((n) => [n[0], n[1]] as const);
+        else problems.push(`${where}: "nodes" must be a list of crossings [ix, iz]`);
+      }
+      if (e.points !== undefined) {
+        if (isPointList(e.points)) edit.points = e.points.map((q) => [tenth(q[0]), tenth(q[1])] as const);
+        else problems.push(`${where}: "points" must be a list of [x, z] on the map`);
+      }
     }
-    if (!edit.removed && edit.x === undefined && edit.heading === undefined) return void problems.push(`${where}: changes nothing`), null;
+    if (!edit.removed && edit.x === undefined && edit.heading === undefined && edit.nodes === undefined && edit.points === undefined) return void problems.push(`${where}: changes nothing`), null;
     return { key: edit.id, entry: edit };
   });
 
@@ -289,10 +341,56 @@ export function parseMapEdits(raw: unknown): ParsedMapEdits {
     return { key: propKey(edit), entry: edit };
   });
 
-  return {
-    edits: sortEdits({ version: MAP_EDITS_VERSION, seed, blocks: blocks as BlockEdit[], roads: roads as RoadEdit[], spots: spots as SpotEdit[], props: props as PropEdit[] }),
-    problems,
-  };
+  const jobs = entries('jobs', (e, where) => {
+    if (typeof e.id !== 'string' || !ID.test(e.id)) return void problems.push(`${where}: "id" must be a job's id`), null;
+    if (typeof e.phone !== 'string' || !ID.test(e.phone)) return void problems.push(`${where}: "phone" must be a payphone's id`), null;
+    unknownFields(where, e, ['id', 'phone']);
+    return { key: e.id, entry: { id: e.id, phone: e.phone } };
+  });
+
+  const landmarks = entries('landmarks', (e, where) => {
+    if (!LANDMARK_IDS.includes(e.id as LandmarkId)) return void problems.push(`${where}: no landmark ${JSON.stringify(e.id)} (one of ${LANDMARK_IDS.join(', ')})`), null;
+    const at = e.at;
+    if (!Array.isArray(at) || at.length !== 2 || !isInt(at[0]) || !isInt(at[1]) || Math.abs(at[0]) >= BLOCK_REACH || Math.abs(at[1]) >= BLOCK_REACH) return void problems.push(`${where}: "at" must be a block [bx, bz]`), null;
+    unknownFields(where, e, ['id', 'at']);
+    return { key: e.id as string, entry: { id: e.id as LandmarkId, at: [at[0], at[1]] as const } };
+  });
+
+  const out: { -readonly [K in keyof MapEdits]: MapEdits[K] } = { version: MAP_EDITS_VERSION, seed, blocks: blocks as BlockEdit[], roads: roads as RoadEdit[], spots: spots as SpotEdit[], props: props as PropEdit[] };
+  if (jobs.length) out.jobs = jobs as JobEdit[];
+  if (landmarks.length) out.landmarks = landmarks as LandmarkEdit[];
+  return { edits: sortEdits(out), problems };
+}
+
+const ID = /^[a-z0-9][a-z0-9:/._-]*$/i;
+const isNodeList = (v: unknown): v is Array<[number, number]> => Array.isArray(v) && v.length >= 2 && v.every(isNode);
+const isPointList = (v: unknown): v is Array<[number, number]> =>
+  Array.isArray(v) && v.length >= 1 && v.every((q) => Array.isArray(q) && q.length === 2 && isNum(q[0]) && isNum(q[1]) && Math.abs(q[0]) <= WORLD_REACH && Math.abs(q[1]) <= WORLD_REACH);
+
+/**
+ * An added frenzy's spec (clamped into its goal's limits, reported) or an
+ * added pickup's kind; null drops the entry (no goal, an unknown kind).
+ */
+function addedSpotExtra(add: AddedSpotKind, e: Record<string, unknown>, where: string, problems: string[]): Pick<SpotEdit, 'frenzy' | 'pickup'> | null {
+  if (add === 'pickup') {
+    if (PICKUP_ITEMS.includes(e.pickup as PickupKind)) return { pickup: e.pickup as PickupKind };
+    problems.push(`${where}: an added pickup needs "pickup", one of ${PICKUP_ITEMS.join(', ')}`);
+    return null;
+  }
+  if (add !== 'frenzy') {
+    if (e.frenzy !== undefined || e.pickup !== undefined) problems.push(`${where}: "frenzy" and "pickup" don't go with an added ${add}; ignored`);
+    return {};
+  }
+  const f = e.frenzy;
+  if (typeof f !== 'object' || f === null || Array.isArray(f)) return void problems.push(`${where}: an added frenzy needs "frenzy" { goal, target, seconds }`), null;
+  const o = f as Record<string, unknown>;
+  if (!FRENZY_GOALS.includes(o.goal as FrenzySpec['goal'])) return void problems.push(`${where}: unknown frenzy goal ${JSON.stringify(o.goal)}`), null;
+  for (const k of Object.keys(o)) if (!['goal', 'target', 'seconds', 'gift'].includes(k)) problems.push(`${where}: frenzy: unknown field "${k}" ignored`);
+  const goal = o.goal as FrenzySpec['goal'];
+  for (const p of frenzySpecProblems(o)) problems.push(`${where}: ${p}; ${p.includes('gift') ? 'dropped' : 'clamped'}`);
+  const spec: FrenzySpec = { goal, target: clampTarget(goal, isNum(o.target) ? o.target : 0), seconds: clampSeconds(goal, isNum(o.seconds) ? o.seconds : 0) };
+  if (FRENZY_GIFTS.includes(o.gift as NonNullable<FrenzySpec['gift']>)) spec.gift = o.gift as FrenzySpec['gift'];
+  return { frenzy: spec };
 }
 
 const blockChanges = (e: Omit<BlockEdit, 'at'>) => e.kind !== undefined || e.district !== undefined || e.style !== undefined || e.variant !== undefined || e.height !== undefined;
@@ -300,11 +398,13 @@ const blockChanges = (e: Omit<BlockEdit, 'at'>) => e.kind !== undefined || e.dis
 const byNode = (p: Node, q: Node) => p[1] - q[1] || p[0] - q[0];
 
 /** Each section's order in the file: blocks and roads north to south then west to east, spots by id, props by kind then place. */
-const COMPARE: { [S in MapSection]: (a: MapEdits[S][number], b: MapEdits[S][number]) => number } = {
+const COMPARE: { [S in MapSection]: (a: NonNullable<MapEdits[S]>[number], b: NonNullable<MapEdits[S]>[number]) => number } = {
   blocks: (a, b) => byNode(a.at, b.at),
   roads: (a, b) => byNode(a.a, b.a) || byNode(a.b, b.b),
   spots: (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
   props: (a, b) => (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : a.z - b.z || a.x - b.x),
+  jobs: (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+  landmarks: (a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
 };
 const compare = (section: MapSection) => COMPARE[section] as (a: object, b: object) => number;
 
@@ -315,6 +415,8 @@ function sortEdits(e: MapEdits): MapEdits {
     roads: [...e.roads].sort(COMPARE.roads),
     spots: [...e.spots].sort(COMPARE.spots),
     props: [...e.props].sort(COMPARE.props),
+    ...(e.jobs ? { jobs: [...e.jobs].sort(COMPARE.jobs) } : {}),
+    ...(e.landmarks ? { landmarks: [...e.landmarks].sort(COMPARE.landmarks) } : {}),
   };
 }
 
@@ -332,8 +434,10 @@ function oneLine(v: unknown): string {
 const ORDER: Readonly<Record<MapSection, readonly string[]>> = {
   blocks: ['at', 'kind', 'district', 'style', 'variant', 'height'],
   roads: ['a', 'b', 'closed', 'oneWay'],
-  spots: ['id', 'add', 'x', 'z', 'heading', 'removed'],
+  spots: ['id', 'add', 'x', 'z', 'heading', 'removed', 'nodes', 'points', 'pickup', 'frenzy'],
   props: ['kind', 'x', 'z', 'heading', 'removed'],
+  jobs: ['id', 'phone'],
+  landmarks: ['id', 'at'],
 };
 const ordered = (section: MapSection, e: object): Record<string, unknown> =>
   Object.fromEntries(ORDER[section].map((k) => [k, (e as Record<string, unknown>)[k]]).filter(([, v]) => v !== undefined));
@@ -342,10 +446,12 @@ const ordered = (section: MapSection, e: object): Record<string, unknown> =>
 export function serializeMapEdits(edits: MapEdits): string {
   const e = sortEdits(edits);
   const section = (name: MapSection) => {
-    const list = e[name] as readonly object[];
+    const list = (e[name] ?? []) as readonly object[];
     return list.length === 0 ? '[]' : `[\n${list.map((x) => `    ${oneLine(ordered(name, x))}`).join(',\n')}\n  ]`;
   };
-  const body = MAP_SECTIONS.map((s) => `  "${s}": ${section(s)}`).join(',\n');
+  const body = MAP_SECTIONS.filter((s) => !OPTIONAL_SECTIONS.has(s) || (e[s]?.length ?? 0) > 0)
+    .map((s) => `  "${s}": ${section(s)}`)
+    .join(',\n');
   return `{\n  "version": ${MAP_EDITS_VERSION},\n  "seed": ${edits.seed},\n${body}\n}\n`;
 }
 
@@ -363,7 +469,9 @@ export function entryKey(section: MapSection, e: object): string {
       return roadKey(r.a, r.b);
     }
     case 'spots':
-      return (e as SpotEdit).id;
+    case 'jobs':
+    case 'landmarks':
+      return (e as { id: string }).id;
     default:
       return propKey(e as PropEdit);
   }
@@ -374,9 +482,9 @@ export interface MapEditChange {
   /** entryKey of the entry. */
   key: string;
   /** In the base (the committed file); undefined if it wasn't edited there. */
-  before?: BlockEdit | RoadEdit | SpotEdit | PropEdit;
+  before?: MapEntry;
   /** In the local edits; undefined if it was reverted. */
-  after?: BlockEdit | RoadEdit | SpotEdit | PropEdit;
+  after?: MapEntry;
 }
 
 const sameEntry = (section: MapSection, a: object, b: object) => oneLine(ordered(section, a)) === oneLine(ordered(section, b));
@@ -387,8 +495,8 @@ export function diffMapEdits(base: MapEdits, local: MapEdits): MapEditChange[] {
   const b = sortEdits(base);
   const l = sortEdits(local);
   for (const section of MAP_SECTIONS) {
-    const before = new Map((b[section] as readonly object[]).map((e) => [entryKey(section, e), e]));
-    const after = new Map((l[section] as readonly object[]).map((e) => [entryKey(section, e), e]));
+    const before = new Map(((b[section] ?? []) as readonly object[]).map((e) => [entryKey(section, e), e]));
+    const after = new Map(((l[section] ?? []) as readonly object[]).map((e) => [entryKey(section, e), e]));
     // Every key once, in the file's order (by whichever side holds it).
     const entries = new Map<string, object>([...before, ...after]);
     const keys = [...entries.keys()].sort((x, y) => compare(section)(entries.get(x)!, entries.get(y)!));
@@ -403,11 +511,17 @@ export function diffMapEdits(base: MapEdits, local: MapEdits): MapEditChange[] {
 }
 
 /** Put `entry` in `section` in place of any entry with the same key (none: just remove it), returning new edits. */
-export function withEntry(edits: MapEdits, section: MapSection, key: string, entry?: BlockEdit | RoadEdit | SpotEdit | PropEdit): MapEdits {
-  const list = (edits[section] as readonly object[]).filter((e) => entryKey(section, e) !== key);
+export function withEntry(edits: MapEdits, section: MapSection, key: string, entry?: MapEntry): MapEdits {
+  const list = ((edits[section] ?? []) as readonly object[]).filter((e) => entryKey(section, e) !== key);
   if (entry) list.push(entry);
-  return sortEdits({ ...edits, [section]: list });
+  const next: Record<string, unknown> = { ...edits, [section]: list };
+  // An emptied optional section goes, so the edits equal ones that never had it.
+  if (OPTIONAL_SECTIONS.has(section) && list.length === 0) delete next[section];
+  return sortEdits(next as unknown as MapEdits);
 }
+
+/** An entry of any section. */
+export type MapEntry = BlockEdit | RoadEdit | SpotEdit | PropEdit | JobEdit | LandmarkEdit;
 
 /** Undo one change of a diff: the entry goes back to what the base had. */
 export function revertChange(local: MapEdits, change: MapEditChange): MapEdits {
@@ -443,8 +557,16 @@ export function withSpotEdit(edits: MapEdits, id: string, edit?: Omit<SpotEdit, 
 }
 
 /** Add a new spot (or with `entry` undefined, drop the added spot `id`). */
-export function withAddedSpot(edits: MapEdits, id: string, entry?: { add: AddedSpotKind; x: number; z: number; heading?: number }): MapEdits {
-  const e: SpotEdit | undefined = entry && { id, add: entry.add, x: tenth(entry.x), z: tenth(entry.z), ...(entry.heading !== undefined ? { heading: hundredth(entry.heading) } : {}) };
+export function withAddedSpot(edits: MapEdits, id: string, entry?: { add: AddedSpotKind; x: number; z: number; heading?: number; frenzy?: FrenzySpec; pickup?: PickupKind }): MapEdits {
+  const e: SpotEdit | undefined = entry && {
+    id,
+    add: entry.add,
+    x: tenth(entry.x),
+    z: tenth(entry.z),
+    ...(entry.heading !== undefined ? { heading: hundredth(entry.heading) } : {}),
+    ...(entry.pickup !== undefined ? { pickup: entry.pickup } : {}),
+    ...(entry.frenzy !== undefined ? { frenzy: frenzySpec(entry.frenzy) } : {}),
+  };
   return withEntry(edits, 'spots', id, e);
 }
 
@@ -454,4 +576,48 @@ export function withPropEdit(edits: MapEdits, prop: PropEdit, undo = false): Map
     ? { kind: prop.kind, x: tenth(prop.x), z: tenth(prop.z), removed: true }
     : { kind: prop.kind, x: tenth(prop.x), z: tenth(prop.z), ...(prop.heading !== undefined ? { heading: hundredth(prop.heading) } : {}) };
   return withEntry(edits, 'props', propKey(entry), undo ? undefined : entry);
+}
+
+// --- Round 3: story spots, jobs' phones, landmarks ---
+
+/** A frenzy spec with its keys in the file's order (goal, target, seconds, gift). */
+function frenzySpec(f: FrenzySpec): FrenzySpec {
+  return { goal: f.goal, target: f.target, seconds: f.seconds, ...(f.gift ? { gift: f.gift } : {}) };
+}
+
+/**
+ * A story job's spot edit (round 3): a point moved (x, z, and a turn for a
+ * parked car), or a route's crossings or a collect step's points replaced.
+ * With nothing in `edit`, the spot is back as the job was written.
+ */
+export function withStorySpotEdit(edits: MapEdits, id: string, edit: Pick<SpotEdit, 'x' | 'z' | 'heading' | 'nodes' | 'points'> = {}): MapEdits {
+  const entry: SpotEdit = {
+    id,
+    ...(edit.x !== undefined && edit.z !== undefined ? { x: tenth(edit.x), z: tenth(edit.z) } : {}),
+    ...(edit.heading !== undefined ? { heading: hundredth(edit.heading) } : {}),
+    ...(edit.nodes ? { nodes: edit.nodes.map((n) => [n[0], n[1]] as const) } : {}),
+    ...(edit.points ? { points: edit.points.map((q) => [tenth(q[0]), tenth(q[1])] as const) } : {}),
+  };
+  const changes = entry.x !== undefined || entry.heading !== undefined || entry.nodes !== undefined || entry.points !== undefined;
+  return withEntry(edits, 'spots', id, changes ? entry : undefined);
+}
+
+/** Ring job `id` from payphone `phone` (undefined: the phone it was written for). */
+export function withJobPhone(edits: MapEdits, id: string, phone?: string): MapEdits {
+  return withEntry(edits, 'jobs', id, phone ? { id, phone } : undefined);
+}
+
+/** Move landmark `id` to core block `at` (undefined: where the city puts it). */
+export function withLandmark(edits: MapEdits, id: LandmarkId, at?: readonly [number, number]): MapEdits {
+  return withEntry(edits, 'landmarks', id, at ? { id, at: [at[0], at[1]] } : undefined);
+}
+
+/** The block landmark `id` is moved to, if the edits move it. */
+export function landmarkEdit(edits: MapEdits | undefined, id: LandmarkId): LandmarkEdit | undefined {
+  return edits?.landmarks?.find((l) => l.id === id);
+}
+
+/** The phone the edits ring job `id` from, if they move it. */
+export function jobPhone(edits: MapEdits | undefined, id: string): string | undefined {
+  return edits?.jobs?.find((j) => j.id === id)?.phone;
 }

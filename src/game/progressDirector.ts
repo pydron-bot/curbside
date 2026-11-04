@@ -29,7 +29,7 @@ import { CHAOS_RUN_ID } from './modes/chaosRun';
 import type { Mode, ModeCtx, ProgressDeps } from './modes/context';
 import { ExportMode } from './modes/exportMode';
 import { ORDERS_PER_LIST, exportList } from './modes/exports';
-import { FRENZIES } from './modes/frenzies';
+import { ACTIVE_FRENZIES } from './modes/frenzies';
 import { FrenzyMode } from './modes/frenzyMode';
 import { MissionMode } from './modes/missionMode';
 import { AreaMode } from './modes/areaMode';
@@ -122,7 +122,7 @@ export class ProgressDirector implements ModeCtx {
     // Ids this build doesn't have can't count (missions' ids once the jobs are built, below).
     pruneSave(this.progress.data, {
       packages: knownPackageIndices(),
-      frenzies: FRENZIES.map((f) => f.id),
+      frenzies: ACTIVE_FRENZIES.map((f) => f.id),
       exportOrders: exportList(this.progress.data.exports.lists).map((o) => o.id),
     });
     this.progress.track(d.bus, () => this.live, () => d.playing());
@@ -536,7 +536,7 @@ export class ProgressDirector implements ModeCtx {
     const n = (v: number) => fmt(Math.round(v));
     const done = completion(s, {
       missions: this.missions.jobsIn('main').map((m) => m.id),
-      frenzies: FRENZIES.length,
+      frenzies: ACTIVE_FRENZIES.length,
       packages: PACKAGE_COUNT,
       races: RACES.map((r) => r.id),
       exportOrders: ORDERS_PER_LIST,
@@ -564,7 +564,7 @@ export class ProgressDirector implements ModeCtx {
               const r = this.gangs.respect(g.id);
               return { label: `${g.name[0]}${g.name.slice(1).toLowerCase()} respect`, value: `${r > 0 ? '+' : ''}${r}`, bar: (r + RESPECT_MAX) / (2 * RESPECT_MAX) };
             }),
-            ...sideOnly([{ label: 'Frenzies beaten', value: `${s.frenzies.length}/${FRENZIES.length}`, bar: s.frenzies.length / FRENZIES.length }]),
+            ...sideOnly([{ label: 'Frenzies beaten', value: `${s.frenzies.length}/${ACTIVE_FRENZIES.length}`, bar: s.frenzies.length / ACTIVE_FRENZIES.length }]),
             { label: 'Hidden packages', value: `${s.packages.length}/${PACKAGE_COUNT}`, bar: s.packages.length / PACKAGE_COUNT },
             ...sideOnly([
               { label: 'Races with a medal', value: `${medalRaces}/${RACES.length}`, bar: medalRaces / RACES.length },

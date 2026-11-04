@@ -14,6 +14,7 @@
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, core, lotBytes, type Block, type City } from './city';
 import { DIR_VEC, canLeave, dirHeading, nodeValid, type Dir } from './roads';
 import { len2 } from '../core/len';
+import { builtBlockAt } from './landmarks';
 
 /** A parked car's middle from the road centreline, m (a sedan is 1.9 m across: 1 m clear of the lane, 0.15 m off the kerb). */
 export const PARK_OFFSET = ROAD_WIDTH / 2 - 1.1;
@@ -87,7 +88,9 @@ export function placeHospital(city: City): Hospital {
   const tz = core(HOSPITAL_TARGET[1]);
   let best = city.blocks[0];
   let bestD = Infinity;
-  for (const b of city.blocks) {
+  // Moved by the map edits (round 3): onto that block if it's built up.
+  const moved = builtBlockAt(city, 'hospital');
+  for (const b of moved ? [] : city.blocks) {
     if (b.kind !== 'buildings') continue;
     const d = len2(b.bx - tx, b.bz - tz);
     if (d < bestD) {
@@ -95,6 +98,7 @@ export function placeHospital(city: City): Hospital {
       best = b;
     }
   }
+  if (moved) best = moved;
   const x0 = -HALF_EXTENT + best.bx * BLOCK_SIZE;
   const z0 = -HALF_EXTENT + best.bz * BLOCK_SIZE;
   // Between two street lamps (every 16 m along the side). Eastbound traffic has this kerb on its right.

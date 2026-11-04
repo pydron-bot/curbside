@@ -10,6 +10,7 @@
  */
 import { BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, CORE_OFFSET, blockInterior, core, type City, type Rect } from './city';
 import { len2 } from '../core/len';
+import { landmarkEdit, type LandmarkId } from './mapEdits';
 
 export interface SprayShop {
   id: string;
@@ -46,24 +47,58 @@ const STATION_TARGET = [6, 9] as const;
 /** Pavement path: midway across the sidewalk, from the road centreline. */
 const WALK_INSET = ROAD_WIDTH / 2 + SIDEWALK / 2;
 
+/** The spray bays' slots (the map file's landmark ids), in SHOP_TARGETS order: one per quarter. */
+export const SPRAY_SLOTS: readonly LandmarkId[] = ['spray-nw', 'spray-ne', 'spray-sw', 'spray-se'];
+
 export function placeSprayShops(city: City): SprayShop[] {
-  const shops: SprayShop[] = [];
+  return sprayShopSlots(city).map((s) => s.shop);
+}
+
+/**
+ * The spray bays with the slot each fills. A slot the map edits move
+ * (round 3) takes its block's bay if that's an open lot with room (else
+ * it's placed as generated: the checks say why); the others go near their
+ * targets as ever, round the moved ones and a moved docks yard.
+ */
+export function sprayShopSlots(city: City): Array<{ slot: LandmarkId; shop: SprayShop }> {
+  const fixed = new Map<LandmarkId, SprayShop>();
   const used = new Set<string>();
-  for (const [cx, cz] of SHOP_TARGETS) {
-    const tx = core(cx);
-    const tz = core(cz);
-    const blocks = [...city.blocks]
-      .filter((b) => b.kind !== 'buildings' && !used.has(`${b.bx},${b.bz}`))
-      .sort((a, b) => len2(a.bx - tx, a.bz - tz) - len2(b.bx - tx, b.bz - tz));
-    for (const b of blocks) {
-      const shop = bayFor(b.bx, b.bz, city);
-      if (!shop) continue;
+  if (city.edits?.landmarks?.length) {
+    for (const id of ['docks' as const, ...SPRAY_SLOTS]) {
+      const e = landmarkEdit(city.edits, id);
+      const b = e && city.blocks.find((q) => q.bx === core(e.at[0]) && q.bz === core(e.at[1]));
+      if (!b || b.kind === 'buildings' || used.has(`${b.bx},${b.bz}`)) continue;
+      const bay = bayFor(b.bx, b.bz, city);
+      if (!bay) continue;
       used.add(`${b.bx},${b.bz}`);
-      shops.push(shop);
-      break;
+      if (id !== 'docks') fixed.set(id, bay);
     }
   }
-  return shops;
+  const out: Array<{ slot: LandmarkId; shop: SprayShop }> = [];
+  SHOP_TARGETS.forEach(([cx, cz], i) => {
+    const slot = SPRAY_SLOTS[i];
+    const moved = fixed.get(slot);
+    if (moved) return void out.push({ slot, shop: moved });
+    const shop = nearestBay(city, cx, cz, used);
+    if (shop) out.push({ slot, shop });
+  });
+  return out;
+}
+
+/** The bay on the open lot nearest core block (cx, cz) not in `used` (which gains it). */
+function nearestBay(city: City, cx: number, cz: number, used: Set<string>): SprayShop | null {
+  const tx = core(cx);
+  const tz = core(cz);
+  const blocks = [...city.blocks]
+    .filter((b) => b.kind !== 'buildings' && !used.has(`${b.bx},${b.bz}`))
+    .sort((a, b) => len2(a.bx - tx, a.bz - tz) - len2(b.bx - tx, b.bz - tz));
+  for (const b of blocks) {
+    const shop = bayFor(b.bx, b.bz, city);
+    if (!shop) continue;
+    used.add(`${b.bx},${b.bz}`);
+    return shop;
+  }
+  return null;
 }
 
 /**
@@ -131,7 +166,9 @@ export function placeStation(city: City): Station {
   const tz = core(STATION_TARGET[1]);
   let best = city.blocks[0];
   let bestD = Infinity;
-  for (const b of city.blocks) {
+  // Moved by the map edits (round 3): onto that block if it's built up.
+  const moved = builtBlockAt(city, 'station');
+  for (const b of moved ? [] : city.blocks) {
     if (b.kind !== 'buildings') continue;
     const d = len2(b.bx - tx, b.bz - tz);
     if (d < bestD) {
@@ -139,6 +176,7 @@ export function placeStation(city: City): Station {
       best = b;
     }
   }
+  if (moved) best = moved;
   const x0 = -HALF_EXTENT + best.bx * BLOCK_SIZE;
   const z0 = -HALF_EXTENT + best.bz * BLOCK_SIZE;
   // Between two street lamps (they stand every 16 m along the block side).
@@ -149,3 +187,10 @@ function overlaps(a: Rect, b: Rect): boolean {
   return a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ;
 }
 
+
+/** The built-up block the map edits move landmark `id` (the station, the hospital) to, or null (no edit, or not built up there). */
+export function builtBlockAt(city: City, id: LandmarkId): City['blocks'][number] | null {
+  const e = landmarkEdit(city.edits, id);
+  if (!e) return null;
+  return city.blocks.find((b) => b.bx === core(e.at[0]) && b.bz === core(e.at[1]) && b.kind === 'buildings') ?? null;
+}

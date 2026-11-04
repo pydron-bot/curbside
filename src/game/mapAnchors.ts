@@ -24,8 +24,11 @@ import { buildMissions } from '../systems/missionsData';
 import type { MissionDef } from '../systems/missions';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, core, type City } from '../world/city';
 import { DISTRICT_NAMES, districtAt, type District } from '../world/districts';
-import { placeSprayShops, placeStation } from '../world/landmarks';
-import { NO_EDITS, entryKey, propKey, roadKey, type AddedSpotKind, type MapEdits, type MapSection } from '../world/mapEdits';
+import { placeStation, sprayShopSlots } from '../world/landmarks';
+import { NO_EDITS, entryKey, propKey, roadKey, type AddedSpotKind, type LandmarkId, type MapEdits, type MapSection } from '../world/mapEdits';
+import { placePickups } from '../world/pickups';
+import { storySpots } from '../systems/storyEdits';
+import { checkRound3, collectRound3, storyRule } from './mapSpots';
 import { placeCityRamps } from '../world/ramps';
 import { RoadRules } from '../world/roadRules';
 import { DIRS, DIR_VEC, MAX_NODE, reverse, turnToward, type Dir } from '../world/roads';
@@ -50,7 +53,10 @@ export type AnchorGroup =
   | 'vendor'
   | 'hydrant'
   | 'package'
-  | 'test';
+  | 'test'
+  | 'pickup'
+  | 'shop'
+  | 'roadworks';
 
 type Point = { x: number; z: number };
 export type Node = readonly [number, number];
@@ -75,6 +81,8 @@ export interface Anchor {
   moved?: boolean;
   /** Added by the map edits (not a spot the city generates). */
   added?: boolean;
+  /** A landmark the map moves block to block (the `landmarks` section): its id there. */
+  landmark?: LandmarkId;
 }
 
 /** Where on the map a pick (and so a dependency) is: block and crossing indices as the road grid numbers them. */
@@ -94,6 +102,10 @@ export interface AnchorInputs {
   hydrants?: readonly Point[];
   /** The map edits whose spots to place (default: the city's own). */
   edits?: MapEdits;
+  /** Shop doors (world/shopSpots.ts: the awnings the scenes use), when the overlay should list them. */
+  shops?: ReadonlyArray<Point & { neon: boolean; district: District }>;
+  /** Road works sites (dressCity's street.roadworks). */
+  roadworks?: ReadonlyArray<{ area: { minX: number; minZ: number; maxX: number; maxZ: number } }>;
 }
 
 /** Everything tied to a place in `city`, where the map edits put it (removed spots aren't listed). */
@@ -114,14 +126,23 @@ export function collectAnchors(city: City, inputs: AnchorInputs = {}): Anchor[] 
   for (const p of placeFrenzyTokens(edits)) spot(p.id, 'frenzy', `Frenzy token ${p.id.slice(3)}`, p);
   const docks = placeDocks(city);
   spot('docks', 'docks', 'Docks yard', docks);
-  for (const s of placeSprayShops(city)) spot(s.id, 'spray', "Pay 'n' Spray", s);
+  out[out.length - 1].landmark = 'docks';
+  for (const { slot, shop: s } of sprayShopSlots(city)) {
+    spot(s.id, 'spray', "Pay 'n' Spray", s);
+    out[out.length - 1].landmark = slot;
+  }
   spot('station', 'station', 'Police station', placeStation(city));
+  out[out.length - 1].landmark = 'station';
   const hospital = placeHospital(city);
   spot('hospital', 'hospital', 'Hospital doors', hospital);
   spot('hospital-bay', 'hospital', 'Ambulance bay', { x: hospital.bayX, z: hospital.bayZ });
+  out[out.length - 1].landmark = out[out.length - 2].landmark = 'hospital';
   for (const h of placeHangouts(GANGS, edits)) spot(h.id, 'hangout', `${h.gang.name} hangout`, h);
   for (const r of RACES) out.push({ id: r.id, group: 'race', label: `Race: ${r.name}`, points: [nodePoint(r.nodes[0])], route: r.nodes });
-  for (const m of buildMissions(docks, safehouse)) storyAnchors(m, out);
+  const storyFrom = out.length;
+  for (const m of buildMissions(docks, safehouse, edits)) storyAnchors(m, out);
+  // Story spots the edits move (round 3).
+  if (edits.spots.length) for (let i = storyFrom; i < out.length; i++) if (spotEdit(edits, out[i].id)) out[i].moved = true;
   inputs.ramps?.forEach((r, i) => spot(r.id ?? `ramp-${i}`, 'ramp', r.kind === 'kicker' ? 'Kicker' : 'Stunt ramp', r));
   for (const p of placePackages(edits)) spot(packageId(p.index), 'package', `Hidden package ${p.index}`, p);
   inputs.busStops?.forEach((s, i) => {
@@ -130,6 +151,9 @@ export function collectAnchors(city: City, inputs: AnchorInputs = {}): Anchor[] 
   });
   inputs.vendors?.forEach((v, i) => spot(`vendor-${i}`, 'vendor', v.kind === 'fruit_stand' ? 'Fruit stand' : 'Food cart', v));
   inputs.hydrants?.forEach((h, i) => spot(`hydrant-${i}`, 'hydrant', 'Hydrant', h));
+  // Round 3: pickups (spots the map moves, removes and adds), shop doors and road works.
+  for (const p of placePickups(city.seed, edits)) spot(p.id!, 'pickup', `Pickup: ${p.kind}`, p);
+  collectRound3(inputs, out);
   // The TEST menu's quick teleports: the safehouse, hospital and docks are listed above; the Neon Mile's is the middle of its blocks, snapped out to the pavement.
   const neon = districtCentre(city, 'arts');
   spot('test-neon', 'test', `TEST teleport: ${DISTRICT_NAMES.arts}`, snapOnFoot(neon.x, neon.z, () => true) ?? neon);
@@ -334,9 +358,13 @@ export function spotRules(id: string, seed = 1337): SpotRule | null {
     case 'safehouse':
       return { group, label: 'Safehouse', movable: true, removable: false, turnable: false, why: 'the shop, and jobs drop off at it', generated };
     case 'payphone':
-      return { group, label: `Payphone ${id.slice(6)}`, movable: true, removable: false, turnable: false, why: 'story jobs ring it', generated };
+      return { group, label: `Payphone ${id.slice(6)}`, movable: true, removable: !generated, turnable: false, why: 'story jobs ring it', generated };
     case 'frenzy':
-      return { group, label: `Frenzy token ${id.slice(3)}`, movable: true, removable: false, turnable: false, why: 'its frenzy counts toward 100%', generated };
+      return { group, label: `Frenzy token ${id.slice(3)}`, movable: true, removable: !generated, turnable: false, why: 'its frenzy counts toward 100%', generated };
+    case 'story':
+      return storyRule(id);
+    case 'pickup':
+      return { group, label: `Pickup ${id.slice(7)}`, movable: true, removable: true, turnable: false, generated };
     case 'hangout':
       return { group, label: `${GANGS.find((g) => id.startsWith(`${g.id}-`))?.name ?? 'Gang'} hangout`, movable: true, removable: true, turnable: false, generated };
     case 'package':
@@ -349,12 +377,18 @@ export function spotRules(id: string, seed = 1337): SpotRule | null {
 /** The group an added spot's id belongs to (`ramp-<n>`, `<gang>-<n>`, `pkg-<n>`), or null. */
 function addedGroup(id: string): AnchorGroup | null {
   if (idNumber(id, 'pkg') !== null) return 'package';
+  if (idNumber(id, 'phone') !== null) return 'payphone';
+  if (idNumber(id, 'fz') !== null) return 'frenzy';
+  if (idNumber(id, 'pickup') !== null) return 'pickup';
   if (idNumber(id, 'ramp') !== null) return 'ramp';
   return GANGS.some((g) => idNumber(id, g.id) !== null) ? 'hangout' : null;
 }
 
+/** Ids of added phones, frenzies and pickups: `phone-<n>`, `fz-<n>`, `pickup-<n>` (never a shipped id: those are words). */
+const ADDED_PREFIX: Readonly<Record<'phone' | 'frenzy' | 'pickup', string>> = { phone: 'phone', frenzy: 'fz', pickup: 'pickup' };
+
 /** The group each kind of added spot joins. */
-export const ADDED_GROUP: Readonly<Record<AddedSpotKind, AnchorGroup>> = { ramp: 'ramp', kicker: 'ramp', hangout: 'hangout', package: 'package' };
+export const ADDED_GROUP: Readonly<Record<AddedSpotKind, AnchorGroup>> = { ramp: 'ramp', kicker: 'ramp', hangout: 'hangout', package: 'package', phone: 'payphone', frenzy: 'frenzy', pickup: 'pickup' };
 
 /**
  * An id for a new spot of `kind` (for a hangout, of gang `gang`): the next
@@ -362,7 +396,7 @@ export const ADDED_GROUP: Readonly<Record<AddedSpotKind, AnchorGroup>> = { ramp:
  * number is its index in the save, so it's never reused within a map).
  */
 export function newSpotId(edits: MapEdits, kind: AddedSpotKind, gang = GANGS[0].id): string {
-  const prefix = kind === 'package' ? 'pkg' : kind === 'hangout' ? gang : 'ramp';
+  const prefix = kind === 'package' ? 'pkg' : kind === 'hangout' ? gang : kind === 'ramp' || kind === 'kicker' ? 'ramp' : ADDED_PREFIX[kind];
   let next = 0;
   for (const id of [...spotIds(edits.seed).keys(), ...edits.spots.map((s) => s.id)]) {
     const n = idNumber(id, prefix);
@@ -382,6 +416,9 @@ function spotIds(seed: number): ReadonlyMap<string, AnchorGroup> {
   for (const h of placeHangouts(GANGS, NO_EDITS)) ids.set(h.id, 'hangout');
   for (const r of placeCityRamps(seed, NO_EDITS)) ids.set(r.id!, 'ramp');
   PACKAGE_SPOTS.forEach((_, i) => ids.set(packageId(i), 'package'));
+  // Round 3: every job's spots (ids don't depend on where the docks are) and the pickups.
+  for (const s of storySpots(buildMissions({ x: 0, z: 0 }, { x: 0, z: 0 }, NO_EDITS))) ids.set(s.id, 'story');
+  for (const p of placePickups(seed, NO_EDITS)) ids.set(p.id!, 'pickup');
   idsBySeed.set(seed, (m = ids));
   return m;
 }
@@ -524,7 +561,7 @@ export function checkMapEdits(city: City, edits: MapEdits, anchors: readonly Anc
     const at = { x: e.x, z: e.z };
     const road = roadAt(e.x, e.z);
     if (rule.group === 'ramp' && !road) out.push({ id: e.id, label: rule.label, problem: 'a ramp must stand on a road', edit, at });
-    else if (rule.group !== 'ramp' && road) out.push({ id: e.id, label: rule.label, problem: `stands in the road at ${e.x.toFixed(1)}, ${e.z.toFixed(1)} (it belongs on a pavement)`, edit, at });
+    else if (rule.group !== 'ramp' && rule.group !== 'story' && road) out.push({ id: e.id, label: rule.label, problem: `stands in the road at ${e.x.toFixed(1)}, ${e.z.toFixed(1)} (it belongs on a pavement)`, edit, at });
   }
   for (const g of GANGS) {
     if (g.hangouts.length > 0 && !anchors.some((a) => a.group === 'hangout' && a.id.startsWith(`${g.id}-`))) {
@@ -536,6 +573,9 @@ export function checkMapEdits(city: City, edits: MapEdits, anchors: readonly Anc
   if (packages !== PACKAGE_COUNT) {
     out.push({ id: 'packages', label: 'Hidden packages', problem: `${packages} on the map, not ${PACKAGE_COUNT}: the perks and 100% count ${PACKAGE_COUNT}` });
   }
+
+  // Round 3: jobs' phones, added frenzies and pickups, story spots, landmarks (game/mapSpots.ts).
+  out.push(...checkRound3(city, edits, anchors));
 
   // Props.
   for (const p of inputs.street?.propEditProblems ?? []) {

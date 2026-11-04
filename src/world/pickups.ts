@@ -8,6 +8,9 @@ import { cornerPoint } from '../systems/crowd';
 import { WEAPONS, type WeaponKind } from '../systems/weapons';
 import { BLOCKS_PER_SIDE, CORE_BLOCKS, core, inCoreBlock } from './city';
 import { mulberry32 } from './random';
+import type { MapEdits } from './mapEdits';
+import { ACTIVE_MAP } from './shippedMap';
+import { addedSpots, editSpot } from './spotEdits';
 
 export type PickupKind = WeaponKind | 'health' | 'armour' | 'ammo';
 
@@ -17,6 +20,8 @@ export interface Pickup {
   kind: PickupKind;
   /** Sim time when it comes back, or 0 if it's available. */
   respawnAt: number;
+  /** Its spot id for the map edits (placePickups): `pickup-<n>`, `pickup-ring-<n>` in a bigger city's ring. */
+  id?: string;
 }
 
 export const PICKUP_RADIUS = 1.4;
@@ -40,6 +45,14 @@ const KINDS: Array<[PickupKind, number]> = [
   ['smoke', 0.04],
 ];
 
+/** Every kind a crate can be (the map file's added pickups pick from these: mapEdits PICKUP_ITEMS). */
+export const PICKUP_KINDS: readonly PickupKind[] = KINDS.map(([k]) => k);
+
+/** The default number of crates in the core city. */
+const CORE_COUNT = 56;
+/** The starter crates by the spawn corner, after the core's scatter. */
+const STARTERS = 3;
+
 /** The feed line for picking one up. */
 export function pickupLabel(kind: PickupKind): string {
   if (kind === 'health') return '+ HEALTH';
@@ -49,7 +62,7 @@ export function pickupLabel(kind: PickupKind): string {
 }
 
 /** `count` crates in the core city; a bigger city's ring gets as many again per core-sized area. */
-export function generatePickups(seed: number, count = 56): Pickup[] {
+export function generatePickups(seed: number, count = CORE_COUNT): Pickup[] {
   const out: Pickup[] = [];
   const scatter = (rand: () => number, n: number, block: () => [number, number]) => {
     for (let i = 0; i < n; i++) {
@@ -104,4 +117,24 @@ export function pickupAt(pickups: Pickup[], x: number, z: number): Pickup | null
 /** Bring back crates whose respawn time has passed. */
 export function respawnPickups(pickups: Pickup[], now: number): void {
   for (const p of pickups) if (p.respawnAt > 0 && now >= p.respawnAt) p.respawnAt = 0;
+}
+
+/**
+ * The crates as the map edits leave them (W3-D round 3): generatePickups'
+ * crates with spot ids (the core's scatter `pickup-0..55`, the starters
+ * `pickup-56..58` at any city size, a bigger city's ring `pickup-ring-<n>`),
+ * moved or removed by spot edits, and the edits' added crates after them.
+ * With no edits, the same crates in the same order.
+ */
+export function placePickups(seed: number, edits: MapEdits = ACTIVE_MAP): Pickup[] {
+  const raw = generatePickups(seed);
+  const ring = raw.length - CORE_COUNT - STARTERS;
+  const out: Pickup[] = [];
+  raw.forEach((p, i) => {
+    const id = i < CORE_COUNT ? `pickup-${i}` : i < CORE_COUNT + ring ? `pickup-ring-${i - CORE_COUNT}` : `pickup-${i - ring}`;
+    const e = editSpot({ ...p, id }, edits, true);
+    if (e) out.push(e);
+  });
+  for (const s of addedSpots(edits, 'pickup')) out.push({ id: s.id, x: s.x!, z: s.z!, kind: s.pickup ?? 'health', respawnAt: 0 });
+  return out;
 }

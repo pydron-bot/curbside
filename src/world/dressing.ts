@@ -66,7 +66,7 @@ export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: num
   });
   // Things in the road keep off the spawn corner (its parked cars), the ramps' run-ups and every car a mission parks.
   const reserve = [{ x: 0, z: 0, r: 70 }, ...ramps.map((r) => ({ x: r.x, z: r.z, r: 30 }))];
-  for (const m of buildMissions(docks, safehouse)) {
+  for (const m of buildMissions(docks, safehouse, edits)) {
     for (const step of m.steps) {
       for (const a of [...(step.start ?? []), ...(step.done ?? [])]) if (a.do === 'spawnCar') reserve.push({ x: a.x, z: a.z, r: 6 });
     }

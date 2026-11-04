@@ -19,6 +19,9 @@ import { DIR_VEC, dirHeading, type Dir } from '../world/roads';
 import { NIGHT_PHONE, type MissionDef } from './missions';
 import { LULL_LIMO_PAINT } from './charges';
 import { GETAWAY_TAG, OPENING_JOB } from '../game/opening';
+import type { MapEdits } from '../world/mapEdits';
+import { ACTIVE_MAP } from '../world/shippedMap';
+import { editMissions } from './storyEdits';
 
 type Point = { x: number; z: number };
 
@@ -70,7 +73,13 @@ const DOREEN_MINT = '#bfe8d8';
 /** Wardens' hi-vis (Clamp's in the Night Shift, Lull's in the main story). */
 const HI_VIS = '#d4e23c';
 
-export function buildMissions(docks: Point & { heading?: number; halfWidth?: number; halfLength?: number }, safehouse: Point): MissionDef[] {
+/** The jobs, with the map's edits (`edits`, default the map this page plays: phones the jobs ring from, spots moved; systems/storyEdits.ts). */
+export function buildMissions(docks: Point & { heading?: number; halfWidth?: number; halfLength?: number }, safehouse: Point, edits: MapEdits = ACTIVE_MAP): MissionDef[] {
+  return editMissions(writtenMissions(docks, safehouse), edits);
+}
+
+/** The jobs as written. */
+function writtenMissions(docks: Point & { heading?: number; halfWidth?: number; halfLength?: number }, safehouse: Point): MissionDef[] {
   const saintCar = kerb(-4, 4, 1, 26);
   const vans = [kerb(-3, -3, 1, 18), kerb(-3, -3, 1, 23.5), kerb(-3, -3, 1, 29)];
   const pikeCar = kerb(5, 6, 0, 30);
