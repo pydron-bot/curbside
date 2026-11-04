@@ -630,6 +630,61 @@ districts), desktop first, and the edits **ship in the game**.
   overlay (TEST → MAP → MAP EDITOR; EXPORT, VIEW IN 3D). Waiting on: the
   iPhone check of the cold open's new street, then a release.
 
+### W3-E · Modes, side quests and city events (ideas, 2026-11-04)
+
+Brainstormed at the owner's request; none chosen or scheduled yet. Each
+builds on systems already in the game, and none repeats W3-C, Quiet
+Wardens (V2-15) or anything in *Not in V2* (no daily seeded run, duty
+jobs or photo mode). Suggested first three: **Blackout**, **Getaway**,
+**Lost dog** (the most fun for the least new art).
+
+**Timed modes** (beside the Chaos Run and races):
+
+- **Last Stop**: steal a bus and pick up the riders waiting at shelters
+  against the clock; a hit spills passengers and costs time. Builds on
+  the bus shelters, boarding and `Gathering` queues.
+- **Getaway**: collect a crew of three outside the cash van job, start at
+  3 stars, get everyone to the safehouse. One crew member is late: wait
+  under fire or leave them. Builds on heat, the cash van incident and the
+  safehouse.
+- **Demolition derby**: a car park is closed off and five AI cars ram each
+  other; last car running wins. Builds on the car parks, damage,
+  explosions and breach scars.
+- **Hot ride**: a rival sticks a charge on your car; it goes off below a
+  speed or when the timer runs out, unless you drive through a Pay 'n'
+  Spray. Builds on `systems/charges.ts`, nitro and the spray bays.
+
+**Side quests** (short, with characters):
+
+- **Lost dog**: LOST posters for one of the strays; find it, it follows
+  you on foot, and you walk it home through VIPERS turf. Builds on the
+  stray dogs, the painted billboards and the gangs.
+- **Busker's manager**: move a busker to better pitches as the crowd and
+  the tips grow, while rivals (and the Quiet Wardens) try to shut them
+  down. Builds on the busker's crowd and stamps.
+- **Taxi regulars**: about five recurring fares with running stories (the
+  nervous groom, the "follow that car" man). Builds on `modes/taxi.ts`
+  pay and the scanner.
+- **Tagger**: spray roofs and walls at spots on the radar; tagging VIPERS
+  turf starts flare-ups. Builds on the street art, gang turf and stamps.
+
+**City events** (rare, city-wide, announced on the scanner):
+
+- **Blackout**: a storm knocks out one district's power. Street lights,
+  windows and neon go dark, looters come out, the police are slow.
+  Builds on the glow sources, living windows and the incidents; a new
+  look at night with almost no new art.
+- **City marathon**: a route closes to traffic and runners stream past
+  water stations; drive through it for a big stamp, or join on foot.
+  Builds on the conga's walking crowd, `laneBlock.ts` and the funeral's
+  escort.
+- **Heatwave day**: hydrants open on every block with kids in the spray,
+  ice cream queues triple, tempers flare into more scuffles. Builds on
+  the hydrant incident, the ice cream van and scuffles.
+- **Carnival parade**: floats with music and string lights through the
+  arts quarter. Builds on the convoy logic, the string lights and the
+  boombox music.
+
 ## Schedule
 
 | Days | Milestone | Items | Exit criteria |
