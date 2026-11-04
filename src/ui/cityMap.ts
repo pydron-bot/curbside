@@ -144,8 +144,11 @@ function drawPedestrianStreet(ctx: CanvasRenderingContext2D, r: RoadEdit): void 
   ctx.lineWidth = 1.2;
   ctx.beginPath();
   for (const t of [1.6, len - 1.6]) {
-    ctx.moveTo(...at(t, -half + 1));
-    ctx.lineTo(...at(t, half - 1));
+    // Bollards across the end, with the gap in the middle.
+    for (const [a, b] of [[-half + 1, -1.2], [1.2, half - 1]]) {
+      ctx.moveTo(...at(t, a));
+      ctx.lineTo(...at(t, b));
+    }
   }
   ctx.stroke();
 }

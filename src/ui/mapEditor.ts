@@ -1372,7 +1372,7 @@ export class MapEditor implements Panel {
       [a, 1],
       [b, -1],
     ] as const) {
-      for (let o = -7.2; o <= 7.3; o += 1.8) {
+      for (const o of [-7.2, -5.4, -3.6, -1.35, 1.35, 3.6, 5.4, 7.2]) {
         const x = c.x + ux * sgn * 9.6 - uz * o;
         const z = c.z + uz * sgn * 9.6 + ux * o;
         ctx.fillRect(x - Math.max(0.35, px), z - Math.max(0.35, px), Math.max(0.7, 2 * px), Math.max(0.7, 2 * px));

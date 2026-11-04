@@ -396,9 +396,10 @@ every router audited for closures: turns, spawns, routes, buses, races,
 parking and kerb scenes, road works, bus stops, roadblocks) treats it as
 closed. It's drawn as the district's paving across the whole carriageway
 with a drainage channel down the middle (no lane markings, stop lines or
-crossings); the junctions keep their own markings. Nine bollards across
+crossings); the junctions keep their own markings. Eight bollards across
 each end (9.6 m from the crossing, 1.5 m gaps: people walk through, cars
-stop; none at an end whose crossing has no road left), and down the middle
+stop, but for a 2.4 m gap in the middle a car can just squeeze through;
+none at an end whose crossing has no road left), and down the middle
 planters, benches, bins, bike racks and pairs of café tables
 (`dressPedestrianStreet`, a stream keyed by the street). People walking
 the blocks either side stroll down it, each on their own line 0–7 m out
@@ -511,7 +512,7 @@ pedestrian street (1, 1)–(2, 1), a 2×1 merge ((1, −1)–(1, 0) removed) and
 a 2×2 round crossing (−2, −2)): 41 shader programs with and without the
 edits; three 60 s runs round them, 4,913 car samples within 150 m, none on
 the pedestrian street or a removed road; 179 people-samples on the
-pedestrian street (111 of them in its middle 12 m); 18 bollards; no lamp
+pedestrian street (111 of them in its middle 12 m); 16 bollards; no lamp
 posts in the merge; buildings across the old road; the end crossings'
 poles for the gone arms missing and the rest standing. Draw calls and
 triangles (desktop, observe, top-down, same views; traffic and people
@@ -529,9 +530,6 @@ instances in the prop batches; the road map is a texture on the ground's
 one draw).
 
 **Not done / open:**
-- A pedestrian street has no gap for a car to squeeze through (the nine
-  bollards are 1.5 m apart): the player can't drive down one. Easy to add
-  (drop the middle bollard) if the owner wants it.
 - Merged blocks' lamps: only the first 8 merges put their light out.
 - The scenes' per-block maps (ice cream vans' nice blocks, the pigeons'
   ground, tyre dust on grass) are built at boot, so after VIEW IN 3D

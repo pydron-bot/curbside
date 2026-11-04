@@ -192,7 +192,7 @@ describe('merged blocks', () => {
     expect(d.street.props.filter((p) => Math.abs(p.x - 64) < 11 && p.z > -50 && p.z < -14 && p.kind !== 'tree_round' && p.kind !== 'tree_tall' && p.kind !== 'palm' && p.kind !== 'dumpster')).toEqual([]);
     // Bollards across both ends of the pedestrian street, dressing down it.
     const onPed = d.street.props.filter((p) => Math.abs(p.z - 64) < 8 && p.x > 70 && p.x < 122);
-    expect(onPed.filter((p) => p.kind === 'bollard')).toHaveLength(18);
+    expect(onPed.filter((p) => p.kind === 'bollard')).toHaveLength(16);
     expect(onPed.filter((p) => p.kind !== 'bollard').length).toBeGreaterThan(2);
     // People walk round the merge, not into the old road.
     expect(cornerPoint(8, 7, 0)).toEqual({ x: 9.5, z: -54.5 });

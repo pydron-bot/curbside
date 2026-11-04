@@ -670,8 +670,8 @@ async function streetsCheck(page, label) {
     return r;
   });
   check(
-    live.observe && live.merged === 2 && live.bollards === 18 && live.programs === programs && !live.url.includes('map=local'),
-    `${label}: VIEW IN 3D rebuilds the streets live: 2 blocks merged, 18 bollards, no new programs (${JSON.stringify({ ...live, before: programs })})`,
+    live.observe && live.merged === 2 && live.bollards === 16 && live.programs === programs && !live.url.includes('map=local'),
+    `${label}: VIEW IN 3D rebuilds the streets live: 2 blocks merged, 16 bollards, no new programs (${JSON.stringify({ ...live, before: programs })})`,
   );
   check(live.samples > 0 && live.on === 0, `${label}: no traffic on the pedestrian street or the removed road over 20 s (${live.on} of ${live.samples} car samples)`);
   check(live.calls > 0 && live.calls < DRAW_BUDGET, `${label}: ${live.calls} draw calls over the edited streets (budget ${DRAW_BUDGET})`);

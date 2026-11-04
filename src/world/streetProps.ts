@@ -418,9 +418,14 @@ function closeRoadEnd(ix: number, iz: number, tx: number, tz: number, put: (kind
   for (const o of CLOSURE_BARRELS) put('traffic_barrel', cx - vz * o, cz + vx * o, heading, 1, 0.5);
 }
 
-/** Bollards across each end of a pedestrian street (m into it from its crossing's centre, and across from its centreline): 1.5 m gaps people walk through, too narrow for a car. */
+/**
+ * Bollards across each end of a pedestrian street (m into it from its
+ * crossing's centre, and across from its centreline): 1.5 m gaps people walk
+ * through, too narrow for a car, but for one in the middle (2.4 m) a car can
+ * just squeeze through (traffic never tries: the road rules shut it).
+ */
 const PED_BOLLARDS_ALONG = 9.6;
-const PED_BOLLARDS = [-7.2, -5.4, -3.6, -1.8, 0, 1.8, 3.6, 5.4, 7.2];
+const PED_BOLLARDS = [-7.2, -5.4, -3.6, -1.35, 1.35, 3.6, 5.4, 7.2];
 /** What stands down a pedestrian street's middle (|across| < 2.5 m; people walk either side of it). */
 const PED_DRESSING: ReadonlyArray<readonly [StreetPropKind | 'terrace' | null, number]> = [
   ['planter', 3],
