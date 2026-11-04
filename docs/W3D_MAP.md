@@ -505,3 +505,37 @@ course legs red.
 dressing, signal poles), the radar, and the crowd and traffic read the
 installed rules. What it doesn't redo (as before): the scenes' block maps
 (ice cream, pigeons' ground, tyre dust on grass) until PLAY ON EDITS.
+
+**Checked in the game** (headless on `vite preview`, `?map=local` with a
+pedestrian street (1, 1)–(2, 1), a 2×1 merge ((1, −1)–(1, 0) removed) and
+a 2×2 round crossing (−2, −2)): 41 shader programs with and without the
+edits; three 60 s runs round them, 4,913 car samples within 150 m, none on
+the pedestrian street or a removed road; 179 people-samples on the
+pedestrian street (111 of them in its middle 12 m); 18 bollards; no lamp
+posts in the merge; buildings across the old road; the end crossings'
+poles for the gone arms missing and the rest standing. Draw calls and
+triangles (desktop, observe, top-down, same views; traffic and people
+differ run to run):
+
+| View | Shipped map | With the edits |
+|---|---|---|
+| 400 m up over the centre | 76 calls, 272k tris | 80, 274k |
+| 70 m over the pedestrian street | 54, 128k | 56, 133k |
+| 70 m over the 2×1 merge | 64, 143k | 55, 136k |
+| 110 m over the 2×2 merge | 81, 210k | 75, 169k |
+
+The edits add no draw calls of their own (bollards and dressing are
+instances in the prop batches; the road map is a texture on the ground's
+one draw).
+
+**Not done / open:**
+- A pedestrian street has no gap for a car to squeeze through (the nine
+  bollards are 1.5 m apart): the player can't drive down one. Easy to add
+  (drop the middle bollard) if the owner wants it.
+- Merged blocks' lamps: only the first 8 merges put their light out.
+- The scenes' per-block maps (ice cream vans' nice blocks, the pigeons'
+  ground, tyre dust on grass) are built at boot, so after VIEW IN 3D
+  they're the boot city's until PLAY ON EDITS (as for any block edit).
+- Hand-placed spots on a removed road (a frenzy token, a job's scene, a
+  race start) are flagged, not moved: the owner moves them or picks
+  another road.
