@@ -505,7 +505,10 @@ course legs red.
 `uStreets`, the dark lamps, the city mesh's chunks, the props (bollards,
 dressing, signal poles), the radar, and the crowd and traffic read the
 installed rules. What it doesn't redo (as before): the scenes' block maps
-(ice cream, pigeons' ground, tyre dust on grass) until PLAY ON EDITS.
+(ice cream, pigeons' ground, tyre dust on grass) until PLAY ON EDITS, and
+cars already on a road it removes or paves stay where they are (a parked
+car, one finishing the block); nothing new drives on (the smoke test
+checks, leaving those out).
 
 **Checked in the game** (headless on `vite preview`, `?map=local` with a
 pedestrian street (1, 1)–(2, 1), a 2×1 merge ((1, −1)–(1, 0) removed) and
