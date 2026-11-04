@@ -297,6 +297,9 @@ export function driveAi(
   }
   const panic = ai.mood === 'panic';
   if (ai.phase === 'approach' && offRoute(ai, car)) rerouteAi(ai, car, rand);
+  // The turn was planned a block back; the road rules may have changed since (the map
+  // editor's VIEW IN 3D paving a street over): never on into a road that's now shut.
+  if (!canLeave(ai.ix, ai.iz, ai.next)) ai.next = chooseTurn(ai.ix, ai.iz, ai.dir, rand);
   let target = currentWaypoint(ai);
   // Traffic lights (the light facing us as we approach): how far our nose is from the stop line.
   const light = signals && ai.phase === 'approach' && !panic && !ai.urgent ? signals.at(ai.ix, ai.iz, ai.dir) : null;

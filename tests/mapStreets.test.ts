@@ -21,7 +21,8 @@ import { MAX_NODE, canLeave } from '../src/world/roads';
 import { hasSignals, signalPoles } from '../src/world/signals';
 import { generateStreetLamps } from '../src/world/streetLamps';
 import { segmentValid } from '../src/world/streetSpots';
-import { spawnAi } from '../src/systems/traffic';
+import { driveAi, spawnAi } from '../src/systems/traffic';
+import { VEHICLE_SPECS, createVehicleState, stepVehicle } from '../src/entities/vehicle';
 import { mulberry32 } from '../src/world/random';
 
 afterEach(() => void generateCity(1337));
@@ -60,6 +61,24 @@ describe('the file', () => {
 });
 
 describe('road rules', () => {
+  it('a car that planned its turn onto a street before it was paved over picks again (VIEW IN 3D mid-drive)', () => {
+    generateCity(1337);
+    const rand = mulberry32(3);
+    // Heading south (+z) for the crossing at (64, 64), planning to turn east onto the road about to become a pedestrian street.
+    const s = spawnAi(1, 1, 2, 0.6, rand)!;
+    s.driver.next = 1;
+    const car = createVehicleState(s.x, s.z, s.heading);
+    generateCity(1337, edits([ped([1, 1], [2, 1])]));
+    const east = { min: Infinity };
+    for (let t = 0; t < 12; t += 1 / 60) {
+      stepVehicle(car, driveAi(s.driver, car, [], rand, 1 / 60), VEHICLE_SPECS.sedan, 1 / 60);
+      if (Math.abs(car.z - 64) < 7 && car.x > 74 && car.x < 118) east.min = Math.min(east.min, car.x);
+    }
+    expect(east.min).toBe(Infinity);
+    // Through the crossing and away on a road still open.
+    expect(Math.hypot(car.x - 64, car.z - 64)).toBeGreaterThan(20);
+  });
+
   it('a pedestrian street and a removed road take no traffic; spawns and kerb spots keep off them', () => {
     generateCity(1337, edits([ped([1, 1], [2, 1]), gone([1, -1], [1, 0])]));
     const r = roadRules();

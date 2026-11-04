@@ -15,6 +15,14 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.31.1',
+    date: '2026-11-04',
+    title: 'Mind the bollards',
+    notes: [
+      'Map editor: after VIEW IN 3D, a car that had already planned to turn into a street you\'d just made pedestrian (or removed) now picks another way, instead of driving down it.',
+    ],
+  },
+  {
     version: '0.31.0',
     date: '2026-11-04',
     title: 'Under the bonnet',
