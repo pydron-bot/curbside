@@ -369,3 +369,139 @@ A desktop 2D editor rather than a live 3D rebuild: TEST → MAP → MAP EDITOR
 - Undo keeps up to 200 MapEdits snapshots. (VIEW IN 3D now rebuilds in
   place: see *Round 2* above.)
 
+
+## Round 3: streets (branch `claude/w3d-roads`)
+
+The owner's "can we edit or remove streets?": two new states for a road
+segment (between two neighbouring crossings), next to open, closed and
+one-way, in the road panel's STREET row and the crossing panel's four
+roads.
+
+**Format.** In the `roads` section, exclusive with `closed`/`oneWay`
+(written smaller crossing first, no direction):
+
+```json
+{ "a": [-3, -3], "b": [-3, -2], "pedestrian": true }
+{ "a": [-3, -1], "b": [-3, 0], "removed": true }
+```
+
+Parsing keeps one state per entry (removed, then pedestrian, then closed,
+then one-way wins, with a problem saying so); canonical text, CHANGES
+("Road …: pedestrian street", "Road …: removed (blocks merged)"), REVERT
+and undo as for any road edit. `MAP_EDITS_VERSION` stays 2 (an older build
+reads the entries as "changes nothing" and drops them).
+
+**Pedestrian street.** `RoadRules` shuts both lanes, so `canLeave` (and so
+every router audited for closures: turns, spawns, routes, buses, races,
+parking and kerb scenes, road works, bus stops, roadblocks) treats it as
+closed. It's drawn as the district's paving across the whole carriageway
+with a drainage channel down the middle (no lane markings, stop lines or
+crossings); the junctions keep their own markings. Nine bollards across
+each end (9.6 m from the crossing, 1.5 m gaps: people walk through, cars
+stop; none at an end whose crossing has no road left), and down the middle
+planters, benches, bins, bike racks and pairs of café tables
+(`dressPedestrianStreet`, a stream keyed by the street). People walking
+the blocks either side stroll down it, each on their own line 0–7 m out
+into it (`crowd.ts strollCorner`, from their pace: no extra draw). The end
+crossings lose that arm's signal pole, and their lights altogether when
+fewer than three roads are left (`hasSignals`). The radar paves it with a
+dashed line and bollard bars; a crossing with no road left is paved.
+
+**Removed road.** The road becomes land and the blocks either side one
+block. Decisions:
+
+- *Rectangles only, refused in the editor.* REMOVE (`blockMerge.ts
+  removeRoad`) merges the two sides (each a block or a merge) when their
+  union is a rectangle, removing every road inside it (two stacked 2×1s
+  plus the road between make a 2×2 and take its last inner road too);
+  otherwise it's refused with the reason shown under the button ("That
+  would make an L-shaped block…"). The outer ring road is refused ("there's
+  no block beyond it"). Putting a removed road back (any other mode) cuts
+  its merge along that whole grid line, so both sides stay rectangles
+  (`restoreRoad`). A hand-edited file can still hold a bad set: those
+  removals aren't applied (they play as closed roads, barriers and all) and
+  `checkMapEdits` names each with why. A crossing whose every arm is
+  removed (the middle of a 2×2) is land.
+- *The north-west block decides.* The merge takes its north-west block's
+  kind, district, style, variant and height (its edit, if any); the
+  editor's block panel selects and edits the merge as that block (a click
+  anywhere on it picks it; the panel says "Merged block, 2×1 blocks").
+  Edits on the merge's other blocks don't apply and are flagged.
+- *Local.* Every block of the merge still draws its generated content from
+  the city stream and throws it away; the north-west block fills the whole
+  interior from `blockSeed(…) ^ MERGE_SALT` (a park gets trees for its
+  area). `tests/mapLocality.test.ts` pins a 2×1, a 2×2 and a pedestrian
+  street: every prop, bus stop, cart, road works site, building and plan
+  outside the edited cells as before.
+
+`Block.merge` (on every block of it: the north-west block's indices and
+the size) carries the merge; every member has the merge's kind, district
+and whole `interior`; `mergedAway(b)` is true for all but the north-west
+block, which the placing modules dress. `blockSpan(bx, bz)` and
+`RoadRules.mergeAt/sideStreet/streetAt/crossingStands` answer for code
+without the city. `installMap(edits)` (city.ts) installs districts, road
+rules and the merges' repaints; the editor's `restoreGameMap` uses it.
+
+**Drawing.** The ground shader gets one more data texture, `uRoadMap`
+(per block: its four sides' state, 2 bits each, and its place in a merge),
+and a uniform `uStreets`; with no street edits `uStreets` is 0 and the
+shader takes the old path (one uniform branch: same look, same cost). A
+side that isn't a road moves the block's kerb box out past the cell edge
+(a junction corner stays road unless both its sides are gone), and a
+merged block's lot (park paths, plaza fountain, car-park bays, waste
+ground) spans the whole merge from its centre. Street lamps along a
+removed road go: no posts (`generateStreetLamps`, `lampsNear`) and no
+light (`uDarkLamps`, up to 8 merged interiors in the shared world
+uniforms, skipped by the lattice in `ubStreetLight` and the ground's lamp
+glints; a ninth merge keeps pools of light with no post, and the checks
+say so). No new shader programs: compiled once at boot, updated by
+uniforms and texture data (`refreshGround`).
+
+**BLOCK_SIZE audit** (the 53 files that assume the 64 m grid):
+
+- *Changed:* `city.ts` (merges), `roadRules.ts`, `ground.ts`,
+  `shaderLib.ts` (lamps), `streetLamps.ts`, `signals.ts`, `streetProps.ts`
+  (no kerb furniture along a removed road, a merge dressed once, bollards
+  and dressing on pedestrian streets, dumpsters by merge), `kerbs.ts`
+  (`sideStreet`, `sideRemoved`), `streetStops.ts` (carts), `buildingPlans.ts`
+  (street faces round the merge), `dressing.ts`, `crowd.ts`
+  (`cornerPoint` is the merge's, crossings only straight over a road,
+  strolling), `population.ts` (edge length), `landmarks.ts` (spray bays
+  and the station on a merge's outside), `streetSpots.ts` (hospital),
+  `parkWater.ts` (one fountain or sprinkler set per merge),
+  `fxDriving.ts` (grass across a merged park), `neonReflect.ts` (no damp
+  road on land or paving), `pigeons.ts` (landing spots round a merge),
+  `steamVents.ts`, `stringLights.ts` (none on a removed road),
+  `buskers.ts`, `cityMap.ts` (radar), `mapAnchors.ts` (`blockAt`,
+  `roadAt`, `districtBlockAt` see merges; checks), `mapEditorState.ts`,
+  `mapEditor.ts`.
+- *Fine as they are* (they go through `canLeave`/`segmentValid`/`isClosed`
+  or `cornerPoint`, or work on crossings a course names): `roads.ts`,
+  `traffic.ts`, `routeAhead.ts`, `police.ts` (roadblocks skip `isClosed`),
+  `incidents.ts`, `trafficScenes.ts`, `doubleParking.ts`, `funeral.ts`,
+  `filmShoot.ts`, `cashRun.ts`, `iceCream.ts` (per-block kinds: members
+  carry the merge's), `conga.ts`, `strayDogs.ts`, `muggings`, `pickups`,
+  `places.ts`, `races.ts`, `raceCrasher.ts`, `crasherBlips.ts`,
+  `trafficLook.ts`, `radarRoute.ts`, `stinger.ts`, `opening.ts`, `gangs.ts`,
+  `ramps.ts`, `missionsData.ts`, `missionMode.ts` (courses, routes and
+  spots over a removed or pedestrian road are check problems, not moved),
+  `packages.ts` (fixed spots; checked), `testSpots.ts`, `landmarkProps.ts`,
+  `frontages.ts` (shopfronts come from the plans), `cityMesh.ts` (lamp
+  stand-ins from `generateStreetLamps`), `districts.ts` (merges repaint
+  through `paintDistricts`), `pigeonMesh.ts`.
+
+**Checks** (`checkMapEdits`, so the editor's problems list too): a removal
+that can't apply (ring, L, a road left inside), a course or a job's race
+step down a pedestrian street or a removed road, a spot or job spot (any
+anchor point) or an added prop standing on a removed road, a drive route
+heading for a crossing inside a merge, a block edit on a merge's other
+block, more than 8 merges (lamps). Connectivity treats both as closed, and
+crossings with no road left drop out of the network check. The editor adds
+"stands on a pedestrian street" for a spot parked on one, and draws the
+course legs red.
+
+**VIEW IN 3D** rebuilds them in place: the ground's road map and
+`uStreets`, the dark lamps, the city mesh's chunks, the props (bollards,
+dressing, signal poles), the radar, and the crowd and traffic read the
+installed rules. What it doesn't redo (as before): the scenes' block maps
+(ice cream, pigeons' ground, tyre dust on grass) until PLAY ON EDITS.
