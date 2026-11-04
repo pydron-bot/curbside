@@ -25,7 +25,11 @@ import {
  *   prove there's headroom: raises are cautious (6 s good, at most one per
  *   10 s) and a raise that promptly fails backs off longer each time.
  * - A drop that doesn't make frames at least 10% faster wasn't helping
- *   (CPU-bound or capped): it's undone, and drops pause for a while. An
+ *   (CPU-bound or capped): it's undone, and drops pause for a while. It's
+ *   judged on several seconds each side (a phone in Low Power Mode misses
+ *   30 Hz ticks at random, so one-second windows let noise keep a useless
+ *   drop: an iPhone went from medium@1.5x to low@1x, losing its shadows,
+ *   at the same ~24 fps), and audited again over 10 s once kept. An
  *   effects-only drop (same pixel ratio) is the exception: when the GPU is
  *   busy filling pixels, dropping bloom or shadows may not show, so it's kept
  *   and the next, resolution drop is judged against where the run began.
@@ -77,6 +81,8 @@ export interface ControllerOptions {
   raiseAfterDrop: number;
   /** After a drop, judge whether it helped over this long, s. */
   probeSeconds: number;
+  /** A kept run of drops is checked again over this long at a settled level, s. */
+  auditSeconds: number;
   /** A drop must make frames this much faster to stay (0.1 = 10%). */
   minImprovement: number;
   /** First pause on drops after one didn't help, s (doubles each time). */
@@ -94,7 +100,8 @@ export const DEFAULT_OPTIONS: ControllerOptions = {
   raiseAfter: 6,
   raiseCooldown: 10,
   raiseAfterDrop: 8,
-  probeSeconds: 2,
+  probeSeconds: 3,
+  auditSeconds: 10,
   minImprovement: 0.1,
   dropBackoff: 30,
   raiseBackoff: 30,
@@ -109,6 +116,15 @@ const TARGET_INTERVAL = 1000 / 60;
  */
 export const STALL_MS = 200;
 const MAX_SAMPLES = 512;
+/**
+ * A drop's baseline is the mean of up to this many windows since the last
+ * level change, and needs at least MIN_BASELINE of them: the few slow
+ * windows that set a drop off are a biased sample on their own.
+ */
+const BASELINE_WINDOWS = 10;
+const MIN_BASELINE = 4;
+/** A steady window slower than this isn't a display's refresh (30 Hz at the slowest), ms. */
+const MAX_REFRESH = 35;
 
 export type WindowVerdict = 'good' | 'capped' | 'slow';
 
@@ -139,7 +155,12 @@ export class ResolutionController {
    * Set right after a drop, to check it was worth it: `from` and `baseline`
    * are the level and frame interval where this run of drops began.
    */
-  private probe: { from: number; baseline: number; until: number } | null = null;
+  private probe: { from: number; baseline: number; until: number; sum: number; n: number } | null = null;
+  /** A kept run of drops, checked again once settled: `from` and `baseline` as for the probe. */
+  private audit: { from: number; baseline: number; sum: number; n: number } | null = null;
+  /** Interval of the windows judged since the last level change (newest last, at most BASELINE_WINDOWS). */
+  private readonly recent = new Float64Array(BASELINE_WINDOWS);
+  private recentCount = 0;
   /** An effects-only drop that didn't help yet: the next drop is judged together with it. */
   private carry: { from: number; baseline: number } | null = null;
 
@@ -163,7 +184,8 @@ export class ResolutionController {
   setLadder(ladder: QualityLevel[]): void {
     this.ladder = ladder;
     this.level = 0;
-    this.probe = this.carry = null;
+    this.probe = this.carry = this.audit = null;
+    this.recentCount = 0;
     this.goodRun = this.slowRun = 0;
     this.holdOff();
   }
@@ -175,6 +197,8 @@ export class ResolutionController {
     this.carry = null;
     this.count = 0;
     this.windowTime = 0;
+    this.recentCount = 0;
+    if (this.audit) this.audit.sum = this.audit.n = 0;
   }
 
   /** Feed one frame interval (ms). Returns true when the level changed. */
@@ -193,9 +217,11 @@ export class ResolutionController {
     if (this.count < MAX_SAMPLES) this.samples[this.count++] = intervalMs;
     this.windowTime += seconds;
     if (this.windowTime < this.options.windowSeconds) return false;
+    const from = this.level;
     const changed = this.judgeWindow();
     this.count = 0;
     this.windowTime = 0;
+    if (this.level !== from) this.recentCount = 0;
     return changed;
   }
 
@@ -214,8 +240,11 @@ export class ResolutionController {
     // Spread of the middle half: small when every frame takes the same time.
     const spread = sorted[Math.floor(n * 0.75)] - sorted[Math.floor(n * 0.25)];
     const steady = spread < Math.max(1, interval * 0.06);
-    if (steady && (this.refreshInterval === 0 || interval < this.refreshInterval)) this.refreshInterval = interval;
+    if (steady && interval < MAX_REFRESH && (this.refreshInterval === 0 || interval < this.refreshInterval)) this.refreshInterval = interval;
     this.lastInterval = interval;
+    if (this.recentCount === BASELINE_WINDOWS) this.recent.copyWithin(0, 1);
+    else this.recentCount++;
+    this.recent[this.recentCount - 1] = interval;
 
     // Until a steady window shows the real refresh rate, assume 60 Hz.
     const refresh = this.refreshInterval || TARGET_INTERVAL;
@@ -226,11 +255,16 @@ export class ResolutionController {
     else verdict = 'slow';
     this.lastVerdict = verdict;
 
-    // Judge the last drop once it has had time to show.
+    // Judge the last drop once it has had time to show, on every window since.
+    if (this.probe) {
+      this.probe.sum += interval;
+      this.probe.n++;
+    }
     if (this.probe && this.now >= this.probe.until) {
       const { from, baseline } = this.probe;
+      const after = this.probe.sum / this.probe.n;
       this.probe = null;
-      if (verdict !== 'good' && baseline / interval - 1 < o.minImprovement) {
+      if (after > target && baseline / after - 1 < o.minImprovement) {
         const effectsOnly = this.ladder[this.level].pixelRatio >= this.ladder[from].pixelRatio;
         if (verdict === 'slow' && effectsOnly && this.level < this.ladder.length - 1) {
           // Fewer effects may cost nothing to a GPU that's busy filling
@@ -238,14 +272,22 @@ export class ResolutionController {
           // resolution, be judged against where this run began.
           this.carry = { from, baseline };
         } else {
-          // Didn't help (CPU-bound or capped): put it all back and stop
-          // trying for a while.
-          this.level = from;
-          this.dropsBlockedUntil = this.now + this.dropBackoff;
-          this.dropBackoff = Math.min(this.dropBackoff * 2, 240);
-          this.goodRun = this.slowRun = 0;
-          return true;
+          return this.undo(from);
         }
+      } else if (this.audit) {
+        this.audit.sum = this.audit.n = 0;
+      } else {
+        this.audit = { from, baseline, sum: 0, n: 0 };
+      }
+    } else if (this.audit && !this.probe) {
+      // A kept drop must still pay once things settle; noise can pass a probe.
+      const a = this.audit;
+      a.sum += interval;
+      a.n++;
+      if (a.n * o.windowSeconds >= o.auditSeconds) {
+        const mean = a.sum / a.n;
+        this.audit = null;
+        if (a.baseline / mean - 1 < o.minImprovement) return this.undo(a.from);
       }
     }
     if (verdict !== 'slow') this.carry = null;
@@ -261,17 +303,19 @@ export class ResolutionController {
       this.goodRun = this.slowRun = 0;
     }
 
-    const canDrop = this.level < this.ladder.length - 1 && this.now >= this.dropsBlockedUntil && !this.probe;
+    const canDrop =
+      this.level < this.ladder.length - 1 && this.now >= this.dropsBlockedUntil && !this.probe && (this.carry !== null || this.recentCount >= MIN_BASELINE);
     if (this.slowRun >= o.dropAfter && canDrop) {
-      if (this.now - this.lastRaise < o.dropAfter + 2 * w) {
+      if (this.now - this.lastRaise < Math.max(o.dropAfter, MIN_BASELINE * w) + 2 * w) {
         // The last raise was one step too far: wait longer before the next.
         this.raisesBlockedUntil = this.now + this.raiseBackoff;
         this.raiseBackoff = Math.min(this.raiseBackoff * 2, 160);
       }
-      const run = this.carry ?? { from: this.level, baseline: interval };
+      const run = this.carry ?? { from: this.level, baseline: this.recentMean() };
       this.carry = null;
-      this.probe = { from: run.from, baseline: run.baseline, until: this.now + o.probeSeconds };
+      this.probe = { from: run.from, baseline: run.baseline, until: this.now + o.probeSeconds, sum: 0, n: 0 };
       this.level++;
+      if (this.audit) this.audit.sum = this.audit.n = 0;
       this.lastDrop = this.now;
       this.slowRun = this.goodRun = 0;
       return true;
@@ -283,11 +327,31 @@ export class ResolutionController {
       this.now >= this.raisesBlockedUntil;
     if (this.goodRun >= o.raiseAfter && canRaise) {
       this.level--;
+      this.audit = null;
       this.lastRaise = this.now;
       this.goodRun = 0;
       return true;
     }
     return false;
+  }
+
+  /** Mean of the windows since the last level change: a drop's baseline. */
+  private recentMean(): number {
+    let sum = 0;
+    for (let i = 0; i < this.recentCount; i++) sum += this.recent[i];
+    return this.recentCount ? sum / this.recentCount : this.lastInterval;
+  }
+
+  /** Didn't help (CPU-bound or capped): put it all back and stop trying for a while. */
+  private undo(from: number): boolean {
+    this.level = from;
+    // An earlier kept drop below this one is still on trial.
+    if (this.audit && this.audit.from < from) this.audit.sum = this.audit.n = 0;
+    else this.audit = null;
+    this.dropsBlockedUntil = this.now + this.dropBackoff;
+    this.dropBackoff = Math.min(this.dropBackoff * 2, 240);
+    this.goodRun = this.slowRun = 0;
+    return true;
   }
 }
 

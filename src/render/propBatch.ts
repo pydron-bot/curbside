@@ -560,23 +560,30 @@ const LEAF = /* glsl */ `
   float pLeaf = step(lc0.y * 1.08, lc1.x) * step(0.02, lc1.x);`;
 
 /**
- * Dappled shade: the canopies' shadow (sun or moon) gets holes where the
- * light gets through the leaves, a noise on the ground followed back up the
- * light's ray (so it lines up through every layer of a canopy) that moves
- * with the sway, so pools of light flicker on the grass under a tree.
+ * Dappled shade: sun flecks in the canopies' shadow (sun or moon). The ground
+ * is cut into 0.6 m cells, some holding a round hole that shimmers; each
+ * leaf fragment is followed down the light's ray to the ground, so the holes
+ * line up through every layer of a canopy. Flecks, not a threshold on a
+ * smooth noise (which ate the shadow away in blobs and, past 100%, whole):
+ * the shadow keeps its outline and at least ~2/3 of its area at 200%.
+ * Hoskins' sin-free hash: sin() of world-sized arguments bands on phone GPUs.
  */
-const DAPPLE = /* glsl */ `void main() {
-  if (uSway > 0.5 && vDapLeaf > 0.5) {
-    // Down the light's ray to the ground, so the holes line up through every layer of leaves.
-    vec2 dq = (vDapWorld.xz - uSunDir.xz / max(uSunDir.y, 0.25) * vDapWorld.y) * 1.3;
-    vec2 di = floor(dq);
-    vec2 df = fract(dq);
-    df = df * df * (3.0 - 2.0 * df);
-    float h00 = fract(sin(dot(di, vec2(127.1, 311.7))) * 43758.5453);
-    float h10 = fract(sin(dot(di + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
-    float h01 = fract(sin(dot(di + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
-    float h11 = fract(sin(dot(di + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
-    if (mix(mix(h00, h10, df.x), mix(h01, h11, df.x), df.y) > 1.0 - 0.4 * LK_DAPPLE) discard;
+const DAPPLE = /* glsl */ `vec3 dapHash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+  p3 += dot(p3, p3.yxz + 33.33);
+  return fract((p3.xxy + p3.yzz) * p3.zyx);
+}
+void main() {
+  if (uSway > 0.5 && vDapLeaf > 0.5 && LK_DAPPLE > 0.0) {
+    vec2 dg = (vDapWorld.xz - uSunDir.xz / max(uSunDir.y, 0.25) * vDapWorld.y) / 0.6;
+    vec2 dc = floor(dg);
+    vec3 dh = dapHash(dc);
+    // Share of cells with a fleck and its radius (cell widths) grow with the slider: ~14% of the shadow lit at 100%, ~1/3 at 200%.
+    if (dh.z < min(0.8, 0.55 * LK_DAPPLE)) {
+      float dr = min(0.45, 0.23 + 0.1 * LK_DAPPLE) * (0.7 + 0.3 * fract(dh.z * 7.31)) * (0.88 + 0.12 * sin(uTime * (1.7 + 2.3 * dh.x) + dh.y * 40.0));
+      vec2 dp = dc + 0.5 + (dh.xy - 0.5) * (1.0 - 2.0 * dr);
+      if (dot(dg - dp, dg - dp) < dr * dr) discard;
+    }
   }`;
 
 function patchDepth(
@@ -602,6 +609,7 @@ function patchDepth(
   );
   shader.uniforms.uSunDir = worldUniforms.uSunDir;
   shader.fragmentShader = after(shader.fragmentShader, '#include <common>', `uniform float uSway;
+    uniform float uTime;
     uniform vec3 uSunDir;
     ${shaderLookGlsl()}
     varying vec3 vDapWorld;

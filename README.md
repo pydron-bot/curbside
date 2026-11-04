@@ -163,7 +163,15 @@ frame stats. Each model file logs an `asset` event as it arrives, and
 holds dynamic resolution off for 2 s (its uploads and first draws). The Full overlay shows the counts on two more lines
 (`fx hot/soft big fill · glow n (fill) · fire seen/all burn boom`,
 `ppl · cars · scenes`), the Diagnostics summary an `ON SCREEN` line and the
-recent dips. Nothing is allocated per frame.
+recent dips. Nothing is allocated per frame. The **tail** (`tail p50/p95`
+in the Full overlay, `tailP50` / `tailP95` in samples) is the browser's
+own work after the frame's JS: a message posted at the end of each frame
+lands once style, layout and the compositing commit are done (in Safari
+the commit hands the WebGL frame to the GPU process). Frame interval −
+JS − tail is time spent waiting: a high tail with low JS points at the
+browser or the GPU process, a low one at the GPU itself or a cap. The
+overlay's `30 Hz (Low Power Mode?)` shows when the fastest 5% of frames
+sit at ~33 ms, however many miss a tick.
 
 **Report bug** (`ui/bugReport.ts`): with test tools on
 (`settings.testTools`), the Perf overlay on or `?debug`, a bug button sits
@@ -245,7 +253,13 @@ share sheet mocked.
   `DynamicResolution` steps down e.g. medium@1.5x → low@1.25x → low@1x on
   a phone (never below 1x on high-DPI screens), keeps going past effects-only
   steps that don't help a fill-bound GPU, and treats a steady 30 Hz (Low
-  Power Mode) as a cap, not overload.
+  Power Mode) as a cap, not overload. A drop is judged on the mean of up to
+  10 windows before it (at least 4) against 3 s after it, and a kept run
+  of drops is audited again over 10 s: one that isn't 10% faster is undone
+  and drops back off (30 s, doubling to 240 s). Low Power Mode also misses
+  30 Hz ticks at random, which one-second windows took for load: an iPhone
+  went from medium@1.5x to low@1x, shadows and all, at the same ~24 fps
+  (`tests/resolution.test.ts` replays that pattern).
 - App updates wait for the fresh run after WASTED, the title screen
   going to the background, a return after 10+ minutes away, or "restart
   now" on the pause screen (never a plain app switch mid-run); a lost WebGL context pauses until it's restored (back
@@ -2803,8 +2817,11 @@ the first time it comes into view.
       with `sway`, a per-family uniform, so still one program) bends
       downwind in gusts rolling across the city, quadratic in height,
       stronger in rain; green (leaf) vertices flutter. *Dappled light*: the
-      family's depth pass discards a noise on the ground followed up the
-      light's ray (`DAPPLE`), so sun comes through the canopy shadows.
+      family's depth pass cuts round sun flecks (0.6 m cells, some holding
+      a shimmering hole, sin-free hash) on the ground followed up the
+      light's ray (`DAPPLE`), so the canopy shadow keeps its outline: ~14%
+      of it lit at 100%, about a third at 200% (0.30.1; before, a threshold
+      on a smooth noise ate it away in blobs and, at 200%, almost whole).
     - *Park water* (`world/parkWater.ts`, tested; `render/waterLook.ts`):
       every open plaza's fountain throws a plume and eight rim arcs (soft
       particles, the hose's stretched drops, started along their flight;

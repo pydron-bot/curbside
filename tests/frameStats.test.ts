@@ -84,6 +84,34 @@ describe('frameStats', () => {
     expect(formatFrameStats(s)).toContain('30 Hz');
   });
 
+  it('a 30 Hz cap that misses ticks (whole-ms Safari timestamps) is still flagged', () => {
+    const fs = new FrameStats();
+    for (let i = 0; i < 300; i++) fs.sample(i % 4 === 0 ? 50 : i % 7 === 0 ? 67 : i % 2 ? 33 : 34, 6);
+    expect(fs.summarize(emptySummary()).capped30).toBe(true);
+  });
+
+  it('60 Hz with missed frames, or a steady 50 fps, is not a 30 Hz cap', () => {
+    const fs = new FrameStats();
+    for (let i = 0; i < 600; i++) fs.sample(i % 3 ? 16.7 : 33.3, 4);
+    expect(fs.summarize(emptySummary()).capped30).toBe(false);
+    const fifty = new FrameStats();
+    run(fifty, 20, 600);
+    expect(fifty.summarize(emptySummary()).capped30).toBe(false);
+  });
+
+  it('the tail after the JS lands on the newest frame and gets its own percentiles', () => {
+    const fs = new FrameStats();
+    for (let i = 0; i < 100; i++) {
+      fs.sample(40, 6);
+      fs.sampleTail(i < 90 ? 2 : 20);
+    }
+    fs.sample(40, 6); // its tail hasn't come yet: counts as 0
+    const s = fs.summarize(emptySummary());
+    expect(s.tailP50).toBe(2);
+    expect(s.tailP95).toBe(20);
+    expect(formatFrameStats(s)).toContain('tail 2.0/20.0 ms');
+  });
+
   it('JS time is reported separately from the frame interval', () => {
     const fs = new FrameStats();
     for (let i = 0; i < 100; i++) fs.sample(16.7, i < 95 ? 3 : 12);
@@ -109,6 +137,6 @@ describe('frameStats', () => {
     run(fs, 16, 10);
     const out = emptySummary();
     expect(fs.summarize(out)).toBe(out);
-    expect(formatFrameStats(out)).toMatch(/^\d+ fps · [\d.]+\/[\d.]+\/[\d.]+\/[\d.]+ ms · \d+ hitch\/min · JS p95 [\d.]+ ms$/);
+    expect(formatFrameStats(out)).toMatch(/^\d+ fps · [\d.]+\/[\d.]+\/[\d.]+\/[\d.]+ ms · \d+ hitch\/min · JS p95 [\d.]+ · tail [\d.]+\/[\d.]+ ms$/);
   });
 });

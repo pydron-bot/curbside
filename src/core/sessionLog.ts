@@ -30,6 +30,9 @@ export interface SessionSample {
   p95: number;
   p99: number;
   jsP95: number;
+  /** The browser's work after the frame's JS, p50 / p95, ms (FrameStats tail; absent in older logs). */
+  tailP50?: number;
+  tailP95?: number;
   /** Hitches (>50 ms frames) per minute. */
   hitches: number;
   tier: string;
@@ -134,6 +137,8 @@ export class SessionLog {
       audioState: s.audioState,
       paused: s.paused,
     };
+    if (s.tailP50 !== undefined) entry.tailP50 = r1(s.tailP50);
+    if (s.tailP95 !== undefined) entry.tailP95 = r1(s.tailP95);
     if (s.rubble !== undefined) entry.rubble = s.rubble;
     if (s.physP95 !== undefined) entry.physP95 = r2(s.physP95);
     if (s.n) entry.n = roundCounts(s.n);

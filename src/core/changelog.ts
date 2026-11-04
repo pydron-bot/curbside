@@ -15,6 +15,16 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.30.1',
+    date: '2026-11-04',
+    title: 'Sun through the leaves',
+    notes: [
+      'Tree shadows: dappled light is now round flecks of sun inside the shadow, which keeps its shape. Before, the shadow broke up into blobs and at the slider\'s top end almost vanished.',
+      'Low Power Mode on iPhone: the automatic graphics setting no longer drops to low (losing the shadows) when that doesn\'t make the game any smoother. A drop now has to prove it helps over several seconds, and is checked again after it\'s kept.',
+      'Perf overlay and Diagnostics: a "tail" figure, the browser\'s own time after each frame, so a report shows where slow frames go.',
+    ],
+  },
+  {
     version: '0.30.0',
     date: '2026-11-04',
     title: 'Open files',

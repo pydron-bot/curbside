@@ -20,6 +20,11 @@ function run(c: ResolutionController, seconds: number, interval: (level: number,
 
 const phoneLadder = () => buildLadder('medium', true, 3);
 
+/** Seeded uniform [0, 1). */
+function lcg(seed: number) {
+  return () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32;
+}
+
 describe('quality tiers', () => {
   it("'auto' picks medium on phones and high on desktops", () => {
     expect(tierForPreset('auto', { handheld: true, pixelRatio: 3 })).toBe('medium');
@@ -110,6 +115,43 @@ describe('resolution controller', () => {
     expect(c.lastVerdict).toBe('capped');
   });
 
+  it('Low Power Mode missing 30 Hz ticks at random keeps its quality (drops are tried, found useless, undone)', () => {
+    // An iPhone report: 24 fps at medium@1.5x and the same at low@1x, but noise in
+    // one-second windows kept both drops and the shadows were lost for nothing.
+    for (const miss of [0.1, 0.2, 0.3, 0.4]) {
+      for (let seed = 1; seed <= 6; seed++) {
+        const r = lcg(seed);
+        const c = new ResolutionController(phoneLadder());
+        let t = 0;
+        let below = 0;
+        while (t < 300_000) {
+          // Safari's whole-ms timestamps; a missed tick waits for the next 60 Hz slot or 30 Hz one.
+          const ms = Math.round((r() < miss ? (r() < 0.5 ? 50 : 66.7) : 33.3) + (r() - 0.5) * 3);
+          t += ms;
+          if (c.level > 0) below += ms;
+          c.sample(ms);
+        }
+        expect(below / t, `miss ${miss} seed ${seed}`).toBeLessThan(0.25);
+      }
+    }
+  });
+
+  it('a jittery GPU-bound phone still drops, and the audit keeps a drop that helps', () => {
+    const r = lcg(7);
+    const c = new ResolutionController(phoneLadder());
+    // At the top a third of frames miss; one step down they all make 30 Hz.
+    const ms = (level: number) => Math.round((level === 0 && r() < 0.35 ? 66.7 : 33.3) + (r() - 0.5) * 3);
+    let changes = 0;
+    for (let t = 0; t < 120_000; ) {
+      const m = ms(c.level);
+      t += m;
+      if (c.sample(m)) changes++;
+    }
+    expect(c.level).toBe(1);
+    // The drop, then probing raises that fail and back off (as with a steady GPU-bound load).
+    expect(changes).toBeLessThanOrEqual(7);
+  });
+
   it('stays sharp when capped at 30 Hz from the start', () => {
     const c = new ResolutionController(phoneLadder());
     run(c, 60, () => 33.33);
@@ -176,7 +218,8 @@ describe('resolution controller', () => {
     const c = new ResolutionController(ladder);
     const load = fillBound(ladder, 20); // 20 ms at 1x, 14.5 ms at 0.85x: only the last rung fits
     run(c, 4, () => HZ60);
-    run(c, 8, load);
+    // Four windows to measure, then three 3 s probes.
+    run(c, 12, load);
     expect(c.level).toBe(3);
     // Later probing raises fail and back off; it settles where it fits.
     run(c, 120, load);

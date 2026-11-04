@@ -1240,6 +1240,11 @@ function npcShoot(sx: number, sz: number, dirX: number, dirZ: number) {
 
 // --- Loop ---
 const loop = new FixedStep(1 / 60);
+// The browser's work after each frame's JS (FrameStats tail): Low Power Mode reports showed slow frames with little JS.
+const tailChannel = new MessageChannel();
+const tailPort = tailChannel.port2;
+let tailFrom = 0;
+tailChannel.port1.onmessage = () => frameStats.sampleTail(performance.now() - tailFrom);
 let last = performance.now();
 let paused = false;
 let maintainTimer = 0;
@@ -1424,6 +1429,9 @@ function frame(now: number) {
   if (!spannedHidden) {
     frameStats.sample(elapsed * 1000, jsMs);
     diagnostics.frame(elapsed * 1000, jsMs);
+    // A task posted now runs once the browser has finished this frame (style, layout, the commit).
+    tailFrom = performance.now();
+    tailPort.postMessage(null);
   }
   spannedHidden = false;
   prof.add(P_FRAME, performance.now() - t0);

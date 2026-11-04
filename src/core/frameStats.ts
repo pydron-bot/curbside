@@ -29,14 +29,24 @@ export interface FrameSummary {
   bigHitchesPerMin: number;
   /** JS time per frame (main-loop work, not GPU), ms. */
   jsP95: number;
+  /**
+   * The browser's own work after the frame's JS, ms: style, layout and the
+   * compositing commit (in Safari the commit waits for the GPU process to
+   * take the WebGL frame). Interval − JS − tail is time spent waiting.
+   */
+  tailP50: number;
+  tailP95: number;
   /** Frames in the stats window. */
   frames: number;
-  /** Steady ~33 ms frames: Safari's Low Power Mode caps rAF at 30 Hz. */
+  /**
+   * Frames never faster than ~33 ms: Safari's Low Power Mode caps rAF at
+   * 30 Hz (a 60 Hz renderer too slow everywhere looks the same, hence the "?").
+   */
   capped30: boolean;
 }
 
 export function emptySummary(): FrameSummary {
-  return { fps: 0, p50: 0, p95: 0, p99: 0, max: 0, hitchesPerMin: 0, bigHitchesPerMin: 0, jsP95: 0, frames: 0, capped30: false };
+  return { fps: 0, p50: 0, p95: 0, p99: 0, max: 0, hitchesPerMin: 0, bigHitchesPerMin: 0, jsP95: 0, tailP50: 0, tailP95: 0, frames: 0, capped30: false };
 }
 
 /** Nearest-rank percentile of the first n entries of an ascending array. */
@@ -48,8 +58,10 @@ function rank(sorted: Float32Array, n: number, p: number): number {
 export class FrameStats {
   private readonly intervals = new Float32Array(CAPACITY);
   private readonly js = new Float32Array(CAPACITY);
+  private readonly tail = new Float32Array(CAPACITY);
   private readonly sortedIntervals = new Float32Array(CAPACITY);
   private readonly sortedJs = new Float32Array(CAPACITY);
+  private readonly sortedTail = new Float32Array(CAPACITY);
   private head = 0;
   private count = 0;
   /** Sum of all sampled intervals: the clock the sort throttle runs on. */
@@ -62,9 +74,15 @@ export class FrameStats {
     if (!(intervalMs > 0) || !Number.isFinite(intervalMs)) return;
     this.intervals[this.head] = intervalMs;
     this.js[this.head] = jsMs > 0 ? jsMs : 0;
+    this.tail[this.head] = 0;
     this.head = (this.head + 1) % CAPACITY;
     if (this.count < CAPACITY) this.count++;
     this.clock += intervalMs;
+  }
+
+  /** The browser's work after the newest frame's JS, measured once it's done (a task posted at the frame's end), ms. */
+  sampleTail(ms: number): void {
+    if (this.count > 0 && ms > 0 && Number.isFinite(ms)) this.tail[this.at(0)] = ms;
   }
 
   /** Fills `out` (reused by the caller); percentiles refresh at most every SORT_EVERY ms. */
@@ -83,6 +101,8 @@ export class FrameStats {
     out.hitchesPerMin = c.hitchesPerMin;
     out.bigHitchesPerMin = c.bigHitchesPerMin;
     out.jsP95 = c.jsP95;
+    out.tailP50 = c.tailP50;
+    out.tailP95 = c.tailP95;
     out.frames = c.frames;
     out.capped30 = c.capped30;
     return out;
@@ -110,6 +130,7 @@ export class FrameStats {
   private refresh(c: FrameSummary): void {
     const si = this.sortedIntervals;
     const sj = this.sortedJs;
+    const st = this.sortedTail;
     let sum = 0;
     let n = 0;
     let hitches = 0;
@@ -119,6 +140,7 @@ export class FrameStats {
       const v = this.intervals[k];
       si[n] = v;
       sj[n] = this.js[k];
+      st[n] = this.tail[k];
       sum += v;
       if (v > HITCH_MS) hitches++;
       if (v > BIG_HITCH_MS) big++;
@@ -127,18 +149,24 @@ export class FrameStats {
     // Pad and sort the whole array: sorting a subarray would allocate a view.
     si.fill(Infinity, n);
     sj.fill(Infinity, n);
+    st.fill(Infinity, n);
     si.sort();
     sj.sort();
+    st.sort();
     c.frames = n;
     c.p50 = rank(si, n, 0.5);
     c.p95 = rank(si, n, 0.95);
     c.p99 = rank(si, n, 0.99);
     c.max = n > 0 ? si[n - 1] : 0;
     c.jsP95 = rank(sj, n, 0.95);
+    c.tailP50 = rank(st, n, 0.5);
+    c.tailP95 = rank(st, n, 0.95);
     const perMin = sum > 0 ? 60_000 / sum : 0;
     c.hitchesPerMin = hitches * perMin;
     c.bigHitchesPerMin = big * perMin;
-    c.capped30 = n >= 30 && c.p50 > 30 && c.p50 < 36 && c.p95 < 40;
+    // The fastest frames sit at ~33 ms (Safari rounds to whole ms), however many miss a tick.
+    const fast = rank(si, n, 0.05);
+    c.capped30 = n >= 30 && fast > 28 && fast < 36 && c.p50 < 70;
   }
 }
 
@@ -153,6 +181,6 @@ export function formatFps(fps: number): string {
 export function formatFrameStats(s: FrameSummary): string {
   return (
     `${formatFps(s.fps)} fps · ${fmt(s.p50)}/${fmt(s.p95)}/${fmt(s.p99)}/${fmt(s.max)} ms` +
-    ` · ${Math.round(s.hitchesPerMin)} hitch/min · JS p95 ${fmt(s.jsP95)} ms${s.capped30 ? ' · 30 Hz (Low Power Mode?)' : ''}`
+    ` · ${Math.round(s.hitchesPerMin)} hitch/min · JS p95 ${fmt(s.jsP95)} · tail ${fmt(s.tailP50)}/${fmt(s.tailP95)} ms${s.capped30 ? ' · 30 Hz (Low Power Mode?)' : ''}`
   );
 }
