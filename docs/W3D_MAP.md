@@ -369,3 +369,202 @@ A desktop 2D editor rather than a live 3D rebuild: TEST → MAP → MAP EDITOR
 - Undo keeps up to 200 MapEdits snapshots. (VIEW IN 3D now rebuilds in
   place: see *Round 2* above.)
 
+
+## Round 3: spots (branch `claude/w3d-spots`)
+
+The owner's six asks, all in the file, the game, the checks and the
+editor. With the committed (empty) map the game is byte-identical: every
+`cityCore` fingerprint and existing test is untouched; the new pieces are
+pinned in `tests/mapSpots.test.ts`.
+
+### The file
+
+Still version 2: new optional fields on spot entries and two optional
+sections, `jobs` and `landmarks`, written only when they have entries (so
+an older map, and the committed one, write the same bytes). Canonical as
+before (each section sorted by id, keys in a fixed order), and parsing
+drops what it can't read with a reason.
+
+```json
+{
+  "version": 2,
+  "seed": 1337,
+  "blocks": [],
+  "roads": [],
+  "spots": [
+    { "id": "fz-0", "add": "frenzy", "x": 44, "z": 9.5, "frenzy": { "goal": "wreck", "target": 9, "seconds": 70, "gift": "shotgun" } },
+    { "id": "phone-0", "add": "phone", "x": 34, "z": 9.5 },
+    { "id": "pickup-0", "x": 18, "z": 9.5 },
+    { "id": "pickup-59", "add": "pickup", "x": 52, "z": 9.5, "pickup": "rocket" },
+    { "id": "story:m3-saints/steps.0.start.0", "x": -218, "z": 261.5, "heading": 1.57 },
+    { "id": "story:m4-parcels/steps.0.points", "points": [[100, 41], [130, 41], [160, 41]] },
+    { "id": "story:s6-quietest/steps.0.start.0.route", "nodes": [[-1, -3], [-4, -4], [0, -6], [3, -5], [3, -2], [1, -1]] }
+  ],
+  "props": [],
+  "jobs": [
+    { "id": "s3-quiet", "phone": "phone-0" }
+  ],
+  "landmarks": [
+    { "id": "spray-ne", "at": [12, 2] }
+  ]
+}
+```
+
+### 1. Payphones, and jobs on them
+
+- PLACE → PAYPHONE adds `phone-<n>` (`newSpotId`; the shipped phones are
+  words, so no clash). `placePayphones(edits)` lists the added ones after
+  the city's, so the jobs, the booths (the dressing), the radar and the
+  TEST menu all have them.
+- **`jobs: [{ id, phone }]`** rings a story job from any phone, generated
+  or added. Applied in `buildMissions(docks, safehouse, edits)`
+  (`systems/storyEdits.ts editMissions`; the edits default to the map the
+  page plays), which every reader goes through. Arcs: missionMode rings
+  each arc's next job from that job's own `phone`, so a job's phone is
+  per job, not per arc.
+- **Editor:** a phone's panel lists the jobs it RINGS FOR (each goes to
+  its spot; OWN PHONE puts a moved one back) and MOVE A JOB HERE (every
+  job, with its arc and current phone). A story spot's panel has RINGS
+  FROM, the job's phone. Setting a job back to the phone it was written
+  for clears the entry.
+- **Checks:** an added phone no job rings; a job naming a phone that isn't
+  on the map, a job id nobody has, the cold open given a phone; a phone
+  both arcs ring (the main story by day, the Night Shift after dark: both
+  can ring at once, and one booth would carry two calls), blamed on the
+  job moved there. An added phone can be removed (dropping its entry);
+  the four generated ones still can't (`spotRules`: `removable` is
+  `!generated` for phones and frenzies).
+
+### 2. Custom frenzies
+
+- PLACE → FRENZY TOKEN adds `fz-<n>` with a `frenzy: { goal, target,
+  seconds, gift? }` (it starts as KNOCK DOWN 15 in 60 s). Its panel sets
+  the goal (any `FrenzyGoal`; a new goal takes that goal's defaults), the
+  target and time (number fields, clamped and stepped to the goal's
+  limits) and the gift (none or any weapon but the story's sticky charge).
+  `needsCar` follows from the goal as the shipped eight's do (near miss,
+  drift, hit & run, smash), and the HUD title is worded the same way
+  (`frenzyTitle`: "WRECK 9 CARS", "DRIFT 3,000"; a test checks it
+  reproduces all eight shipped titles).
+- **Limits** (`game/modes/frenzyLimits.ts FRENZY_LIMITS`): knock-downs
+  3–40 in 20–180 s, wrecks 2–20 in 20–180 s, drift 500–10,000 points (in
+  hundreds) in 15–120 s, near misses, hit & runs 3–30 and smashes 3–40 in
+  20–120 s, carjacks 2–12 in 30–240 s, a combo ×3–×10 (frenzyCredit caps
+  it at 10) in 20–120 s; seconds in 5s. `parseMapEdits` clamps and says
+  so, drops an unknown goal; `checkRound3` flags anything off in a file
+  written by hand.
+- **In the game:** `frenzyList(edits)` is the shipped eight then the
+  map's; `ACTIVE_FRENZIES` (this page's map) is what frenzyMode,
+  progressDirector (completion, the PROGRESS row, the save's prune) and
+  the TEST menu's import read; `placeFrenzyTokens` places the tokens. A
+  custom frenzy plays exactly as a shipped one: token, 3-2-1, the count,
+  $1,000 the first time, gold, saved by id. A preview on `?map=local`
+  keeps its custom frenzies' ids in the save; the shipped map prunes
+  them (as packages do).
+
+### 3. Story spots
+
+- Every job spot the inventory walks is a spot edit on the inventory's own
+  id, `story:<job>/<path>` (the path into the job's definition: stable for
+  a given `missionsData.ts`, and the label says what it is: "SAINTS'
+  PAINT: saintcar"). A point takes `x`, `z` (and `heading` for a parked
+  car: R turns it a quarter); a drive route (`.route`, the crossings
+  `via`) and a race step (`.nodes`) take `nodes`, the crossings in order;
+  a collect step (`.points`) takes `points`. Not removable.
+- Applied in `buildMissions` (`storyEdits.ts`, walking the same way as
+  `storyAnchors`; a test keeps the ids equal), so the game, the dressing's
+  reserved kerbs and the inventory read the moved spot. Jobs it doesn't
+  touch are untouched; an edited job is a deep copy that shares no lists,
+  so moving one path never moves another that happened to share an array.
+- **Editor:** points drag; a route, race or collect step shows numbered
+  handles at its crossings or points: a crossing drags and snaps to the
+  nearest crossing, a collect point goes where it's dropped. Back as
+  written clears the edit.
+- **Checks:** the wrong shape (x on a route, a list of the wrong length);
+  a spot written on the road (a parked car, a kerb) moved off it, or a
+  pavement or lot spot moved into it; plus the existing ones, now blamed
+  on the edit: inside a building, off the map, a mayhem area outside the
+  district it was written for, a race leg off its road, a route heading
+  for a crossing off the map or one closures cut off.
+
+### 4. Landmarks
+
+- **`landmarks: [{ id, at }]`** moves the docks yard, the four spray bays
+  (`spray-nw`, `spray-ne`, `spray-sw`, `spray-se`: the quarter each
+  serves, `SPRAY_SLOTS`) or the station and hospital to core block `at`.
+  The placement functions read `city.edits`, so everything that places
+  from them follows: the bays and their booths, the export garage, the
+  station's sign, keep-out zones and furniture clearance (the dressing),
+  heat's shops and station, the hospital's doors and ambulance bay
+  (cityLife), the docks' delivery zone, Vex's spot beside it, the radar
+  and the TEST teleports.
+- **Same shape:** a bay goes on an open lot's road edge (`bayFor`: the side
+  facing the centre if clear, else any clear side); the station and
+  hospital on a built-up block, on the side they're written for. A moved
+  bay's block is taken first, so the generated ones place round it.
+  Something that doesn't fit stays where the city puts it and
+  `checkRound3` says why (not built up, built up, no room for a bay,
+  another landmark took that lot).
+- **Editor:** drag a landmark: every block it fits is ringed green while
+  you drag (`landmarkBlocks`), and the drop snaps to the block under the
+  cursor; back on the block the city gives it clears the entry
+  (`landmarkHome`). AS GENERATED in its panel too. Not removable.
+
+### 5. Pickups
+
+`placePickups(seed, edits)` gives the crates ids (the core's scatter
+`pickup-0..55`, the three starters `pickup-56..58`, a bigger city's ring
+`pickup-ring-<n>`) and applies spot edits: move, remove, and add
+(`pickup-<n>` with `pickup: <kind>`, PLACE → PICKUP: <KIND>; an added
+one's panel changes its kind). The generated crates don't depend on the
+blocks (they scatter by the seed), so they didn't need pinning as
+packages did; with no edits they're exactly `generatePickups`'. main.ts
+plays `placePickups(1337, ACTIVE_MAP)`. The pavement check applies (a
+crate moved into the road is flagged).
+
+### 6. Inventory and overlay
+
+- Shop doors (`world/shopSpots.ts`: the awnings the scenes use, ~1,600)
+  and the 18 road works sites join the inventory (`collectAnchors` inputs
+  `shops`, `roadworks`; `collectRound3`). They're detail groups: drawn
+  (shop doors as dots) and picked only zoomed in, unless they're a
+  dependent or the selection. The editor's preview keeps them in
+  `Preview.extras`, apart from `anchors`.
+- **CAN HOST** (`game/sceneHosts.ts`): a selected block or road lists what
+  the run-time scenes could pick there, worked out with the preview's
+  districts and road rules: shelter from the rain (awnings), the night
+  crowd under the neon, kebab chucking-out time (neon shops in Neon Mile
+  and Cobble Row), a burst hydrant, buskers and the ice cream van's stop
+  (a park or a plaza that isn't a car park), and on a road each kerb
+  traffic can reach (ice cream van, cash run, funeral) and the downtown
+  ones a film shoot can use. Close a road and its kerb scenes go from the
+  list.
+
+### Not done, or done differently
+
+- **Landmarks are a section of their own, not spot edits.** They move
+  block to block (the file holds a block, not a point), and the editor's
+  `spotRule` still says the station isn't a free spot (an existing test
+  pins it).
+- **The four generated phones can't be removed** even with no job on
+  them (the rule is per id; an existing test pins `phone-docks` as fixed).
+  An idle generated phone isn't a problem.
+- **A spray bay's side** follows `bayFor` (the side facing the centre if
+  clear); the file can't pick a side.
+- **Story spots that share a place** (Doreen and her pitch, the mayhem
+  area and the scene in it) are separate entries and move separately.
+- **Consecutive main-story jobs on one phone** (the shipped data never
+  does it; the missions test checks the data) isn't a check: it's the
+  owner's call on an edited map.
+- **VIEW IN 3D** doesn't redo round 3's spots live (liveMap is being
+  reworked); PLAY ON EDITS / `?map=local` applies all of them.
+
+**Checked end to end** (headless, `vite preview`): placing a phone and
+moving QUIET PLEASE to it, a WRECK 9 CARS frenzy with a shotgun, a rocket
+pickup and a moved crate, the Saints' car moved along its kerb, the coach
+route's last crossing dragged, the north-east spray bay dragged to the car
+park at (12, 2); then `?map=local`: the job rings from `phone-0`, nine
+frenzy tokens with WRECK 9 CARS among them, the Saints' car and the coach
+route where they were moved, the spray booth on the new lot and none on
+the old, 60 pickups with the rocket. `tools/smoke.mjs` does the same on
+desktop (`mapSpotsCheck`).

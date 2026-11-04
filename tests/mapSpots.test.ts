@@ -10,6 +10,8 @@ import { FRENZIES, customFrenzy, frenzyList } from '../src/game/modes/frenzies';
 import { FRENZY_LIMITS, frenzySpecProblems, frenzyTitle } from '../src/game/modes/frenzyLimits';
 import { corePavement, placeDocks, placeFrenzyTokens, placePayphones, placeSafehouse } from '../src/game/modes/places';
 import { hostKey } from '../src/game/sceneHosts';
+import { defaultSave, pruneSave } from '../src/game/progressSave';
+import { completionParts } from '../src/game/progressStats';
 import {
   buildPreview,
   describeChange,
@@ -402,5 +404,21 @@ describe('what the run-time scenes can pick (the editor’s "can host")', () => 
     // Shop doors and road works are listed apart (zoomed in only).
     expect(p.extras.filter((a) => a.group === 'shop').length).toBeGreaterThan(100);
     expect(p.extras.filter((a) => a.group === 'roadworks').length).toBeGreaterThan(5);
+  });
+});
+
+describe('frenzies counted from the map', () => {
+  it('a map with a custom frenzy needs it beaten for the frenzies’ share, and the save keeps its id', () => {
+    const map = placeSpot(NO_EDITS, 'frenzy', pave(0.3).x, pave(0.3).z).edits;
+    const list = frenzyList(map);
+    const save = defaultSave();
+    save.frenzies = FRENZIES.map((f) => f.id);
+    const totals = { missions: [], frenzies: list.length, packages: 40, races: [], exportOrders: 5 };
+    expect(completionParts(save, totals).frenzies).toBeCloseTo(8 / 9);
+    save.frenzies.push('fz-0', 'fz-77');
+    pruneSave(save, { frenzies: list.map((f) => f.id) });
+    expect(save.frenzies).toContain('fz-0');
+    expect(save.frenzies).not.toContain('fz-77');
+    expect(completionParts(save, totals).frenzies).toBe(1);
   });
 });

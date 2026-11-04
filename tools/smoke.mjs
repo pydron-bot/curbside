@@ -602,6 +602,76 @@ async function mapEditorCheck(page, label) {
   );
 }
 
+/**
+ * The map editor's round 3 (desktop): a payphone placed with PLACE and a
+ * job moved onto it from its panel, a custom frenzy set from its panel, a
+ * spray bay moved to another lot and a rocket pickup added; no problems.
+ * Then the page boots on `?map=local`: the job rings from the new phone,
+ * the frenzy's token is in the game, the bay and its booth stand on the new
+ * lot, the rocket is a pickup. The shipped map comes back after.
+ */
+async function mapSpotsCheck(page, label) {
+  const at = await page.evaluate(() => {
+    const u = window.__ub;
+    localStorage.removeItem('curbside.map.local');
+    if (u.observe?.active) u.observe.exit();
+    u.startGame();
+    u.fastForward(0.5);
+    u.mapEditor.open();
+    const ed = u.mapEditor.editor;
+    const safe = ed.preview.anchors.find((a) => a.id === 'safehouse').points[0];
+    Object.assign(ed.view, { cx: safe.x + 12, cz: safe.z, scale: 5 });
+    ed.select(null);
+    // Screen points along the safehouse's pavement.
+    const r = document.querySelector('#mapeditor canvas').getBoundingClientRect();
+    const sx = (x) => r.left + ed.view.width / 2 + (x - ed.view.cx) * ed.view.scale;
+    return { y: r.top + ed.view.height / 2, phone: sx(safe.x + 8), frenzy: sx(safe.x + 18), rocket: sx(safe.x - 8) };
+  });
+  const place = async (value, x) => {
+    await page.selectOption('#mapeditor .me-place select', value);
+    await page.mouse.click(x, at.y);
+    await page.keyboard.press('Escape');
+  };
+  await place('spot:phone', at.phone);
+  await page.selectOption('#mapeditor [data-input="r3jobHere"]', 's3-quiet', { timeout: 30000 });
+  await place('spot:frenzy', at.frenzy);
+  await page.selectOption('#mapeditor [data-input="r3goal"]', 'wreck', { timeout: 30000 });
+  await place('spot:pickup:rocket', at.rocket);
+  const ed = await page.evaluate(() => {
+    const e = window.__ub.mapEditor.editor;
+    // The spray bay by its landmark edit (the editor's drag writes the same).
+    e.commit({ ...e.edits, landmarks: [{ id: 'spray-ne', at: [12, 2] }] }, true);
+    return { spots: e.edits.spots, jobs: e.edits.jobs, problems: e.problems.map((p) => `${p.label}: ${p.problem}`), saved: !!localStorage.getItem('curbside.map.local') };
+  });
+  const ids = ed.spots.map((s) => `${s.id}${s.frenzy ? `:${s.frenzy.goal}` : ''}${s.pickup ? `:${s.pickup}` : ''}`).join(', ');
+  check(
+    ids === 'fz-0:wreck, phone-0, pickup-59:rocket' && ed.jobs?.[0]?.phone === 'phone-0' && ed.problems.length === 0 && ed.saved,
+    `${label}: round 3 edits from the editor: a phone ringing QUIET PLEASE, a WRECK frenzy, a rocket, a spray bay moved, no problems (${ids}; ${ed.problems.join('; ')})`,
+  );
+  await page.goto(`${URL}${URL.includes('?') ? '&' : '?'}map=local`);
+  await page.waitForFunction(() => window.__ub, null, { timeout: 90000 });
+  const game = await page.evaluate(() => {
+    const u = window.__ub;
+    const m = u.progress.missions;
+    const tok = u.progress.frenzies.tokens.find((t) => t.def.id === 'fz-0');
+    const bay = u.heat.shops.find((s) => s.id === 'spray-12-2');
+    return {
+      quiet: m.missions.find((j) => j.id === 's3-quiet').phone,
+      phone: !!m.phoneById.get('phone-0'),
+      frenzy: tok?.def.title ?? null,
+      bay: !!bay && u.dressing.landmarks.props.some((p) => p.kind === 'spray_booth' && Math.hypot(p.x - bay.x, p.z - bay.z) < 9),
+      rocket: u.radar.sources.pickups.some((p) => p.id === 'pickup-59' && p.kind === 'rocket'),
+    };
+  });
+  check(
+    game.quiet === 'phone-0' && game.phone && game.frenzy === 'WRECK 6 CARS' && game.bay && game.rocket,
+    `${label}: ?map=local plays them: the job rings from the new phone, the frenzy's token, the bay on its new lot, the rocket (${JSON.stringify(game)})`,
+  );
+  await page.evaluate(() => localStorage.removeItem('curbside.map.local'));
+  await page.goto(URL);
+  await page.waitForFunction(() => window.__ub, null, { timeout: 90000 });
+}
+
 /** What the best-moment card must stay clear of on WASTED: its title, numbers and timer, the pause button, the corners' HUD and the thumbs. */
 const MOMENT_CLEAR_OF = ['.wasted-title', '.wasted-stats', '.wasted-timer', '.hud-pause', '#radar', '#score', '#wanted', '.tbtn', '.stick-base', '.aim-base', '.pedal-pad'];
 
@@ -779,6 +849,7 @@ try {
       await observeCheck(page, label);
       if (label.startsWith('desktop')) await mapEditorCheck(page, label);
       await momentCheck(page, label);
+      if (label.startsWith('desktop')) await mapSpotsCheck(page, label);
     } catch (e) {
       check(false, `${label}: ${e.message.split('\n')[0]}`);
     }
