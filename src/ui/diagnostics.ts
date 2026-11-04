@@ -8,7 +8,9 @@ import { getQuality } from '../render/quality';
 import type { FrontDoor } from './frontDoor';
 import type { Haptics } from './haptics';
 import { ICONS } from './icons';
+import { breakdownLines } from '../core/gpuBreakdown';
 import { DestructionProbe, destructionSummary, type DestructionProbeDeps } from './destructionProbe';
+import { GpuProbe, type GpuProbeDeps } from './gpuProbe';
 import { InputProbes } from './inputProbes';
 import { MenuNav, overlay, type Panel } from './menu';
 import { safeInsets } from './safeArea';
@@ -35,6 +37,8 @@ export interface DiagnosticsDeps {
   counts?: (out: SceneCounts) => SceneCounts;
   /** The REPORT BUG tab (ui/bugReport.ts). */
   reportBug?: () => void;
+  /** GPU BREAKDOWN: the paused scene drawn with one part left out at a time. */
+  gpu?: GpuProbeDeps;
 }
 
 /** Rapier's files as loaded (Resource Timing): did Pages gzip the wasm, did it come from cache? */
@@ -84,6 +88,7 @@ export class Diagnostics implements Panel {
   private readonly firstBtn: HTMLButtonElement;
   private readonly probes: InputProbes | null = null;
   private readonly destruction: DestructionProbe | null = null;
+  private readonly gpu: GpuProbe | null = null;
   private readonly tuning: TuningProbe;
   private readonly frameOut = emptySummary();
   private readonly countsOut = emptyCounts();
@@ -140,6 +145,10 @@ export class Diagnostics implements Panel {
       this.destruction = new DestructionProbe(deps.destruction, this.nav);
       this.summaryEl.before(this.destruction.el);
     }
+    if (deps.gpu) {
+      this.gpu = new GpuProbe(deps.gpu, this.nav);
+      this.summaryEl.before(this.gpu.el);
+    }
     if (deps.haptics) {
       this.probes = new InputProbes(deps.haptics, this.nav);
       this.summaryEl.before(this.probes.el);
@@ -186,6 +195,7 @@ export class Diagnostics implements Panel {
     this.root.hidden = true;
     this.probes?.stop();
     this.destruction?.stop();
+    this.gpu?.stop();
     this.onClose();
   }
 
@@ -193,6 +203,7 @@ export class Diagnostics implements Panel {
     this.root.hidden = true;
     this.probes?.stop();
     this.destruction?.stop();
+    this.gpu?.stop();
   }
 
   /**
@@ -264,6 +275,7 @@ export class Diagnostics implements Panel {
       counts: n ? { ...n } : null,
       tune: changedTune(),
       destruction: this.deps.destruction?.stats() ?? null,
+      gpuBreakdown: this.gpu?.last ?? null,
       rapierFiles: rapierFiles(),
       session: this.log.data(),
       previous: this.previous,
@@ -287,6 +299,7 @@ export class Diagnostics implements Panel {
       `FRAMES ${f.fps.toFixed(1)} fps · p50 ${f.p50.toFixed(1)} p95 ${f.p95.toFixed(1)} p99 ${f.p99.toFixed(1)} ms · js p95 ${f.jsP95.toFixed(1)} · tail ${f.tailP50.toFixed(1)}/${f.tailP95.toFixed(1)} · ${f.hitchesPerMin.toFixed(1)} hitch/min`,
       `SESSION ${this.log.seconds(performance.now()).toFixed(0)} s · ${d.samples.length} samples (every ${SAMPLE_EVERY_MS / 1000} s) · ${this.log.eventCount} events · ${this.log.dipCount} dips`,
       tuneSummary(),
+      ...(this.gpu?.last ? breakdownLines(this.gpu.last) : []),
       `PREVIOUS ${this.previous ? `${this.previous.samples.length} samples from ${this.previous.started}` : 'none'}`,
     ].join('\n');
   }

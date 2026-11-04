@@ -173,6 +173,23 @@ browser or the GPU process, a low one at the GPU itself or a cap. The
 overlay's `30 Hz (Low Power Mode?)` shows when the fastest 5% of frames
 sit at ~33 ms, however many miss a tick.
 
+**GPU breakdown** (Diagnostics → GPU BREAKDOWN → RUN; `core/gpuBreakdown.ts`,
+`ui/gpuProbe.ts`, `render/gpuLayers.ts`): Safari has no GPU timer, so with
+the game paused the frozen scene is drawn again and again and each frame is
+waited for (a 1-pixel `readPixels`): everything, then each part left out in
+turn (sun shadow pass, buildings, ground, props and trees, people and
+birds, cars, glows, fire/smoke/rain, contact shadows, rubble, everything
+else; then half the pixels, then nothing at all), then everything again to
+show drift as the phone warms. 6 warm-up and 20 measured frames a step,
+about 15 s. Each part's cost is the full frame's median minus the median
+with it left out. Parts are found by their objects' names (`layerOf`) and
+hidden with an empty layer mask (the batches rewrite `visible` every
+frame); lights are never touched, so nothing recompiles; half the pixels
+goes through `DynamicResolution.probeScale`. The result goes into the
+report (`gpuBreakdown`, and its lines in the summary). Pause on the busy
+moment you want measured; closing the sheet stops a run and puts
+everything back.
+
 **Report bug** (`ui/bugReport.ts`): with test tools on
 (`settings.testTools`), the Perf overlay on or `?debug`, a bug button sits
 in the pause card's top corner (the Diagnostics sheet has a REPORT BUG tab

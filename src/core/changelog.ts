@@ -15,6 +15,14 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.31.0',
+    date: '2026-11-04',
+    title: 'Under the bonnet',
+    notes: [
+      'Diagnostics: GPU BREAKDOWN. Pause on a busy moment and press RUN: for about 15 seconds the paused scene is redrawn with one part left out at a time (shadows, buildings, glows, people, smoke…), and the report shows what each one costs the phone\'s graphics chip.',
+    ],
+  },
+  {
     version: '0.30.1',
     date: '2026-11-04',
     title: 'Sun through the leaves',

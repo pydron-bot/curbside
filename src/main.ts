@@ -42,6 +42,7 @@ import { Effects } from './render/effects';
 import { FxDirector } from './render/fxDirector';
 import { CameraRig } from './render/cameraRig';
 import { DynamicResolution } from './render/dynamicResolution';
+import { GpuLayers } from './render/gpuLayers';
 import { emptySummary, FrameStats, formatFps, formatFrameStats } from './core/frameStats';
 import { Look, type PlayerView } from './render/look';
 import { addHeatLook } from './render/heatLook';
@@ -1750,6 +1751,10 @@ function logEvent(kind: string, detail?: string) {
 }
 
 // Session perf log and the Diagnostics sheet (pause card, Perf overlay on).
+// GPU BREAKDOWN (Diagnostics): parts of the paused scene left out one at a time (render/gpuLayers.ts).
+const gpuLayers = new GpuLayers(scene, renderer, (k) => resolution.probeScale(k), { particles: [effects.lowRes.offscreen] });
+const gl = renderer.getContext();
+const gpuPixel = new Uint8Array(4);
 const diagnostics = new Diagnostics(document.body, {
   frame: (out) => frameStats.summarize(out),
   ratio: () => resolution.pixelRatio,
@@ -1767,6 +1772,20 @@ const diagnostics = new Diagnostics(document.body, {
   },
   counts: (out) => census.fill(out),
   reportBug: () => openBugReport(),
+  gpu: {
+    blocker: () => (contextLost ? 'The graphics context is lost' : paused ? null : 'Pause the game first'),
+    setLayer: (key) => gpuLayers.set(key),
+    frame: (out) => {
+      const t0 = performance.now();
+      look.render(rig.camera);
+      const t1 = performance.now();
+      // Reading a pixel back waits for the GPU to finish the frame (Safari has no GPU timer).
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, gpuPixel);
+      out.cpu = t1 - t0;
+      out.total = performance.now() - t0;
+    },
+    info: () => ({ tier: getQuality().name, ratio: resolution.pixelRatio, dc: renderer.info.render.calls }),
+  },
 });
 // Each model file as it arrives (start-up dips in the log line up with these), and
 // its geometry uploads and first draws aren't slow frames to dynamic resolution.

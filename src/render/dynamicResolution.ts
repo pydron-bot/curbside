@@ -422,6 +422,15 @@ export class DynamicResolution {
     return `${c.current.pixelRatio.toFixed(2)}x ${c.current.tier}${capped}`;
   }
 
+  /**
+   * The GPU breakdown only (render/gpuLayers.ts), while paused: draw at k ×
+   * the chosen pixel ratio; 1 puts it back.
+   */
+  probeScale(k: number): void {
+    const drawn = this.controller.current.pixelRatio * RENDER_SCALE * k;
+    if (this.renderer.getPixelRatio() !== drawn) this.renderer.setPixelRatio(drawn);
+  }
+
   private ladder(): QualityLevel[] {
     return buildLadder(preferredTier(), settings.quality === 'auto', getDevice().pixelRatio);
   }
