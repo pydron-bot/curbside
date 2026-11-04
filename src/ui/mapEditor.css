@@ -447,3 +447,8 @@ h3 .me-mini {
 .me-toast[hidden] {
   display: none;
 }
+
+/* Round 3: why REMOVE can't apply to a road. */
+.me-note.me-warn {
+  color: #ff9a8a;
+}

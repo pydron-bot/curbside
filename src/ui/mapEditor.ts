@@ -83,6 +83,8 @@ import {
 import { LOCAL_MAP_KEY, loadLocalMap, previewingLocalMap } from '../world/shippedMap';
 import type { StreetPropKind } from '../world/streetProps';
 import type { AddedSpotKind } from '../world/mapEdits';
+import { removeRefusal } from '../game/mapEditorState';
+import { roadKey, type RoadEdit } from '../world/mapEdits';
 import { DISTRICT_HUE } from './cityMap';
 import { ICONS } from './icons';
 import { MenuNav, type Panel } from './menu';
@@ -742,7 +744,7 @@ export class MapEditor implements Panel {
     if (e.button === 0 && !this.placing && this.preview && this.selection) {
       const w = toWorld(this.view, sx, sy);
       const sel = this.selection;
-      const stack = picksAt(w, this.preview.anchors.filter((a) => anchorShown(a, this.view.scale)), this.preview.props, this.view.scale);
+      const stack = picksAt(w, this.preview.anchors.filter((a) => anchorShown(a, this.view.scale)), this.preview.props, this.view.scale, this.preview.rules);
       if (stack.some((x) => sameSelection(x, sel)) && this.draggable(sel)) {
         this.drag = { mode: 'move', id: e.pointerId, x: sx, y: sy, moved: false, at: w };
         return;
@@ -819,7 +821,7 @@ export class MapEditor implements Panel {
       return;
     }
     // Removed spots can be picked too (to put them back). A click again where the last one landed steps through what's stacked there.
-    const stack = picksAt(w, [...p.anchors.filter((a) => anchorShown(a, this.view.scale)), ...p.removed], p.props, this.view.scale);
+    const stack = picksAt(w, [...p.anchors.filter((a) => anchorShown(a, this.view.scale)), ...p.removed], p.props, this.view.scale, p.rules);
     const last = this.lastClick;
     const again = last !== null && Math.hypot(w.x - last.x, w.z - last.z) * this.view.scale <= CLICK_SLOP * 2;
     this.lastClick = w;
@@ -881,11 +883,11 @@ export class MapEditor implements Panel {
     // What relies on the selection: a place's dependents, or a spot's own course and what it stands on.
     let deps: Anchor[] = [];
     let depsTitle = 'WHAT RELIES ON IT';
-    if (pick) deps = dependentsOf(p.anchors, pick);
+    if (pick) deps = dependentsOf(p.anchors, pick, p.rules);
     else if (sel?.kind === 'anchor') {
       const a = this.allAnchors().find((x) => x.id === sel.id);
-      const place = a && anchorPlace(a);
-      deps = place ? dependentsOf(p.anchors, place).filter((x) => x.id !== sel.id) : [];
+      const place = a && anchorPlace(a, p.rules);
+      deps = place ? dependentsOf(p.anchors, place, p.rules).filter((x) => x.id !== sel.id) : [];
       depsTitle = 'SHARES ITS PLACE WITH';
     }
     this.depsEl.hidden = !sel || sel.kind === 'prop';
@@ -944,6 +946,7 @@ export class MapEditor implements Panel {
       const [cx, cz] = [s.bx - CORE_OFFSET, s.bz - CORE_OFFSET];
       return `<h3>BLOCK ${cx},${cz} <span class="me-sub">${DISTRICT_NAMES[block.district]}</span></h3>
         ${edit ? `<p class="me-note edited">Edited: ${esc(describeBlock(edit))}</p>` : ''}
+        ${block.merge ? `<p class="me-note">Merged block, ${block.merge.w}×${block.merge.h} blocks (roads removed): everything here applies to all of it.</p>` : ''}
         <div class="me-row">${BLOCK_EDIT_KINDS.map((k) => btn('kind', KIND_LABEL[k], { arg: k, on: kind === k })).join('')}</div>
         <h4>DISTRICT</h4>
         <div class="me-row">${DISTRICTS.map((dname) => `<button type="button" class="me-btn me-dist${block.district === dname ? ' on' : ''}" data-act="district" data-arg="${dname}" style="--hue:${DISTRICT_HUE[dname]}">${DISTRICT_NAMES[dname]}</button>`).join('')}</div>
@@ -962,7 +965,7 @@ export class MapEditor implements Panel {
       const fwd = st.mode === 'oneWay' && st.from![0] === s.a[0] && st.from![1] === s.a[1];
       return `<h3>ROAD ${s.a.join(',')} – ${s.b.join(',')} <span class="me-sub">${along}</span></h3>
         <div class="me-row">${btn('road', 'OPEN', { arg: 'open', on: st.mode === 'open' })}${btn('road', 'CLOSED', { arg: 'closed', on: st.mode === 'closed', sub: 'barriers both ends' })}</div>
-        <div class="me-row">${btn('road', `ONE-WAY ${ab.toUpperCase()}`, { arg: 'oneWay', on: st.mode === 'oneWay' && fwd })}${btn('road', `ONE-WAY ${ba.toUpperCase()}`, { arg: 'oneWayBack', on: st.mode === 'oneWay' && !fwd })}${st.mode === 'oneWay' ? btn('flip', 'FLIP') : ''}</div>`;
+        <div class="me-row">${btn('road', `ONE-WAY ${ab.toUpperCase()}`, { arg: 'oneWay', on: st.mode === 'oneWay' && fwd })}${btn('road', `ONE-WAY ${ba.toUpperCase()}`, { arg: 'oneWayBack', on: st.mode === 'oneWay' && !fwd })}${st.mode === 'oneWay' ? btn('flip', 'FLIP') : ''}</div>${this.streetRowHtml(e, s.a, s.b, btn)}`;
     }
     if (s.kind === 'junction') {
       const rows = [
@@ -974,7 +977,7 @@ export class MapEditor implements Panel {
       return `<h3>CROSSING ${s.ix},${s.iz}</h3><div class="me-row">${rows
         .map(([n, label]) => {
           const st = roadState(e, [s.ix, s.iz], n);
-          const what = st.mode === 'open' ? 'open' : st.mode === 'closed' ? 'closed' : `one-way ${compass(st.from!, st.to!)}`;
+          const what = st.mode === 'open' ? 'open' : st.mode === 'closed' ? 'closed' : st.mode === 'pedestrian' ? 'pedestrian' : st.mode === 'removed' ? 'removed' : `one-way ${compass(st.from!, st.to!)}`;
           return btn('pickRoad', label, { arg: `${s.ix},${s.iz}|${n[0]},${n[1]}`, sub: what, on: st.mode !== 'open' });
         })
         .join('')}</div>`;
@@ -1109,9 +1112,13 @@ export class MapEditor implements Panel {
     }
     ctx.setLineDash([]);
 
-    // Road edits: closed in red with barriers; one-way with arrows.
+    // Road edits: closed in red with barriers; one-way with arrows; pedestrian streets and removed roads (round 3).
     for (const r of h.current.roads) {
       const [a, b] = [nodePoint(r.a), nodePoint(r.b)];
+      if (r.pedestrian || r.removed) {
+        this.drawStreetEdit(r, p);
+        continue;
+      }
       if (r.closed) {
         this.segment(a, b, 'rgb(255 59 79 / 0.85)', Math.max(5, 9 * s) * px, 9);
         const dx = Math.sign(b.x - a.x);
@@ -1180,7 +1187,7 @@ export class MapEditor implements Panel {
     // The overlay: what relies on the selection (routes as lines through their crossings).
     const pick = selectionPick(sel);
     const all = this.allAnchors();
-    let deps: Anchor[] = pick ? dependentsOf(p.anchors, pick) : [];
+    let deps: Anchor[] = pick ? dependentsOf(p.anchors, pick, p.rules) : [];
     const selAnchor = sel?.kind === 'anchor' ? all.find((a) => a.id === sel.id) : undefined;
     if (selAnchor) deps = [selAnchor];
     for (const a of deps) {
@@ -1308,6 +1315,68 @@ export class MapEditor implements Panel {
       ctx.beginPath();
       ctx.arc(sx, sy, Math.max(4, 2.2 * s), 0, Math.PI * 2);
       ctx.fill();
+    }
+  }
+
+  /**
+   * The road panel's round-3 row: PEDESTRIAN (paved, no traffic) and REMOVE
+   * (land: the blocks either side merge), with why REMOVE can't apply here.
+   */
+  private streetRowHtml(e: MapEdits, a: readonly [number, number], b: readonly [number, number], btn: (act: string, label: string, opts?: { arg?: string; on?: boolean; sub?: string; disabled?: boolean }) => string): string {
+    const st = roadState(e, a, b);
+    const refusal = st.mode === 'removed' ? null : removeRefusal(e, a, b);
+    const notes: string[] = [];
+    if (st.mode === 'removed') notes.push('Land now: the blocks either side are one block (select it to edit it). Any other mode puts the road back, cutting the merged block along this line.');
+    if (st.mode === 'pedestrian') notes.push('Paved over: no traffic, bollards across both ends, people walk down it.');
+    if (refusal) notes.push(refusal);
+    return `<h4>STREET</h4><div class="me-row">${btn('road', 'PEDESTRIAN', { arg: 'pedestrian', on: st.mode === 'pedestrian', sub: 'paved, no traffic' })}${btn('road', 'REMOVE', { arg: 'removed', on: st.mode === 'removed', sub: 'merge the blocks', disabled: refusal !== null })}</div>${notes.map((n) => `<p class="me-note${refusal === n ? ' me-warn' : ''}">${esc(n)}</p>`).join('')}`;
+  }
+
+  /** A pedestrian street (paving, a dashed line, bollards at the ends) or a removed road (a faint dashed line where it ran: the merged block covers it). */
+  private drawStreetEdit(r: RoadEdit, p: Preview): void {
+    const ctx = this.ctx;
+    const px = 1 / this.view.scale;
+    const [a, b] = [nodePoint(r.a), nodePoint(r.b)];
+    const ux = Math.sign(b.x - a.x);
+    const uz = Math.sign(b.z - a.z);
+    if (r.removed) {
+      ctx.strokeStyle = p.rules?.refused.some((x) => x.road === r || roadKey(x.road.a, x.road.b) === roadKey(r.a, r.b)) ? 'rgb(255 59 79 / 0.8)' : 'rgb(255 210 63 / 0.55)';
+      ctx.lineWidth = Math.max(1, 1.5 * px);
+      ctx.setLineDash([5 * px, 5 * px]);
+      ctx.beginPath();
+      ctx.moveTo(a.x + ux * 12, a.z + uz * 12);
+      ctx.lineTo(b.x - ux * 12, b.z - uz * 12);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      return;
+    }
+    // The carriageway, paved like the pavements, between the crossings' boxes.
+    const half = 8;
+    const x0 = Math.min(a.x, b.x) + (ux !== 0 ? half : -half);
+    const z0 = Math.min(a.z, b.z) + (uz !== 0 ? half : -half);
+    const w = ux !== 0 ? BLOCK_SIZE - 2 * half : 2 * half;
+    const d = uz !== 0 ? BLOCK_SIZE - 2 * half : 2 * half;
+    ctx.fillStyle = 'hsl(260 10% 34%)';
+    ctx.fillRect(x0, z0, w, d);
+    ctx.strokeStyle = 'rgb(255 210 63 / 0.7)';
+    ctx.lineWidth = Math.max(1, 1.5 * px);
+    ctx.setLineDash([3 * px, 3 * px]);
+    ctx.beginPath();
+    ctx.moveTo(a.x + ux * 12, a.z + uz * 12);
+    ctx.lineTo(b.x - ux * 12, b.z - uz * 12);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Bollards across both ends.
+    ctx.fillStyle = '#ffd23f';
+    for (const [c, sgn] of [
+      [a, 1],
+      [b, -1],
+    ] as const) {
+      for (let o = -7.2; o <= 7.3; o += 1.8) {
+        const x = c.x + ux * sgn * 9.6 - uz * o;
+        const z = c.z + uz * sgn * 9.6 + ux * o;
+        ctx.fillRect(x - Math.max(0.35, px), z - Math.max(0.35, px), Math.max(0.7, 2 * px), Math.max(0.7, 2 * px));
+      }
     }
   }
 
