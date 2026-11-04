@@ -64,34 +64,21 @@ export function respectOf(save: SaveData, gang: string): number {
 }
 
 export class GangMode implements Mode {
-  readonly hangouts: Hangout[];
+  hangouts: Hangout[];
   private readonly members: Member[] = [];
   /** Seconds toward the next point of a fading grudge, per gang. */
   private readonly carry = new Map<string, number>();
   /** Each hangout's boombox, and this step's crew there: on the street, in trouble. */
-  private readonly boomboxes: Boombox[];
-  private readonly present: Uint8Array;
-  private readonly trouble: Uint8Array;
+  private boomboxes: Boombox[];
+  private present: Uint8Array;
+  private trouble: Uint8Array;
 
   constructor(private readonly ctx: ModeCtx) {
     this.hangouts = placeHangouts();
     this.boomboxes = this.hangouts.map(() => createBoombox());
     this.present = new Uint8Array(this.hangouts.length);
     this.trouble = new Uint8Array(this.hangouts.length);
-    this.hangouts.forEach((h, slot) => {
-      h.members.forEach((m, i) => {
-        this.members.push({
-          hangout: h,
-          slot,
-          homeX: m.x,
-          homeZ: m.z,
-          // One in each crew carries a gun.
-          armed: i === 0,
-          body: h.gang.bodies[i % h.gang.bodies.length],
-          ped: null,
-        });
-      });
-    });
+    this.enlist();
     const bus = ctx.deps.bus;
     bus.on('pedDown', (e) => {
       if (!e.byPlayer || e.isPlayer || !this.ctx.freeRoam) return;
@@ -254,5 +241,34 @@ export class GangMode implements Mode {
   reset(): void {
     this.clear();
     this.carry.clear();
+  }
+
+  /** The hangouts and their crews again, on the active map (after reset(), which sent the crews home). */
+  remap(): void {
+    this.clear();
+    this.hangouts = placeHangouts();
+    this.boomboxes = this.hangouts.map(() => createBoombox());
+    this.present = new Uint8Array(this.hangouts.length);
+    this.trouble = new Uint8Array(this.hangouts.length);
+    this.members.length = 0;
+    this.enlist();
+  }
+
+  /** Each hangout's crew, standing at home. */
+  private enlist(): void {
+    this.hangouts.forEach((h, slot) => {
+      h.members.forEach((m, i) => {
+        this.members.push({
+          hangout: h,
+          slot,
+          homeX: m.x,
+          homeZ: m.z,
+          // One in each crew carries a gun.
+          armed: i === 0,
+          body: h.gang.bodies[i % h.gang.bodies.length],
+          ped: null,
+        });
+      });
+    });
   }
 }

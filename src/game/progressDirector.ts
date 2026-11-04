@@ -383,6 +383,22 @@ export class ProgressDirector implements ModeCtx {
     this.resetAll();
   }
 
+  /**
+   * The map editor rebuilt the city live on new edits (game/liveMap.ts,
+   * after setActiveMap): drop whatever's running, as quitting does, and
+   * place every mode's spots again on the active map, so play goes on
+   * there with no reload.
+   */
+  remap(): void {
+    this.resetAll();
+    this.unblip('safehouse');
+    this.homeBlip = false;
+    this.exports.remap();
+    this.missions.remapJobs(this.exports.docks);
+    this.opening.remap();
+    for (const m of this.modes) if (m !== this.exports && m !== this.opening) m.remap?.();
+  }
+
   // --- Internals ---
 
   private resetAll(): void {

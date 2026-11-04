@@ -14,7 +14,7 @@ import { core, type City } from '../../world/city';
 import { bayFor, placeSprayShops, type SprayShop } from '../../world/landmarks';
 import { len2 } from '../../core/len';
 import { landmarkEdit, type MapEdits } from '../../world/mapEdits';
-import { ACTIVE_MAP } from '../../world/shippedMap';
+import { ACTIVE_MAP, onActiveMap } from '../../world/shippedMap';
 import { addedSpots, editSpot } from '../../world/spotEdits';
 
 export interface Spot {
@@ -44,8 +44,9 @@ export function placeSafehouse(edits: MapEdits = ACTIVE_MAP): Spot {
   return editSpot({ id: 'safehouse', ...corePavement(8, 8, 0, 16.5 / 45) }, edits, false)!;
 }
 
-/** The safehouse door in the map this page plays. */
-export const SAFEHOUSE: Spot = placeSafehouse();
+/** The safehouse door in the map this page plays (a live binding: it follows setActiveMap). */
+export let SAFEHOUSE: Spot = placeSafehouse();
+onActiveMap((edits) => (SAFEHOUSE = placeSafehouse(edits)));
 
 /** Payphones (one per quarter of the city), as [core block x, core block z, edge, t]. */
 const PHONE_SPOTS: ReadonlyArray<readonly [string, number, number, number, number]> = [

@@ -21,18 +21,30 @@ const PINK = [1.0, 0.28, 0.6] as const;
 const CYAN = [0.3, 0.85, 1.0] as const;
 const WARM = [1.0, 0.72, 0.45] as const;
 
+/** Each vent's steam tint by its district (linear rgb, 3 per vent). */
+function ventTints(vents: readonly SteamVent[]): Float32Array {
+  const tints = new Float32Array(vents.length * 3);
+  vents.forEach((v, i) => {
+    const t = v.district === 'arts' ? (i % 2 ? PINK : CYAN) : v.district === 'downtown' ? CYAN : WARM;
+    tints.set(t, i * 3);
+  });
+  return tints;
+}
+
 export class SteamLook {
-  private readonly tints: Float32Array;
+  private tints: Float32Array;
 
   constructor(
     private readonly fx: Effects,
-    private readonly vents: readonly SteamVent[],
+    private vents: readonly SteamVent[],
   ) {
-    this.tints = new Float32Array(vents.length * 3);
-    vents.forEach((v, i) => {
-      const t = v.district === 'arts' ? (i % 2 ? PINK : CYAN) : v.district === 'downtown' ? CYAN : WARM;
-      this.tints.set(t, i * 3);
-    });
+    this.tints = ventTints(vents);
+  }
+
+  /** The vents again (the map editor's live rebuild: a removed road loses its vents, a repaint changes their tint). */
+  replan(vents: readonly SteamVent[]): void {
+    this.vents = vents;
+    this.tints = ventTints(vents);
   }
 
   update(dt: number, view: Rect): void {

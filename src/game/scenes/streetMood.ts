@@ -63,15 +63,15 @@ interface LoiterGroup {
 }
 
 export class StreetMood implements Scene {
-  readonly spots: readonly ShopSpot[];
-  readonly grid: SpotGrid;
+  spots: readonly ShopSpot[];
+  grid: SpotGrid;
   readonly shelterers: Shelterer[] = [];
   readonly groups: LoiterGroup[] = [];
   /** Walkers with an umbrella up now, and its colour (0..UMBRELLA_COLOURS-1), by index (refreshed twice a second). */
   readonly umbrellas: CrowdPed[] = [];
   readonly umbrellaColour: number[] = [];
   /** People under each awning (shelter) or a group there (loiter). */
-  private readonly taken: Uint8Array;
+  private taken: Uint8Array;
   /** Each walker's own pace (while the rain hurries them) and umbrella (-1: none), by agent. */
   private readonly pace = new WeakMap<PedAgent, number>();
   private readonly brolly = new WeakMap<PedAgent, number>();
@@ -108,6 +108,12 @@ export class StreetMood implements Scene {
     this.weather(mood.rain);
     this.shelter(mood.rain);
     this.loiter(mood.nightlife);
+  }
+
+  remap(): void {
+    this.spots = shopSpots(this.life.d.city);
+    this.grid = new SpotGrid(this.spots);
+    this.taken = new Uint8Array(this.spots.length);
   }
 
   reset(): void {

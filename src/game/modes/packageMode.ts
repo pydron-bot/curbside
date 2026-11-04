@@ -18,7 +18,7 @@ const FIRST_AID_DELAY = 6;
 const FIRST_AID_RATE = 5;
 
 export class PackageMode implements Mode {
-  readonly packages: HiddenPackage[];
+  packages: HiddenPackage[];
   private readonly found: Set<number>;
   private blipsOn = false;
   private sinceHurt = 0;
@@ -108,6 +108,12 @@ export class PackageMode implements Mode {
 
   reset(): void {
     this.sinceHurt = 0;
+  }
+
+  remap(): void {
+    for (const pk of this.packages) this.ctx.unblip(blipId(pk));
+    this.blipsOn = false;
+    this.packages = placePackages();
   }
 
   /** Scanner: every package not yet found on the radar (free roam only). */

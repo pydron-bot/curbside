@@ -81,12 +81,8 @@ export class IceCream implements Scene {
   ) {
     life.clock.define('iceCream', { every: [90, 180], cap: 1, first: 45, range: SHOW_RANGE, hold: IN_PLAY });
     this.driver = { drive: (v, obstacles) => this.drive(v, obstacles) };
-    const city = life.d.city;
-    const bytes = lotBytes(city);
     this.nice = new Uint8Array(BLOCKS_PER_SIDE * BLOCKS_PER_SIDE);
-    city.blocks.forEach((b, i) => {
-      if (b.kind === 'park' || (b.kind === 'plaza' && !isCarPark(city, bytes, i))) this.nice[b.bx * BLOCKS_PER_SIDE + b.bz] = 1;
-    });
+    this.remap();
   }
 
   get running(): number {
@@ -118,6 +114,15 @@ export class IceCream implements Scene {
       } else if (van.phase === 'pull' && (van.timer += dt) > PULL_GIVE_UP) van.phase = 'drive';
       else if (van.phase === 'open') this.serve(van, dt, scan);
     }
+  }
+
+  remap(): void {
+    const city = this.life.d.city;
+    const bytes = lotBytes(city);
+    this.nice.fill(0);
+    city.blocks.forEach((b, i) => {
+      if (b.kind === 'park' || (b.kind === 'plaza' && !isCarPark(city, bytes, i))) this.nice[b.bx * BLOCKS_PER_SIDE + b.bz] = 1;
+    });
   }
 
   reset(): void {

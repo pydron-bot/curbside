@@ -104,13 +104,8 @@ export class TestTools {
 
   constructor(private readonly d: TestToolsDeps) {
     this.starter = new SceneStarter(d);
-    const neon = districtCentre(d.city, 'arts');
-    this.landmarks = [
-      { id: 'safehouse', label: 'SAFEHOUSE', x: SAFEHOUSE.x, z: SAFEHOUSE.z },
-      { id: 'hospital', label: 'HOSPITAL', x: d.cityLife.hospital.x, z: d.cityLife.hospital.z },
-      { id: 'neon', label: DISTRICT_NAMES.arts, x: neon.x, z: neon.z },
-      { id: 'docks', label: 'DOCKS', x: d.progress.exports.docks.x, z: d.progress.exports.docks.z },
-    ];
+    this.landmarks = [];
+    this.remap();
     // Slow motion carries on into the next life: so does the taint.
     d.bus.on('respawn', () => {
       if (this.timeScale !== 1) d.player.markCheated();
@@ -122,6 +117,20 @@ export class TestTools {
       this.timeScale = 1;
     });
   }
+
+  /** The teleports again, where the active map puts them (the map editor's live rebuild; after the modes and city life). */
+  remap(): void {
+    const d = this.d;
+    const neon = districtCentre(d.city, 'arts');
+    this.landmarks.length = 0;
+    this.landmarks.push(
+      { id: 'safehouse', label: 'SAFEHOUSE', x: SAFEHOUSE.x, z: SAFEHOUSE.z },
+      { id: 'hospital', label: 'HOSPITAL', x: d.cityLife.hospital.x, z: d.cityLife.hospital.z },
+      { id: 'neon', label: DISTRICT_NAMES.arts, x: neon.x, z: neon.z },
+      { id: 'docks', label: 'DOCKS', x: d.progress.exports.docks.x, z: d.progress.exports.docks.z },
+    );
+  }
+
 
   get frozen(): boolean {
     return this.d.time.speed === 0;

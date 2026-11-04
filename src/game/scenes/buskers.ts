@@ -71,22 +71,7 @@ export class Buskers implements Scene {
   constructor(private readonly life: SceneCtx) {
     life.clock.define('busker', { every: [50, 100], cap: 1, first: 35, range: START_RING[1], hold: HOLD });
     for (let i = 0; i < TIP_MAX; i++) this.tips.push({ fromX: 0, fromZ: 0, toX: 0, toZ: 0, age: TIP_FLIGHT });
-    const city = life.d.city;
-    const bytes = lotBytes(city);
-    city.blocks.forEach((b, i) => {
-      if (b.kind === 'buildings' || b.kind === 'lot' || isCarPark(city, bytes, i)) return;
-      for (let side = 0; side < 4; side++) {
-        const s = blockSide(b, side);
-        // Not along a removed road: it's the middle of a merged park or plaza (round 3).
-        if (sideRemoved(s)) continue;
-        for (const t of [BLOCK_SIZE * 0.3, BLOCK_SIZE * 0.7]) {
-          const p = s.at(t, SPOT_INSET);
-          if (city.trees.some((tr) => len2(tr.x - p.x, tr.z - p.z) < tr.radius + 2)) continue;
-          if (life.d.vendors.some((v) => len2(v.x - p.x, v.z - p.z) < 7)) continue;
-          this.spots.push({ x: p.x, z: p.z, heading: s.toRoad });
-        }
-      }
-    });
+    this.remap();
   }
 
   get running(): number {
@@ -107,6 +92,27 @@ export class Buskers implements Scene {
       this.end(b);
       this.buskers.splice(i, 1);
     }
+  }
+
+  remap(): void {
+    const life = this.life;
+    const city = life.d.city;
+    this.spots.length = 0;
+    const bytes = lotBytes(city);
+    city.blocks.forEach((b, i) => {
+      if (b.kind === 'buildings' || b.kind === 'lot' || isCarPark(city, bytes, i)) return;
+      for (let side = 0; side < 4; side++) {
+        const s = blockSide(b, side);
+        // Not along a removed road: it's the middle of a merged park or plaza (round 3).
+        if (sideRemoved(s)) continue;
+        for (const t of [BLOCK_SIZE * 0.3, BLOCK_SIZE * 0.7]) {
+          const p = s.at(t, SPOT_INSET);
+          if (city.trees.some((tr) => len2(tr.x - p.x, tr.z - p.z) < tr.radius + 2)) continue;
+          if (life.d.vendors.some((v) => len2(v.x - p.x, v.z - p.z) < 7)) continue;
+          this.spots.push({ x: p.x, z: p.z, heading: s.toRoad });
+        }
+      }
+    });
   }
 
   reset(): void {

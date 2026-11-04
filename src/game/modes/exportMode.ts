@@ -36,7 +36,7 @@ const REFUSALS = [
 ] as const;
 
 export class ExportMode implements Mode {
-  readonly docks: SprayShop;
+  docks: SprayShop;
   private list: ExportOrder[];
   private listNo = 0;
   private held = 0;
@@ -57,7 +57,7 @@ export class ExportMode implements Mode {
 
   constructor(
     private readonly ctx: ModeCtx,
-    city: City,
+    private readonly city: City,
   ) {
     this.docks = placeDocks(city);
     this.list = exportList(ctx.progress.data.exports.lists);
@@ -201,6 +201,14 @@ export class ExportMode implements Mode {
     if (player.driving === v) player.exit();
     this.ctx.deps.population.retireVehicle(v);
     if (player.lastDriven === v) player.lastDriven = null;
+  }
+
+  /** The docks again, where the active map puts them (after reset()). */
+  remap(): void {
+    this.ctx.unblip('docks');
+    this.blip = '';
+    this.parked = null;
+    this.docks = placeDocks(this.city);
   }
 
   /** '$' at the docks in free roam; pulsing with an arrow while you drive a wanted car. */

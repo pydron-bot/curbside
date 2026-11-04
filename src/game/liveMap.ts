@@ -1,17 +1,16 @@
 /**
  * The map editor's live rebuild (W3-D): the running game's city rebuilt in
- * place on new map edits, so VIEW IN 3D shows them without a reload. What's
- * rebuilt is what the city looks like and what moves through it: the city's
- * blocks, buildings and trees (in place: everything holding `city` sees
- * them), districts and road rules (generateCity installs them), ramps, the
- * dressing's props and landmarks, collision, knockables, the ground, the
- * changed 256 m chunks of the city's meshes, the night glows and the radar.
- *
- * What isn't: what the game modes placed at boot (payphones, frenzy tokens,
- * packages, hangouts, the safehouse, jobs), the city's own life (bus stops,
- * carts, scenes) and the like. So once the city has been rebuilt live it's
- * only for looking at (observe mode); `dirty` tells main.ts that leaving the
- * pause for play must reload on the local edits, where all of it agrees.
+ * place on new map edits, so VIEW IN 3D shows them and play goes on there
+ * with no reload. The edits become the active map first (setActiveMap: the
+ * placement defaults, the safehouse and the frenzy list follow), then the
+ * world is rebuilt here: the city's blocks, buildings and trees (in place:
+ * everything holding `city` sees them), districts, road rules and merges
+ * (generateCity installs them), pickups, ramps, the dressing's props and
+ * landmarks, collision, knockables, the ground, the changed 256 m chunks of
+ * the city's meshes, the night glows and the radar. Then `remap` (main.ts)
+ * has every system that placed things at boot place them again: the game
+ * modes' spots, heat's bays and station, the city's life and its scenes,
+ * park water, steam, pigeons and the TEST teleports.
  */
 import type { Look } from '../render/look';
 import type { Knockables } from '../systems/knockables';
@@ -21,6 +20,8 @@ import { dressCity, type Dressing } from '../world/dressing';
 import type { MapEdits } from '../world/mapEdits';
 import type { Pickup } from '../world/pickups';
 import { placeCityRamps, rampSolids, type Ramp } from '../world/ramps';
+import { placePickups } from '../world/pickups';
+import { setActiveMap } from '../world/shippedMap';
 import type { Roadworks } from '../world/roadworks';
 
 export interface LiveMapDeps {
@@ -28,7 +29,8 @@ export interface LiveMapDeps {
   city: City;
   /** The game's ramps: replaced in place. */
   ramps: Ramp[];
-  pickups: readonly Pickup[];
+  /** The game's pickups: replaced in place. */
+  pickups: Pickup[];
   /** The game's dressing: its fields replaced. */
   dressing: Dressing;
   collision: StaticGrid;
@@ -37,12 +39,14 @@ export interface LiveMapDeps {
   look: Look;
   radar: { refreshMap(): void };
   signals: { setRoadworks(r: readonly Roadworks[]): void };
+  /** After the world: every system that placed things at boot places them again (main.ts). */
+  remap(): void;
 }
 
 export class LiveMap {
   /** The edits the city now shows (what the map editor previews against). */
   edits: MapEdits;
-  /** The city was rebuilt live: playing on it needs a reload. */
+  /** The city was rebuilt live (the page plays the editor's local edits now). */
   dirty = false;
 
   constructor(
@@ -57,6 +61,7 @@ export class LiveMap {
     const t0 = performance.now();
     const d = this.d;
     const city = d.city;
+    setActiveMap(edits);
     // Installs the edits' districts and road rules for the whole game, as at boot.
     const next = generateCity(city.seed, edits);
     replace(city.blocks, next.blocks);
@@ -65,7 +70,9 @@ export class LiveMap {
     replace(city.obstacles, next.obstacles);
     city.edits = edits;
     replace(d.ramps, placeCityRamps(city.seed, edits));
-    const dressing = dressCity(city, d.pickups as Pickup[], d.ramps);
+    replace(d.pickups, placePickups(city.seed, edits));
+    d.look.pickups.refresh();
+    const dressing = dressCity(city, d.pickups, d.ramps);
     Object.assign(d.dressing, dressing);
     d.collision.reset([...city.obstacles, ...dressing.solids]);
     d.rampGrid.reset(rampSolids(d.ramps));
@@ -73,6 +80,7 @@ export class LiveMap {
     const chunks = d.look.rebuildCity(city, dressing.street, dressing.landmarks);
     d.signals.setRoadworks(dressing.street.roadworks);
     d.radar.refreshMap();
+    d.remap();
     this.edits = edits;
     this.dirty = true;
     return { chunks, ms: performance.now() - t0 };

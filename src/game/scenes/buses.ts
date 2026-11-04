@@ -83,7 +83,7 @@ export class Buses implements Scene {
   private readonly driver: SceneDriver;
 
   constructor(private readonly life: SceneCtx) {
-    for (const s of life.stops) if (!this.byLane.has(laneKey(s.ix, s.iz, s.dir))) this.byLane.set(laneKey(s.ix, s.iz, s.dir), s);
+    this.remap();
     // A bus brought in now and then while people wait and none is about.
     life.clock.define('bus', { every: [45, 90], cap: 1, first: 25, range: STOP_RANGE, hold: IN_PLAY });
     this.driver = { drive: (v, obstacles, dt) => this.drive(v, obstacles, dt) };
@@ -116,6 +116,11 @@ export class Buses implements Scene {
         this.runs.splice(i, 1);
       }
     }
+  }
+
+  remap(): void {
+    this.byLane.clear();
+    for (const s of this.life.stops) if (!this.byLane.has(laneKey(s.ix, s.iz, s.dir))) this.byLane.set(laneKey(s.ix, s.iz, s.dir), s);
   }
 
   reset(): void {

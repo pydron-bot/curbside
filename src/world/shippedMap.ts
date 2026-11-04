@@ -8,7 +8,8 @@
  *
  * ACTIVE_MAP is what this page plays: the shipped map, unless the page was
  * opened with `?map=local` (the map editor's VIEW IN 3D), when it's the
- * editor's local edits from localStorage (LOCAL_MAP_KEY). Players never see
+ * editor's local edits from localStorage (LOCAL_MAP_KEY), or whatever the
+ * editor's VIEW IN 3D last rebuilt the running city on. Players never see
  * local edits.
  */
 import raw from './maps/city.json';
@@ -41,4 +42,18 @@ export function previewingLocalMap(search = globalThis.location?.search ?? ''): 
   }
 }
 
-export const ACTIVE_MAP: MapEdits = (previewingLocalMap() && loadLocalMap()) || SHIPPED_MAP;
+/** The map this page plays (a live binding: VIEW IN 3D's rebuild in place switches it, setActiveMap). */
+export let ACTIVE_MAP: MapEdits = (previewingLocalMap() && loadLocalMap()) || SHIPPED_MAP;
+
+const activeMapListeners: Array<(edits: MapEdits) => void> = [];
+
+/** Run `fn` whenever the active map changes: modules that derive constants from it (the safehouse, the frenzy list) recompute them here. */
+export function onActiveMap(fn: (edits: MapEdits) => void): void {
+  activeMapListeners.push(fn);
+}
+
+/** Play `edits` from now on (game/liveMap.ts, after rebuilding the city on them); placement defaults and derived constants follow. */
+export function setActiveMap(edits: MapEdits): void {
+  ACTIVE_MAP = edits;
+  for (const fn of activeMapListeners) fn(edits);
+}

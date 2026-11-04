@@ -110,8 +110,8 @@ export class Heat {
   readonly wanted: Wanted;
   readonly police: PoliceForce;
   readonly bust = new BustMeter();
-  readonly shops: SprayShop[];
-  readonly station: Station;
+  shops: SprayShop[];
+  station: Station;
   /** The bay the player's car is in (null when not in one). */
   shop: SprayShop | null = null;
   /** 0..1 while a respray runs. */
@@ -310,6 +310,14 @@ export class Heat {
   }
 
   /** A fresh run (or the title): nobody's wanted, the police clear the street. */
+  /** The spray bays and the station again, where the active map puts them (the map editor's live rebuild). */
+  remap(): void {
+    this.shops = placeSprayShops(this.deps.city);
+    this.station = placeStation(this.deps.city);
+    this.shop = null;
+    this.sprayProgress = 0;
+  }
+
   reset(): void {
     this.wanted.clear('reset');
     this.police.reset();

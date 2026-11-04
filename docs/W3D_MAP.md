@@ -739,3 +739,47 @@ one draw).
 - Hand-placed spots on a removed road (a frenzy token, a job's scene, a
   race start) are flagged, not moved: the owner moves them or picks
   another road.
+
+## Round 3: VIEW IN 3D plays on (branch `claude/w3d-map-3`)
+
+The last gap from round 2: VIEW IN 3D rebuilt the world in place, but what
+the game placed at boot stayed where it was, so leaving the pause for play
+reloaded on `?map=local`. Now the rebuild covers all of it and play goes
+on, with no reload:
+
+- **The active map is switchable.** `ACTIVE_MAP` (`world/shippedMap.ts`)
+  is a live binding; `setActiveMap(edits)` switches it and runs the
+  `onActiveMap` listeners, which recompute what modules derived from it
+  at load (`SAFEHOUSE` in `places.ts`, `ACTIVE_FRENZIES` in
+  `frenzies.ts`). Every `place*(…, edits = ACTIVE_MAP)` default follows.
+  `LiveMap.apply` calls it first, so the world rebuild reads the edits
+  the same way a boot does. (`tests/activeMap.test.ts`.)
+- **Pickups** are placed again in place (`placePickups`, round 3's pickup
+  edits) and `PickupMesh.refresh` takes their colours and count (the box
+  mesh keeps 32 spare instances for added ones; the models need none).
+- **Everything that placed things at boot places them again**
+  (`main.ts remapGame`, `LiveMapDeps.remap`), in order: heat's spray bays
+  and station (`Heat.remap`) and their blips (`HeatPresenter.placeBlips`);
+  park water and steam vents (planned again); the pigeons' landing map
+  (`PigeonLook.remap`); the city's life (`CityLife.remap`: it resets,
+  takes the new dressing's shelters, carts and keep-outs, places the
+  hospital and the car-park bays again, then each scene's `remap`: bus
+  stops by lane, busker pitches, ice cream's parks, the docks yard, the
+  dogs' obstacle grid, shop doors for shelter and loitering); the game
+  modes (`ProgressDirector.remap`: whatever is running stops as it does
+  on quitting, then the docks, the jobs and phones with their arcs, the
+  opening's job, frenzy tokens, packages, hangouts and crews, each
+  `Mode.remap`, and the safehouse blip); the opening's bus stop stage;
+  the TEST menu's teleports.
+- **The streets:** cars and people the edits built over (now inside a
+  building or a prop) go, the player too if on foot inside one (respawned
+  at the spawn corner), and upkeep reseeds round the camera.
+- **The URL** says `?map=local` after a live rebuild on local edits (and
+  drops it when the editor applies the shipped map), so a reload keeps
+  playing them. PLAY ON EDITS still reloads at once.
+
+Checked: the smoke test's round 3 spots check now also clicks VIEW IN 3D
+on its edits, leaves observe mode for play and finds, in the same page,
+the job ringing from the new phone, the custom frenzy's token, the spray
+bay and booth on the new lot, the added rocket and the TEST menu's docks
+teleport at the new docks.

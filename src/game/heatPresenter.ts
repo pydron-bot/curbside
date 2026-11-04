@@ -38,6 +38,8 @@ export class HeatPresenter {
   private time = 0;
   private wantedBefore = 0;
 
+  private shopBlips: string[] = [];
+
   constructor(
     private readonly heat: Heat,
     private readonly audio: GameAudio,
@@ -46,13 +48,20 @@ export class HeatPresenter {
     feed: ScoreHud,
     bus: EventBus,
   ) {
-    for (const s of heat.shops) radar.setBlip(s.id, { x: s.x, z: s.z, kind: 'shop', icon: 'S', size: 6 });
-    radar.setBlip('station', { x: heat.station.x, z: heat.station.z, kind: 'police', icon: '★', size: 6 });
+    this.placeBlips();
     bus.on('wanted', (e) => {
       // Shaking off 1-2 stars: a line in the feed (3+ pays the EVADED bonus, which has its own).
       if (e.reason === 'evaded' && evadeBonus(heat.wanted.peak) === 0) feed.notice('EVADED', 'evaded');
     });
     bus.on('respray', (e) => feed.notice(e.cleared ? 'RESPRAYED · CLEAN' : 'RESPRAYED', 'police'));
+  }
+
+  /** The spray bays' and the station's radar blips (again after Heat.remap: the old bays' go). */
+  placeBlips(): void {
+    for (const id of this.shopBlips) this.radar.removeBlip(id);
+    this.shopBlips = this.heat.shops.map((s) => s.id);
+    for (const s of this.heat.shops) this.radar.setBlip(s.id, { x: s.x, z: s.z, kind: 'shop', icon: 'S', size: 6 });
+    this.radar.setBlip('station', { x: this.heat.station.x, z: this.heat.station.z, kind: 'police', icon: '★', size: 6 });
   }
 
   /** Per frame (not while paused). (x, z): the listener / camera focus. */

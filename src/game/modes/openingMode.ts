@@ -82,7 +82,7 @@ export class OpeningMode implements Mode {
   private t = 0;
   /** WRONG STOP started with the getaway (its end, before the player got in, ends the opening too). */
   private jobOn = false;
-  private readonly job: MissionDef | null;
+  private job: MissionDef | null;
 
   constructor(
     private readonly ctx: ModeCtx,
@@ -155,6 +155,11 @@ export class OpeningMode implements Mode {
   glow(_g: GlowSprites, _props: ProgressProps, _view: Rect): void {}
 
   /** Quit, RESTART, a new run: it stops (a respawn arms it again if it hasn't run). */
+  /** The opening's job again, as the active map moved its spots (after the missions were remapped). */
+  remap(): void {
+    this.job = this.missions.missions.find((m) => m.id === OPENING_JOB) ?? null;
+  }
+
   reset(): void {
     if (this.phase !== 'done') this.drop();
     else this.phase = 'idle';

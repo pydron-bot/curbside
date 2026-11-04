@@ -138,8 +138,8 @@ interface MissionPed {
 }
 
 export class MissionMode implements Mode {
-  readonly missions: MissionDef[];
-  private readonly phones: Spot[];
+  missions: MissionDef[];
+  private phones: Spot[];
   private run: MissionRun | null = null;
   private readonly cars = new Map<string, MissionCar>();
   private readonly peds = new Map<string, MissionPed>();
@@ -159,9 +159,9 @@ export class MissionMode implements Mode {
   private wpX = NaN;
   private wpZ = NaN;
   /** Payphones by id. */
-  private readonly phoneById: Map<string, Spot>;
+  private phoneById: Map<string, Spot>;
   /** The main story's phone, then the Night Shift's. */
-  private readonly arcs: ArcPhone[];
+  private arcs: ArcPhone[];
   /** The job running (or being called about) is a repeat. */
   private replaying = false;
   private ringIn = 0;
@@ -195,7 +195,7 @@ export class MissionMode implements Mode {
     this.missions = buildMissions(docks, SAFEHOUSE);
     this.phones = placePayphones();
     this.phoneById = new Map(this.phones.map((p) => [p.id, p]));
-    this.arcs = (['main', 'night'] as const).map((arc) => ({ arc, jobs: this.missions.filter((m) => arcOf(m) === arc), next: undefined, replay: false, blip: '' }));
+    this.arcs = arcPhones(this.missions);
     const self = this;
     this.view = {
       x: 0,
@@ -1033,6 +1033,17 @@ export class MissionMode implements Mode {
     for (const a of this.arcs) this.syncRingBlip(a, null);
   }
 
+  /** The jobs and phones again, on the active map (after reset(): no job is running). */
+  remapJobs(docks: { x: number; z: number }): void {
+    for (const a of this.arcs) this.syncRingBlip(a, null);
+    this.clearBlips();
+    this.near = null;
+    this.missions = buildMissions(docks, SAFEHOUSE);
+    this.phones = placePayphones();
+    this.phoneById = new Map(this.phones.map((p) => [p.id, p]));
+    this.arcs = arcPhones(this.missions);
+  }
+
   /** Debug labels: the job's people (story characters by name) and cars by their tags. */
   describe(out: LabelSink): void {
     for (const m of this.pedList) {
@@ -1042,4 +1053,9 @@ export class MissionMode implements Mode {
     }
     for (const c of this.carList) out.car(c.v, `MISSION CAR: ${c.tag}`, 'mission');
   }
+}
+
+/** The main story's phone, then the Night Shift's, each with its jobs (none worked out yet). */
+function arcPhones(missions: readonly MissionDef[]): ArcPhone[] {
+  return (['main', 'night'] as const).map((arc) => ({ arc, jobs: missions.filter((m) => arcOf(m) === arc), next: undefined, replay: false, blip: '' }));
 }

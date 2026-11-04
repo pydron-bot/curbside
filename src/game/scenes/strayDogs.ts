@@ -116,6 +116,10 @@ export class StrayDogs implements Scene {
     }
   }
 
+  remap(): void {
+    this.grid.reset(this.life.d.city.obstacles);
+  }
+
   reset(): void {
     this.pack.clear();
     this.chased = null;

@@ -9,7 +9,7 @@
 import type { GameEvent } from '../../core/events';
 import type { WeaponKind } from '../../systems/weapons';
 import type { MapEdits, SpotEdit } from '../../world/mapEdits';
-import { ACTIVE_MAP } from '../../world/shippedMap';
+import { ACTIVE_MAP, onActiveMap } from '../../world/shippedMap';
 import { addedSpots } from '../../world/spotEdits';
 import { FRENZY_DEFAULTS, NEEDS_CAR_GOALS, frenzyTitle } from './frenzyLimits';
 
@@ -64,8 +64,9 @@ export function frenzyList(edits: MapEdits = ACTIVE_MAP): readonly FrenzyDef[] {
   return added.length === 0 ? FRENZIES : [...FRENZIES, ...added.map(customFrenzy)];
 }
 
-/** The frenzies on the map this page plays. */
-export const ACTIVE_FRENZIES: readonly FrenzyDef[] = frenzyList();
+/** The frenzies on the map this page plays (a live binding: it follows setActiveMap). */
+export let ACTIVE_FRENZIES: readonly FrenzyDef[] = frenzyList();
+onActiveMap((edits) => (ACTIVE_FRENZIES = frenzyList(edits)));
 
 /**
  * How much a bus event counts toward `goal`: 1 per knockdown / wreck /

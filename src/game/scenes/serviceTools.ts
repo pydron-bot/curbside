@@ -184,6 +184,12 @@ export class ServiceTools implements Scene {
     else this.stepWinch(t, dt, driving && pressed, driving);
   }
 
+  remap(): void {
+    const docks = placeDocks(this.life.d.city);
+    this.yard.x = docks.x;
+    this.yard.z = docks.z;
+  }
+
   reset(): void {
     this.drop();
     this.delivered = null;

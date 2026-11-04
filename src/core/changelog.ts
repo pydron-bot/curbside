@@ -15,6 +15,19 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.29.0',
+    date: '2026-11-04',
+    title: 'Street plans',
+    notes: [
+      'Map editor: a street can be paved over as a pedestrian street (bollards at each end, benches and planters down the middle, people strolling on it, no traffic) or removed outright, merging the blocks either side into one bigger block.',
+      'Add payphones and choose which phone each story job rings from.',
+      'Make your own frenzies: pick the goal, the target, the time limit and a gift weapon. They count toward 100%.',
+      'Story jobs\' spots, drive routes and race steps can be moved; so can the docks yard, the Pay \'n\' Spray bays, the police station and the hospital, and pickups can be moved, removed or added.',
+      'The editor shows shop doors and road works up close, and lists which street scenes a block or road can host.',
+      'VIEW IN 3D now rebuilds everything, jobs, frenzies, gangs, buses and all, so you can carry on playing on your edits with no reload.',
+    ],
+  },
+  {
     version: '0.28.0',
     date: '2026-11-03',
     title: 'Map makers',

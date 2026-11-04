@@ -231,6 +231,8 @@ export interface Scene {
   readonly running: number;
   /** Stop everything now (a fresh run, the title): hand back what it holds. */
   reset(): void;
+  /** Work out its places again on the city as rebuilt live (the map editor), after reset(). */
+  remap?(): void;
   /** Debug labels (settings.debugLabels, ~5 Hz): what its people and cars are doing. */
   describe?(out: LabelSink): void;
   /** The title's highlights (game/attractHighlights.ts): what to watch of it into `out`; false with nothing on. */
@@ -240,11 +242,11 @@ export interface Scene {
 export class CityLife {
   readonly d: CityLifeDeps;
   readonly clock: SceneClock;
-  readonly hospital: Hospital;
+  hospital: Hospital;
   /** The bus shelters (world/streetStops.ts, via deps.busStops); deps.avoid keeps parked cars out of their bays. */
-  readonly stops: readonly BusStop[];
+  stops: readonly BusStop[];
   /** The car parks' bays. */
-  readonly bays: Bay[];
+  bays: Bay[];
   readonly drops = new WeaponDrops();
   readonly medics: Medics;
   readonly streetMood: StreetMood;
@@ -279,7 +281,7 @@ export class CityLife {
   private readonly dropped = new WeakSet<PedAgent>();
   private readonly viewRect: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
   private readonly spot: RoadSpot = { ix: 0, iz: 0, dir: 0, along: 0, x: 0, z: 0, heading: 0 };
-  private readonly parkAvoid: readonly Avoid[];
+  private parkAvoid: readonly Avoid[];
   private readonly world: SceneWorld = { playing: false, activity: false, stars: 0, opening: false };
   private scanTimer = 0;
   private tidyTimer = 0;
@@ -454,6 +456,24 @@ export class CityLife {
       const v = pop.parkCar({ archetype, paint: trafficPaint(archetype, rand), x, z, heading }, scale);
       if (v) have++;
     }
+  }
+
+  /**
+   * The map editor rebuilt the city live: stop everything (as reset), take
+   * the new dressing's shelters, carts and keep-outs, and work out every
+   * place again (the hospital, the car parks' bays, each scene's spots).
+   */
+  remap(next: Pick<CityLifeDeps, 'avoid' | 'busStops' | 'vendors'>): void {
+    this.reset();
+    const d = this.d as { -readonly [K in keyof CityLifeDeps]: CityLifeDeps[K] };
+    d.avoid = next.avoid;
+    d.busStops = next.busStops;
+    d.vendors = next.vendors;
+    this.hospital = placeHospital(d.city);
+    this.stops = d.busStops;
+    this.parkAvoid = [...d.avoid, { x: this.hospital.bayX, z: this.hospital.bayZ, r: 14 }];
+    this.bays = carParkBays(d.city);
+    for (const s of this.scenes) s.remap?.();
   }
 
   /** A fresh run (or the title): every scene stops, the drops vanish, the clocks start over. */

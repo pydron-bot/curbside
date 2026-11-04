@@ -33,7 +33,7 @@ interface Token {
 }
 
 export class FrenzyMode implements Mode {
-  private readonly tokens: Token[];
+  private tokens: Token[];
   private run: FrenzyRun | null = null;
   private token: Token | null = null;
   private shownCount = 0;
@@ -42,11 +42,7 @@ export class FrenzyMode implements Mode {
   private readonly goal = new KeyedText();
 
   constructor(private readonly ctx: ModeCtx) {
-    const spots = placeFrenzyTokens();
-    this.tokens = ACTIVE_FRENZIES.map((def) => {
-      const prompt = `FRENZY · ${def.title} IN ${def.seconds} S`;
-      return { def, spot: spots.find((s) => s.id === def.id)!, armed: true, prompt, promptOnFoot: def.needsCar ? `${prompt} · NEEDS A CAR` : prompt };
-    });
+    this.tokens = placeTokens();
     const bus = ctx.deps.bus;
     bus.onAny((e) => {
       const run = this.run;
@@ -188,6 +184,11 @@ export class FrenzyMode implements Mode {
     this.hideBlips();
   }
 
+  remap(): void {
+    this.hideBlips();
+    this.tokens = placeTokens();
+  }
+
   /** Radar: '!' per token in free roam (gold once beaten). */
   private syncBlips(): void {
     const want = this.ctx.sideModes;
@@ -206,4 +207,13 @@ export class FrenzyMode implements Mode {
     this.blipsOn = false;
     for (const t of this.tokens) this.ctx.unblip(t.def.id);
   }
+}
+
+/** The active map's frenzies at their tokens. */
+function placeTokens(): Token[] {
+  const spots = placeFrenzyTokens();
+  return ACTIVE_FRENZIES.map((def) => {
+    const prompt = `FRENZY · ${def.title} IN ${def.seconds} S`;
+    return { def, spot: spots.find((s) => s.id === def.id)!, armed: true, prompt, promptOnFoot: def.needsCar ? `${prompt} · NEEDS A CAR` : prompt };
+  });
 }

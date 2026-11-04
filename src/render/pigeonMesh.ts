@@ -84,6 +84,8 @@ export class PigeonLook {
   /** What the flocks see this frame (reused). */
   private readonly world: PigeonWorld = { view: this.view, x: 0, z: 0, threats: this.threats };
   private loaded = false;
+  /** Each block's kind, where the flocks may land (refreshed by remap). */
+  private readonly kinds = new Map<number, City['blocks'][number]['kind']>();
 
   constructor(
     scene: Scene,
@@ -94,7 +96,8 @@ export class PigeonLook {
     rand: () => number,
     url = publicUrl('assets/pigeon.glb'),
   ) {
-    const kinds = new Map(city.blocks.map((b) => [b.bx * 1000 + b.bz, b.kind]));
+    this.remap(city);
+    const kinds = this.kinds;
     this.flocks = new Pigeons(
       {
         kindAt: (bx, bz) => kinds.get(bx * 1000 + bz) ?? 'buildings',
@@ -137,6 +140,12 @@ export class PigeonLook {
         (err) => console.error(`Failed to load ${url}`, err),
       );
     }
+  }
+
+  /** The blocks' kinds again (the map editor's live rebuild): flocks land on the new parks and plazas. */
+  remap(city: City): void {
+    this.kinds.clear();
+    for (const b of city.blocks) this.kinds.set(b.bx * 1000 + b.bz, b.kind);
   }
 
   /**

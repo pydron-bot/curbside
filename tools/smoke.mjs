@@ -588,7 +588,7 @@ async function mapEditorCheck(page, label) {
     for (let i = 0; i < 3; i++) await new Promise((res) => requestAnimationFrame(res));
     const lot = u.mapEditor.live.edits.blocks.find((b) => b.kind === 'lot');
     const r = { url: location.search, observe: !!u.observe?.active, dirty: u.mapEditor.live.dirty, lot: !!lot, programs: u.renderer.info.programs.length };
-    // Put the shipped city back for the checks after this one (and forget the live edit, or RESUME would reload).
+    // Put the shipped city back for the checks after this one.
     u.mapEditor.live.apply(u.mapEditor.shipped);
     u.mapEditor.live.dirty = false;
     localStorage.removeItem('curbside.map.local');
@@ -597,8 +597,8 @@ async function mapEditorCheck(page, label) {
     return r;
   });
   check(
-    live.observe && live.dirty && live.lot && !live.url.includes('map=local') && live.programs === programs,
-    `${label}: VIEW IN 3D rebuilds the city live in observe mode, no reload, no new programs (${JSON.stringify({ ...live, before: programs })})`,
+    live.observe && live.dirty && live.lot && live.url.includes('map=local') && live.programs === programs,
+    `${label}: VIEW IN 3D rebuilds the city live in observe mode (the URL now says map=local), no reload, no new programs (${JSON.stringify({ ...live, before: programs })})`,
   );
 }
 
@@ -647,6 +647,37 @@ async function mapSpotsCheck(page, label) {
   check(
     ids === 'fz-0:wreck, phone-0, pickup-59:rocket' && ed.jobs?.[0]?.phone === 'phone-0' && ed.problems.length === 0 && ed.saved,
     `${label}: round 3 edits from the editor: a phone ringing QUIET PLEASE, a WRECK frenzy, a rocket, a spray bay moved, no problems (${ids}; ${ed.problems.join('; ')})`,
+  );
+  // VIEW IN 3D rebuilds on them live, and play goes on there with no reload: the modes, heat and the TEST teleports follow.
+  await page.evaluate(() => (window.__sameRun = true));
+  await page.locator('#mapeditor [data-act="view3d"]').click({ timeout: 30000 });
+  const liveGame = await page.evaluate(async () => {
+    const u = window.__ub;
+    const observing = !!u.observe?.active;
+    u.observe.exit();
+    if (u.paused) u.setPaused(false);
+    u.fastForward(2);
+    const m = u.progress.missions;
+    const tok = u.progress.frenzies.tokens.find((t) => t.def.id === 'fz-0');
+    const bay = u.heat.shops.find((s) => s.id === 'spray-12-2');
+    const docks = u.progress.exports.docks;
+    const tp = u.testTools.landmarks.find((l) => l.id === 'docks');
+    return {
+      sameRun: window.__sameRun === true,
+      observing,
+      playing: !u.paused,
+      url: location.search,
+      quiet: m.missions.find((j) => j.id === 's3-quiet').phone,
+      phone: !!m.phoneById.get('phone-0'),
+      frenzy: tok?.def.title ?? null,
+      bay: !!bay && u.dressing.landmarks.props.some((p) => p.kind === 'spray_booth' && Math.hypot(p.x - bay.x, p.z - bay.z) < 9),
+      rocket: u.radar.sources.pickups.some((p) => p.id === 'pickup-59' && p.kind === 'rocket'),
+      teleport: !!tp && tp.x === docks.x && tp.z === docks.z,
+    };
+  });
+  check(
+    liveGame.sameRun && liveGame.observing && liveGame.playing && liveGame.url.includes('map=local') && liveGame.quiet === 'phone-0' && liveGame.phone && liveGame.frenzy === 'WRECK 6 CARS' && liveGame.bay && liveGame.rocket && liveGame.teleport,
+    `${label}: VIEW IN 3D then play, no reload: the job rings from the new phone, the frenzy's token, the bay on its new lot, the rocket (${JSON.stringify(liveGame)})`,
   );
   await page.goto(`${URL}${URL.includes('?') ? '&' : '?'}map=local`);
   await page.waitForFunction(() => window.__ub, null, { timeout: 90000 });
@@ -748,7 +779,7 @@ async function streetsCheck(page, label) {
     return r;
   });
   check(
-    live.observe && live.merged === 2 && live.bollards === 16 && live.programs === programs && !live.url.includes('map=local'),
+    live.observe && live.merged === 2 && live.bollards === 16 && live.programs === programs && live.url.includes('map=local'),
     `${label}: VIEW IN 3D rebuilds the streets live: 2 blocks merged, 16 bollards, no new programs (${JSON.stringify({ ...live, before: programs })})`,
   );
   check(live.samples > 0 && live.on === 0, `${label}: no traffic onto the pedestrian street or the removed road over 20 s (${live.on} of ${live.samples} car samples; ${live.leftThere} already there at the rebuild left out)`);

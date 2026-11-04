@@ -3104,11 +3104,21 @@ and every new program is compiled behind the current frame.
   (`CityMesh.rebuild` hashes each chunk's contents), every static prop
   (`WorldProps.rebuild`), the searchlights, neon reflections and smoke
   occluders, then the radar (`refreshMap`). Same materials, so no new
-  shader programs. Observe mode opens over the selection. What the game
-  modes placed at boot (phones, tokens, packages, hangouts, jobs, the
-  city's scenes) isn't rebuilt, so after a live rebuild leaving the pause
-  for play, or PLAY from the title, reloads on `?map=local` (where all of
-  it agrees); PLAY ON EDITS does that at once.
+  shader programs. Observe mode opens over the selection. The edits become
+  the page's map first (`setActiveMap`, `world/shippedMap.ts`: a live
+  binding, with `onActiveMap` for what's derived from it, `SAFEHOUSE` and
+  `ACTIVE_FRENZIES`), and after the world `main.ts remapGame` has every
+  system that placed things at boot place them again: pickups
+  (`PickupMesh.refresh`), the game modes (`ProgressDirector.remap`: what's
+  running stops as on quitting, then each `Mode.remap`: the docks, jobs and
+  phones, the opening's job, frenzy tokens, packages, hangouts and crews),
+  heat's spray bays and station and their blips, the city's life
+  (`CityLife.remap`: shelters, carts, keep-outs, the hospital, car-park
+  bays, then each `Scene.remap`), park water, steam vents, pigeons' landing
+  map and the TEST teleports; cars and people now inside something solid
+  go, and upkeep fills the streets again. So play goes on on the edits with
+  no reload, and the URL says `?map=local` (a reload keeps them). PLAY ON
+  EDITS still reloads on them.
 - **Map editor, round 3: spots** (`game/mapSpots.ts`, `systems/storyEdits.ts`,
   `game/sceneHosts.ts`, `ui/mapEditorSpots.ts`; `tests/mapSpots.test.ts`;
   docs/W3D_MAP.md *Round 3*): PLACE adds payphones (`phone-<n>`), frenzy

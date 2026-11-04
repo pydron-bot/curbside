@@ -70,6 +70,21 @@ desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
 
 ## To do (in priority order)
 
+**Map editor, round 3 (2026-11-04, branch `claude/w3d-map-3`): 0.29.0
+"Street plans"** (details in `docs/W3D_MAP.md` → *Round 3: spots*, *Round
+3: streets*, *Round 3: VIEW IN 3D plays on*): pedestrian streets and
+removed roads (merged blocks, rectangles only); added payphones with jobs
+moved onto them; custom frenzies; story spots, routes and race steps,
+landmarks (docks, spray bays, station, hospital) and pickups movable;
+shop doors, road works and CAN HOST in the overlay; VIEW IN 3D rebuilds
+every system in place and play goes on with no reload. Owner to decide:
+the frenzy limits (`frenzyLimits.ts`), whether idle generated phones
+become removable, whether the rectangle rule (REMOVE refused for an L)
+suits, whether a car should squeeze through a pedestrian street's
+bollards. Device check: a pedestrian street, a merged block, a moved
+spray booth and a custom frenzy on the iPhone (the game plays the edits
+only after they're committed as `src/world/maps/city.json`).
+
 **Map editor, round 2 (2026-11-03, branch `claude/w3d-map-2`):**
 **0.28.0 "Map makers"** (details in `docs/W3D_MAP.md` → *Round 2*): click
 again on a spot to step through what's stacked there; hidden packages are

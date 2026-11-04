@@ -82,6 +82,9 @@ const MODEL_GLOW = 0.3;
  * `things` family once it's loaded (only those near the view); until then,
  * or without it, as glowing colour-coded boxes (one instanced draw call).
  */
+/** Room for pickups the map editor adds live (boxes only: the models need none). */
+const SPARE = 32;
+
 export class PickupMesh {
   readonly mesh: InstancedMesh;
   private readonly m = new Matrix4();
@@ -89,19 +92,30 @@ export class PickupMesh {
   private readonly up = new Vector3(0, 1, 0);
   private readonly pos = new Vector3();
   private readonly scale = new Vector3();
-  private readonly colours: Color[];
+  private colours: Color[];
+  /** Instances the box mesh has room for (the map editor's live rebuild can add pickups). */
+  private readonly capacity: number;
 
   constructor(
     private readonly pickups: Pickup[],
     private readonly props: WorldProps | null = null,
   ) {
     const material = createPickupMaterial();
-    this.mesh = new InstancedMesh(new BoxGeometry(0.75, 0.75, 0.75), material, pickups.length);
-    this.colours = pickups.map((p) => new Color(COLORS[p.kind]));
-    this.colours.forEach((c, i) => this.mesh.setColorAt(i, c));
+    this.capacity = pickups.length + SPARE;
+    this.mesh = new InstancedMesh(new BoxGeometry(0.75, 0.75, 0.75), material, this.capacity);
+    this.colours = [];
+    this.refresh();
     this.mesh.frustumCulled = false; // spread over the whole city; one cheap draw call
     this.mesh.castShadow = true;
     this.mesh.name = 'pickups';
+  }
+
+  /** The pickups list changed in place (the map editor's live rebuild): their colours and count again. */
+  refresh(): void {
+    this.colours = this.pickups.map((p) => new Color(COLORS[p.kind]));
+    this.colours.forEach((c, i) => i < this.capacity && this.mesh.setColorAt(i, c));
+    if (this.mesh.instanceColor) this.mesh.instanceColor.needsUpdate = true;
+    this.mesh.count = Math.min(this.pickups.length, this.capacity);
   }
 
   /** Spin and bob the crates; add rings and light shafts for those near `view`. */
@@ -113,7 +127,7 @@ export class PickupMesh {
       const p = this.pickups[i];
       const s = p.respawnAt === 0 ? 1 : 0;
       const bob = Math.sin(time * 3 + i) * 0.15;
-      if (!things) {
+      if (!things && i < this.capacity) {
         this.q.setFromAxisAngle(this.up, time * 2 + i);
         this.pos.set(p.x, 0.8 + bob, p.z);
         this.m.compose(this.pos, this.q, this.scale.set(s, s, s));

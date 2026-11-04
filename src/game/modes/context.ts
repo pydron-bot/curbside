@@ -89,6 +89,8 @@ export interface Mode {
   glow(g: GlowSprites, props: ProgressProps, view: Rect, t: number, night: number): void;
   /** Drop everything silently (quit to title, restart, a mode taking over). */
   reset(): void;
+  /** Place its spots again on the active map (the map editor's live rebuild), after reset(). */
+  remap?(): void;
 }
 
 /** The director's services for the runtimes. */

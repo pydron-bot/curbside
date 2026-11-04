@@ -505,6 +505,18 @@ const fireworks = new Fireworks(effects);
 look.addGlowSource((g) => fireworks.drawGlows(g));
 
 // --- The city's own life (game/cityLife.ts): ambient scenes, parking, dropped guns ---
+/** Where the city's life parks nothing: landmarks, ramps, spray bays, the spawn corner's cars, road works, bus stops. */
+function cityAvoid() {
+  return [
+    ...dressing.landmarks.props.map((p) => ({ x: p.x, z: p.z, r: 11 })),
+    ...ramps.map((r) => ({ x: r.x, z: r.z, r: 9 })),
+    ...heat.shops.map((sh) => ({ x: sh.x, z: sh.z, r: 13 })),
+    ...PARKED.map((p) => ({ x: p.x, z: p.z, r: 8 })),
+    // Road works close the kerb strip, and a bus pulls in at a shelter: no parking in either.
+    ...dressing.street.roadworks.map(({ area: a }) => ({ x: (a.minX + a.maxX) / 2, z: (a.minZ + a.maxZ) / 2, r: Math.hypot(a.maxX - a.minX, a.maxZ - a.minZ) / 2 + 4 })),
+    ...dressing.street.busStops.map((b) => ({ x: b.stopX, z: b.stopZ, r: 13 })),
+  ];
+}
 const cityLife = new CityLife({
   bus: events,
   vehicles,
@@ -524,15 +536,7 @@ const cityLife = new CityLife({
   stars: () => heat.wanted.level,
   opening: () => progress.opening.holding,
   keep: (v) => activityCars.includes(v) || (observe?.held(v) ?? false) || combat.charges.carries(v),
-  avoid: [
-    ...dressing.landmarks.props.map((p) => ({ x: p.x, z: p.z, r: 11 })),
-    ...ramps.map((r) => ({ x: r.x, z: r.z, r: 9 })),
-    ...heat.shops.map((sh) => ({ x: sh.x, z: sh.z, r: 13 })),
-    ...PARKED.map((p) => ({ x: p.x, z: p.z, r: 8 })),
-    // Road works close the kerb strip, and a bus pulls in at a shelter: no parking in either.
-    ...dressing.street.roadworks.map(({ area: a }) => ({ x: (a.minX + a.maxX) / 2, z: (a.minZ + a.maxZ) / 2, r: Math.hypot(a.maxX - a.minX, a.maxZ - a.minZ) / 2 + 4 })),
-    ...dressing.street.busStops.map((b) => ({ x: b.stopX, z: b.stopZ, r: 13 })),
-  ],
+  avoid: cityAvoid(),
   busStops: dressing.street.busStops,
   vendors: dressing.street.vendors,
   trafficScale: () => getQuality().trafficScale,
@@ -1612,18 +1616,8 @@ function warmShaders(): number {
   return performance.now() - t0;
 }
 
-/** After a live map rebuild: reload on the local edits (the map editor saved them), where every system placed its spots on them. */
-function playOnLocalMap(): void {
-  progress.progress.flush();
-  const url = new URL(location.href);
-  url.searchParams.set('map', 'local');
-  url.searchParams.delete('look');
-  location.href = url.toString();
-}
-
 /** PLAY: from the attract city to a fresh run at the spawn corner. */
 function startGame() {
-  if (liveMap?.dirty) return playOnLocalMap();
   progress.startRun();
   titleCam.stop();
   hud.setScene('play');
@@ -1707,12 +1701,8 @@ let pausedForContext = false;
 /** Why the game is paused, while it is. */
 let pauseReason: PauseReason = 'paused';
 
-/** Observe mode leaving the pause for its own view (not play): a live map rebuild doesn't reload for it. */
-let observeSwitch = false;
 function setPaused(p: boolean, reason: PauseReason = 'paused') {
   if (!p && contextLost) return;
-  // The city was rebuilt live for the map editor: what the game modes placed at boot no longer matches it, so play restarts on the edits.
-  if (!p && liveMap?.dirty && !observeSwitch) return void playOnLocalMap();
   if (p) {
     pauseReason = reason;
     frontDoor.showPause(reason);
@@ -1820,9 +1810,54 @@ const titleCam = new TitleCamera({
   vehicles,
   moved: () => maintainPopulation(true, false),
 });
+/** Inside something solid (a building, a prop) at (x, z), within r. */
+function insideSolid(x: number, z: number, r: number): boolean {
+  const near = collision.near(x, z, r);
+  for (let i = 0; i < near.length; i++) {
+    const o = near[i];
+    if (x > o.minX - r && x < o.maxX + r && z > o.minZ - r && z < o.maxZ + r) return true;
+  }
+  return false;
+}
+
+/**
+ * After VIEW IN 3D rebuilt the world on new edits (game/liveMap.ts): every
+ * system that placed things at boot places them again, whatever was running
+ * stops (as quitting does), traffic and people the edits built over go, and
+ * the page's URL says whether it plays the local edits (so a reload keeps them).
+ */
+function remapGame(): void {
+  heat.remap();
+  heatPresenter.placeBlips();
+  const water = planParkWater(city, dressing.solids);
+  parkWater.fountains.splice(0, parkWater.fountains.length, ...water.fountains);
+  parkWater.sprinklers.splice(0, parkWater.sprinklers.length, ...water.sprinklers);
+  steamLook.replan(planSteamVents(city.seed));
+  pigeons.remap(city);
+  cityLife.remap({ avoid: cityAvoid(), busStops: dressing.street.busStops, vendors: dressing.street.vendors });
+  progress.remap();
+  progress.opening.useStage(openingStage(cityLife, population, dressing.street.busStops, playerMoved));
+  testTools.remap();
+  // Traffic and passers-by now inside a building or a prop go (not what police, scenes or jobs own); upkeep fills the streets again.
+  const keep = new Set([player.driving, player.lastDriven, ...activityCars]);
+  for (const v of [...vehicles]) if (!keep.has(v) && !v.police && !v.ambient && insideSolid(v.sim.x, v.sim.z, 1)) population.retireVehicle(v);
+  for (const ped of [...population.crowd]) if (ped.agent.street && insideSolid(ped.agent.s.x, ped.agent.s.z, 0.3)) population.removePed(ped);
+  if (!player.driving && insideSolid(player.ped.x, player.ped.z, 0.3)) respawnPlayer();
+  maintainPopulation(true, false);
+  try {
+    const url = new URL(location.href);
+    if (ACTIVE_MAP === SHIPPED_MAP) url.searchParams.delete('map');
+    else url.searchParams.set('map', 'local');
+    url.searchParams.delete('look');
+    history.replaceState(history.state, '', url.toString());
+  } catch {
+    // No history (a sandboxed frame): a reload plays the shipped map.
+  }
+}
+
 // MAP EDITOR (TEST → MAP, desktop): the city top-down, the map edits and what relies on what (ui/mapEditor.ts).
-// VIEW IN 3D rebuilds the city in place (game/liveMap.ts) and looks at it in observe mode; play on it then reloads.
-liveMap = new LiveMap({ city, ramps, pickups, dressing, collision, rampGrid, knockables, look, radar, signals }, ACTIVE_MAP);
+// VIEW IN 3D rebuilds the city in place (game/liveMap.ts) and looks at it in observe mode; play goes on there.
+liveMap = new LiveMap({ city, ramps, pickups, dressing, collision, rampGrid, knockables, look, radar, signals, remap: remapGame }, ACTIVE_MAP);
 const live = liveMap;
 const mapEditor = new MapEditor(document.body, {
   audio,
@@ -1845,7 +1880,7 @@ const mapEditor = new MapEditor(document.body, {
     cam.x = at.x;
     cam.z = at.z;
     cam.vx = cam.vz = 0;
-    hud.score.notice('YOUR EDITS, LIVE · PLAYING ON THEM RESTARTS ON THEM', 'progress');
+    hud.score.notice('YOUR EDITS, LIVE', 'progress');
   },
 });
 function openMapEditor() {
@@ -1913,14 +1948,7 @@ observe = new ObserveMode({
   tier: () => getQuality().name,
   heights: { title: CAMERA_ATTRACT, foot: CAMERA_FOOT, car: CAMERA_CAR },
   best: () => score.best,
-  setPaused: (p) => {
-    observeSwitch = true;
-    try {
-      setPaused(p);
-    } finally {
-      observeSwitch = false;
-    }
-  },
+  setPaused: (p) => setPaused(p),
   moved: () => maintainPopulation(true, false),
   offered: () => progress.offer.observe,
 });
