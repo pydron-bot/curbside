@@ -14,7 +14,8 @@ import { buildMissions } from '../systems/missionsData';
 import { arcOf, type MissionArc, type MissionDef } from '../systems/missions';
 import { storyEditFits, storySpots, type StorySpot } from '../systems/storyEdits';
 import { CORE_OFFSET, core, type City } from '../world/city';
-import { bayFor } from '../world/landmarks';
+import { bayFor, placeStation, sprayShopSlots } from '../world/landmarks';
+import { placeHospital } from '../world/streetSpots';
 import { LANDMARK_IDS, NO_EDITS, PICKUP_ITEMS, type LandmarkId, type MapEdits } from '../world/mapEdits';
 
 type Point = { x: number; z: number };
@@ -212,4 +213,12 @@ export function checkRound3(city: City, edits: MapEdits, anchors: readonly Ancho
     }
   }
   return out;
+}
+
+/** The core block the city puts landmark `id` on with no landmark edits (a move back there clears the edit). */
+export function landmarkHome(city: City, id: LandmarkId): readonly [number, number] | null {
+  const bare: City = { ...city, edits: { ...(city.edits ?? NO_EDITS), landmarks: undefined } };
+  const p = id === 'docks' ? placeDocks(bare) : id === 'station' ? placeStation(bare) : id === 'hospital' ? placeHospital(bare) : sprayShopSlots(bare).find((s) => s.slot === id)?.shop;
+  const b = p && blockAt(p.x, p.z);
+  return b ? [b.bx - CORE_OFFSET, b.bz - CORE_OFFSET] : null;
 }

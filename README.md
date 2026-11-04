@@ -3109,6 +3109,27 @@ and every new program is compiled behind the current frame.
   city's scenes) isn't rebuilt, so after a live rebuild leaving the pause
   for play, or PLAY from the title, reloads on `?map=local` (where all of
   it agrees); PLAY ON EDITS does that at once.
+- **Map editor, round 3: spots** (`game/mapSpots.ts`, `systems/storyEdits.ts`,
+  `game/sceneHosts.ts`, `ui/mapEditorSpots.ts`; `tests/mapSpots.test.ts`;
+  docs/W3D_MAP.md *Round 3*): PLACE adds payphones (`phone-<n>`), frenzy
+  tokens (`fz-<n>`, with their own goal, target, seconds and gift:
+  `frenzyList(edits)` / `ACTIVE_FRENZIES` is what every frenzy count
+  reads) and pickups of any kind (`pickup-<n>`; the generated crates are
+  `pickup-0..58`, `placePickups`). A phone's panel lists the jobs it rings
+  for and MOVES A JOB HERE; a story spot's panel picks the phone its job
+  RINGS FROM (the optional `jobs` section). Every story job's spots move
+  (spot edits on the inventory's `story:<job>/<path>` ids, applied in
+  `buildMissions`; drive routes and race steps drag crossing by
+  crossing, snapping, collect steps point by point; parked cars turn).
+  The docks yard, the spray bays, the station and the hospital drag to
+  another block of their shape (the optional `landmarks` section; the
+  blocks they fit are ringed while dragging) and take their props and
+  keep-out with them. Shop doors and road works are zoomed-in anchors; a
+  block or road lists what the run-time scenes could pick there (CAN
+  HOST). The checks add a job on a missing phone, an added phone no job
+  rings, a phone both arcs ring, a frenzy outside its goal's limits
+  (`frenzyLimits.ts`), a parked car off the road or a pavement spot in
+  it, a landmark that doesn't fit where it's moved.
 - **Placement** (`world/streetProps.ts`, `world/landmarkProps.ts`,
   `world/dressing.ts`; pure, tested, from the city seed): street lamps
   with the arm over the road (the analytic night lighting follows the new

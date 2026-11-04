@@ -447,3 +447,54 @@ h3 .me-mini {
 .me-toast[hidden] {
   display: none;
 }
+
+/* Round 3: a spot's fields (a frenzy's goal and numbers, a job's phone, a pickup's kind) and a place's "can host". */
+.me-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+  font: 800 10px/1 var(--hud-font);
+  letter-spacing: 0.12em;
+  color: var(--ink-dim);
+}
+
+.me-field select,
+.me-field input {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: rgb(255 255 255 / 0.07);
+  box-shadow: inset 0 0 0 1.5px rgb(255 255 255 / 0.16);
+  color: var(--ink);
+  font: 700 11px/1 var(--hud-font);
+  letter-spacing: 0.02em;
+}
+
+.me-field select option {
+  background: #161922;
+}
+
+.me-field small {
+  font: 700 9px/1 var(--hud-font);
+  color: var(--ink-dim);
+  letter-spacing: 0.04em;
+}
+
+.me-note.bad {
+  color: #ff8a96;
+}
+
+.me-hosts {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  font: 700 11px/1.5 var(--hud-font);
+  color: var(--ink);
+}
+
+.me-hosts b {
+  color: var(--neon-cyan);
+}

@@ -87,6 +87,15 @@ import { DISTRICT_HUE } from './cityMap';
 import { ICONS } from './icons';
 import { MenuNav, type Panel } from './menu';
 import './mapEditor.css';
+import { blockAt } from '../game/mapAnchors';
+import { anchorBlock, landmarkBlocks, landmarkHome, phoneJobs, storySpotKind, writtenStorySpot } from '../game/mapSpots';
+import { hostKey } from '../game/sceneHosts';
+import { moveLandmark, moveStoryHandle, nearestNode, setFrenzy, setJobPhone, setPickupKind, storyHandles } from '../game/mapEditorState';
+import { FRENZY_GOALS } from '../game/modes/frenzyLimits';
+import { CORE_OFFSET as CORE } from '../world/city';
+import { withLandmark, type LandmarkId } from '../world/mapEdits';
+import type { PickupKind } from '../world/pickups';
+import { canHostHtml, pickupOptions, spotPanelHtml, storyJob } from './mapEditorSpots';
 
 /** Edits settle this long before the city is rebuilt (a slider drag is many edits), ms. */
 const REBUILD_MS = 90;
@@ -118,7 +127,7 @@ export interface MapEditorDeps {
 
 type Drag =
   | { mode: 'pan'; id: number; x: number; y: number; moved: boolean }
-  | { mode: 'move'; id: number; x: number; y: number; moved: boolean; at: Point };
+  | { mode: 'move'; id: number; x: number; y: number; moved: boolean; at: Point; handle?: number };
 
 export class MapEditor implements Panel {
   readonly root: HTMLElement;
@@ -158,6 +167,10 @@ export class MapEditor implements Panel {
   private armed: HTMLElement | null = null;
   private armTimer = 0;
   private onClose: () => void = () => {};
+  /** Round 3: a landmark being followed through rebuilds (a moved spray bay's anchor id changes with its block). */
+  private followLandmark: LandmarkId | null = null;
+  /** Round 3: while a landmark is dragged, the core blocks it fits. */
+  private targets: Array<readonly [number, number]> | null = null;
   private readonly listeners: Array<[EventTarget, string, EventListener, AddEventListenerOptions | boolean]> = [];
 
   constructor(
@@ -178,7 +191,7 @@ export class MapEditor implements Panel {
           <button type="button" class="me-btn" data-act="undo" title="Undo (Ctrl+Z)">UNDO</button>
           <button type="button" class="me-btn" data-act="redo" title="Redo (Ctrl+Shift+Z)">REDO</button>
           <label class="me-place" title="Pick a spot or a street prop, then click the map to place it (Esc stops)">PLACE
-            <select><option value="">—</option><optgroup label="SPOTS">${PLACEABLE_SPOTS.map((k) => `<option value="${placeValue(k)}">${k.label}</option>`).join('')}</optgroup><optgroup label="STREET PROPS">${PLACEABLE_PROPS.map((k) => `<option value="${k}">${k.replace(/_/g, ' ').toUpperCase()}</option>`).join('')}</optgroup></select>
+            <select><option value="">—</option><optgroup label="SPOTS">${PLACEABLE_SPOTS.map((k) => `<option value="${placeValue(k)}">${k.label}</option>`).join('')}</optgroup>${pickupOptions()}<optgroup label="STREET PROPS">${PLACEABLE_PROPS.map((k) => `<option value="${k}">${k.replace(/_/g, ' ').toUpperCase()}</option>`).join('')}</optgroup></select>
           </label>
           <button type="button" class="me-btn" data-act="export" title="Download city.json and copy it">EXPORT</button>
           <button type="button" class="me-btn hot" data-act="view3d" title="Rebuild the city on your edits and look at the selection in observe mode (no reload)">VIEW IN 3D</button>
@@ -235,6 +248,11 @@ export class MapEditor implements Panel {
     this.side.addEventListener('change', (e) => {
       const t = e.target as HTMLInputElement;
       if (t.dataset.input === 'height') this.setHeight(Number(t.value), true);
+    });
+    // Round 3's fields (a frenzy's goal, a pickup's kind, a job's phone): one undo step each.
+    this.side.addEventListener('change', (e) => {
+      const t = e.target as HTMLInputElement | HTMLSelectElement;
+      if (t.dataset.input?.startsWith('r3')) this.input3(t);
     });
     this.placeEl.addEventListener('change', () => {
       this.placing = this.placeEl.value || null;
@@ -386,6 +404,12 @@ export class MapEditor implements Panel {
 
   /** A prop selection follows its prop into the new preview (its origin may have changed). */
   private resolveSelection(): void {
+    const follow = this.followLandmark;
+    if (follow && this.preview) {
+      this.followLandmark = null;
+      const a = this.preview.anchors.find((x) => x.landmark === follow);
+      if (a) this.selection = { kind: 'anchor', id: a.id };
+    }
     const s = this.selection;
     if (s?.kind !== 'prop' || !this.preview) return;
     const p = this.preview.props.find((q) => q.kind === s.prop.kind && Math.abs(q.x - s.prop.x) <= PROP_MATCH && Math.abs(q.z - s.prop.z) <= PROP_MATCH);
@@ -497,7 +521,79 @@ export class MapEditor implements Panel {
         this.commit(this.d.shipped);
         this.say('BACK TO THE SHIPPED MAP');
         return this.d.audio.ui('back');
+      default:
+        return this.act3(act, arg);
     }
+  }
+
+  // --- Round 3: phones and jobs, frenzies, pickups, story spots, landmarks ---
+
+  private act3(act: string, arg: string): void {
+    const h = this.history;
+    if (!h) return;
+    switch (act) {
+      case 'r3job':
+        return this.selectJob(arg);
+      case 'r3jobHome': {
+        const j = phoneJobs(h.current).find((x) => x.id === arg);
+        if (j) this.commit(setJobPhone(h.current, arg, j.written));
+        return this.d.audio.ui('back');
+      }
+      case 'r3resetLandmark':
+        this.followLandmark = arg as LandmarkId;
+        this.commit(withLandmark(h.current, arg as LandmarkId), true);
+        return this.d.audio.ui('confirm');
+    }
+  }
+
+  /** A round 3 field changed. */
+  private input3(t: HTMLInputElement | HTMLSelectElement): void {
+    const h = this.history;
+    const sel = this.selection;
+    if (!h) return;
+    const e = h.current;
+    const id = sel?.kind === 'anchor' ? sel.id : '';
+    const v = t.value;
+    switch (t.dataset.input) {
+      case 'r3jobHere':
+        if (v) this.commit(setJobPhone(e, v, id));
+        break;
+      case 'r3ringFrom':
+        if (t.dataset.job) this.commit(setJobPhone(e, t.dataset.job, v));
+        break;
+      case 'r3goal':
+        if (FRENZY_GOALS.includes(v as never)) this.commit(setFrenzy(e, id, { goal: v as never }));
+        break;
+      case 'r3target':
+        this.commit(setFrenzy(e, id, { target: Number(v) }));
+        break;
+      case 'r3seconds':
+        this.commit(setFrenzy(e, id, { seconds: Number(v) }));
+        break;
+      case 'r3gift':
+        this.commit(setFrenzy(e, id, { gift: v ? (v as never) : null }));
+        break;
+      case 'r3pickup':
+        this.commit(setPickupKind(e, id, v as PickupKind));
+        break;
+      default:
+        return;
+    }
+    this.d.audio.ui('confirm');
+    // A clamped value shows clamped.
+    this.refreshSide();
+  }
+
+  /** Select a job's first spot on the map. */
+  private selectJob(job: string): void {
+    const a = this.preview?.anchors.find((x) => x.group === 'story' && storyJob(x.id) === job);
+    if (a) this.select({ kind: 'anchor', id: a.id }, true);
+    else this.say('IT HAS NO SPOT ON THE MAP');
+  }
+
+  /** The landmark an anchor id stands for, if it's one. */
+  private landmarkOf(id: string): LandmarkId | undefined {
+    return this.allAnchors().find((a) => a.id === id)?.landmark;
   }
 
   private arm(b: HTMLElement): void {
@@ -542,7 +638,10 @@ export class MapEditor implements Panel {
     const h = this.history;
     const p = this.preview;
     if (!h || !p) return;
-    if (sel?.kind === 'anchor' && sel.id.startsWith('ramp-')) {
+    if (sel?.kind === 'anchor' && sel.id.startsWith('story:') && spotRule(sel.id).turnable) {
+      const base = writtenStorySpot(p.city, h.current, sel.id)?.heading;
+      if (base !== undefined) this.commit(turnSpot(h.current, sel.id, Math.sign(delta) * QUARTER, base));
+    } else if (sel?.kind === 'anchor' && sel.id.startsWith('ramp-')) {
       const ramp = p.rawRamps.find((r) => r.id === sel.id) ?? p.ramps.find((r) => r.id === sel.id);
       if (ramp) this.commit(turnSpot(h.current, sel.id, delta, ramp.heading));
     } else if (sel?.kind === 'prop' && sel.prop.origin === 'added') {
@@ -596,7 +695,11 @@ export class MapEditor implements Panel {
       const r = e as { a: readonly [number, number]; b: readonly [number, number] };
       this.select({ kind: 'segment', a: r.a, b: r.b }, true);
     } else if (c.section === 'spots') this.select({ kind: 'anchor', id: (e as { id: string }).id }, true);
-    else {
+    else if (c.section === 'jobs') this.selectJob((e as { id: string }).id);
+    else if (c.section === 'landmarks') {
+      const a = this.preview?.anchors.find((x) => x.landmark === (e as { id: string }).id);
+      if (a) this.select({ kind: 'anchor', id: a.id }, true);
+    } else {
       const pr = e as { kind: string; x: number; z: number };
       const found = this.preview?.props.find((q) => q.kind === pr.kind && Math.abs(q.x - pr.x) <= PROP_MATCH && Math.abs(q.z - pr.z) <= PROP_MATCH);
       if (found) this.select({ kind: 'prop', prop: found }, true);
@@ -609,6 +712,7 @@ export class MapEditor implements Panel {
   private showProblem(pr: EditorProblem): void {
     const id = pr.id.startsWith('spot:') ? pr.id.slice(5) : pr.id;
     if (this.allAnchors().some((a) => a.id === id)) return this.select({ kind: 'anchor', id }, true);
+    if (id.startsWith('job:')) return this.selectJob(id.slice(4));
     const at = pr.points[0];
     if (!at) return;
     const prop = this.preview?.props.find((q) => q.origin === 'added' && Math.abs(q.x - at.x) <= PROP_MATCH && Math.abs(q.z - at.z) <= PROP_MATCH);
@@ -635,7 +739,7 @@ export class MapEditor implements Panel {
   /** Anchors on the map and the ones the edits removed (a removed spot can still be selected, to put it back). */
   private allAnchors(): Anchor[] {
     const p = this.preview;
-    return p ? [...p.anchors, ...p.removed] : [];
+    return p ? [...p.anchors, ...p.removed, ...p.extras] : [];
   }
 
   // --- Input ---
@@ -742,9 +846,21 @@ export class MapEditor implements Panel {
     if (e.button === 0 && !this.placing && this.preview && this.selection) {
       const w = toWorld(this.view, sx, sy);
       const sel = this.selection;
-      const stack = picksAt(w, this.preview.anchors.filter((a) => anchorShown(a, this.view.scale)), this.preview.props, this.view.scale);
-      if (stack.some((x) => sameSelection(x, sel)) && this.draggable(sel)) {
+      const stack = picksAt(w, [...this.preview.anchors, ...this.preview.extras].filter((a) => anchorShown(a, this.view.scale)), this.preview.props, this.view.scale);
+      // A story spot made of crossings or points drags by the one pressed (round 3).
+      const a = sel.kind === 'anchor' ? this.preview.anchors.find((x) => x.id === sel.id) : undefined;
+      const handles = a && storyHandles(a);
+      if (handles) {
+        const reach = 10 / this.view.scale;
+        const i = handles.findIndex((q) => Math.hypot(q.x - w.x, q.z - w.z) <= reach);
+        if (i >= 0) {
+          this.drag = { mode: 'move', id: e.pointerId, x: sx, y: sy, moved: false, at: w, handle: i };
+          return;
+        }
+      } else if (stack.some((x) => sameSelection(x, sel)) && this.draggable(sel)) {
         this.drag = { mode: 'move', id: e.pointerId, x: sx, y: sy, moved: false, at: w };
+        const lm = sel.kind === 'anchor' ? this.landmarkOf(sel.id) : undefined;
+        this.targets = lm ? landmarkBlocks(this.preview.city, lm, this.preview.anchors) : null;
         return;
       }
     }
@@ -752,7 +868,7 @@ export class MapEditor implements Panel {
   }
 
   private draggable(s: Selection): boolean {
-    return (s.kind === 'anchor' && spotRule(s.id).movable) || (s.kind === 'prop' && s.prop.origin === 'added');
+    return (s.kind === 'anchor' && (spotRule(s.id).movable || this.landmarkOf(s.id) !== undefined)) || (s.kind === 'prop' && s.prop.origin === 'added');
   }
 
   private move(e: PointerEvent): void {
@@ -780,10 +896,24 @@ export class MapEditor implements Panel {
     const h = this.history;
     const p = this.preview;
     if (!h || !p) return;
+    this.targets = null;
     if (g.mode === 'move' && g.moved) {
       const s = this.selection;
       const at = { x: Math.round(g.at.x * 10) / 10, z: Math.round(g.at.z * 10) / 10 };
-      if (s?.kind === 'anchor') {
+      const lm = s?.kind === 'anchor' ? this.landmarkOf(s.id) : undefined;
+      const anchor = s?.kind === 'anchor' ? p.anchors.find((a) => a.id === s.id) : undefined;
+      if (lm) {
+        // Snaps to the block it's dropped on (the checks say if it can't stand there).
+        const b = blockAt(at.x, at.z);
+        const now = anchor && anchorBlock(anchor);
+        if (b && (!now || now[0] !== b.bx - CORE || now[1] !== b.bz - CORE)) {
+          this.followLandmark = lm;
+          this.commit(moveLandmark(h.current, lm, [b.bx - CORE, b.bz - CORE], landmarkHome(p.city, lm)), true);
+        }
+      } else if (anchor && g.handle !== undefined) {
+        const written = writtenStorySpot(p.city, h.current, anchor.id)?.list;
+        if (written) this.commit(moveStoryHandle(h.current, anchor, g.handle, at, written));
+      } else if (s?.kind === 'anchor') {
         const from = p.moved.get(s.id)?.from ?? p.anchors.find((a) => a.id === s.id)?.points[0];
         if (from) this.commit(moveSpot(h.current, s.id, at.x, at.z, from));
       } else if (s?.kind === 'prop') {
@@ -819,7 +949,7 @@ export class MapEditor implements Panel {
       return;
     }
     // Removed spots can be picked too (to put them back). A click again where the last one landed steps through what's stacked there.
-    const stack = picksAt(w, [...p.anchors.filter((a) => anchorShown(a, this.view.scale)), ...p.removed], p.props, this.view.scale);
+    const stack = picksAt(w, [...p.anchors.filter((a) => anchorShown(a, this.view.scale)), ...p.removed, ...p.extras.filter((a) => anchorShown(a, this.view.scale))], p.props, this.view.scale);
     const last = this.lastClick;
     const again = last !== null && Math.hypot(w.x - last.x, w.z - last.z) * this.view.scale <= CLICK_SLOP * 2;
     this.lastClick = w;
@@ -881,11 +1011,12 @@ export class MapEditor implements Panel {
     // What relies on the selection: a place's dependents, or a spot's own course and what it stands on.
     let deps: Anchor[] = [];
     let depsTitle = 'WHAT RELIES ON IT';
-    if (pick) deps = dependentsOf(p.anchors, pick);
+    const listed = [...p.anchors, ...p.extras];
+    if (pick) deps = dependentsOf(listed, pick);
     else if (sel?.kind === 'anchor') {
       const a = this.allAnchors().find((x) => x.id === sel.id);
       const place = a && anchorPlace(a);
-      deps = place ? dependentsOf(p.anchors, place).filter((x) => x.id !== sel.id) : [];
+      deps = place ? dependentsOf(listed, place).filter((x) => x.id !== sel.id) : [];
       depsTitle = 'SHARES ITS PLACE WITH';
     }
     this.depsEl.hidden = !sel || sel.kind === 'prop';
@@ -898,7 +1029,7 @@ export class MapEditor implements Panel {
             )
             .join('')}</ul>`
         : '<p class="me-note">Nothing tied to this place.</p>'
-    }`;
+    }${pick ? canHostHtml(p.hosts.get(hostKey(pick) ?? '')) : ''}`;
     const probs = p.problems;
     this.problemsEl.innerHTML = `<h3 class="${probs.length ? 'bad' : ''}">PROBLEMS <b>${probs.length}</b></h3>${
       probs.length
@@ -998,10 +1129,10 @@ export class MapEditor implements Panel {
       return `<h3><i class="me-dot" style="background:${g.color}"></i>${esc(a.label)}</h3>
         <p class="me-note">${g.name} · <code>${esc(a.id)}</code>${at ? ` · ${at.x.toFixed(1)}, ${at.z.toFixed(1)}` : ''}${a.points.length > 1 ? ` · ${a.points.length} points` : ''}${line ? ` · ${line.fixed ? 'a course' : 'a drive route'} through ${line.points.length - (line.fixed ? 0 : 1)} crossings` : ''}</p>
         ${state ? `<p class="me-note edited">${state}</p>` : ''}
-        <p class="me-note">${rule.movable ? (removed ? 'Removed from the city.' : 'Drag it on the map to move it.') : 'Placed by the game (not a spot the map file moves): this shows what it relies on.'}</p>
+        <p class="me-note">${rule.movable ? (removed ? 'Removed from the city.' : storyHandles(a) ? 'Its job uses these where they stand.' : 'Drag it on the map to move it.') : a.landmark ? 'A landmark: it moves block to block.' : 'Placed by the game (not a spot the map file moves): this shows what it relies on.'}</p>
         <div class="me-row">${rule.removable && !removed ? btn('removeSpot', 'REMOVE', { sub: 'Del' }) : ''}${edit && !edit.add ? btn('resetSpot', removed ? 'PUT BACK' : 'AS GENERATED') : ''}${
           a.id.startsWith('ramp-') && !removed ? btn('turnSpot', 'TURN ⟲', { arg: String(-QUARTER) }) + btn('turnSpot', 'TURN ⟳', { arg: String(QUARTER) }) : ''
-        }</div>`;
+        }</div>${this.spotPanel(a, e)}`;
     }
     const pr = s.prop;
     const what = pr.origin === 'added' ? 'Added by your edits' : pr.origin === 'removed' ? 'Removed by your edits' : 'Generated';
@@ -1010,6 +1141,18 @@ export class MapEditor implements Panel {
       <div class="me-row">${pr.origin === 'removed' ? btn('restoreProp', 'PUT BACK') : btn('removeProp', 'REMOVE', { sub: 'Del' })}${
         pr.origin === 'added' ? btn('turnProp', 'TURN ⟲', { arg: String(-QUARTER / 2) }) + btn('turnProp', 'TURN ⟳', { arg: String(QUARTER / 2) }) : ''
       }</div>`;
+  }
+
+  /** Round 3's part of a spot's panel (mapEditorSpots). */
+  private spotPanel(a: Anchor, e: MapEdits): string {
+    return spotPanelHtml(a, {
+      edits: e,
+      jobs: a.group === 'payphone' || a.group === 'story' ? phoneJobs(e) : [],
+      phones: this.preview?.anchors.filter((x) => x.group === 'payphone') ?? [],
+      edit: spotEdited(e, a.id),
+      storyKind: a.group === 'story' ? storySpotKind(a.id) : null,
+      turnable: a.group === 'story' && spotRule(a.id).turnable,
+    });
   }
 
   private say(text: string): void {
@@ -1180,12 +1323,21 @@ export class MapEditor implements Panel {
     // The overlay: what relies on the selection (routes as lines through their crossings).
     const pick = selectionPick(sel);
     const all = this.allAnchors();
-    let deps: Anchor[] = pick ? dependentsOf(p.anchors, pick) : [];
+    let deps: Anchor[] = pick ? dependentsOf([...p.anchors, ...p.extras], pick) : [];
     const selAnchor = sel?.kind === 'anchor' ? all.find((a) => a.id === sel.id) : undefined;
     if (selAnchor) deps = [selAnchor];
     for (const a of deps) {
       const line = routeLine(a);
       if (line) this.polyline(line.points, line.fixed ? 'rgb(46 230 255 / 0.85)' : 'rgb(46 230 255 / 0.6)', 4 * px, !line.fixed, line.fixed);
+    }
+    // A landmark being dragged: the blocks it fits, ringed green.
+    if (this.targets) {
+      ctx.strokeStyle = 'rgb(95 227 106 / 0.8)';
+      ctx.lineWidth = 3 * px;
+      for (const [cx, cz] of this.targets) {
+        const b = p.city.blocks[blockIndex(p.city, cx + CORE, cz + CORE)];
+        if (b) ctx.strokeRect(b.interior.minX - 2, b.interior.minZ - 2, b.interior.maxX - b.interior.minX + 4, b.interior.maxZ - b.interior.minZ + 4);
+      }
     }
     // Problems in red: their roads, and rings drawn with the icons below.
     for (const pr of p.problems) for (const [a, b] of pr.segments ?? []) this.segment(nodePoint(a), nodePoint(b), '#ff3b4f', Math.max(7, 6 * s) * px, 4);
@@ -1216,7 +1368,8 @@ export class MapEditor implements Panel {
       const { sx, sy } = toScreen(v, q.x, q.z);
       if (sx < -20 || sy < -20 || sx > v.width + 20 || sy > v.height + 20) return;
       const g = GROUP_STYLE[a.group];
-      const small = a.group === 'busStop' || (a.group === 'story' && !depIds.has(a.id) && s < 1);
+      // Shop doors (thousands) are dots, labelled only when they matter.
+      const small = a.group === 'busStop' || (a.group === 'shop' && selAnchor !== a) || (a.group === 'story' && !depIds.has(a.id) && s < 1);
       const r = small ? 3.5 : 6.5;
       if (bad.has(a.id)) {
         ctx.strokeStyle = '#ff3b4f';
@@ -1278,7 +1431,26 @@ export class MapEditor implements Panel {
     for (const a of p.anchors) {
       if (!anchorShown(a, s, keep)) continue;
       const drag = dragging && selAnchor === a;
-      a.points.forEach((q, i) => icon(a, drag && i === 0 ? dragging : q, false));
+      a.points.forEach((q, i) => icon(a, drag && i === 0 && this.drag?.mode === 'move' && this.drag.handle === undefined ? dragging : q, false));
+    }
+    // Shop doors and road works (zoomed in, or tied to the selection).
+    for (const a of p.extras) if (anchorShown(a, s, keep)) icon(a, a.points[0], false);
+    // A selected story route or collect step: its handles (a crossing being dragged snaps to the nearest one).
+    const handles = selAnchor && storyHandles(selAnchor);
+    if (handles) {
+      const g = this.drag?.mode === 'move' && this.drag.moved ? this.drag : null;
+      handles.forEach((q, i) => {
+        const at = g?.handle === i ? (selAnchor!.via || selAnchor!.route ? nodePoint(nearestNode(g.at)) : g.at) : q;
+        const { sx, sy } = toScreen(v, at.x, at.z);
+        ctx.fillStyle = g?.handle === i ? '#5fe36a' : '#ffb13c';
+        ctx.strokeStyle = '#090b10';
+        ctx.lineWidth = 1.5;
+        ctx.fillRect(sx - 5, sy - 5, 10, 10);
+        ctx.strokeRect(sx - 5, sy - 5, 10, 10);
+        ctx.fillStyle = '#090b10';
+        ctx.textAlign = 'center';
+        ctx.fillText(String(i + 1), sx, sy + 0.5);
+      });
     }
     // Problems with no anchor on the map (a removed spot the game needs, an added prop in a building).
     for (const pr of p.problems) {
