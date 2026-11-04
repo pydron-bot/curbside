@@ -181,10 +181,12 @@ export function checkRound3(city: City, edits: MapEdits, anchors: readonly Ancho
       if (!s) continue; // checkMapEdits: no spot has the id
       const edit = { section: 'spots' as const, key: e.id };
       const bad = storyEditFits(s, e);
-      if (bad) {
+      // A turn of a spot with no facing is checkMapEdits' own finding.
+      if (bad && !(e.heading !== undefined && s.heading === undefined && s.kind === 'point')) {
         out.push({ id: e.id, label: s.label, problem: bad, edit });
         continue;
       }
+      if (bad) continue;
       const pairs: Array<[Point, Point]> =
         s.kind === 'point' ? (e.x !== undefined ? [[s, { x: e.x, z: e.z! }]] : []) : s.kind === 'points' ? s.list!.map(([x, z], i) => [{ x, z }, { x: e.points![i][0], z: e.points![i][1] }]) : [];
       for (const [from, to] of pairs) {

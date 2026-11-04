@@ -279,7 +279,7 @@ describe('story spots', () => {
     expect(about(p, 'story:m3-saints/steps.0.start.0')[0]).toMatch(/must stand on a road/);
     expect(about(p, 'story:m2-tuna/steps.1.start.0')[0]).toMatch(/stands in the road/);
     expect(about(p, 'story:m6-midnight/steps.2.nodes')).toContain('has 6 crossings, not 2');
-    expect(about(p, 'story:m4-parcels/steps.1')).toContain('has no facing to turn');
+    expect(about(p, 'story:m4-parcels/steps.1')).toEqual(['has no facing to turn']);
   });
 
   it('the editor drags a route crossing to the nearest crossing, and back home clears it', () => {
