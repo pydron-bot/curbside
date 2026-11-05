@@ -15,6 +15,14 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.32.1',
+    date: '2026-11-05',
+    title: 'Which way up',
+    notes: [
+      'Bug reports now say what the player\'s body is doing on foot (knocked down or up, the animation playing, which way up it stands), to track down a player seen lying flat while aiming.',
+    ],
+  },
+  {
     version: '0.32.0',
     date: '2026-11-04',
     title: 'Power cut',

@@ -2026,6 +2026,7 @@ const bugReport = new BugReportSheet(document.body, {
       ratio: resolution.pixelRatio,
       activity: progress.busy ?? (progress.chaos.active ? 'chaos' : attract.active ? 'title' : null),
       simTime,
+      pose: v ? undefined : `${player.down ? 'down' : 'up'} stun ${player.stunned.toFixed(2)} · ${playerModel.debugPose()}`,
     };
   },
   events: () => trail.entries(simTime),

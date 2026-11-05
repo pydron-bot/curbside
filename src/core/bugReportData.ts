@@ -30,6 +30,8 @@ export interface BugState {
   activity: string | null;
   /** Sim time, s. */
   simTime: number;
+  /** On foot: down / stun and the body's animation state (CharacterModel.debugPose), for pose bugs. */
+  pose?: string;
 }
 
 export interface BugReportInput {
@@ -62,7 +64,7 @@ export function buildBugReport(p: BugReportInput) {
     version: p.version,
     at: p.at.toISOString(),
     note: p.note.trim().slice(0, NOTE_MAX),
-    player: { x: r1(s.x), z: r1(s.z), heading: Math.round(s.heading), vehicle: s.vehicle, health: Math.round(s.health), alive: s.alive },
+    player: { x: r1(s.x), z: r1(s.z), heading: Math.round(s.heading), vehicle: s.vehicle, health: Math.round(s.health), alive: s.alive, ...(s.pose ? { pose: s.pose } : {}) },
     wanted: s.wanted,
     time: { hour: Math.round(s.hour * 100) / 100, clock: clock(s.hour), night: r1(s.night) },
     weather: { rain: r1(s.rain), wetness: r1(s.wetness) },

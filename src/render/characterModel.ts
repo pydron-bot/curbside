@@ -757,6 +757,25 @@ export class CharacterModel {
     this.rig.updateMatrixWorld(true);
   }
 
+  /**
+   * For bug reports: the whole-body state and its clip, the aim and one-shot
+   * layers, the procedural lean, and how the root bone stands (`up` 1:
+   * upright, 0: lying, -1: upside down; `y` its height, m).
+   */
+  debugPose(): string {
+    const layer = (l: Layer) => `${l.cur.clip?.name ?? '-'}@${l.cur.time.toFixed(2)} w${l.weight.toFixed(2)}`;
+    let rootBone = '';
+    const b = this.bank && this.animBones[this.bank.posSlot];
+    if (b) {
+      const e = b.matrixWorld.elements;
+      rootBone = ` · root up ${e[5].toFixed(2)} y ${e[13].toFixed(2)}`;
+    }
+    return (
+      `${this.downPhase}/${this.fullState}${this.wasDown ? ' wasDown' : ''} · full ${layer(this.full)} · aim ${layer(this.aim)} · act ${this.actKind} ${layer(this.act)}` +
+      ` · lean ${this.body.rotation.x.toFixed(2)} y ${this.body.position.y.toFixed(2)} · stagger ${this.staggerTime.toFixed(2)}${rootBone}`
+    );
+  }
+
   /** Throw a punch (over whatever the legs do): 0 the jab, 1 the left hook, 2 the uppercut. */
   punch(step = 0): void {
     const clip = this.bank?.get(PUNCH_CLIP[((step % 3) + 3) % 3]);
