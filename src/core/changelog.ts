@@ -15,6 +15,14 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.32.3',
+    date: '2026-11-06',
+    title: 'Travelling light',
+    notes: [
+      'The game starts with less code to read: the map editor, the TEST menu, the LOOK panel and this version history now load the first time they\'re opened (they still work offline).',
+    ],
+  },
+  {
     version: '0.32.2',
     date: '2026-11-06',
     title: 'Back on your feet',

@@ -8,7 +8,7 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
 
 ## Where it is (2026-11-06)
 
-- **Live:** **0.32.2** at https://deeek.org/curbside/, deployed by
+- **Live:** **0.32.3** at https://deeek.org/curbside/, deployed by
   `.github/workflows/pages.yml` on every push to `main` (tests → build with
   `CURBSIDE_BASE=/curbside/` → deploy). The `github-pages` environment may
   ask for approval on the Actions run ("Review deployments").
@@ -25,7 +25,10 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
   hunting iPhone slowness: GPU BREAKDOWN (0.31.0) and LOW POWER TESTS
   (0.32.0), plus a frame "tail" stat; the player's pose in bug reports
   (0.32.1), then a fix for getting up tilted after being thrown off a bike
-  (0.32.2). **Ask the owner** whether the "lying flat while aiming" report
+  (0.32.2). 0.32.3 is housekeeping: the docs split into `docs/systems/`,
+  looks and `__ub` entries registered where they're made
+  ([main-loop.md](systems/main-loop.md)), and the map editor, TEST sheet,
+  LOOK panel and changelog loaded on first open. **Ask the owner** whether the "lying flat while aiming" report
   is gone with 0.32.2, and what LOW POWER TESTS showed on the phone.
 
 ## Open work, in priority order
