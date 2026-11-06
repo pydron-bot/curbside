@@ -1,4 +1,4 @@
-import { AnimationClip, Bone, Color, Group, Matrix4, Quaternion, QuaternionKeyframeTrack, Vector3, VectorKeyframeTrack } from 'three';
+import { AnimationClip, Bone, Color, Euler, Group, Matrix4, Quaternion, QuaternionKeyframeTrack, Vector3, VectorKeyframeTrack } from 'three';
 import { describe, expect, it } from 'vitest';
 import { CharacterModel, poseFor, type CharacterBatch } from '../src/render/characterModel';
 import { ClipBank } from '../src/render/characterAnim';
@@ -345,6 +345,25 @@ describe('boarding (PeoplePose)', () => {
     m.root.position.set(120, 0, 40);
     bus.emit({ type: 'enterVehicle', archetype: 'sports' });
     expect(m.root.visible).toBe(false);
+  });
+});
+
+describe('off a bike (PeoplePose)', () => {
+  it('stands upright facing its heading, whatever lean and pitch the bike left on the body', () => {
+    const { m } = model(ALL);
+    const bus = new EventBus();
+    const heading = 1;
+    const at = { x: 3, z: 4, heading, vx: 0, vz: 0 };
+    const player = { driving: null, alive: true, down: false, dead: 0, stunned: 0, arrested: false, ped: at, prev: { ...at }, arsenal: { current: null } };
+    const pose = new PeoplePose({ bus, player: player as unknown as Player, model: m, crowd: [], locked: () => false, playing: () => true });
+    // Riding (streetLife.ts sit): the bike's whole orientation, turned past 90° and leaning into a bend, nose down.
+    m.root.quaternion.setFromEuler(new Euler(0.5, 2.6, 0.62, 'YXZ'));
+    pose.update(1 / 60, 1, null);
+    expect(m.root.rotation.x).toBeCloseTo(0, 6);
+    expect(m.root.rotation.z).toBeCloseTo(0, 6);
+    expect(m.root.rotation.y).toBeCloseTo(heading, 6);
+    m.root.updateMatrixWorld(true);
+    expect(m.root.matrixWorld.elements[5]).toBeCloseTo(1, 6);
   });
 });
 

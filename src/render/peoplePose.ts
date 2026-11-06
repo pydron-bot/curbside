@@ -104,7 +104,9 @@ export class PeoplePose {
     if (this.boardCar) this.stepBoard(dt);
     else {
       m.root.position.set(lerp(p.prev.x, ped.x, alpha), 0, lerp(p.prev.z, ped.z, alpha));
-      m.root.rotation.y = lerpAngle(p.prev.heading, ped.heading, alpha);
+      // Upright with only the facing: riding a bike, the root took the bike's lean and pitch
+      // (streetLife.ts sit), and setting y alone kept them after a fall off it.
+      m.root.rotation.set(0, lerpAngle(p.prev.heading, ped.heading, alpha), 0);
     }
     const held = this.boardCar ? null : p.arsenal.current;
     const moving = this.boardCar ? 0 : len2(ped.vx, ped.vz);
@@ -151,7 +153,7 @@ export class PeoplePose {
     const from = this.boardFrom;
     m.root.position.set(lerp(from.x, dx, e), 0, lerp(from.z, dz, e));
     // Facing the car, into the door.
-    m.root.rotation.y = lerpAngle(from.heading, Math.atan2(car.sim.x - dx, car.sim.z - dz), e);
+    m.root.rotation.set(0, lerpAngle(from.heading, Math.atan2(car.sim.x - dx, car.sim.z - dz), e), 0);
   }
 
   /** A win: the player (on foot) and any story character close by cheer. */

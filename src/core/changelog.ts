@@ -15,6 +15,14 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.32.2',
+    date: '2026-11-06',
+    title: 'Back on your feet',
+    notes: [
+      'Thrown off a motorbike or scooter, you no longer get up tilted, lying flat or facing the wrong way: the bike\'s lean and tilt stayed on your body after the fall.',
+    ],
+  },
+  {
     version: '0.32.1',
     date: '2026-11-05',
     title: 'Which way up',
