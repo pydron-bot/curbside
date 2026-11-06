@@ -78,6 +78,27 @@ expose('nitro', nitro);
 it. A name exposed twice throws. The tools depend on these names, so don't
 rename one without searching `tools/`.
 
+## Loaded on demand
+
+Screens most players never open load the first time they're used, through a
+dynamic `import()`, so their code isn't parsed at boot: the map editor, the
+TEST sheet with its teleport map (`ui/testCorner.ts` adds the corner button
+at boot), the LOOK panel, and the changelog behind Settings → Version
+history (the version itself comes from package.json through vite's `define`,
+`core/version.ts`). The service worker precaches them, so they open offline.
+
+`vite.config.ts` puts all other source in one `app` chunk and lists these
+modules in `LAZY_SRC`, so the bundler can't split shared code into extra
+chunks whose stylesheets would load ahead of the app's and change the CSS
+cascade. Adding a lazy screen: `import()` it where it's opened and add it,
+with any module only it uses, to `LAZY_SRC`; check `dist/index.html` links
+one stylesheet. Through `__ub`, a lazy screen is null until first opened
+(`__ub.lookPanel`, `__ub.mapEditor.editor`), and `__ub.mapEditor.open()`
+returns a promise.
+
+Observe mode stays in the app chunk: it's on the title for every player,
+and the frame loop, the sim step and the harnesses read it directly.
+
 ## Adding a system
 
 Build it in its module (pure logic with tests in `tests/`), then in main.ts:

@@ -783,26 +783,7 @@ export function describeBlock(b: Omit<BlockEdit, 'at'>): string {
 
 // --- VIEW IN 3D ---
 
-/** The `look=x,z` URL parameter VIEW IN 3D adds: the game boots into observe mode over it. */
-export function lookParam(p: Point): string {
-  return `${Math.round(p.x)},${Math.round(p.z)}`;
-}
-
-/** Where `?map=local&look=x,z` asks the camera to start, or null. */
-export function editorLookAt(search: string): Point | null {
-  let q: URLSearchParams;
-  try {
-    q = new URLSearchParams(search);
-  } catch {
-    return null;
-  }
-  if (q.get('map') !== 'local') return null;
-  const m = /^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/.exec(q.get('look') ?? '');
-  if (!m) return null;
-  const x = Number(m[1]);
-  const z = Number(m[2]);
-  return Math.abs(x) < 4096 && Math.abs(z) < 4096 ? { x, z } : null;
-}
+export { editorLookAt, lookParam } from './editorLook';
 
 /** The centre of a selection, world m (what VIEW IN 3D looks at). */
 export function selectionCentre(sel: Selection, anchors: readonly Anchor[]): Point | null {

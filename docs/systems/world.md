@@ -101,7 +101,8 @@ and every new program is compiled behind the current frame.
   kind of id, a package count other than 40), each naming the edit at fault; `editsOn` lists
   the edits on a pick (`tests/mapEditsApply.test.ts`).
 - **Map editor** (`ui/mapEditor.ts`, logic in `game/mapEditorState.ts`;
-  TEST → MAP → MAP EDITOR, desktop only): the city top-down on a canvas
+  TEST → MAP → MAP EDITOR, desktop only; its code loads the first time it
+  opens, so `await __ub.mapEditor.open()` before reading `.editor`): the city top-down on a canvas
   (drag or arrows to pan, wheel to zoom), every anchor as a labelled icon
   and, zoomed in, the street props. Click a block (kind, district,
   building style, REROLL, height), a road (open, closed, one-way, FLIP), a

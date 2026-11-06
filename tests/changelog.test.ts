@@ -1,12 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { CHANGELOG, VERSION, compareVersions } from '../src/core/changelog';
+import { VERSION as SHOWN } from '../src/core/version';
 
 describe('changelog', () => {
   it('the version is the newest release, and package.json agrees', () => {
     const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
     expect(VERSION).toBe(CHANGELOG[0].version);
     expect(pkg.version).toBe(VERSION);
+    // What the title, pause card and settings show (package.json through vite's define).
+    expect(SHOWN).toBe(VERSION);
   });
 
   it('releases run newest first, each a well-formed version, date and some notes', () => {

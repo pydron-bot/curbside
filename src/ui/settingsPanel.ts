@@ -1,6 +1,6 @@
 import type { GameAudio } from '../audio/gameAudio';
 import { BUILD_ID } from '../core/build';
-import { VERSION } from '../core/changelog';
+import { VERSION } from '../core/version';
 import { onSettingsChange, settings, updateSettings, type Settings } from '../core/settings';
 import { ICONS } from './icons';
 import { MenuNav, overlay, type Panel } from './menu';

@@ -525,7 +525,7 @@ async function mapEditorCheck(page, label) {
     u.startGame();
     u.fastForward(1);
     const districts = u.mapEditor.districts();
-    u.mapEditor.open();
+    await u.mapEditor.open();
     const ed = u.mapEditor.editor;
     // A downtown block made a park in Neon Mile.
     ed.select({ kind: 'block', bx: 7, bz: 7 }, true);
@@ -577,7 +577,7 @@ async function mapEditorCheck(page, label) {
     const u = window.__ub;
     await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
     const n = u.renderer.info.programs.length;
-    u.mapEditor.open();
+    await u.mapEditor.open();
     u.mapEditor.editor.select({ kind: 'block', bx: 9, bz: 8 }, true);
     return n;
   });
@@ -611,13 +611,13 @@ async function mapEditorCheck(page, label) {
  * lot, the rocket is a pickup. The shipped map comes back after.
  */
 async function mapSpotsCheck(page, label) {
-  const at = await page.evaluate(() => {
+  const at = await page.evaluate(async () => {
     const u = window.__ub;
     localStorage.removeItem('curbside.map.local');
     if (u.observe?.active) u.observe.exit();
     u.startGame();
     u.fastForward(0.5);
-    u.mapEditor.open();
+    await u.mapEditor.open();
     const ed = u.mapEditor.editor;
     const safe = ed.preview.anchors.find((a) => a.id === 'safehouse').points[0];
     Object.assign(ed.view, { cx: safe.x + 12, cz: safe.z, scale: 5 });
@@ -724,7 +724,7 @@ async function streetsCheck(page, label) {
     u.fastForward(1);
     await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
     const n = u.renderer.info.programs.length;
-    u.mapEditor.open();
+    await u.mapEditor.open();
     u.mapEditor.editor.select({ kind: 'segment', a: [1, 1], b: [2, 1] }, true);
     return n;
   });
@@ -792,10 +792,10 @@ async function streetsCheck(page, label) {
  * goes back, and a file that isn't a map is refused.
  */
 async function mapImportCheck(page, label) {
-  await page.evaluate(() => {
+  await page.evaluate(async () => {
     const u = window.__ub;
     localStorage.removeItem('curbside.map.local');
-    u.mapEditor.open();
+    await u.mapEditor.open();
   });
   const file = JSON.stringify({ version: 2, seed: 1337, blocks: [{ at: [9, 3], kind: 'carpark' }, { at: [1, 1], kind: 'volcano' }], roads: [{ a: [1, 1], b: [2, 1], pedestrian: true }], spots: [], props: [] });
   await page.setInputFiles('#mapeditor .me-file', { name: 'city.json', mimeType: 'application/json', buffer: Buffer.from(file) });

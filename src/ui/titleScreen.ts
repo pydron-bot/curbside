@@ -1,5 +1,5 @@
 import './tokens.css';
-import { VERSION } from '../core/changelog';
+import { VERSION } from '../core/version';
 import './title.css';
 import type { GameAudio } from '../audio/gameAudio';
 import type { InputDevice } from '../core/input';

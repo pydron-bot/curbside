@@ -1,5 +1,5 @@
 import { BUILD_ID } from '../core/build';
-import { VERSION } from '../core/changelog';
+import { VERSION } from '../core/version';
 import type { InputDevice } from '../core/input';
 import { onSettingsChange } from '../core/settings';
 import './core.css';

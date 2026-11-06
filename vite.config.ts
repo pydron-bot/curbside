@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { execSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { defineConfig, type Plugin } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -22,6 +23,17 @@ function buildId(): string {
  * a meta tag, so src/render/rubbleLoader.ts can download them as soon as the
  * test is on but import (evaluate and instantiate) them only behind a pause.
  */
+/**
+ * Source loaded only by dynamic import, and what only it uses: the map editor,
+ * the TEST sheet and its teleport map, the LOOK panel, the changelog (Version
+ * history) and the destruction test's physics. Everything else in src/ goes
+ * in one app chunk, so its CSS keeps one stylesheet in import order (shared
+ * chunks would load theirs first and change the cascade). A dynamic import
+ * missing from this list still works; it just isn't lazy.
+ */
+const LAZY_SRC =
+  /[\\/]src[\\/](ui[\\/](mapEditor|mapEditorSpots|testMenu|teleportMap|lookPanel)|game[\\/](mapEditorState|mapAnchors|mapSpots|sceneHosts)|core[\\/]changelog|render[\\/]rubblePhysics)\.(ts|css)$/;
+
 function rapierFilesMeta(): Plugin {
   return {
     name: 'curbside-rapier-files',
@@ -40,7 +52,11 @@ export default defineConfig({
   // The site path the game is served from: '/' locally, '/curbside/' when the
   // Pages workflow builds it for deeek.org/curbside/ (CURBSIDE_BASE).
   base: process.env.CURBSIDE_BASE ?? '/',
-  define: { __BUILD__: JSON.stringify(buildId()) },
+  define: {
+    __BUILD__: JSON.stringify(buildId()),
+    // The version without the changelog (src/core/version.ts): the full list loads only with Version history.
+    __VERSION__: JSON.stringify(JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')).version),
+  },
   server: {
     host: true,
     port: 5173,
@@ -66,6 +82,7 @@ export default defineConfig({
             { name: 'three', test: /node_modules[\\/]three[\\/]/ },
             // Rapier (the destruction test) gets chunks of its own, kept out of the precache below.
             { name: 'rapier', test: /node_modules[\\/]@dimforge[\\/]/ },
+            { name: 'app', test: (id) => /[\\/]src[\\/]/.test(id) && !LAZY_SRC.test(id) },
           ],
         },
       },

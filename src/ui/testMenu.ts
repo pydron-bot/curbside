@@ -1,5 +1,5 @@
 import type { GameAudio } from '../audio/gameAudio';
-import { onSettingsChange, settings } from '../core/settings';
+import { settings } from '../core/settings';
 import { CAR_NAMES } from '../game/modes/exports';
 import { ARCHETYPES, SCENES, SLOW_MO, TIME_PRESETS, type RainMode, type TestTools } from '../game/testTools';
 import type { City } from '../world/city';
@@ -459,10 +459,10 @@ function finePointer(): boolean {
 }
 
 /**
- * TEST in the pause menu's corner while Settings → Test tools is on: the
- * TEST sheet, and the teleport map over it. Returns the sheet.
+ * The TEST sheet and the teleport map over it (the corner button that opens
+ * it is ui/testCorner.ts, so this loads on the first tap). Returns the sheet.
  */
-export function mountTestMenu(
+export function buildTestMenu(
   tools: TestTools,
   frontDoor: FrontDoor,
   audio: GameAudio,
@@ -486,13 +486,5 @@ export function mountTestMenu(
     landmark: (id) => tools.landmark(id),
     say: (text) => menu.say(text),
   });
-  const button = frontDoor.pause.addCorner('TEST', 'wrench', () => {
-    audio.ui('click');
-    frontDoor.openPanel(menu);
-    menu.open(() => frontDoor.closePanel(menu), d.showFocus());
-  });
-  const sync = () => (button.hidden = !settings.testTools);
-  sync();
-  onSettingsChange(sync);
   return menu;
 }

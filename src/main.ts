@@ -155,7 +155,8 @@ import { Destruction } from './render/destruction';
 import { BlowWall } from './ui/blowWall';
 import { len2 } from './core/len';
 import { TestTools } from './game/testTools';
-import { mountTestMenu } from './ui/testMenu';
+import { mountTestCorner } from './ui/testCorner';
+import type { TestMenu } from './ui/testMenu';
 import { LabelsOverlay, toggleLabels } from './ui/labelsOverlay';
 import { describeWorld, type LabelWorld } from './game/debugLabels';
 import { emptyCounts, formatCounts } from './core/sceneCounts';
@@ -165,12 +166,12 @@ import { snapshotView } from './render/snapshot';
 import { worldUniforms } from './render/shaderLib';
 import { addBugReportButton, BugReportSheet } from './ui/bugReport';
 import { ObserveMode } from './ui/observeMode';
-import { MapEditor } from './ui/mapEditor';
+import type { MapEditor } from './ui/mapEditor';
 import { LiveMap } from './game/liveMap';
-import { LookPanel } from './ui/lookPanel';
+import type { LookPanel } from './ui/lookPanel';
 import { lookTuning } from './render/lookLive';
 import { LOOK_SPECS } from './render/lookTuning';
-import { editorLookAt } from './game/mapEditorState';
+import { editorLookAt } from './game/editorLook';
 import { districtOf } from './world/districts';
 import { parseMapEdits } from './world/mapEdits';
 
@@ -1983,7 +1984,11 @@ function remapGame(): void {
 // VIEW IN 3D rebuilds the city in place (game/liveMap.ts) and looks at it in observe mode; play goes on there.
 liveMap = new LiveMap({ city, ramps, pickups, dressing, collision, rampGrid, knockables, look, radar, signals, remap: remapGame }, ACTIVE_MAP);
 const live = liveMap;
-const mapEditor = new MapEditor(document.body, {
+// Loaded the first time it's opened (desktop only, behind TEST), so its code isn't parsed at boot.
+let mapEditor: MapEditor | null = null;
+let mapEditorLoad: Promise<MapEditor> | null = null;
+const loadMapEditor = (): Promise<MapEditor> =>
+  (mapEditorLoad ??= import('./ui/mapEditor').then(({ MapEditor }) => (mapEditor = new MapEditor(document.body, {
   audio,
   shipped: SHIPPED_MAP,
   get gameMap() {
@@ -2006,12 +2011,18 @@ const mapEditor = new MapEditor(document.body, {
     cam.vx = cam.vz = 0;
     hud.score.notice('YOUR EDITS, LIVE', 'progress');
   },
-});
-function openMapEditor() {
-  if (mapEditor.isOpen) return;
+}))).catch((err: unknown) => {
+    // Offline before the service worker had it: let the next try load it again.
+    mapEditorLoad = null;
+    hud.score.notice("MAP EDITOR DIDN'T LOAD", 'progress');
+    throw err;
+  }));
+async function openMapEditor(): Promise<void> {
+  const editor = await loadMapEditor().catch(() => null);
+  if (!editor || editor.isOpen) return;
   if (!paused) setPaused(true);
-  frontDoor.openPanel(mapEditor);
-  mapEditor.open(() => frontDoor.closePanel(mapEditor));
+  frontDoor.openPanel(editor);
+  editor.open(() => frontDoor.closePanel(editor));
 }
 // LOOK panel (TEST → LOOK): sliders over the look, down one edge of live play (ui/lookPanel.ts, render/lookTuning.ts).
 let lookStore: Storage | null = null;
@@ -2021,31 +2032,54 @@ try {
   // Storage blocked: the panel's changes last this session.
 }
 lookTuning.load(lookStore);
-const lookPanel = new LookPanel(document.body, lookTuning, audio, {
-  hour: () => testTools.hour,
-  holdClock: (hour) => testTools.holdClock(hour),
-  held: () => testTools.frozen,
-});
-/** TEST → LOOK: the panel (open(), close()) and the live look (set(key, v), resetAll(), look). */
-expose('lookPanel', lookPanel);
+// Made the first time it's opened, like the TEST sheet below.
+let lookPanel: LookPanel | null = null;
+let lookPanelLoad: Promise<LookPanel> | null = null;
+async function openLookPanel(): Promise<void> {
+  lookPanelLoad ??= import('./ui/lookPanel').then(
+    ({ LookPanel }) =>
+      (lookPanel = new LookPanel(document.body, lookTuning, audio, {
+        hour: () => testTools.hour,
+        holdClock: (hour) => testTools.holdClock(hour),
+        held: () => testTools.frozen,
+      })),
+  );
+  const panel = await lookPanelLoad.catch(() => ((lookPanelLoad = null), null));
+  panel?.open();
+}
+/** TEST → LOOK: the panel (open(), close(); null until first opened) and the live look (set(key, v), resetAll(), look). */
+exposeGetter('lookPanel', () => lookPanel);
 expose('lookSpecs', LOOK_SPECS);
 const syncLook = () => {
   lookTuning.setEnabled(settings.testTools);
-  if (!settings.testTools) lookPanel.close();
+  if (!settings.testTools) lookPanel?.close();
 };
 syncLook();
 onSettingsChange(syncLook);
-mountTestMenu(testTools, frontDoor, audio, city, {
-  resume: () => setPaused(false),
-  showFocus: () => input.lastDevice !== 'touch',
-  at: () => player.position,
-  notice: (text) => hud.score.notice(text, 'progress'),
-  openEditor: openMapEditor,
-  openLook: () => {
-    setPaused(false);
-    lookPanel.open();
-  },
-});
+// TEST in the pause corner; the sheet and its teleport map load on the first tap (ui/testCorner.ts).
+let testMenuLoad: Promise<TestMenu> | null = null;
+mountTestCorner(
+  frontDoor,
+  audio,
+  () =>
+    (testMenuLoad ??= import('./ui/testMenu').then(({ buildTestMenu }) =>
+      buildTestMenu(testTools, frontDoor, audio, city, {
+        resume: () => setPaused(false),
+        showFocus: () => input.lastDevice !== 'touch',
+        at: () => player.position,
+        notice: (text) => hud.score.notice(text, 'progress'),
+        openEditor: () => void openMapEditor(),
+        openLook: () => {
+          setPaused(false);
+          void openLookPanel();
+        },
+      }),
+    )).catch((err: unknown) => {
+      testMenuLoad = null;
+      throw err;
+    }),
+  () => input.lastDevice !== 'touch',
+);
 // OBSERVE (title and pause menu): a free camera over the live city, no player, no HUD; incidents on demand.
 observe = new ObserveMode({
   parent: document.body,
@@ -2171,7 +2205,10 @@ exposeGetter('observe', () => observe);
  * live: VIEW IN 3D's rebuild in place (game/liveMap.ts).
  */
 expose('mapEditor', {
-  editor: mapEditor,
+  /** null until the editor is first opened (open() resolves once it is). */
+  get editor() {
+    return mapEditor;
+  },
   open: openMapEditor,
   districts: () => city.blocks.map((b) => districtOf(b.bx, b.bz)).join(),
   parse: (text: string) => parseMapEdits(JSON.parse(text)),

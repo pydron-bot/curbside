@@ -1,5 +1,5 @@
 import { BUILD_ID } from '../core/build';
-import { VERSION } from '../core/changelog';
+import { VERSION } from '../core/version';
 import { buildBugReport, bugFileStem, bugSummary, NOTE_MAX, type BugReport, type BugState } from '../core/bugReportData';
 import type { TrailEntry } from '../core/eventTrail';
 import type { SceneCounts } from '../core/sceneCounts';

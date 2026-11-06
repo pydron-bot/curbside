@@ -1,16 +1,22 @@
 import type { GameAudio } from '../audio/gameAudio';
 import { BUILD_ID } from '../core/build';
-import { CHANGELOG, VERSION } from '../core/changelog';
+import type { Release } from '../core/changelog';
+import { VERSION } from '../core/version';
 import { ICONS } from './icons';
 import { MenuNav, overlay, type Panel } from './menu';
 
-/** Settings → Version history: every release, newest first, and the build that's running. */
+/**
+ * Settings → Version history: every release, newest first, and the build
+ * that's running. The changelog loads the first time it opens.
+ */
 export class VersionHistory implements Panel {
   readonly root: HTMLElement;
   readonly nav: MenuNav;
   readonly sheet = true;
   private readonly body: HTMLElement;
   private onClose: () => void = () => {};
+  private readonly build: HTMLElement;
+  private loading = false;
 
   constructor(
     parent: HTMLElement,
@@ -31,7 +37,16 @@ export class VersionHistory implements Panel {
     card.querySelector('.sheet-head')!.append(close);
     this.nav.add({ el: close, activate: () => this.back() });
     this.body = card.querySelector('.versions')!;
-    for (const r of CHANGELOG) {
+    this.build = document.createElement('footer');
+    this.build.className = 'build-id';
+    this.build.textContent = `Build ${BUILD_ID}`;
+    this.body.append(this.build);
+    parent.append(root);
+  }
+
+  /** The releases, above the build line. */
+  private fill(changelog: readonly Release[]): void {
+    for (const r of changelog) {
       const el = document.createElement('section');
       el.className = `release${r.version === VERSION ? ' current' : ''}`;
       el.innerHTML = '<header><b></b><span></span><time></time></header><ul></ul>';
@@ -44,15 +59,10 @@ export class VersionHistory implements Panel {
         li.textContent = n;
         ul.append(li);
       }
-      this.body.append(el);
+      this.body.insertBefore(el, this.build);
       // A stop for the keyboard / pad, so arrows scroll the list.
       this.nav.add({ el });
     }
-    const build = document.createElement('footer');
-    build.className = 'build-id';
-    build.textContent = `Build ${BUILD_ID}`;
-    this.body.append(build);
-    parent.append(root);
   }
 
   get isOpen(): boolean {
@@ -61,6 +71,10 @@ export class VersionHistory implements Panel {
 
   open(onClose: () => void, showFocus: boolean): void {
     this.onClose = onClose;
+    if (!this.loading) {
+      this.loading = true;
+      void import('../core/changelog').then((m) => this.fill(m.CHANGELOG));
+    }
     this.root.hidden = false;
     this.body.scrollTop = 0;
     this.nav.focus();
