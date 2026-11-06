@@ -17,7 +17,7 @@ export const OBSERVE_START_HEIGHT = 46;
 /**
  * Highest per quality tier, m. Draw calls grow slowly with height (`medium`
  * at 852×393, turned 45°, at night with a fire and a chase on: 84 at 130 m;
- * README *Observe mode* has the table), so what bounds it is the streets
+ * docs/systems/ui.md *Observe mode* has the table), so what bounds it is the streets
  * (the crowd lives within 60 m of the focus, traffic within 160 m) and the
  * phone's fill: a lower tier sees less.
  */

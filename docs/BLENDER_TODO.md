@@ -275,7 +275,7 @@ now against this contract:
 props.glb within their budgets (`check_assets.py` now enforces them); notes at the end of this file.
 
 Road works, food carts, bus shelters and more kerbside furniture are in the
-game (README → *World*), drawn as box stand-ins (`src/render/propStandIns.ts`,
+game ([*World*](systems/world.md)), drawn as box stand-ins (`src/render/propStandIns.ts`,
 which is also the best picture of each: sizes, colours, material names)
 until `props.glb` has a root of the same name; the loader swaps them in by
 name with no code change. Same contract as §3: one root per prop, origin on
@@ -284,7 +284,7 @@ side named below), Y up, metres, flat colours, no textures.
 
 **Triangle budget.** All of these join the `street` family (one draw call
 for every kerbside model). Each instance runs only its own model's
-vertices (rounded up to the family's chunk of 126; README *Families*), so a
+vertices (rounded up to the family's chunk of 126; [*Families*](systems/world.md)), so a
 root's triangles cost once per copy in view: the small, frequent ones
 (meters, bins, cones, barrels) add up most. Please keep each root to the
 budget below (≤ 60 for the small, frequent ones) and leave out faces
@@ -558,7 +558,7 @@ the `_seat` empty.
 
 ### Code side integrated: people (2026-10-30, branch `stage6/people`)
 
-Wired in (README → *Look → People* has the details):
+Wired in ([*Look → People*](systems/look.md) has the details):
 
 - **Clips (§1, §7, §8.3):** all 22, by name, sampled per bone without an
   `AnimationMixer` (`render/characterAnim.ts`). Walk/Run share one gait
@@ -630,7 +630,7 @@ on the iPhone profile and 27 m on desktop, by day and at night):
 ## Code side integrated: world, props and vehicles (stage 6)
 
 props.glb, pickups.glb, debris.glb, heli.glb and the twelve new
-`vehicles.glb` roots are now in the game (see README → *World*). Material
+`vehicles.glb` roots are now in the game (see [*World*](systems/world.md)). Material
 names are the contract: `lamp`, `light_red/amber/green`, `police_lamp`,
 `spray_sign` / `export_sign` / `payphone_sign` / `stripe_*`, `hazard` /
 `cone_orange` / `barrier_orange`, `ramp`, `frenzy`, `booth_roof`,
@@ -709,7 +709,7 @@ future Blender pass. The code works round each one for now:
 **Done 2026-11-02** (`blender/generators/pickups.py`; `PICKUP_MODELS` and the `things`
 list point at the crates). The brief, as asked:
 
-The air horn weapon is in the game (README → *Driving and combat*, the air
+The air horn weapon is in the game ([*Driving and combat*](systems/driving-and-combat.md), the air
 horn) with nothing in the hand and the ammo box standing in for its crate.
 The held model swaps in by name; the crate needs a one-line code change:
 
@@ -727,7 +727,7 @@ The held model swaps in by name; the crate needs a one-line code change:
 **Done 2026-11-02** (`blender/generators/pickups.py`; `PICKUP_MODELS` and the `things`
 list point at the crates). The brief, as asked:
 
-The taser weapon is in the game (README → *Driving and combat*, the taser)
+The taser weapon is in the game ([*Driving and combat*](systems/driving-and-combat.md), the taser)
 with nothing in the hand and the ammo box standing in for its crate. The
 held model swaps in by name; the crate needs a one-line code change:
 
@@ -747,7 +747,7 @@ held model swaps in by name; the crate needs a one-line code change:
 **Done 2026-11-02** (`blender/generators/pickups.py`; `PICKUP_MODELS` and the `things`
 list point at the crates). The brief, as asked:
 
-The stinger is in the game (README → *Driving and combat*, the stinger).
+The stinger is in the game ([*Driving and combat*](systems/driving-and-combat.md), the stinger).
 The strip on the road is built in code (`src/render/stingerLook.ts`) and
 needs no model; nothing shows in the hand and the ammo box stands in for
 its crate:
@@ -765,7 +765,7 @@ its crate:
 **Done 2026-11-02** (`blender/generators/pickups.py`; `PICKUP_MODELS` and the `things`
 list point at the crates). The brief, as asked:
 
-The smoke grenade is in the game (README → *Driving and combat*, the smoke
+The smoke grenade is in the game ([*Driving and combat*](systems/driving-and-combat.md), the smoke
 grenade) with nothing in the hand and the grenade crate standing in for its
 crate. The cloud is particles and needs no model.
 
@@ -782,7 +782,7 @@ crate. The cloud is particles and needs no model.
 **Done 2026-11-03** (`sticky_charge` in `blender/generators/pickups.py`, `charge_stuck` in
 `props.py`; `chargeLook.ts` still to switch over, see the §15 notes at the end). The brief, as asked:
 
-The sticky charge is in the game (README → *Driving and combat*, the
+The sticky charge is in the game ([*Driving and combat*](systems/driving-and-combat.md), the
 sticky charge) with code-built stand-ins: the held brick in
 `src/render/heldWeapons.ts` (`STAND_INS`) and the charge stuck to a car or
 lying on the road in `src/render/chargeLook.ts`. Both swap for models:

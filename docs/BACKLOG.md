@@ -1018,7 +1018,7 @@ It stays local only, with no network and no backend.
 **Status 2026-11-01:** `music-stations` (four of the five: phonk, funk /
 disco, dub, chiptune; the scanner station waits for `police-chatter`),
 `music-reactive` (with the VIPERS' boombox) and `music-themes` are done on
-`claude/music-7`; see HANDOFF #7 and README *Audio*. `music-radio-life` and
+`claude/music-7`; see HANDOFF #7 and [*Audio*](systems/audio.md). `music-radio-life` and
 `music-recorded` are still ideas.
 
 Done first (Derek's pick): better sound and song structure, with a drum kit

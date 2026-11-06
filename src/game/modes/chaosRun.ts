@@ -19,7 +19,7 @@ export const COMBO_BONUS = 3;
 export const COMBO_BONUS_AT = 5;
 /** The clock counts down out loud from here, s. */
 export const FINAL_COUNT = 10;
-/** Medal thresholds (points), tuned with scripted runs (see README). */
+/** Medal thresholds (points), tuned with scripted runs (docs/systems/testing.md). */
 export const CHAOS_MEDALS: Readonly<Record<Medal, number>> = { bronze: 15_000, silver: 40_000, gold: 80_000 };
 
 /**

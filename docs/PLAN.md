@@ -20,8 +20,8 @@ _Plan written 2026-10-29 as "Urban Blight"; renamed **Curbside** the same day (o
 | M7 | Missions & HUD | ✅ Payphone missions (two chapters, thirteen jobs), Chaos Run, frenzies, packages, races, exports, taxi, cash, shop, save, radar, new HUD and menus |
 | M8 | Ship as PWA | 🟡 Live at https://deeek.org/curbside/ (GitHub Pages); deploy, offline boot and installability verified by `tools/smoke.mjs` in CI; still to do: the real-device performance pass (and a real home-screen icon, `icons-splash`) |
 
-The overhaul that took M5 to here is summarised in `docs/HANDOFF.md`, which
-also holds the prioritised to-do list.
+The overhaul that took M5 to here is summarised in `docs/HISTORY.md`; the
+prioritised to-do list is in `docs/HANDOFF.md`.
 
 **Where it runs:** live at https://deeek.org/curbside/ (deployed from `main` by GitHub Pages). Code at `~/dev/curbside` on hive1 (git, pushed to `pydron-bot/curbside`). Dev server is the `curbside-dev` user service; play at `https://hive1.tail078432.ts.net:8443` (tailnet only). Drive keeps this plan and any source art.
 

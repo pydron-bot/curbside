@@ -535,7 +535,7 @@ smoke grenade. Not scheduled yet.
   sequence, debris, stamps. A story-job reward. **Built** (`claude/w3-sticky`):
   RIBBON CUTTING gives two and opens the shop item (no crates); DETONATE
   on G / D-pad down / touch BOOM sets every charge off, play only; three
-  out at most; carrying cars kept; README *Driving and combat*.
+  out at most; carrying cars kept; [*Driving and combat*](systems/driving-and-combat.md).
 
 ### W3-C · Four new street scenes (owner picked, 2026-11-02)
 

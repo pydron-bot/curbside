@@ -4,9 +4,16 @@ Top-down open-world driving/crime game for the browser: three.js 0.186,
 TypeScript (strict), Vite 8, vite-plugin-pwa, Vitest. Targets Safari on an
 iPhone 15 Pro (landscape, touch) and desktop (keyboard/mouse/gamepad).
 
-Read first: `README.md` (every system, its API and budgets), `docs/HANDOFF.md`
-(current state and the to-do list), `docs/PLAN.md` (design and milestones),
-`docs/BLENDER_TODO.md` (asset contracts with the Blender pipeline).
+Read first: `docs/HANDOFF.md` (current state and open work) and `README.md`
+(commands, layout, and the index of `docs/systems/`). Then read only the
+`docs/systems/*.md` files your task touches; each covers one system, its API
+and its budget. Read `docs/BLENDER_TODO.md` before touching GLB loading or
+assets (the loaders depend on its contracts). `docs/PLAN.md` is the design;
+`docs/HISTORY.md` is what was built when, for when you need the why.
+
+Keeping the docs small is part of the job: document a system in its
+`docs/systems/` file (a new system gets a new file and a row in the README
+index), and when an item in HANDOFF ships, move its notes to HISTORY.
 
 ## Commands
 
@@ -57,4 +64,4 @@ tools/smoke.mjs` (desktop 1280×720, iPhone 15 Pro landscape 852×393 and
 852×340, offline PWA; about 6 min, the 3D view drawn at 0.35×, `--scale 1`
 for sharp screenshots); for a closer look, `window.__ub` exposes the game
 (`startGame()`, `fastForward(seconds)`, state). Tuning harnesses are in
-`tools/tune/` (README *Tuning harnesses*).
+`tools/tune/` ([*Tuning harnesses*](docs/systems/testing.md)).

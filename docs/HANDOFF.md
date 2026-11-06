@@ -1,695 +1,108 @@
-# Handoff — Curbside overhaul (2026-10-30)
+# Handoff
 
-Notes for whoever picks this up next (a person or a fresh Claude session).
-The *how it works* lives in `README.md` (one section per system, with APIs);
-this file is the *where things stand* and *what's left*.
+Where things stand and what's open, for whoever picks this up next (a
+person or a fresh Claude session). Keep it short: when an item ships, move
+its notes to [HISTORY.md](HISTORY.md) and drop it here. How each system works
+is in [`docs/systems/`](systems/) (index in the README); per-release notes in
+`src/core/changelog.ts`.
 
-## Where it is
+## Where it is (2026-11-06)
 
-- **Live:** https://deeek.org/curbside/ — GitHub Pages, deployed by
+- **Live:** **0.32.2** at https://deeek.org/curbside/, deployed by
   `.github/workflows/pages.yml` on every push to `main` (tests → build with
-  `CURBSIDE_BASE=/curbside/` → deploy). The `github-pages` environment may ask
-  for approval on the Actions run ("Review deployments"); remove required
-  reviewers under Settings → Environments → github-pages to skip that.
+  `CURBSIDE_BASE=/curbside/` → deploy). The `github-pages` environment may
+  ask for approval on the Actions run ("Review deployments").
 - **Domain:** `deeek.org` is the custom domain of the user site
-  `pydron-bot/pydron-bot.github.io` (GoDaddy DNS: four A records for `@` to
-  185.199.108–111.153, CNAME `www` → `pydron-bot.github.io`). Project repos
-  with Pages on the `pydron-bot` account appear at `deeek.org/<repo>/`. Don't
-  set a custom domain on this repo; it inherits.
-- **Branches:** `main` is the shipped game; work goes on a branch (CI checks
-  it) and merges to `main` to deploy. Cleaned up 2026-10-31: every merged
-  branch was deleted (local and on GitHub) and the `curbside-blender`
-  worktree removed. Their tips, should one be wanted (`git branch <name>
-  <sha>`; the commits are all in `main`'s history): claude/game-overhaul
-  3c10413, claude/destruction-test 0e8bf2c, blender/assets 890beb8,
-  stage1/audio cf04f04, stage1/core b83c520, stage2/look 556701e, stage2/ui
-  9718d38, stage3/fx ebb1965, stage3/heat 5f3d532, stage4/feel 82848a5,
-  stage4/play a38e987, stage5/qa 0faca68, stage6/assets 00c4d65,
-  stage6/people 9d63f9c, stage6/world 3717b34.
+  `pydron-bot/pydron-bot.github.io` (the hub page); project repos with Pages
+  on that account appear at `deeek.org/<repo>/`. Don't set a custom domain
+  on this repo; it inherits.
+- **Branches:** `main` is the shipped game. Work goes on a branch (`ci.yml`
+  checks it: tests, types, GLB contracts, smoke test) and merges to `main` to
+  deploy. Old stream branches are kept on GitHub; everything shipped is in
+  `main`'s history.
+- **Latest work (0.29–0.32):** map editor round 3 and IMPORT
+  ([W3D_MAP.md](W3D_MAP.md)); dappled tree shadows; Diagnostics tools for
+  hunting iPhone slowness: GPU BREAKDOWN (0.31.0) and LOW POWER TESTS
+  (0.32.0), plus a frame "tail" stat; the player's pose in bug reports
+  (0.32.1), then a fix for getting up tilted after being thrown off a bike
+  (0.32.2). **Ask the owner** whether the "lying flat while aiming" report
+  is gone with 0.32.2, and what LOW POWER TESTS showed on the phone.
 
-## What the overhaul did
+## Open work, in priority order
 
-Starting from the M5 sandbox, in stages, each built in parallel git worktrees,
-independently reviewed and fixed, then merged and play-tested:
+1. **Real-device pass on the iPhone 15 Pro** (the owner, ~1.5–2 h; steps in
+   [BACKLOG.md](BACKLOG.md) `device-checklist`). Settings → Perf overlay on
+   Full, play, then pause → DIAGNOSTICS → SHARE and send the report (it
+   carries the play log). Nothing below has been seen on a real phone:
+   - *Look:* lamp streaks and neon reflections, rooftop neon at 852×340,
+     searchlights, steam, cloud-shadow darkness, sun glints, the 5-star edge
+     glow, the VHS glitch on WASTED/BUSTED, tree sway, fountain spray, dawn
+     mist, billboards, gull size, the LOOK panel's sliders in Safari, the
+     cop's silver cap band at night.
+   - *Controls and UI:* BOOM's spot on touch at 852×393 and 852×340 (on foot,
+     in a car, left-handed); HOSE drag-to-aim; observe pinch/twist; the
+     scanner's 11 px text; the Settings sheet at 852×340; SHARE within
+     WASTED's 3 s; the home-screen icon and launch screen; TOUCH TUNING's
+     `TUNE` line (the numbers to bake in).
+   - *Play:* the cold open (STEAL THIS CAR over the bus); s4 fairness, s5
+     grenades on touch, s6 pace; chapter 2's timers; CRED pacing; how the
+     witnesses' delayed heat feels; RACE CRASHER, VAN NICKED, adopted crashes
+     and DOMINO pay; whether bodies, dogs, umbrellas, phone screens, coins,
+     cuffed suspects, the taser's wires, the stinger strip and a stuck charge
+     read at phone scale.
+   - *Audio:* every station, the title theme, chase music and stings (no
+     person has heard them yet); levels on foot; an ambient chase's sirens.
+   - *Performance:* two smoke clouds; the Neon Mile's night crowd; walking
+     past shops (drum kits warm in play).
+   - **Destruction test soak** (decides whether it goes on by default): 15+
+     minutes on Auto graphics with DESTRUCTION (TEST) → AUTO, BLOW A WALL
+     every minute or two, watching for a tier drop or creeping p99 as the
+     phone warms; SHARE at the end. Then the owner decides. Full procedure
+     and the first run's numbers: [destruction-test.md](systems/destruction-test.md).
+2. **1.0.0** after the device pass (the owner's call).
+3. **Tuning from real play:** medals and the 5-star escape, from the play
+   logs the device pass sends back ([testing.md](systems/testing.md) has the
+   harnesses and baselines).
+4. **Waiting on the owner:**
+   - A `look.json` from the LOOK panel: commit it as `src/render/look.json` as
+     it is (a test checks it's canonical; if hand-edited, re-serialise with
+     `serialiseLookFile(parseLookFile(...))`), bump the version, ship. A
+     constant with no slider: add a spec to `LOOK_SPECS`, or to `SHADER_LOOK`
+     with its `LK_*` macro (keep `uLook` within 16 floats).
+   - Map editor: the frenzy limits (`frenzyLimits.ts`) and whether the
+     rectangle rule (REMOVE refused for an L) suits.
+   - A bigger city (W3-A): the decisions listed in [W3A_CITY.md](W3A_CITY.md).
+   - Which W3-E ideas, if any ([V2_PLAN.md](V2_PLAN.md) *W3-E*).
+   - Any backend for an online leaderboard (`online-leaderboard` in BACKLOG).
+   - The Old Town race's leg 1 lands a ramp jump at a corner checkpoint: keep
+     it as a feature?
+5. **Next features (chosen, not started):** W3-C, four street scenes (QUIET
+   PLEASE march, roadworks, bin day with a tipper for Borrowed Blues, delivery
+   rush; [V2_PLAN.md](V2_PLAN.md)).
+6. **Known gaps, low priority:** a police car retired by the police system
+   takes its sticky charge with it; ambient police cars aren't on the radar;
+   the scooter stands in for a motorcycle; a tow can clip a neighbour in a
+   tight car park; thrown props don't start scuffles; no busker music or
+   visible bags; no scaffolding, work van or water barriers; later audio
+   ideas (`music-radio-life`, `music-recorded`, `police-chatter`).
 
-1. **Core:** event bus (`src/core/events.ts`), player state module, bug fixes
-   (vehicle leak, explosion death chain, pause/input), off-screen spawning and
-   denser streets, quality tiers + dynamic resolution, PWA update deferral,
-   GL context-loss handling.
-2. **Audio:** fully synthesised Web Audio — engine/gearbox, tyres, weapons,
-   crashes, explosions, sirens, ambience, adaptive procedural music with radio
-   stations (`src/audio/`).
-3. **Look:** batched rendering (all people/cars/glows in a few draw calls), sun
-   shadows, ACES + grade, shader-drawn roads/buildings, districts, 12-minute
-   day/night, street light pools, desktop bloom (`src/render/look.ts`).
-4. **UI:** title over a live attract mode (framed right of the menu, cutting to
-   city-scene highlights: README *Title highlights*), pause/settings/how-to, rotate card,
-   touch overhaul (point-to-steer, pedal pad, twin-stick aim), mouse and
-   gamepad aim, new HUD, radar with blips/waypoints, haptics (`src/ui/`).
-5. **FX:** particle pools, skid marks, sparks, tracers, muzzle flashes,
-   explosion sequence with debris/scorch, camera trauma/kicks/hit-stop, rain.
-6. **Heat (M6):** 0–5 star wanted level, police pursuit AI, roadblocks, SWAT,
-   helicopter, officers on foot, BUSTED, Pay 'n' Spray, traffic reactions.
-7. **Progression (M7):** save + cash, bank-your-chaos, Chaos Run 2:00 with
-   medals, frenzies, hidden packages, races, exports, taxi fares, thirteen
-   payphone missions in two chapters (`docs/STORY.md`), safehouse shop, progress page.
-8. **Feel:** handling (top speeds, cornering limit, drifts, burnouts, nitro),
-   damage + armour, ped HP and combos, grenades/molotovs/rockets, drive-bys,
-   stunt ramps.
-9. **QA:** four adversarial playtests (iPhone flow, cross-system seams,
-   performance/long sessions, desktop polish), ~30 fixes.
-10. **Blender assets integrated:** 22 animation clips, 8 body GLBs (crowd mix,
-    cop, story characters), weapons in hand, pigeons, street/rooftop props,
-    landmarks, pickups, debris, 12 new vehicles incl. scooter and police bike
-    (lean, rider, ejection), the helicopter model. Contracts and the Blender
-    session's notes: `docs/BLENDER_TODO.md`.
-
-Numbers at handoff (headless Chromium + SwiftShader, so no real frame rates):
-606 tests; iPhone profile ('medium') ~38–56 draw calls in busy scenes,
-desktop ('high') ~50–70, budget 150; no shader compiles after start-up.
-
-## To do (in priority order)
-
-**Map editor, round 3 (2026-11-04, branch `claude/w3d-map-3`): 0.29.0
-"Street plans"** (details in `docs/W3D_MAP.md` → *Round 3: spots*, *Round
-3: streets*, *Round 3: VIEW IN 3D plays on*): pedestrian streets and
-removed roads (merged blocks, rectangles only); added payphones with jobs
-moved onto them; custom frenzies; story spots, routes and race steps,
-landmarks (docks, spray bays, station, hospital) and pickups movable;
-shop doors, road works and CAN HOST in the overlay; VIEW IN 3D rebuilds
-every system in place and play goes on with no reload. Owner to decide:
-the frenzy limits (`frenzyLimits.ts`), whether idle generated phones
-become removable, whether the rectangle rule (REMOVE refused for an L)
-suits, whether a car should squeeze through a pedestrian street's
-bollards. Device check: a pedestrian street, a merged block, a moved
-spray booth and a custom frenzy on the iPhone (the game plays the edits
-only after they're committed as `src/world/maps/city.json`).
-
-**Map editor, round 2 (2026-11-03, branch `claude/w3d-map-2`):**
-**0.28.0 "Map makers"** (details in `docs/W3D_MAP.md` → *Round 2*): click
-again on a spot to step through what's stacked there; hidden packages are
-pinned to a fixed list (block edits no longer move them; same indices, so
-saves are unchanged) and are editable spots; PLACE adds new stunt ramps,
-kickers, gang hangouts and packages (`"add"` in a spot entry); a block
-can be an empty lot (waste ground) or take another district's building
-style; VIEW IN 3D rebuilds the running city in place (changed 256 m
-chunks only, no new shader programs) and opens observe mode, and play
-after it reloads on the local edits (PLAY ON EDITS does that at once).
-Not yet: adding payphones or frenzy tokens (each needs its job or frenzy
-in code). Desktop only, so no iPhone check needed beyond the game itself.
-
-**Where the look work stands (2026-11-03, LOOK panel session):** `main` =
-**0.27.0 "Look book", live** (from branch `claude/look-panel`): the LOOK
-tuning panel, TEST → LOOK (README → *Look → Tuning*). Not yet tried on a
-real iPhone (headless Chromium only): ask the owner how the panel and
-the sliders feel in Safari. All four slider
-groups agreed with the owner are in: sky and light by part of the day, the
-colour grade, neon and night, daytime (about fifty sliders); clock hold;
-saved locally; distance from shipped, reset per slider, RESET ALL; EXPORT
-downloads `look.json`.
-
-**When the owner hands over a `look.json`:** commit it as
-`src/render/look.json` as it is (the test `look.json → the shipped file
-parses cleanly and is canonical` checks it; if they edited it by hand,
-re-serialise with `serialiseLookFile(parseLookFile(...))`), bump the
-version and ship. Sliders measure their distance from it from then on.
-If they want a constant tuned that has no slider: add a spec to
-`LOOK_SPECS` (pure, tests check ranges), read `look.<key>` where the
-constant is (JS), or add it to `SHADER_LOOK` and use its `LK_*` macro in
-GLSL (no recompiles; keep `uLook` within its 16 floats).
-
-The 0.26.0 gulls are a low-poly model built in code after a reference
-picture the owner sent (`render/gullMesh.ts`; if a Blender gull is wanted
-later, the same contract: nose +Z, wings bending at shoulder and wrist).
-Screenshot harnesses: `tools/look/` (README there; `panel.mjs` and
-`sliders.mjs` for the LOOK panel).
-
-**Unconfirmed on a real phone (ask the owner):** lamp streaks / neon
-reflections strength, cloud shadow darkness, whether sun glints read, the
-5-star wanted edge glow, the VHS glitch on WASTED/BUSTED; 0.26.0: whether the tree sway and the fountain spray
-read at phone scale, the mist's thickness in the old town at dawn, the
-billboards legible from the play camera, gull size.
-
-**0.25.0 "Sunny side" (2026-11-03, branch `claude/daytime-1`):** cloud
-shadows, rooftop pools, sun glints, street art by district (crossings, roof
-murals/logos/bay numbers, park courts), plane and blimp shadow flyovers
-(README → *Look → Neon city → Sunny side*). Still to come from the daytime
-list: swaying trees, park fountains and sprinklers, morning mist, painted
-billboards, seagulls at the docks. **For the device pass:** are cloud
-shadows too dark on the phone; do the glints read.
-
-**0.24.0 "After hours" (2026-11-03, branch `claude/neon-city-3`, stacked on
-`claude/neon-city-2` / 0.23.0; not merged, at the owner's request):** living
-windows, rain ripples/spray/wet paint, midnight fireworks downtown,
-explosion shockwave and wall flash, wanted-level edge glow, neon
-WASTED/BUSTED (README → *Look → Neon city → After hours*). **For the device
-pass:** is the wanted edge glow at five stars too much on a phone; are the
-VHS glitches distracting on the death screen.
-
-**0.23.0 "Neon nights" (2026-11-03, branch `claude/neon-city-2`, stacked on
-`claude/glint-junctions` / 0.22.1; not merged, at the owner's request):**
-coloured neon/signal reflections in the wet road, police light wash on
-walls and road, string lights over the arts quarter, animated roof signs,
-downtown searchlights, steam vents (README → *Look → Neon city → Neon
-nights*). Still to come from the same list: living windows, rain upgrades,
-midnight fireworks, explosion shockwaves, wanted-level screen-edge glow,
-neon WASTED/BUSTED. **For the device pass:** do the searchlight beams wash
-too much of the screen close to their roofs; is the steam visible enough.
-
-**0.22.0 "Neon city" (2026-11-03, branch `claude/neon-polish`, stacked on
-`claude/sticky-charge-model` / 0.21.2; neither merged yet, at the owner's
-request):** the in-game look brought to the title screen's neon (README →
-*Look → Neon city*): grade, synthwave dusk/night, rooftop neon, wet-look
-night roads with lamp streaks, underglow (all sports cars, some others),
-light trails, headlight beams fixed to start at the lamps, HUD restyle and
-a Neon filter setting. **For the device pass:** are the lamp streaks on
-the road too strong on the phone; does the rooftop neon read at 852×340;
-the iPhone Settings sheet now scrolls a little in both columns at 393 px
-tall (Police scanner was already cut off before).
-
-**V2 status (2026-11-02, second session):** wave 1 is live as **0.14.0**
-(V2-01 in-view meter, V2-02 the city doesn't stop, V2-03 chase handoff,
-V2-04 stamps, V2-05 story scene/mayhem steps, V2-08 Night Shift, s2/s3 of
-KEEP IT LOUD, V2-13 six new incidents); 0.13.1 fixed black slabs on
-desktop High (bloom NaN).
-**Wave 2 shipped as 0.15.0 "Wrong stop"** (live): V2-07 live cold open +
-s1 WRONG STOP (tutorial pointers removed; side modes hidden until s2),
-V2-06 s4–s6 (chapter 1 complete), V2-09 Borrowed Blues (hose, chime,
-winch, Vex's tow contracts, the `keeps()` guard), V2-18 observe mode,
-V2-11 scanner pings (off while observing), V2-10 Your Mess, Their Problem
-(adopted crashes, the shots chain, DOMINO ×N). **0.16.0 "Race crasher"**
-followed: V2-12 RACE CRASHER and VAN NICKED (the chime queue now chases a
-van driven off rather than dispersing), V2-17 prune for newcomers (fresh
-title PLAY + SETTINGS; OBSERVE after the cold open or with Test tools;
-PROGRESS → STILL TO COME; the 1.0.0 bump waits for the device pass, the
-owner's call), V2-16 best-moment picture on WASTED/BUSTED (built outright
-on the owner's say-so), and the headlight-beam black lines (NaN from
-`pow` of a negative base at the cone's far edge; rain splashes had the
-same pattern). Every stream branch (`claude/v2-*`) is pushed.
-Integration fixes: the scanner's on-foot smoke check leaves the cold
-open's getaway first; long stamp names wrap at 852×393 under the
-activity card (they covered NOS in a Chaos Run, failing CI since 0.14.0:
-`pages.yml` runs only the unit tests, so a red smoke doesn't stop a
-deploy); the CI smoke job's limit is 30 minutes (wave 2 took it past 20).
-**Wave 2 device checklist (iPhone, V2-14):** cold open (STEAL THIS CAR
-shows over the bus before the crash; bus nose vs crash point; chase cars
-stop 22 m short); s4 fairness (the truck rarely stops at lights) and the
-90% scratch line; s6 pace (coach 8 m/s, 5,000 points; the story harness
-topped up short runs); s5 grenades on touch; hose drag-to-aim, HOSE label
-at 852×340, jet density at 60 fps, stars from hosing a queue; towing to
-the yard without clipping kerbs; observe pinch/twist, crowd at widest
-zoom, strip legibility at 852×340; scanner 11 px text, thumb covering it,
-squelch level, chattiness; the Settings sheet's sixth row at 852×340;
-adopted crash pacing and DOMINO pay from the gunfire chain; RACE CRASHER
-joining by touch and win balance from slow cars; VAN NICKED chasers
-reading as angry and whether chasing spoils the chime lure; the
-best-moment copy's cost in the hit-stop (Diagnostics `moment` lines),
-reaching SHARE within WASTED's 3 s, the share sheet, its fit with real
-safe areas at 852×340; the fresh title and STILL TO COME at 852×340; no
-black lines at the end of headlight beams at night.
-**0.17.0 "Air horn"**: the first W3-B weapon (the hose's cone is now a
-shared `coneHit`; a `nuisance` crime that never reaches a star; no held
-model yet, see BLENDER_TODO §11) and the observe palette scrolling on
-touch (its list lacked `data-scroll`; `tests/sheetScroll.test.ts` now
-checks every sheet list).
-**0.18.0 "Taser, stinger and smoke"**: three more W3-B weapons, built in
-parallel streams (`claude/w3-taser`, `-stinger`, `-smoke`) and merged.
-The TASER floors one person through `pedDown` (cause `taser`), so the
-muggings and chase handoff read it as a have-a-go (`chaseHandoff.tasedArrest`).
-The STINGER is a thrown or dropped projectile that the world lays
-(`ProjectileWorld.lay`); flats live on `DamageState`; SPIKED. The SMOKE
-GRENADE's `SmokeView` blocks `sees` and police car sight, dazes police
-cars (`Daze`: crawl, hazards, wrong turn) and blanks the helicopter;
-two clouds at most (`mayhem.mjs --scenario smoke`: peak smoke fill 1.46
-vs a car explosion's 5.05 on medium, 47–50 draw calls). Merge note: the
-projectile fuse runs for grenades and smoke, not stingers. Crate odds
-rebalanced to sum to 1 with the three new crates. No held models or
-crates in 0.18.0; 0.19.1 added them (BLENDER_TODO §11–14, done). Device checks: the taser's wires and the
-stinger's strip legible at 852×340, two smoke clouds' frame rate on the
-iPhone, the smoke confusion split reading as scattered in a real chase.
-**0.20.0 "Sticky charge"** (`claude/w3-sticky`, the last W3-B weapon;
-the map editor, `claude/w3-map`, follows as 0.21.0 after its iPhone check). Owner's calls (2026-11-02): RIBBON CUTTING gives two and opens
-the shop item (+2, $700), never in crates; FIRE throws, a separate
-DETONATE sets every charge off (G, D-pad down, touch BOOM shown only
-while one is out), on foot or in a car, play only (`canDetonate`: not on
-the title, paused, under the TEST menu, the map editor or Settings, in
-Observe, under a card); cars only, three out, a miss lies on the road (and
-is forgotten 400 m off); cars carrying one are in the keep guard; no crime
-to stick it on, the blast is the explosion crime (and copCarWrecked)
-through ignite → wreck → `vehicleExploded`; PARTING GIFT (weight 7) on a
-car someone else drives with you 30 m off, or the cash van or the Mayor's
-limo from anywhere. Pure logic in `systems/charges.ts`
-(`tests/charges.test.ts`); models from Blender since 0.21.2 (BLENDER_TODO
-§15: `sticky_charge` in the hand, `charge_stuck` on cars and in flight); the smoke test checks BOOM on the phones (in view, clear of the other
-buttons on foot and in a car, a tap sets it off). `tests/cityCore.test.ts`
-re-pinned the mission data (s5's give and Lionel's line; the spots are
-the same). Merge note: `src/main.ts`, `core/input.ts`, `ui/frontDoor.ts`
-(`menuUp`) and `tools/smoke.mjs` edits are additive; the map editor opens
-from TEST behind the pause, so `canDetonate`'s `paused` / `menu` already
-cover it. Device checks: the charge's legibility on a roof and on the road
-at 852×340 (3× life size, blinking light, red ring), BOOM's spot on touch
-at 852×393 and 852×340 on foot and in a car (and left-handed), that
-D-pad down in play doesn't fight anything, and the four-charge refusal
-notice reading clearly. Known gap: a police car retired by the police
-system takes its charge with it.
-**0.21.0 "Map editor"** (`claude/w3-map`, W3-D; details in
-`docs/W3D_MAP.md`): the map file (`src/world/maps/city.json`, v2: blocks,
-roads, spots, props; empty in this release) applied in the game, the
-checks (`checkMapEdits`), and the desktop editor with the dependency
-overlay (TEST → MAP → MAP EDITOR; EXPORT, VIEW IN 3D on `?map=local`).
-The dressing and building plans now come from per-block and per-building
-streams, so an edit stays in its block: a one-time reshuffle of the
-furniture, bus stops (93, was 86), carts and rooftops, and the cold open
-at a shelter 66 m from the safehouse (was 100 m). Also: the smoke test
-draws the 3D view at 0.35× (`--scale`, about 6 min, was ~18) and has
-`--jobs`. **Device checks:** the cold open's new shelter (STEAL THIS CAR
-over the bus, the bus nose against the crash), the reshuffled streets
-reading as before. (Hidden packages moving with block edits: fixed in
-0.28.0, the owner chose pinned, editable packages.)
-**Next:** the iPhone device pass (V2-14) on 0.18.0, then 1.0.0. Wave 3
-candidates in `docs/V2_PLAN.md`: W3-A a bigger city; W3-B is complete
-(AIR HORN, TASER, STINGER and SMOKE GRENADE shipped; STICKY CHARGE on
-`claude/w3-sticky`). W3-C four new street scenes
-the owner picked (QUIET PLEASE march, roadworks, bin day with a tipper
-for Borrowed Blues, delivery rush); W3-D a desktop map editor whose edits ship in the
-game (place things, blocks, roads, districts) with an overlay of what
-depends on a route. Run at most three
-streams at once (4 cores; SwiftShader smoke tests are CPU-bound). Give
-each stream its own smoke port and scratch dir: `smoke.mjs` starts
-`vite preview` with output ignored, so a taken port silently tests
-another stream's build. Agents run tsc, tests and a build (one smoke run
-at most, timing failures under load are noise); the integrator re-runs
-after merging and GitHub CI (uncontended) is the arbiter before main.
-Wave 3 candidate: W3-A, a bigger city. **Groundwork shipped as 0.19.0**
-(`claude/w3-city`): `?city=24` / `?city=32` grows a ring round today's city,
-which stays block for block; the measurements, the inventory of everything
-placed by hand and the decisions left for the owner are in
-`docs/W3A_CITY.md`.
-
-**V2 is planned in `docs/V2_PLAN.md` (2026-11-02).** The owner chose
-direction A, *Have-a-Go* (the city's incidents keep running while you're
-wanted, and you can join them), with B's mayhem (stolen service vehicles'
-hose, chime and winch; named stamps) and the alarm-fitter main story,
-*Keep It Loud*. The Graveyard Shift becomes the Night Shift side story, and
-towing a side job. A towing-first draft was rejected ("I don't want to play
-a tow truck simulator"). V2 work takes priority over the list below.
-
-Re-planned 2026-10-30 after a scoping pass: every item below was checked
-against the code. **`docs/BACKLOG.md` has the details for each one** (cause
-with file:line, proposed fix, risks, how to verify, what the user must
-decide), under the id in brackets here.
-
-**Done in the 2026-10-30 session:** settings sheet fits at 852×340; the
-context-lost RELOAD button is reachable by keyboard/pad; long score-feed
-lines wrap clear of the radio card; FRENZY FAILED queues behind
-WASTED/BUSTED; bikes say STEAL THIS BIKE / GET ON and the marker ring fits
-small vehicles; SMASH and bike HIT & RUN only when the player did the
-ramming (head-ons still count); a build id in Settings and on the pause card;
-the screen stays awake while playing; GLBs get precache revisions, so an
-installed app picks up new art; stored settings are sanitised at boot.
-Then: frame-time stats (fps, p50/p95/p99/max, hitches/min, JS p95) and a
-Settings → Perf overlay choice (Off / FPS / Full; `?debug` forces Full)
-[`perf-overlay` and `overlay-in-app`, minus `DynamicResolution.state()`, a
-third overlay line and the DIAGNOSTICS button, which go with `diag-report`];
-crowd members well off-screen aren't posed [`pose-offscreen`]; small
-instance buffers upload whole and empty car batches not at all
-[`upload-ranges`]; car batches share one precompiled shadow-depth material
-[`shadow-depth-flip`]; the Old Town race no longer runs into the back of a
-stunt ramp, with a test for every course; asset builds run under pip `bpy`
-[`toolchain-bpy`]. Then: a session perf log (`curbside.diag`) and a
-DIAGNOSTICS sheet on the pause card (shown while the Perf overlay is on, or
-with `?debug`) whose SHARE / COPY report includes the play log
-[`diag-report`, minus an alive marker and event-driven audio state]; app
-updates no longer reload mid-run on an app switch or after a bust, only on
-the title, after WASTED, or after 10+ minutes away [`update-reloads-midrun`];
-a local play log of Chaos Runs, races and chases (`curbside.playlog`, via a
-new `activityEnd` event) [`tune-telemetry`, core fields only]. Then:
-haptics / rumble / live gamepad probes in the Diagnostics sheet
-[`input-probes`]; fast vehicles are swept against static obstacles (no
-more tunnelling through posts and bollards) and standing street furniture
-is solid to people [`minor-props`]; races start with nitro at
-`NITRO_START`; a timed-out Chaos Run is scored at the freeze, never below
-the HUD; the radar tints by the real districts; muzzle flashes start at the
-bore; Blender pass round 1: rooftop hut/tank tops in the GLB (no more
-`PART_COLOURS`), paler pigeons with near-white wings, a silver cop cap band
-and chest badge (SWAT too) [part of `characters-looks` / `props-world`].
-
-**Done since (2026-10-31):** menu buttons act on a tap made with a thumb
-still down (`src/ui/tap.ts`), **confirmed on the iPhone: it works every
-time**. The destruction test (README *Destruction test*, off by default)
-had its first device run: DESKTOP forced on the iPhone 15 Pro (home-screen
-app, iOS 18.7, `medium` at 1.50x, build `0e8bf2c`, one 151 s session) held
-59.9 fps, frame p99 18 ms, 0 hitches/min overall, with 145 bodies (none
-awake once settled), physics avg 0.28 ms (worst second 0.58 ms) and 46–59
-draw calls; Pages serves the wasm compressed (770 KB for 2.02 MB) and the
-second load came from the runtime cache; switching modes warmed in 3 ms.
-One 10 s window after the second DESKTOP blast dipped to 57 fps / p99
-26 ms (one hitch), then recovered. So `auto` now gives phones the
-desktop style: `high` and `medium` are desktop, `low` stays scar-only (the
-safety valve when DynamicResolution drops a tier, which it only does with
-Settings → Graphics on Auto, the default), and PHONE stays on the switch to
-compare against. Full numbers in README *Destruction test*.
-
-**Done 2026-11-01:** the service worker's navigation fallback skips URLs
-that name a file (`navigateFallbackDenylist` in `vite.config.ts`), so
-opening `/curbside/og.jpg` (or any file added there later) on a device that
-has played shows the file, not the game; `.html` and the bare game URL
-still get the offline shell.
-
-1. ~~Live touch tuning~~ [`touch-tuning`]: done 2026-10-31 (pause →
-   DIAGNOSTICS → TOUCH TUNING; README *Controls*). Use it during the device
-   pass and send the report: its `TUNE` line is the numbers to bake in.
-2. **Real-device pass on an iPhone 15 Pro** (the user, ~1.5–2 h): turn on
-   Settings → Perf overlay, follow [`device-checklist`] (the haptics /
-   rumble / pad questions are answered by the probes in the Diagnostics
-   sheet), then pause → DIAGNOSTICS → SHARE and send back the report (it
-   carries the play log). Also look at cops at night: nobody has seen the
-   new silver cap band on a phone yet.
-   **The destruction test stays a test (off by default) until:**
-   (a) **a 15+ minute soak on the phone** shows no throttling: Perf
-   overlay on Full and Settings → Graphics on Auto (a fixed Med never
-   drops to `low`), pause → DIAGNOSTICS → DESTRUCTION (TEST) → AUTO (now
-   the desktop style on the phone), wait for `rapier … ready`, then play
-   normally for 15+ minutes, BLOW A WALL every minute or two (3–4 m from
-   the wall, facing it), drive through the piles and blow up a car chain
-   beside a wall; watch the overlay for a tier drop to `low` (breaches go
-   scar-only) or a resolution step, and for fps / p99 creeping as the
-   phone warms; SHARE the report at the end (its samples are the
-   timeline). Still open from the first run: with a Mac at hand, any GC
-   sawtooth in the Safari timeline while a pile settles; and the boot
-   `warm` event with the test on at boot (relaunch the app with AUTO
-   saved) against one from an `off` session. On a desktop machine the
-   same with DESKTOP (or `?destruction=desktop`), against the estimate of
-   ≤ 1.3 ms physics p95. (b) **Rubble look polish**: done in the cloud
-   2026-10-31 (desktop sizes skewed small, more core, per-chunk tint, a
-   dust-and-gravel spill decal at the wall's foot; still one batch, no new
-   program or draw call). Needs a look on the phone in daylight and at night
-   during the soak.
-   (c) Then decide whether the test goes on by default.
-3. **Races and tuning**: the bot-vs-dev-time test
-   (`tests/raceDevTime.test.ts`) and the seeded harnesses `tools/tune/chaos.mjs`
-   and `heat.mjs` with baselines (README *Tuning harnesses*) are done
-   2026-10-31. Still open: re-tune medals and 5-star escape from logged real
-   play. Gold is reachable in any car (decided 2026-10-31): the dev time
-   scales with the car on the line (`carPace` in `modes/races.ts`), and
-   tightens if a faster one is taken mid-race (`RaceRun.takeCar`).
-4. **Blender adjustment pass: done 2026-10-31** (rebuilt with the local
-   Blender 5.2.3 LTS, `npm run assets`; the pip `bpy` recipe in
-   `docs/BLENDER_TODO.md` gives the same files). The flying `rocket`,
-   `grenade` and `molotov` models from weapons.glb [`rocket-projectile`,
-   `render/combatLook.ts`, same shader program before and after the load];
-   `GetUpFast` and a Throw that releases at 25% [`clips-getup-throw`;
-   `GETUP_LEAD` 0.92, Throw from 0 at 1×]; held guns bigger across with a
-   stripe on top, a bigger grenade and molotov, the launcher on the
-   shoulder (rockets fly at 1.45 m) [`weapons-held`]; a big boxy slim
-   backpack and Pike's pale collar [`characters-looks`]; lamp and signal
-   tops, a lit police-lamp cap and safehouse shade, a lighter booth roof
-   and a 17.2 m gantry at 1:1 [`props-world`]. Still for the device pass:
-   whether all that reads on the phone, the heli's size at night, and the
-   pickups' scale (left in code, [`pickups-debris`] skipped as low value).
-5. **deeek.org landing page: done 2026-10-31.** The hub in
-   `pydron-bot/pydron-bot.github.io` (`c7c1e80`): a wall of posters with
-   Curbside featured, a "More soon" flyer and stills, a matching 404,
-   favicon, touch icon, link-preview meta and `og.jpg`, `.nojekyll`; its
-   README covers adding a project and the same-origin rules (no service
-   worker or manifest at `/`) [`hub-screenshots`, `hub-page`,
-   `hub-social-meta`, `shared-origin-landing`]. Curbside (`af2e1a3`):
-   link-preview meta and `public/og.jpg`, and a MORE AT DEEEK.ORG link on
-   the title [`curbside-og-meta`, `curbside-linkback`]. Left for the user
-   on a real network: [`pages-domain-check`] (both URLs on the phone and
-   desktop, Settings → Pages: DNS check and Enforce HTTPS, `www`
-   redirects, a link preview in iMessage).
-6. **Minor issues: all done 2026-10-31.** Left turns give way
-   [`minor-junction-turns`] (README *Traffic lights*); the browser smoke
-   test and CI [`smoke-ci`: `tools/smoke.mjs`, `.github/workflows/ci.yml`];
-   M8's criteria in PLAN.md [`m8-closeout`]; branch cleanup
-   [`repo-hygiene`]. Garbage [`anim-bake`, `hypot-hot-loops`,
-   `sim-call-boxing`]: clips baked into Float32Arrays, `len2` for
-   `Math.hypot`, allocation-free static contacts, indexed loops in
-   `simulate`; headless V8 now allocates ~12 KB per sim step (was ~55) and
-   ~1.1 KB per frame posing the crowd (was ~3.5); `tests/animBake.test.ts`
-   checks the baked clips against three's interpolants. Home-screen icon
-   [`icons-splash`]: rendered from the game (`tools/make-icons.mjs`: the
-   car from above at night in its ring), with a 180 px apple-touch-icon and
-   a PNG favicon; still to note on the device pass: how it looks on the
-   home screen and what iOS shows at launch (no startup images yet). An
-   INSTALL button on the title for Android / desktop Chrome and Edge
-   (`ui/installPrompt.ts`, shown only while the browser offers
-   `beforeinstallprompt`; iOS keeps its Add to Home Screen tip). The
-   manifest keeps no explicit `id` (it defaults to the start URL, which is
-   what installed copies already have).
-7. **Music: done 2026-11-01** on `claude/music-7` (README *Audio*). Four
-   new stations, each with four songs and their own instruments: SIDEWAYS
-   808 (phonk: cowbell, sliding 808), GETAWAY 104.3 (funk / disco: slap,
-   wah), DUBWISE 88.8 (dub: one drop, skanks, tape echo), INSERT COIN
-   (chiptune; the one major-key station) [`music-stations`]. A title theme
-   with a hand-written hook, and stings built on it: WASTED, BUSTED,
-   mission start / passed / failed, a 3-2-1-GO count-in that drops the
-   radio in on a chorus; stings follow the song's key and mode
-   [`music-themes`]. A chase score from 3 stars that calms down when the
-   cops are lost (R / a tap on its card skips it); on foot the car you left
-   plays on where it stands, and you hear about one parked car in three,
-   shopfronts (stations by district) and the VIPERS' boombox (phonk, cut
-   with a scratch when they turn on you) faintly as you pass
-   [`music-reactive`]. `tools/tune/music.mjs`, `stings.mjs` and
-   `reactive.mjs` render it all offline to MP3 (seeded, repeatable).
-   Reviewed adversarially (36 verified findings, all fixed, each with a
-   test); 964 tests; smoke test passes. **For the device pass:** listen to
-   every station, the theme, the chase and the stings on the phone (nothing
-   has been heard by a person yet); walk NEON MILE past a hangout; check
-   the levels on foot (cars and shops sit ~14 dB under the car radio, the
-   boombox ~4 dB) and that the chase card fits; watch the Perf overlay
-   while walking past shops (kits now warm from the unlock, gently in play;
-   ~7 MB of drum buffers per session). Still kept for later: a living
-   radio (DJ, idents, ads) [`music-radio-life`], recorded tracks
-   [`music-recorded`], a police scanner station (with [`police-chatter`]).
-8. **Ideas:** district names + an area card first [`districts-landmarks`
-   phase A], since chatter and gang turf need them; then police radio
-   chatter [`police-chatter`]; missions after the eighth [`missions-store`]: driven
-   target cars (`drive: true`) and REPEAT JOB replays at half pay are done
-   2026-10-31; chapter 2, *The Ledger* (five jobs against Commissioner
-   Clamp, script in `docs/STORY.md`), done 2026-11-01: play it on the
-   phone and tune its timers;
-   gangs [`gangs-respect`]: district names (placeholders), the area card and one gang (VIPERS, NEON MILE, respect) done 2026-10-31 on `claude/gangs`; leaderboard needs a decision on any backend
-   [`online-leaderboard`].
-
-9. **CRED and perks: done 2026-11-01** on `claude/cred-perks` (README
-   *Progression*, design in `docs/CRED.md`). Every life earns CRED; a level
-   holds the WASTED / BUSTED screen for a pick of three perks (eight perks,
-   four ranks each), off in the Chaos Run and races. **For the device
-   pass:** tap a pick on the phone, feel the pacing (first level after a
-   life or two?), and watch whether stars give too much CRED.
-
-10. **Living city, the shared base: done 2026-11-01** on
-   `claude/living-city` (README *City life*). The knocked out stay down
-   and an ambulance takes them to the hospital (new, `+` on the radar);
-   parked cars at the kerbs and in the car parks' painted bays; anyone
-   armed knocked out drops their gun to pick up (before: nobody dropped
-   anything). Under them: the `CityLife` director with a pure scheduler
-   (cooldowns, caps, range from the player; holds for the title, an
-   activity, wanted stars and the tutorial), a service-vehicle call-out
-   (`scenes/service.ts` ServiceRun) and queues/crowds
-   (`scenes/gathering.ts` Gathering), typed `street` events. iPhone
-   profile ~41 draw calls on average at a fixed seed (40 before), no new
-   mesh or program; smoke OK (61 / 51 iPhone, 70 desktop).
-   **Being built on it in parallel** (one worktree each, branched from
-   this base): fires and fire trucks, police chases, street races, the ice
-   cream van's queue, bus stops, tow trucks, scuffles between people; and
-   the extras (witnesses, traffic accidents, car alarms, muggings,
-   performers and stands, gang flare-ups, double-parked trucks, crowds by
-   time and weather, stray dogs). A first draft of the scenes, written
-   before the work was split, is on the local branch
-   `claude/living-city-scenes-draft` (`4301862`, not pushed): a starting
-   point, not reviewed against this base's APIs.
-   **Atmosphere: done 2026-11-01** on `claude/city-atmosphere` (README
-   *City life*): crowds by the hour and the weather (`game/cityMood.ts`
-   `densityFor`; the Neon Mile and the old town fill at night, the docks
-   and suburbs empty, rain thins every street), umbrellas, sheltering
-   under awnings and hurrying in the rain, groups under the neon at
-   night, a `nightlife` factor for the street races (`life.d.mood`), stray
-   dogs that chase runners and bark, pigeons that land again, and gang
-   turf flare-ups on the VIPERS' borders with colours-only rival crews
-   (step in and the side you didn't hit stands with you). Umbrellas and
-   dogs are code-built stand-ins in the props' `things` family (+2 calls
-   at most; Blender contract in `BLENDER_TODO.md` §8.8). **For the device
-   pass:** do the dogs and umbrellas read from the street camera; is a
-   skirmish (10–20 s) too short; the night crowd in the Neon Mile (up to
-   ~30 people plus the groups) on the phone's CPU.
-   **Hotspots** (keep edits to these small): `core/events.ts` (the
-   `StreetWhat` members for the planned scenes are already there),
-   `game/cityLife.ts` (one `this.add(...)` line per scene), `main.ts` (one
-   `cityLook.add(...)` per scene that draws), `game/population.ts` and
-   `systems/crowd.ts` (the `street` / `scene` / `injured` / `ambient` /
-   `parked` flags), `audio/gameAudio.ts` (`onStreet`). **For the device
-   pass:** does a knocked-out body lying there read on the phone; are the
-   parked cars in the way on foot or in a chase; the drop ring at night.
-   **Emergency services: done 2026-11-01** on `claude/city-emergency`
-   (README *City life*): fires on exploded cars and on walls hit by a
-   grenade or rocket, put out by a fire truck's two firefighters with
-   hoses (or burning out by themselves); tow trucks taking wrecks,
-   abandoned and parked cars away on the hook; car alarms from a bump, a
-   shot or a blast (flashing indicators, a synthesised alarm). Rules pure
-   and tested (`systems/emergency.ts`, `tests/emergency.test.ts`); a new
-   `StreetWhat` member, `alarm`. No new mesh or program; worst case +6
-   draw calls on the iPhone profile (fire truck and tow truck in view,
-   with the firefighters' body). **For the device pass:** the flames and
-   the hose jets in daylight and at night, the alarm's level against the
-   radio, a tow in a tight car park (the car on the hook can clip a
-   neighbour: it's carried, not simulated).
-
-11. **Street props, round 2: done 2026-11-01** on `claude/street-props`
-   (README *World*: *Placement*, *Road works*, *Food carts and bus stops*,
-   *Collision*, *Stand-ins*). Denser, more varied kerbs (parking meters,
-   planters, bike racks, recycling bins, shopping carts; café tables,
-   vending machines and ATMs against shopfronts); 18 road-works sites at
-   the kerb that traffic drives past in its lane (pulling over for a siren
-   too); food carts and fruit stands; 86 bus shelters. All in the `street`
-   family, so no new draw call (iPhone profile, same spots before → after: 49 → 49 at the spawn, 43 → 43 at a works site, 33 → 33 downtown); box stand-ins until props.glb
-   has the models (contracts: `docs/BLENDER_TODO.md` §10). **For the
-   people stream:** `dressing.street.vendors` (serve point, queue
-   direction, vendor spot) and `dressing.street.busStops` (wait spot, where
-   a bus pulls in, its lane) are used by item 12 (the shelters are now
-   the only bus stops; walkers step round a kerb cart's queue). **For the device pass:**
-   whether the new models read from the phone's camera (all twenty
-   round-2 kinds are real models in props.glb since 0.13.0, 2026-11-02;
-   BLENDER_TODO §10 notes). (The street
-   family's vertex cost is fixed on `claude/perf-props`: each prop now runs
-   only its own model; README *Families*.) Not done: scaffolding, a work van, water barriers.
-
-12. **City people: done 2026-11-01** on `claude/city-people` (README *City
-   life*, *People*; built on item 10's base). The bus shelters are the only
-   bus stops (`placeBusStops` is gone; CityLife takes the shelters and the
-   carts through its deps). Buses pull in at shelters where people have
-   gathered, riders board through the front door and a few get off; the
-   ice cream van stops by parks and plazas and serves a queue; food carts
-   get a vendor and a queue, busiest at lunch and in the evening, and
-   walkers step round people standing on the pavement; buskers draw a
-   crowd that tips; scuffles start from a barge (a fleeing ped, the player
-   sprinting), stray fire or a queue-jumper, with a ring of onlookers and
-   now and then a knockout for the ambulance; muggings, with a bag to win
-   back for $50; and witnesses: knocking a civilian down or a carjacking
-   seen only by passers-by is phoned in after 3–5 s, which knocking the
-   caller down or getting 45 m away stops (`HeatDeps.witnesses`,
-   `heat.called`; no witness, the old immediate heat). No new mesh, program
-   or draw call (iPhone profile, fixed seed, seven places: 41.9 → 42.1
-   on average, 57 → 56 at most; README *City life* budget). **Shared-file edits:** `cityLife.ts` (deps
-   `busStops`, `vendors`, `hour?`, `reward?`, `callIn?`; the `witnesses`
-   field; eight `add` lines), `main.ts` (those deps, the heat hook,
-   `cityLook.add(peopleLook(...))`), `heat.ts` (the hook and `called`),
-   `events.ts` (four `StreetWhat` members), `population.ts`
-   (`CrowdPed.phone`), `peoplePose.ts` (one line), `gathering.ts` (`place`,
-   `release`); the scenes' shared bits are `scenes/people.ts`. **For the device pass:** do the phone screens, the mugger's
-   ring and the coins read on the phone; is a bus at a shelter in the way
-   on foot; how the delayed heat feels (tune `CALL_SECONDS`, `SEE_RANGE`,
-   `CALL_RANGE` in `systems/witnesses.ts`). Not done: thrown or knocked
-   objects starting scuffles (no event carries who a knocked prop hit),
-   people carrying a visible bag, a busker's music.
-
-13. **City traffic: done 2026-11-01** on `claude/city-traffic` (README
-   *City life*, *Traffic scenes*). Ambient police chases (car, scooter or
-   on foot; arrested, taken down for the ambulance, or escaped) that never
-   touch the player's heat (attack the officers and the usual crimes
-   apply; any star breaks the chase off and its officers join the police
-   as strays); night-weighted street races with nitro, sometimes chased;
-   rear-end accidents (smoke, hazards, an argument, sometimes a fight, a
-   patrol car breaks it up; the cars stay flagged `Vehicle.towable` for
-   the tow-truck stream); double-parked delivery vans and garbage trucks
-   with a queue that honks and goes round. One incident (chase, race,
-   accident) at a time; a forced scene costs at most +9 draw calls on the
-   iPhone profile; smoke OK (56 / 56 iPhone, 68 desktop). Merged with the
-   others: races read the mood's nightlife where the player is
-   (`nightlife()` in `scenes/streetRaces.ts`), and tows take `towable`
-   crashes first.
-   **For the device pass:** are the sirens of a chase you're not in too
-   much; does a cuffed suspect read at phone scale; are races too fast to
-   follow on foot; how often the queue behind a truck blocks your own run.
-   Not done: a proper motorcycle model (the scooter stands in); ambient
-   police cars aren't on the radar.
-
-Smaller things found on the way (details in BACKLOG.md): the Old Town race's leg 1 has a
-launch ramp landing at a corner checkpoint (is that a feature?).
-
-## V2 in-view numbers
-
-How much of the living city a driving player sees (V2-01): the meter
-(`systems/inViewMeter.ts`, `__ub.inView()`, an `inview` line in the session
-log every 2 minutes of play) and `tools/tune/inview.mjs`: a bot drives the
-iPhone landscape view (852×393) for 20 minutes of free roam (stars cleared),
-then 5 minutes of a 2-star pursuit kept at 2. "Incident" means a chase,
-race, accident, fight, mugging, turf war, fire or tow; seconds are the
-scene's subject on screen. Three seeds (1, 2, 3).
-
-**Baseline (before V2-02, everything loud held while wanted):**
-
-| | seed 1 | seed 2 | seed 3 |
-|---|---|---|---|
-| Free roam: an incident in view | 68 s (6%) | 50 s (4%) | 73 s (6%) |
-| Free roam: came into view after a quiet spell | 32× | 22× | 27× |
-| Free roam: gap median / p90 | 28 / 92 s | 19 / 91 s | 43 / 69 s |
-| Free roam: longest quiet (stretches ≥ 90 s) | 136 s (4) | 369 s (3) | 208 s (1) |
-| 2-star pursuit: an incident in view | 0 s | 0 s | 1 s (a fire) |
-| 2-star pursuit: loud scenes started | 0 | 0 | 0 |
-
-Free roam per kind, seed 1 (in view s / started / seen / ended unseen):
-tow 28/17/9/8, busker 19/15/5/10, accident 11/6/3/3, race 10/7/5/1,
-mugging 8/9/6/3, turf 7/4/1/3, chase 6/9/3/6, fight 0/2/0/2, fire 0/6/0/4.
-The ice cream van (56 started), the bus (29) and stray dogs (235) were
-never in view from a moving car. The pursuit is the gap V2-02 is for: the
-city stops dead the moment you have a star.
-
-**After V2-02 (busy scenes run while wanted at the wanted pace, chases and
-races sometimes on the road ahead, accidents and turf on your way):**
-
-| | seed 1 | seed 2 | seed 3 |
-|---|---|---|---|
-| Free roam: an incident in view | 81 s (7%) | 52 s (4%) | 73 s (6%) |
-| Free roam: came into view after a quiet spell | 28× | 22× | 27× |
-| Free roam: gap median / p90 | 11 / 143 s | 37 / 80 s | 43 / 69 s |
-| 2-star pursuit (5 min): an incident in view | 1 s | 15 s | 10 s |
-| 2-star pursuit: came into view / gap median | 1× / 178 s | 6× / 30 s | 5× / 37 s |
-| 2-star pursuit: put on the road ahead | 1 | 1 | 2 |
-| 2-star pursuit: busy scenes started | 7 | 9 | 8 |
-
-Seen in the pursuits: turf wars (2 of 3 started), muggings (2 of 3),
-accidents (2 of 4), tows (3 of 8), a race (1 of 2). Over 15 minutes at 2
-stars (seeds 1, 2; into the night): an incident in view 67 s and 14 s,
-coming into view 18× and 8×, gap median 18 s and 62 s (p90 110 s and
-208 s), 5 and 4 put on the road ahead. The runs are noisy (one bot route
-past a scene or not); read them as "something now happens in a pursuit"
-rather than a rate. Free roam moves only within the seeds' noise (stars
-there are cleared as they come, so little changed).
-
-**Review fix:** chases started while you were wanted broke off on their
-next step (`stepChase`), units and all driving off, so the counts above
-include some that did; chases waited for no stars until the chase
-handoff (V2-03) was merged, and now run while you're wanted.
-Re-run after that, pursuit only (`--roam 0 --pursuit 300`, so at night,
-hour ~2–3): an incident in view 12 / 12 / 7 s (seeds 1/2/3), coming into
-view 4× / 4× / 3×, 1 race each on the road ahead, no chase started.
-
-**Not yet:** no chase is seen in a pursuit until V2-03; the 5-minute pursuits run by day (17–19 h), when races are mostly
-put off; and free roam's p90 gap is still over 90 s on one seed in three
-(placement in free roam, or new incidents, is the next lever).
-
-**5-star soak, iPhone `medium`** (`mayhem.mjs --scenario pursuit --tier
-medium --time both --seconds 40 --step 100 --dpr 1`: 5 stars held, a busy
-scene forced round the player every 5 s past every hold and cap): draw
-calls peak 76 (average 60) by day, 68 (61) at night, with 7 police units
-and 2–3 busy scenes at once; the same drive with no stars 56 (47). Well
-under 150. The forced starts go past the tier cap the clocks keep to while
-wanted (`WANTED_SCENE_CAP`: high 4, medium 3, low 2), so in play it's at
-most this.
-
-## Working conventions that worked
+## Working conventions
 
 - Big features as **streams in separate git worktrees** (`git worktree add
-  ../cs-<name> -b stage/<name>`, `ln -s ../curbside/node_modules`), one
-  owner per file area, main.ts edits kept to wiring, CSS per stream; then an
-  independent review-and-fix pass, then merge + a Playwright smoke test on
-  desktop 1280×720 and iPhone 15 Pro landscape (852×393 @3x, also 852×340).
-- Headless WebGL: `chromium.launch({ args: ['--use-gl=angle',
+  ../cs-<name> -b <branch>`, `ln -s ../curbside/node_modules`), one owner per
+  file area, `main.ts` edits kept to wiring; then an independent
+  review-and-fix pass, then merge and the smoke test. At most three streams
+  at once on a 4-core machine (the smoke test is CPU-bound); give each its
+  own smoke port and scratch dir (`smoke.mjs` starts `vite preview` with its
+  output ignored, so a taken port silently tests another stream's build).
+  GitHub CI, uncontended, is the arbiter before `main`.
+- **Hotspots** (keep edits small, expect merge conflicts): `src/main.ts`,
+  `core/events.ts`, `game/cityLife.ts` (one `add` line per scene),
+  `audio/gameAudio.ts`, `game/population.ts`, `systems/crowd.ts`,
+  `core/changelog.ts`.
+- **Headless WebGL:** `chromium.launch({ args: ['--use-gl=angle',
   '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] })`. SwiftShader
-  is ~1 fps: drive tests with `window.__ub` (game internals, `startGame()`,
-  `fastForward(seconds)`) and judge draw calls/correctness, not fps.
-- Kill dev servers by PID; `pkill -f "vite --port …"` matches the calling
+  runs at ~1 fps: drive tests through `window.__ub` (`startGame()`,
+  `fastForward(seconds)`) and judge draw calls and correctness, not fps.
+- Kill dev servers by PID: `pkill -f "vite --port …"` matches the calling
   shell's own command line and kills it.
