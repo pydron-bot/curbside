@@ -96,7 +96,9 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
   own smoke port and scratch dir (`smoke.mjs` starts `vite preview` with its
   output ignored, so a taken port silently tests another stream's build).
   GitHub CI, uncontended, is the arbiter before `main`.
-- **Hotspots** (keep edits small, expect merge conflicts): `src/main.ts`,
+- **Hotspots** (keep edits small, expect merge conflicts): `src/main.ts`
+  (register looks and `__ub` entries at the construction site, per
+  [main-loop.md](systems/main-loop.md)),
   `core/events.ts`, `game/cityLife.ts` (one `add` line per scene),
   `audio/gameAudio.ts`, `game/population.ts`, `systems/crowd.ts`,
   `core/changelog.ts`.

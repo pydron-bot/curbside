@@ -54,6 +54,7 @@ How each system works, its API and its budget: one file per system in
 
 | File | What it covers |
 |---|---|
+| [main-loop.md](docs/systems/main-loop.md) | `main.ts`: the order of a frame and a sim step, frame systems and their clocks, `window.__ub`, adding a system |
 | [controls.md](docs/systems/controls.md) | Keyboard, touch and gamepad bindings; the TEST menu; Diagnostics (touch tuning, perf log, GPU breakdown, Low Power tests, bug reports) |
 | [driving-and-combat.md](docs/systems/driving-and-combat.md) | Car handling, crashes, on foot, weapons (drive-bys, air horn, taser, stinger, smoke, sticky charge), stunts, character clips, simulation level of detail |
 | [heat.md](docs/systems/heat.md) | Wanted stars, police response and pursuit, BUSTED, Pay 'n' Spray |

@@ -32,7 +32,10 @@ CURBSIDE_BASE=/curbside/ npx vite build   # what the Pages deploy builds
   Add fields to events compatibly and keep `GameAudio`'s exhaustive switch
   compiling.
 - **main.ts is wiring.** Put logic in modules; pure logic (no three.js) goes
-  with unit tests in `tests/`.
+  with unit tests in `tests/`. A look that updates every frame registers with
+  `frameSystems.add` where it's made, and `expose()` puts a system on
+  `window.__ub` there too (`docs/systems/main-loop.md`); don't add lines to
+  `frame()` or the end of the file for them.
 - **Never hard-code `/assets/...`.** Load files from `public/` with
   `publicUrl('assets/…')` (`src/core/paths.ts`); the game is served from
   `deeek.org/curbside/`.

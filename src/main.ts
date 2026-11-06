@@ -8,6 +8,8 @@ import { PlayLog, browserStorage } from './game/playLog';
 import { Input } from './core/input';
 import { FixedStep } from './core/loop';
 import { SectionTimes } from './core/sectionTimes';
+import { FrameSystems, type FrameContext } from './core/frameSystems';
+import { expose, exposeGetter, installDebugHandle } from './core/debugHandle';
 import { UpdateGate } from './core/updateGate';
 import { PLAYER_ON_FOOT, copyPedState, stepPedestrian } from './entities/pedestrian';
 import {
@@ -201,8 +203,10 @@ const CRASH_EVENT_MIN = 2.5;
 
 // --- Renderer ---
 const renderer = createRenderer();
+expose('renderer', renderer);
 app.append(renderer.domElement);
 const resolution = new DynamicResolution(renderer);
+expose('resolution', resolution);
 const frameStats = new FrameStats();
 const frameSummary = emptySummary();
 /** JS ms per frame by system, for harnesses (__ub.simProfile; off unless started). */
@@ -212,20 +216,27 @@ const prof = new SectionTimes([
 ]);
 const [P_SIM, P_OBSTACLES, P_DRIVE, P_PHYSICS, P_CROWD, P_COLLIDE, P_CARPAIRS, P_PEDCOLLIDE] = [0, 1, 2, 3, 4, 5, 6, 7];
 const [P_SCENES, P_HEAT, P_COMBAT, P_MAINTAIN, P_PEOPLE, P_PIGEONS, P_FRAME] = [8, 9, 10, 11, 12, 13, 14];
+/** Looks and overlays updated every frame, in the order added (core/frameSystems.ts): add a new one where it's made. */
+const frameSystems = new FrameSystems();
 
 // --- Scene ---
 const scene = new Scene();
 const city = generateCity(1337, ACTIVE_MAP);
+expose('city', city);
 const pickups = placePickups(1337, ACTIVE_MAP);
 /** Stunt ramps and kickers: their sides and backs are solid. */
 const ramps = placeCityRamps(1337, ACTIVE_MAP);
+expose('ramps', ramps);
 /** Street furniture and landmark models: lamp posts, signal poles, bollards, booth walls... collide. */
 const dressing = dressCity(city, pickups, ramps);
+expose('dressing', dressing);
 const collision = new StaticGrid([...city.obstacles, ...dressing.solids]);
 const rand = mulberry32(Date.now() >>> 0);
 const rig = new CameraRig(1);
+expose('rig', rig);
 // Lights, time of day, ground, city, props, and the batched people/car/glow renderers.
 const look = new Look(renderer, scene, city, rig, pickups, app, dressing.street);
+expose('look', look);
 look.props.setLandmarks(dressing.landmarks);
 /** The destruction test's craters (systems/breaches.ts): building faces found through the collision grid, awnings from the city's plans. */
 const breaches = new Breaches(
@@ -234,10 +245,13 @@ const breaches = new Breaches(
   new Map<Rect, number>(city.buildings.map((b, i) => [b, i])),
   look.plans.map((p) => p.shopfronts.filter((s) => s.awning !== null)),
 );
+expose('breaches', breaches);
 const effects = new Effects(scene);
+expose('effects', effects);
 look.useLowResFx(effects.lowRes);
 /** Hydrants, bins, benches, cones: a car knocks them flying (they're back a minute later). */
 const knockables = new Knockables(dressing.knockables);
+expose('knockables', knockables);
 const knockFx = new KnockFx(look.props, effects);
 look.addGlowSource((_g, view) => knockFx.update(view));
 // Blown-up cars shed debris.glb's parts once it's in.
@@ -246,20 +260,27 @@ look.addGlowSource(() => effects.debris.drawParts());
 const rampGrid = new StaticGrid(rampSolids(ramps));
 scene.add(new RampMesh(ramps, look).mesh);
 const stunts = new StuntTracker();
+expose('stunts', stunts);
 /** Pigeon flocks on plazas, parks and pavements that scatter at cars, runners and gunfire (one draw call). */
 const pigeons = new PigeonLook(scene, look, city, collision, events, mulberry32((Date.now() ^ 0x5eed) >>> 0));
+expose('pigeons', pigeons);
 /** Seagulls wheeling over the docks' shore by day (one draw call while any is in view). */
 const gulls = new GullLook(scene, look, city.seed);
+expose('gulls', gulls);
 /** Traffic lights: their clock runs with the sim; traffic stops on red, the lenses show it. */
 const signals = new TrafficSignals();
+expose('signals', signals);
 look.props.signals = signals;
 // Drivers pulling over for a siren stay in lane past road works at the kerb.
 signals.setRoadworks(dressing.street.roadworks);
 
 // --- Vehicles ---
 const vehicles: Vehicle[] = [];
+expose('vehicles', vehicles);
 /** Off screen, the street's drivers, walkers and dogs think less often (systems/simLod.ts). */
 const simLod = new SimLod();
+/** The sim's level of detail (systems/simLod.ts): enabled = false runs everything every step. */
+expose('simLod', simLod);
 const lodView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
 
 function createVehicle(archetype: VehicleArchetype, paint: ColorRepresentation): Vehicle {
@@ -317,6 +338,7 @@ const population = new Population(
   },
   rand,
 );
+expose('population', population);
 
 // Placeholder boxes show until the Blender-built models arrive.
 VehicleModels.load(publicUrl('assets/vehicles.glb')).then(
@@ -331,8 +353,10 @@ VehicleModels.load(publicUrl('assets/vehicles.glb')).then(
 
 // --- Player ---
 const player = new Player(events, SPAWN_POINT.x, SPAWN_POINT.z);
+expose('player', player);
 // The body picked on the title screen (CHARACTER), and a new pick at once.
 const playerModel = look.characters.create({}, playerBody(settings.character));
+expose('playerModel', playerModel);
 scene.add(playerModel.root);
 onSettingsChange((s) => look.characters.setBody(playerModel, playerBody(s.character)));
 // God mode (TEST menu), for mayhem testing.
@@ -373,6 +397,7 @@ let observe: ObserveMode | null = null;
 let liveMap: LiveMap | null = null;
 /** Attract mode: the sim runs behind the title with the camera cruising over traffic. */
 const attract = new AttractCamera(rand);
+expose('attract', attract);
 attract.start(SPAWN_POINT.x, SPAWN_POINT.z);
 const keepVehicles: Array<Vehicle | null> = [null, null];
 /** Cars an activity needs kept (a mission's target, the Chaos Run car): filled by the progress director. */
@@ -434,6 +459,7 @@ maintainPopulation(true);
 
 // --- Score ---
 const score = new Score(loadBest());
+expose('score', score);
 /** Every score award goes out as an event; the HUD (and audio, etc.) listen. */
 const award = (a: Award | null) => {
   if (a) events.emit({ type: 'award', award: a });
@@ -473,6 +499,7 @@ const heat = new Heat({
   adoptCrash: (v, impact) => cityLife.accidents.adopt(v, impact),
   smoke,
 });
+expose('heat', heat);
 addHeatLook(look, heat, {
   scene,
   camera: () => rig.camera.position,
@@ -498,20 +525,30 @@ const combat = new Combat({
   smoke,
   pose: playerModel,
 });
+expose('combat', combat);
 const combatLook = new CombatLook(scene, look, effects, combat, population.crowd, player);
+frameSystems.add('combatLook', 'world', (dt) => combatLook.update(dt));
 const stingerLook = new StingerLook(scene, look, combat);
+frameSystems.add('stingerLook', 'real', () => stingerLook.update());
 const chargeLook = new ChargeLook(scene, look, combat);
+frameSystems.add('chargeLook', 'real', () => chargeLook.update());
 chargedCars = (out) => combat.charges.cars(out as Vehicle[]);
 const smokeLook = new SmokeLook(look, effects, smoke, heat.police.units);
+frameSystems.add('smokeLook', 'world', (dt) => smokeLook.update(dt));
 // Steam from the road vents at night (render/steamLook.ts).
 const steamLook = new SteamLook(effects, planSteamVents(city.seed));
-const steamView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
+frameSystems.add('steamLook', 'world', (dt, f) => steamLook.update(dt, f.view));
 // Fountains in the plazas and sprinklers in the parks (render/waterLook.ts).
 const parkWater = planParkWater(city, dressing.solids);
+/** Park water (render/waterLook.ts): fountains, sprinklers, and the look that sprays them. */
+expose('parkWater', parkWater);
 const waterLook = new WaterLook(effects, parkWater.fountains, parkWater.sprinklers);
+expose('waterLook', waterLook);
+frameSystems.add('waterLook', 'world', (dt, f) => waterLook.update(dt, f.view));
 // Midnight fireworks over downtown (render/fireworks.ts).
 const fireworks = new Fireworks(effects);
 look.addGlowSource((g) => fireworks.drawGlows(g));
+frameSystems.add('fireworks', 'world', (dt, f) => fireworks.update(dt, look.time.hour, f.view));
 
 // --- The city's own life (game/cityLife.ts): ambient scenes, parking, dropped guns ---
 /** Where the city's life parks nothing: landmarks, ramps, spray bays, the spawn corner's cars, road works, bus stops. */
@@ -570,6 +607,10 @@ const cityLife = new CityLife({
     return k;
   },
 });
+/** The city's own life (game/cityLife.ts): clock, scenes, medics, drops, people, owned, hospital, bays. */
+expose('cityLife', cityLife);
+/** How much of the city the player has seen (systems/inViewMeter.ts): per-kind seconds in view, starts, seen, unseen. */
+expose('inView', () => cityLife.inViewMeter.report());
 maintainCity = (seed) => cityLife.maintain(seed);
 // A chain the player set off in the city pays DOMINO ×N (systems/mess.ts).
 events.on('domino', (e) => {
@@ -587,7 +628,8 @@ cityLook.add(toolsLook(cityLife));
 cityLook.add(new RaceLook(cityLife.races));
 cityLook.add(new RoadsideLook(cityLife.accidents, cityLife.doubleParking));
 cityLook.add(incidentsLook(cityLife));
-const cityView: Rect = { minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
+// The city scenes' particles, on the sim's clock.
+frameSystems.add('cityLook', 'sim', (dt, f) => cityLook.update(dt, f.view));
 // Everyone's place, pose and clip each frame (and the player ducking into cars, cheering wins).
 const people = new PeoplePose({
   bus: events,
@@ -598,9 +640,11 @@ const people = new PeoplePose({
   playing: () => !attract.active,
   view: (out) => rig.visibleGround(out),
 });
+expose('people', people);
 
 // --- Audio (unlocks on the first tap / click / key) ---
 const audio = new GameAudio({ best: score.best });
+expose('audio', audio);
 const audioFrame = createAudioFrame(vehicles);
 // Shopfronts that play music on foot, picked from the city's plans once.
 audio.streetShops(city.buildings, look.plans);
@@ -619,22 +663,32 @@ const streetLife = new StreetLife({
   },
   audio,
 });
+// Bikes lean and carry their riders; emergency sirens and the ice cream chime.
+frameSystems.add('streetLife', 'real', (dt) => {
+  const focus = attract.active ? attract : player.position;
+  streetLife.update(dt, focus.x, focus.z, !attract.active);
+});
 
 // --- Input ---
 const input = new Input();
+expose('input', input);
 // Results, races and chases kept locally for tuning (localStorage 'curbside.playlog').
 const playLog = new PlayLog({ storage: browserStorage(), build: BUILD_ID, device: () => input.lastDevice, tier: () => getQuality().name, now: () => simTime });
+expose('playLog', playLog);
 playLog.attach(events);
 input.attachMouse(renderer.domElement);
 const haptics = new Haptics(input, events);
+expose('haptics', haptics);
 // Screen on while a run is played and not paused (controller-only play never touches it).
 const screenAwake = new ScreenAwake();
 const touch = mountTouchControls(document.body, input.touch, haptics);
+expose('touch', touch);
 input.addResetHook(() => touch.reset());
 const carButtons = mountCarButtons(touch.layer, input.touch, haptics);
 input.addResetHook(() => carButtons.reset());
 /** The player's nitro tank (fills by drifting, near misses and stunts). */
 const nitro = new Nitro(events);
+expose('nitro', nitro);
 blockBrowserGestures([renderer.domElement, touch.layer]);
 /** World heading the player is aiming this frame (stick, mouse or pad), or null. */
 let aimHeadingNow: number | null = null;
@@ -663,6 +717,7 @@ const fx = new FxDirector({
   // A blast about to breach a wall throws wall-coloured panels (the destruction test).
   blastPaint: (e, out) => !attract.active && destruction.blastPaint(blastKindOf(e.source), e.x, e.z, out),
 });
+expose('fx', fx);
 // Named mayhem (game/stamps.ts): the player's big moments get a stamp, and passers-by in view film them.
 const stamps = new Stamps({
   bus: events,
@@ -671,6 +726,11 @@ const stamps = new Stamps({
   driving: () => player.driving?.archetype ?? null,
   position: () => player.position,
 });
+/** Named mayhem: detector, arbiter, show(id) (cooldown applies), force(id). */
+expose('stamps', stamps);
+/** Slam a stamp on now (smoke test, playtests): an id from STAMPS ('barbecueSeason', 'takeTheHeat', …). */
+expose('stamp', (id: StampId) => stamps.force(id));
+frameSystems.add('stamps', 'real', () => stamps.step());
 events.on('stamp', (e) => cityLife.witnesses.film(e.x, e.z));
 // The destruction test (off by default): blasts near a wall breach it; dust, rubble and its physics.
 const destruction = new Destruction({
@@ -692,6 +752,8 @@ const destruction = new Destruction({
   contactShadows: look.contactShadows,
   carDims: (a) => look.cars.dims(a),
 });
+/** The destruction test: stats(), setMode(m), whenReady(), settle(s), clear(), batch, poses, lastBreach. */
+expose('destruction', destruction);
 look.addGlowSource((_g, view) => destruction.draw(view));
 // What is on screen, for the perf overlay, the session log and bug reports (render/sceneCensus.ts).
 const census = new SceneCensus({
@@ -703,9 +765,11 @@ const census = new SceneCensus({
   rubble: () => destruction.stats(),
   now: () => performance.now() / 1000,
 });
+expose('census', census);
 const censusOut = emptyCounts();
 // The last moments of game events, for bug reports (on the sim clock: a pause doesn't age them).
 const trail = new EventTrail();
+expose('trail', trail);
 events.onAny((e) => trail.record(simTime, e));
 new BreachSystem(events, breaches, { enabled: () => destruction.mode !== 'off', playing: () => !attract.active });
 events.on('enterVehicle', () => {
@@ -1228,6 +1292,7 @@ function explode(source: Vehicle) {
   source.wreckAge = 0;
   combat.vehicleExploded(source);
 }
+expose('explode', explode);
 
 /** Reused every step; the crowd reads it during the step and never keeps it. */
 const targetScratch: Target = { x: 0, z: 0, inCar: false, alive: false };
@@ -1391,18 +1456,12 @@ function frame(now: number) {
   cityMood.set(look.time.hour, fx.weather.rain);
   // Rubble on the sim's clock: frozen by pause, cards and hit-stop like the world.
   destruction.update(simDt);
-  // The city scenes' particles (registered looks), on the sim's clock too.
-  cityLook.update(simDt, rig.visibleGround(cityView));
-  // Bikes lean and carry their riders; emergency sirens and the ice cream chime.
-  streetLife.update(frameSeconds, focus.x, focus.z, !attract.active);
-  combatLook.update(frameSeconds * fx.hitStop.scale * slow);
-  stingerLook.update();
-  chargeLook.update();
-  smokeLook.update(frameSeconds * fx.hitStop.scale * slow);
-  steamLook.update(frameSeconds * fx.hitStop.scale * slow, rig.visibleGround(steamView));
-  waterLook.update(frameSeconds * fx.hitStop.scale * slow, steamView);
-  fireworks.update(frameSeconds * fx.hitStop.scale * slow, look.time.hour, steamView);
-  stamps.step();
+  // The registered looks and overlays (frameSystems), with the ground in view worked out once for all of them.
+  frameNow.real = frameSeconds;
+  frameNow.world = frameSeconds * fx.hitStop.scale * slow;
+  frameNow.sim = simDt;
+  rig.visibleGround(frameNow.view);
+  frameSystems.run(frameNow);
   updateHud(frameSeconds);
   progress.update(frameSeconds);
   heatPresenter.update(frameSeconds, focus.x, focus.z, playing);
@@ -1425,7 +1484,6 @@ function frame(now: number) {
   audio.update(frameSeconds, audioFrame);
 
   const at = player.position;
-  crasherBlips.update();
   radar.update(frameSeconds, at.x, at.z, player.driving ? player.driving.sim.heading : ped.heading, len2(at.vx, at.vz), player.driving);
   threats.update(rig.camera, population.crowd, at.x, at.z, viewW, viewH, playing && player.alive);
 
@@ -1448,6 +1506,8 @@ function frame(now: number) {
   prof.endFrame();
 }
 
+/** This frame's clocks and view, for the frame systems (reused). */
+const frameNow: FrameContext = { real: 0, world: 0, sim: 0, view: { minX: 0, minZ: 0, maxX: 0, maxZ: 0 } };
 /** This frame's aim, for Combat (reused). */
 const aimInput: AimInput = { heading: null, reach: 0, ground: null };
 const driveByOnly = (k: WeaponKind) => WEAPONS[k].driveBy;
@@ -1524,6 +1584,7 @@ const hud = new Hud(document.body, score, events, {
     return full ? `${line}\n${formatCounts(census.fill(censusOut))}` : line;
   },
 });
+expose('hud', hud);
 const combatHud = new CombatHud(document.getElementById('hud')!);
 // Sticky charges: how to set the first one off on this device, and a refused fourth throw.
 events.on('charge', (e) => {
@@ -1540,13 +1601,18 @@ const moment = new MomentCard(document.getElementById('wasted')!, {
   hour: () => look.time.hour,
   log: (kind, detail) => logEvent(kind, detail),
 });
+/** The best-moment picture: best (the life's stamp), picture, copyMs, encodeMs, holding. */
+expose('moment', moment);
 const radar = new Radar(document.body, city, { vehicles, pickups, crowd: population.crowd });
+expose('radar', radar);
 // Where the ambulances go.
 radar.setBlip('hospital', { x: cityLife.hospital.x, z: cityLife.hospital.z, kind: 'friend', icon: '+', size: 6 });
 // RACE CRASHER's next junction and prize on the radar (V2-12).
 const crasherBlips = new CrasherBlips(radar, cityLife.races);
+frameSystems.add('crasherBlips', 'real', () => crasherBlips.update());
 // The police scanner (game/scanner.ts): dispatcher lines along the bottom and radar pings on the incidents.
 const scannerHud = new ScannerHud(document.getElementById('hud')!, events);
+expose('scannerHud', scannerHud);
 const scanner = new Scanner({
   bus: events,
   now: () => simTime,
@@ -1560,6 +1626,8 @@ const scanner = new Scanner({
   clear: () => scannerHud.clear(),
   log: (kind, detail) => logEvent(kind, detail),
 });
+/** The police scanner: say(topic) (now, at the player's), setEnabled(on), feed (pings, stars, said). */
+expose('scanner', scanner);
 const wantedHud = new WantedHud(document.body, events);
 const heatPresenter = new HeatPresenter(heat, audio, radar, wantedHud, hud.score, events);
 const threats = new ThreatIndicators(document.body);
@@ -1580,6 +1648,14 @@ const labels = new LabelsOverlay(app, {
     describeWorld(board, labelWorld);
   },
 });
+/** Playtest labels: toggle(on?), list() (nearest first), stats() (JS ms per frame), resetStats(). */
+expose('labels', {
+  toggle: (on?: boolean) => toggleLabels(on),
+  list: () => labels.list(),
+  stats: () => ({ ...labels.stats }),
+  resetStats: () => labels.resetStats(),
+  overlay: labels,
+});
 labels.bindKey(window);
 const frontDoor = new FrontDoor(document.body, document.getElementById('paused')!, input, audio, {
   startGame,
@@ -1593,6 +1669,7 @@ const frontDoor = new FrontDoor(document.body, document.getElementById('paused')
   pauseReason: () => pauseReason,
   applyUpdate: () => updates.atSafePoint(),
 });
+expose('frontDoor', frontDoor);
 // Cash, saves, Chaos Run, activities and missions (adds CHAOS RUN to the title, PROGRESS / SHOP to the pause menu).
 const progress = new ProgressDirector({
   bus: events,
@@ -1618,6 +1695,7 @@ const progress = new ProgressDirector({
   playing: () => !attract.active,
   enterTitle: () => enterTitle(),
 });
+expose('progress', progress);
 
 /**
  * Compile every material in the scene now (behind the title) rather than on
@@ -1666,6 +1744,7 @@ function enterTitle() {
   audio.setMusicMode('menu');
   frontDoor.showTitle(score.best);
 }
+expose('enterTitle', enterTitle);
 
 // Boot into the title over attract mode.
 playerModel.root.visible = false;
@@ -1694,6 +1773,7 @@ const blowWall = new BlowWall({
   log: (kind, detail) => logEvent(kind, detail),
   setPaused: (p) => setPaused(p),
 });
+expose('blowWall', () => blowWall.fire());
 
 // --- Lifecycle ---
 // App updates wait for a moment when reloading costs nothing (see UpdateGate).
@@ -1706,6 +1786,7 @@ const updates = new UpdateGate(
   },
   () => frontDoor.pause.setUpdateReady(true),
 );
+expose('updates', updates);
 applyUpdate = registerSW({ immediate: true, onNeedRefresh: () => updates.markReady() });
 
 /** True while the WebGL context is gone: nothing can resume until it's back. */
@@ -1739,6 +1820,7 @@ function setPaused(p: boolean, reason: PauseReason = 'paused') {
   }
   events.emit({ type: 'pause', paused: p });
 }
+expose('setPaused', setPaused);
 document.addEventListener('visibilitychange', () => {
   // Both ways: a frame may still run between 'hidden' and the page stopping.
   spannedHidden = true;
@@ -1797,6 +1879,7 @@ const diagnostics = new Diagnostics(document.body, {
     info: () => ({ tier: getQuality().name, ratio: resolution.pixelRatio, dc: renderer.info.render.calls }),
   },
 });
+expose('diagnostics', diagnostics);
 // Each model file as it arrives (start-up dips in the log line up with these), and
 // its geometry uploads and first draws aren't slow frames to dynamic resolution.
 const assetsSeen = new Set<string>();
@@ -1833,8 +1916,12 @@ const testTools = new TestTools({
   moved: playerMoved,
   reload: () => location.reload(),
 });
+/** The TEST menu's actions (game/testTools.ts): scene(id), spawn(archetype), teleport(x, z), timeScale... */
+expose('testTools', testTools);
 // The title's highlights: now and then the camera leaves traffic for a scene (started like the TEST menu's).
 const highlights = new AttractHighlights({ life: cityLife, starter: testTools.starter, rand, ready: () => frontDoor.inTitle, hour: () => look.time.hour });
+/** The title's highlights (game/attractHighlights.ts): show (phase, current), subject, caption, step(dt). */
+expose('highlights', highlights);
 // A story job's scenes (its 'scene' action) start the same way, featured while it runs.
 progress.missions.useScenes(storyScenes(cityLife, testTools.starter));
 // The cold open (PLAY on a fresh save): a bus shelter, a getaway crashing at the kerb (game/modes/openingMode.ts).
@@ -1939,6 +2026,9 @@ const lookPanel = new LookPanel(document.body, lookTuning, audio, {
   holdClock: (hour) => testTools.holdClock(hour),
   held: () => testTools.frozen,
 });
+/** TEST → LOOK: the panel (open(), close()) and the live look (set(key, v), resetAll(), look). */
+expose('lookPanel', lookPanel);
+expose('lookSpecs', LOOK_SPECS);
 const syncLook = () => {
   lookTuning.setEnabled(settings.testTools);
   if (!settings.testTools) lookPanel.close();
@@ -2033,6 +2123,7 @@ const bugReport = new BugReportSheet(document.body, {
   diagnostics: () => diagnostics.reportData(),
   counts: () => ({ ...census.fill(censusOut) }),
 });
+expose('bugReport', bugReport);
 const openBugReport = addBugReportButton(bugReport, frontDoor, () => input.lastDevice !== 'touch');
 
 // iOS drops the GL context of backgrounded or memory-starved pages. Say so,
@@ -2068,135 +2159,51 @@ renderer.domElement.addEventListener('webglcontextrestored', () => {
 });
 
 // Debug hook for poking at the sim from the console / automated checks.
-(window as unknown as { __ub: unknown }).__ub = {
-  /** TEST → LOOK: the panel (open(), close()) and the live look (set(key, v), resetAll(), look). */
-  lookPanel,
-  lookTuning,
-  lookSpecs: LOOK_SPECS,
-  /** Park water (render/waterLook.ts): fountains, sprinklers, and the look that sprays them. */
-  parkWater,
-  waterLook,
-  gulls,
-  player,
-  playerModel,
-  people,
-  pigeons,
-  vehicles,
-  input,
-  city,
-  population,
-  renderer,
-  resolution,
-  rig,
-  look,
-  effects,
-  fx,
-  score,
-  events,
-  audio,
-  explode,
-  /** The destruction test: stats(), setMode(m), whenReady(), settle(s), clear(), batch, poses, lastBreach. */
-  destruction,
-  breaches,
-  blowWall: () => blowWall.fire(),
-  setQualityTier,
-  heat,
-  progress,
-  combat,
-  /** Named mayhem: detector, arbiter, show(id) (cooldown applies), force(id). */
-  stamps,
-  /** Slam a stamp on now (smoke test, playtests): an id from STAMPS ('barbecueSeason', 'takeTheHeat', …). */
-  stamp: (id: StampId) => stamps.force(id),
-  /** The best-moment picture: best (the life's stamp), picture, copyMs, encodeMs, holding. */
-  moment,
-  /** The police scanner: say(topic) (now, at the player's), setEnabled(on), feed (pings, stars, said). */
-  scanner,
-  scannerHud,
-  /** The city's own life (game/cityLife.ts): clock, scenes, medics, drops, people, owned, hospital, bays. */
-  cityLife,
-  /** How much of the city the player has seen (systems/inViewMeter.ts): per-kind seconds in view, starts, seen, unseen. */
-  inView: () => cityLife.inViewMeter.report(),
-  /** The TEST menu's actions (game/testTools.ts): scene(id), spawn(archetype), teleport(x, z), timeScale... */
-  testTools,
-  /** The title's highlights (game/attractHighlights.ts): show (phase, current), subject, caption, step(dt). */
-  highlights,
-  /** Playtest labels: toggle(on?), list() (nearest first), stats() (JS ms per frame), resetStats(). */
-  labels: {
-    toggle: (on?: boolean) => toggleLabels(on),
-    list: () => labels.list(),
-    stats: () => ({ ...labels.stats }),
-    resetStats: () => labels.resetStats(),
-    overlay: labels,
+// Harness controls and live values (the rest of __ub is exposed where each system is made).
+expose('lookTuning', lookTuning);
+expose('events', events);
+expose('setQualityTier', setQualityTier);
+/** Observe mode: enterFromTitle(), enterFromRun(), exit(), cam (height, yaw…), next(), spawn(id), held(v). */
+exposeGetter('observe', () => observe);
+/**
+ * The map editor (TEST → MAP): open() pauses and opens it; editor.edits, changes, problems, undo(), back();
+ * districts() (what districtOf says now, block by block: the editor must leave it as it was); parse(text) reads a map file;
+ * live: VIEW IN 3D's rebuild in place (game/liveMap.ts).
+ */
+expose('mapEditor', {
+  editor: mapEditor,
+  open: openMapEditor,
+  districts: () => city.blocks.map((b) => districtOf(b.bx, b.bz)).join(),
+  parse: (text: string) => parseMapEdits(JSON.parse(text)),
+  /** The committed map file. */
+  shipped: SHIPPED_MAP,
+  /** VIEW IN 3D's live rebuild: edits (what the city shows), dirty (rebuilt live), apply(edits). */
+  get live() {
+    return liveMap;
   },
-  nitro,
-  ramps,
-  stunts,
-  dressing,
-  knockables,
-  signals,
-  updates,
-  hud,
-  radar,
-  frontDoor,
-  diagnostics,
-  bugReport,
-  census,
-  trail,
-  attract,
-  touch,
-  haptics,
-  /** Observe mode: enterFromTitle(), enterFromRun(), exit(), cam (height, yaw…), next(), spawn(id), held(v). */
-  get observe() {
-    return observe;
-  },
-  /**
-   * The map editor (TEST → MAP): open() pauses and opens it; editor.edits, changes, problems, undo(), back();
-   * districts() (what districtOf says now, block by block: the editor must leave it as it was); parse(text) reads a map file;
-   * live: VIEW IN 3D's rebuild in place (game/liveMap.ts).
-   */
-  mapEditor: {
-    editor: mapEditor,
-    open: openMapEditor,
-    districts: () => city.blocks.map((b) => districtOf(b.bx, b.bz)).join(),
-    parse: (text: string) => parseMapEdits(JSON.parse(text)),
-    /** The committed map file. */
-    shipped: SHIPPED_MAP,
-    /** VIEW IN 3D's live rebuild: edits (what the city shows), dirty (rebuilt live), apply(edits). */
-    get live() {
-      return liveMap;
-    },
-  },
-  /** The PLAY button: closes the title and starts a fresh run. */
-  startGame: () => frontDoor.play(),
-  enterTitle,
-  get paused() {
-    return paused;
-  },
-  setPaused,
-  playLog,
-  get simTime() {
-    return simTime;
-  },
-  /** JS ms per frame by system: start(), then summary() (mean, p95, max per section). */
-  simProfile: prof,
-  /** The sim's level of detail (systems/simLod.ts): enabled = false runs everything every step. */
-  simLod,
-  /** One whole frame (sim, effects, render) `ms` after the last: for harnesses that stub requestAnimationFrame. */
-  stepFrame(ms = 1000 / 60) {
-    frame(last + ms);
-  },
-  /**
-   * Run the simulation `seconds` ahead in fixed steps without rendering, for
-   * automated checks on slow (software) GPUs where frames take seconds.
-   */
-  fastForward(seconds: number) {
-    for (let t = 0; t < seconds; t += 1 / 60) {
-      simulate(1 / 60);
-      destruction.update(1 / 60);
-      if ((maintainTimer -= 1 / 60) <= 0) {
-        maintainTimer = 0.25;
-        maintainPopulation();
-      }
+});
+/** The PLAY button: closes the title and starts a fresh run. */
+expose('startGame', () => frontDoor.play());
+exposeGetter('paused', () => paused);
+exposeGetter('simTime', () => simTime);
+/** JS ms per frame by system: start(), then summary() (mean, p95, max per section). */
+expose('simProfile', prof);
+/** One whole frame (sim, effects, render) `ms` after the last: for harnesses that stub requestAnimationFrame. */
+expose('stepFrame', (ms = 1000 / 60) => {
+  frame(last + ms);
+});
+/**
+ * Run the simulation `seconds` ahead in fixed steps without rendering, for
+ * automated checks on slow (software) GPUs where frames take seconds.
+ */
+expose('fastForward', (seconds: number) => {
+  for (let t = 0; t < seconds; t += 1 / 60) {
+    simulate(1 / 60);
+    destruction.update(1 / 60);
+    if ((maintainTimer -= 1 / 60) <= 0) {
+      maintainTimer = 0.25;
+      maintainPopulation();
     }
-  },
-};
+  }
+});
+installDebugHandle();
