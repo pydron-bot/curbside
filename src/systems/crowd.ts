@@ -93,6 +93,8 @@ export interface PedAgent {
   injured?: boolean;
   /** Fleeing a crime (a chase's suspect, a mugger on the run): flooring them isn't an assault. */
   suspect?: boolean;
+  /** In 'arrest' mode, walks to the goal rather than running (a warden marching on a busker). */
+  march?: boolean;
 }
 
 /** Hit points everyone starts with. */
@@ -514,7 +516,7 @@ function stepArrest(p: PedAgent, target: Target | undefined, dt: number): void {
   const run = d > ARREST_STOP;
   copMove.x = run ? dx / d : 0;
   copMove.y = run ? -dz / d : 0;
-  copMove.sprint = d > 2.5;
+  copMove.sprint = d > 2.5 && !p.march;
   stepPedestrian(p.s, copMove, COP_SPEC, dt);
   if (run) return;
   if (target) p.s.heading = Math.atan2(target.x - p.s.x, target.z - p.s.z);

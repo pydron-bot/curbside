@@ -62,6 +62,7 @@ const DOREEN = 'DOREEN';
 const LIONEL = 'LIONEL';
 const LULL = 'MAYOR LULL';
 const MANNY = 'MANNY';
+const TODD = 'TODD';
 
 /** Clamp's tow trucks: traffic-cone orange, apart from the city's yellow ones. */
 const CLAMP_ORANGE = '#e0661f';
@@ -73,6 +74,9 @@ const SHIFT_BLUE = '#3c5a8c';
 const DOREEN_MINT = '#bfe8d8';
 /** Wardens' hi-vis (Clamp's in the Night Shift, Lull's in the main story). */
 const HI_VIS = '#d4e23c';
+/** OPEN MIC: Lionel's set, s, and a pair of wardens every this long (seven pairs: the fourteen Lull's outro counts). */
+const GIG_SECONDS = 180;
+const WAVE_EVERY = 25;
 /** The council's own vans: municipal white. */
 const COUNCIL_WHITE = '#e4e4dc';
 
@@ -141,6 +145,14 @@ function writtenMissions(docks: Point & { heading?: number; halfWidth?: number; 
   const spitVan = kerb(-1, 0, 2, 26);
   const mannyShop = kerb(-5, -6, 1, 30);
   const manny = kerbside(-5, -6, 1, 30);
+  // Lionel's comeback gig mid-block on Neon Mile; Lull's wardens march on it from both ends of the street, a pair every WAVE_EVERY s.
+  const gig = kerbside(5, -4, 0, 32);
+  const gigEnds = [kerbside(5, -4, 0, -12), kerbside(5, -4, 0, 76)];
+  const gigWardens = Array.from({ length: 14 }, (_, i) => `gigwarden${i + 1}`);
+  // Todd, Lull's consultant, outside his hotel in Glass Heights; his drop on the ring road in Maple Flats, across town.
+  const todd = kerbside(0, -2, 1, 30);
+  const ringRoad = kerb(-2, 8, 3, 30);
+  const spareTodd = [{ down: 'todd', reason: 'NOT TODD! HE HAS THE DRAFT' }];
   // The Mayor's street in Glass Heights: five cars along it to wire, her house halfway down.
   const lullStreet = [12, 20, 28, 36, 44];
   const lullHouse = kerbside(2, 1, 2, 28);
@@ -409,6 +421,107 @@ function writtenMissions(docks: Point & { heading?: number; halfWidth?: number; 
             { wrecked: 'spitvan', reason: 'THE SPIT VAN IS WRECKED' },
             { lost: 'spitvan', reason: 'YOU LEFT THE SPIT BEHIND' },
           ],
+        },
+      ],
+    },
+    {
+      id: 's9-openmic',
+      title: 'OPEN MIC',
+      arc: 'main',
+      chapter: 2,
+      phone: 'phone-suburbs',
+      reward: 3500,
+      // Eight o'clock.
+      hour: 20,
+      intro: [
+        { who: LIONEL, text: "My comeback gig. Neon Mile, eight o'clock. Three minutes. It's one song, but it builds." },
+        { who: LULL, text: 'Mayor Lull. Unlicensed singing will be met by wardens. From both ends of the street.' },
+        { who: DOREEN, text: 'Keep them off him till he\'s done. All of it. Even the kazoo bit.' },
+      ],
+      outro: [
+        { who: LIONEL, text: "They shouted 'more'! Or possibly 'no more'. Either way, they were listening." },
+        { who: LULL, text: 'Mayor Lull. Fourteen wardens have resigned. They say the song is still in their heads.' },
+        { who: DOREEN, text: "Fourteen wardens and a kazoo solo. You've earned a cone. Lovely." },
+      ],
+      steps: [
+        {
+          kind: 'goto',
+          ...gig,
+          r: 14,
+          text: "GET TO LIONEL'S GIG ON NEON MILE",
+          // His red waistcoat, hat out.
+          start: [{ do: 'spawnPed', tag: 'lionel', ...gig, shirt: '#a8322b', body: 'ped_slim' }],
+          fail: spareLionel,
+        },
+        {
+          kind: 'survive',
+          seconds: GIG_SECONDS,
+          text: 'KEEP THE WARDENS OFF LIONEL',
+          // Pairs, one from each end, every WAVE_EVERY s: they walk at him and fight you if you're in the way.
+          start: gigWardens.map((tag, i) => ({
+            do: 'spawnPed' as const,
+            tag,
+            ...gigEnds[i % 2],
+            shirt: HI_VIS,
+            hostile: true,
+            body: 'ped_stocky' as const,
+            walkTo: 'lionel',
+            delay: 3 + Math.floor(i / 2) * WAVE_EVERY,
+          })),
+          fail: [...spareLionel, { reach: 'lionel', by: gigWardens, reason: "LIONEL'S BEEN WRITTEN UP" }],
+        },
+      ],
+    },
+    {
+      id: 's10-permission',
+      title: 'PLANNING PERMISSION',
+      arc: 'main',
+      chapter: 2,
+      phone: 'phone-arts',
+      reward: 3500,
+      // Todd wrote the Act; the only American English in the story, and the one callback to the spelling.
+      intro: [
+        { who: DOREEN, text: "Lull's consultant has quit. Wrote her Act, he did. He'll swap us the first draft for a lift." },
+        { who: TODD, text: "Todd Bramble, Bramble Strategic. Love what you're doing. Get me to the ring road, we'll circle back." },
+        { who: LIONEL, text: "He's outside the hotel in Glass Heights. Bring a car. And earplugs. He's been talking since Tuesday." },
+      ],
+      outro: [
+        { who: TODD, text: 'This is me. Love the energy. The draft is in your glovebox. Page four. Have a great life.' },
+        { who: DOREEN, text: "Page four. 'Exempt: the Mayor's own street, for essential noise.' She's got a hot tub." },
+        { who: LIONEL, text: "If her street's exempt, an alarm there's perfectly legal. Now who do we know who fits alarms?" },
+      ],
+      steps: [
+        {
+          kind: 'enter',
+          text: 'GET A CAR',
+          // A lanyard blue shirt; a wheelie case, in spirit.
+          start: [{ do: 'spawnPed', tag: 'todd', ...todd, shirt: '#3d6fd6', body: 'ped_slim' }],
+          fail: spareTodd,
+        },
+        { kind: 'pickup', tag: 'todd', text: 'PICK UP TODD IN GLASS HEIGHTS', fail: spareTodd, done: [{ do: 'board', tag: 'todd' }] },
+        {
+          kind: 'deliver',
+          x: ringRoad.x,
+          z: ringRoad.z,
+          r: 9,
+          text: 'GET TODD TO THE RING ROAD',
+          timer: 150,
+          timeout: 'TODD MISSED HIS FLIGHT',
+          // He talks the whole way; a quick drive hears less of it.
+          start: [
+            {
+              do: 'say',
+              lines: [
+                { who: TODD, text: "The brief was 'quiet'. I heard 'quiet' and I thought: synergy." },
+                { who: TODD, text: "A stick shift? I've never been in a stick shift. Is that legal here?" },
+                { who: TODD, text: "Was that a speed camera? Wave! Always wave. That's engagement." },
+                { who: TODD, text: 'The spelling in the Act? Me. Nobody corrected me. Very polite country.' },
+                { who: TODD, text: "Your driving is very disruptive. In my industry, that's a compliment." },
+                { who: TODD, text: "I'm writing a book about this ride. Chapter one: Disruption." },
+              ],
+            },
+          ],
+          done: [{ do: 'alight', tag: 'todd' }],
         },
       ],
     },

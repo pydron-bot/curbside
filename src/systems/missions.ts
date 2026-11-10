@@ -31,12 +31,7 @@ export interface DialogueLine {
 export type MissionAction =
   /** A car for the mission, kept until the mission ends: parked, or with `drive` driven by traffic AI (see SpawnCar). */
   | SpawnCar
-  /**
-   * Someone for the mission; `hostile` ones fight (armed: shoot) when the
-   * player comes close. `body`: who they're drawn as (a story character's
-   * own GLB and colours; a crowd body if left out).
-   */
-  | { do: 'spawnPed'; tag: string; x: number; z: number; shirt?: string; armed?: boolean; hostile?: boolean; body?: BodyKind }
+  | SpawnPed
   | { do: 'wanted'; stars: number }
   | { do: 'give'; weapon: WeaponKind }
   /**
@@ -45,6 +40,12 @@ export type MissionAction =
    * parked pulls out at once.
    */
   | { do: 'drive'; tag: string; cruise?: number; route?: ReadonlyArray<readonly [number, number]> }
+  /**
+   * Lines said while the step runs (a passenger who won't stop talking), one
+   * at a time: the first `first` s in, then one every `every` s, in order.
+   * The rest are dropped when the step ends (MissionTalk).
+   */
+  | { do: 'say'; lines: DialogueLine[]; first?: number; every?: number }
   /** The tagged person gets into the player's car (off the street). */
   | { do: 'board'; tag: string }
   /**
@@ -60,6 +61,26 @@ export type MissionAction =
    * a fire. It may not start (no room, no people near); no step depends on it.
    */
   | SceneAction;
+
+/**
+ * Someone for the mission; `hostile` ones fight (armed: shoot) when the
+ * player comes close. `body`: who they're drawn as (a story character's own
+ * GLB and colours; a crowd body if left out).
+ */
+export interface SpawnPed {
+  do: 'spawnPed';
+  tag: string;
+  x: number;
+  z: number;
+  shirt?: string;
+  armed?: boolean;
+  hostile?: boolean;
+  body?: BodyKind;
+  /** Walks (never runs) to the tagged person and keeps heading for them, off screen too, until knocked down (OPEN MIC's wardens). */
+  walkTo?: string;
+  /** Comes on this long after the action, s (a step's later waves). */
+  delay?: number;
+}
 
 export interface SpawnCar {
   do: 'spawnCar';
@@ -115,6 +136,9 @@ export interface MissionFail {
   /** Fails when the tagged car's health drops below `below` of its max (SCRATCH_LINE if left out): don't scratch it. */
   damaged?: string;
   below?: number;
+  /** Fails when one of `by` (people, standing) gets within REACH_RANGE of the tagged person: they got to him. */
+  reach?: string;
+  by?: readonly string[];
   reason: string;
 }
 
@@ -214,6 +238,8 @@ export const PICKUP_SPEED = 2;
 export const PICKUP_HOLD = 0.8;
 /** A tagged car further than this from the player has been lost, m. */
 export const LOST_RANGE = 320;
+/** A `reach` fail: this close to the person, m (a warden with a notebook out). */
+export const REACH_RANGE = 2;
 /** A `damaged` fail's line, share of max health: below it the car counts as scratched. */
 export const SCRATCH_LINE = 0.9;
 /** Heat must stay at zero this long to count as lost, s. */
@@ -273,6 +299,18 @@ export class MissionRun {
       if (f.damaged) {
         const car = v.vehicle(f.damaged);
         if (car && (car.health ?? 1) < (f.below ?? SCRATCH_LINE)) return this.fail(f.reason);
+      }
+      if (f.reach && f.by) {
+        const t = v.ped(f.reach);
+        if (t && !t.down) {
+          // Copied: a view may hand back the same object for the next tag.
+          const tx = t.x;
+          const tz = t.z;
+          for (const tag of f.by) {
+            const p = v.ped(tag);
+            if (p && !p.down && len2(p.x - tx, p.z - tz) < REACH_RANGE) return this.fail(f.reason);
+          }
+        }
       }
     }
     return this.check(s, dt, v);
@@ -528,6 +566,48 @@ export function nextInArc(
     replays,
   );
   return job ? { job, replay: true } : null;
+}
+
+// --- Lines said during a step ---------------------------------------------------
+
+/** A 'say' action's first line comes this long into the step, then one every TALK_EVERY, s. */
+export const TALK_FIRST = 4;
+export const TALK_EVERY = 12;
+
+/**
+ * A step's 'say' lines, in order on a timer. request() starts them (a later
+ * request replaces any left); end() (the step over, the job over) drops the
+ * rest, so a quick drive hears fewer.
+ */
+export class MissionTalk {
+  private lines: readonly DialogueLine[] = [];
+  private next = 0;
+  private wait = 0;
+  private every = TALK_EVERY;
+
+  request(a: { lines: readonly DialogueLine[]; first?: number; every?: number }): void {
+    this.lines = a.lines;
+    this.next = 0;
+    this.wait = a.first ?? TALK_FIRST;
+    this.every = a.every ?? TALK_EVERY;
+  }
+
+  /** One sim step: the line that's due, if one is. */
+  step(dt: number): DialogueLine | null {
+    if (this.next >= this.lines.length || (this.wait -= dt) > 0) return null;
+    this.wait = this.every;
+    return this.lines[this.next++];
+  }
+
+  /** Lines still to come. */
+  get left(): number {
+    return this.lines.length - this.next;
+  }
+
+  end(): void {
+    this.lines = [];
+    this.next = 0;
+  }
 }
 
 // --- Scenes a job starts ---------------------------------------------------------

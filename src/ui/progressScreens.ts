@@ -154,6 +154,7 @@ export const BADGES: ReadonlyArray<readonly [RegExp, string]> = [
   [/LIONEL/, 'lionel'],
   [/LULL/, 'lull'],
   [/MANNY/, 'manny'],
+  [/TODD/, 'todd'],
 ];
 
 /** A speaker label's badge ('vex' unless it has its own). */

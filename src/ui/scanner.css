@@ -101,6 +101,15 @@ body[data-device='touch'][data-hand='left'] #scanner {
   --sc: #5f9bff;
 }
 
+/* Someone in the story talking (a passenger): the mission card's cyan, no on-air light. */
+#scanner[data-tone='story'] {
+  --sc: #7ef0ff;
+}
+
+#scanner[data-tone='story'] .sc-tag i {
+  display: none;
+}
+
 @keyframes sc-air {
   50% {
     opacity: 0.25;

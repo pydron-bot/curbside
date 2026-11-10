@@ -18,8 +18,12 @@ import {
   hookLetGo,
   routeLeg,
   LOST_RANGE,
+  REACH_RANGE,
   MissionRun,
   MissionScenes,
+  MissionTalk,
+  TALK_EVERY,
+  TALK_FIRST,
   NIGHT_PHONE,
   REPLAY_PAY,
   SCENE_REACH,
@@ -31,6 +35,7 @@ import {
   nextInArc,
   replayJob,
   replayReward,
+  type DialogueLine,
   type MissionDef,
   type MissionSignal,
   type MissionView,
@@ -80,6 +85,11 @@ function tick(run: MissionRun, v: MissionView, seconds = 1 / 60): MissionSignal[
 }
 
 const def = (steps: MissionDef['steps']): MissionDef => ({ id: 't', title: 'T', phone: 'p', intro: [], outro: [], reward: 100, steps });
+
+/** A job's lines said mid-job ('say' actions). */
+function sayLines(m: MissionDef): DialogueLine[] {
+  return m.steps.flatMap((s) => [...(s.start ?? []), ...(s.done ?? [])]).flatMap((a) => (a.do === 'say' ? a.lines : []));
+}
 
 describe('mission engine: steps', () => {
   it('begin starts the first step; goto needs the right place (and a car if asked)', () => {
@@ -363,6 +373,22 @@ describe('mission engine: mayhem and crowds', () => {
     expect(tick(run, v)[0]).toMatchObject({ kind: 'passed' });
   });
 
+  it('a reach fail: one of them standing beside the person fails it; one knocked down, or the person down, does not count', () => {
+    const fails = [{ reach: 'lionel', by: ['w1', 'w2'], reason: 'WRITTEN UP' }];
+    const run = new MissionRun(def([{ kind: 'survive', seconds: 60, text: 'S', fail: fails }]));
+    const v = world();
+    v.peds.set('lionel', { x: 0, z: 0, down: false });
+    v.peds.set('w1', { x: 1, z: 0, down: true });
+    v.peds.set('w2', { x: REACH_RANGE + 0.5, z: 0, down: false });
+    run.begin();
+    expect(tick(run, v, 1)).toEqual([]);
+    // Not on yet (no view of them): nothing.
+    v.peds.delete('w2');
+    expect(tick(run, v, 1)).toEqual([]);
+    v.peds.set('w2', { x: REACH_RANGE - 0.5, z: 0, down: false });
+    expect(tick(run, v).at(-1)).toEqual({ kind: 'failed', reason: 'WRITTEN UP' });
+  });
+
   it('fails when someone you came for is knocked down', () => {
     const run = new MissionRun(def([{ kind: 'pickup', tag: 'l', text: 'P', fail: [{ down: 'l', reason: 'NOT HIM' }] }]));
     const v = world();
@@ -372,6 +398,38 @@ describe('mission engine: mayhem and crowds', () => {
     expect(tick(run, v)).toEqual([]);
     v.peds.get('l')!.down = true;
     expect(tick(run, v)[0]).toEqual({ kind: 'failed', reason: 'NOT HIM' });
+  });
+});
+
+describe("mission engine: a step's talk", () => {
+  const lines = ['ONE', 'TWO', 'THREE'].map((text) => ({ who: 'TODD', text }));
+  const said = (talk: MissionTalk, seconds: number) => {
+    const out: string[] = [];
+    for (let t = 0; t < seconds - 1e-9; t += 1 / 60) {
+      const l = talk.step(1 / 60);
+      if (l) out.push(l.text);
+    }
+    return out;
+  };
+
+  it('the first line a moment in, then one every TALK_EVERY, in order, and no more', () => {
+    const talk = new MissionTalk();
+    talk.request({ lines });
+    expect(said(talk, TALK_FIRST - 0.1)).toEqual([]);
+    expect(said(talk, 0.2)).toEqual(['ONE']);
+    expect(said(talk, TALK_EVERY - 0.2)).toEqual([]);
+    expect(said(talk, 0.2)).toEqual(['TWO']);
+    expect(said(talk, TALK_EVERY * 5)).toEqual(['THREE']);
+    expect(talk.left).toBe(0);
+  });
+
+  it('its own timing if it says; end() drops the rest', () => {
+    const talk = new MissionTalk();
+    talk.request({ lines, first: 1, every: 2 });
+    expect(said(talk, 3.1)).toEqual(['ONE', 'TWO']);
+    talk.end();
+    expect(talk.left).toBe(0);
+    expect(said(talk, 10)).toEqual([]);
   });
 });
 
@@ -443,8 +501,8 @@ describe('the story', () => {
 
   it('the main story (s-ids) and the Night Shift (m1-m13, ids unchanged), each job from a payphone, paying, with something to say', () => {
     // Chapter 2 is being built: the jobs it has so far, in story order.
-    expect(main.map((m) => m.id)).toEqual(['s1-wrongstop', 's2-noise', 's3-quiet', 's4-problems', 's5-ribbon', 's6-quietest', 's8-doner', 's11-alarmcall', 's12-loudest']);
-    expect(main.filter((m) => m.chapter === 2).map((m) => m.id)).toEqual(['s8-doner', 's11-alarmcall', 's12-loudest']);
+    expect(main.map((m) => m.id)).toEqual(['s1-wrongstop', 's2-noise', 's3-quiet', 's4-problems', 's5-ribbon', 's6-quietest', 's8-doner', 's9-openmic', 's10-permission', 's11-alarmcall', 's12-loudest']);
+    expect(main.filter((m) => m.chapter === 2).map((m) => m.id)).toEqual(['s8-doner', 's9-openmic', 's10-permission', 's11-alarmcall', 's12-loudest']);
     expect(night.map((m) => m.id)).toEqual([
       'm1-audition',
       'm2-tuna',
@@ -491,13 +549,15 @@ describe('the story', () => {
         expect(s.text.length, `${m.id}: ${s.text}`).toBeLessThanOrEqual(40);
         expect(s.text, m.id).toBe(s.text.toUpperCase());
       }
+      // Lines said mid-job go on the scanner's subtitle: two lines on the phone at most.
+      for (const l of sayLines(m)) expect(l.text.length, `${m.id}: ${l.text}`).toBeLessThanOrEqual(72);
     }
   });
 
   it('every speaker has a badge colour, in the card and in its stylesheet', () => {
     const css = readFileSync(new URL('../src/ui/progress.css', import.meta.url), 'utf8');
-    const speakers = new Set(missions.flatMap((m) => [...m.intro, ...m.outro].map((l) => l.who)));
-    expect([...speakers].sort()).toEqual(["COMMISSIONER CLAMP", 'DEACON PIKE', 'DOREEN', "LIL' TUNA", 'LIONEL', 'MANNY', 'MAYOR LULL', 'VEX']);
+    const speakers = new Set(missions.flatMap((m) => [...m.intro, ...m.outro, ...sayLines(m)].map((l) => l.who)));
+    expect([...speakers].sort()).toEqual(["COMMISSIONER CLAMP", 'DEACON PIKE', 'DOREEN', "LIL' TUNA", 'LIONEL', 'MANNY', 'MAYOR LULL', 'TODD', 'VEX']);
     for (const who of speakers) {
       const badge = badgeFor(who);
       if (who !== 'VEX') expect(badge, who).not.toBe('vex');
@@ -507,7 +567,7 @@ describe('the story', () => {
 
   it('names the real districts: no placeholder "arts quarter", "suburbs" or "old town" in anything said or shown', () => {
     for (const m of missions) {
-      const text = [m.title, ...m.intro.map((l) => l.text), ...m.outro.map((l) => l.text), ...m.steps.map((s) => s.text)].join('\n');
+      const text = [m.title, ...m.intro.map((l) => l.text), ...m.outro.map((l) => l.text), ...sayLines(m).map((l) => l.text), ...m.steps.map((s) => s.text)].join('\n');
       expect(text, m.id).not.toMatch(/arts quarter|suburbs|old town/i);
     }
   });
@@ -657,6 +717,69 @@ describe('the story', () => {
     expect(len2(manny.x - home.x, manny.z - home.z)).toBeLessThan(home.r ?? 6);
     for (const s of job.steps) expect(s.fail?.some((f) => f.wrecked === 'spitvan'), s.text).toBe(true);
     expect(home.fail?.some((f) => f.lost === 'spitvan')).toBe(true);
+  });
+
+  it("OPEN MIC: Lionel mid-block on Neon Mile at eight; seven pairs of wardens march on him from both ends, the last in time to matter", () => {
+    const job = main.find((m) => m.id === 's9-openmic')!;
+    expect(job.hour).toBe(20);
+    const [go, gig] = job.steps;
+    const lionel = go.start?.find((a) => a.do === 'spawnPed');
+    if (go.kind !== 'goto' || lionel?.do !== 'spawnPed') throw new Error('no gig');
+    expect(lionel).toMatchObject({ tag: 'lionel', body: 'ped_slim' });
+    expect(lionel.hostile).toBeUndefined();
+    expect(districtAt(lionel.x, lionel.z)).toBe('arts');
+    expect(len2(go.x - lionel.x, go.z - lionel.z)).toBeLessThan(go.r ?? 6);
+    if (gig.kind !== 'survive') throw new Error('not a survive');
+    const wardens = (gig.start ?? []).flatMap((a) => (a.do === 'spawnPed' ? [a] : []));
+    // Fourteen: Lull's outro counts them.
+    expect(wardens).toHaveLength(14);
+    expect(job.outro.some((l) => l.text.includes('Fourteen wardens'))).toBe(true);
+    const ends = new Set(wardens.map((w) => `${w.x},${w.z}`));
+    expect(ends.size).toBe(2);
+    for (const w of wardens) {
+      expect(w, w.tag).toMatchObject({ hostile: true, body: 'ped_stocky', shirt: '#d4e23c', walkTo: 'lionel' });
+      expect(districtAt(w.x, w.z), w.tag).toBe('arts');
+      // From up and down the street, a walk away.
+      const d = len2(w.x - lionel.x, w.z - lionel.z);
+      expect(d, w.tag).toBeGreaterThan(30);
+      // Arriving (at a walk) before the song's over: every pair matters.
+      expect((w.delay ?? 0) + d / 2.2, w.tag).toBeLessThan(gig.seconds);
+    }
+    // In pairs, one from each end.
+    for (let i = 0; i < wardens.length; i += 2) {
+      expect(wardens[i].delay).toBe(wardens[i + 1].delay);
+      expect(`${wardens[i].x},${wardens[i].z}`).not.toBe(`${wardens[i + 1].x},${wardens[i + 1].z}`);
+    }
+    const reach = gig.fail?.find((f) => f.reach);
+    expect(reach).toMatchObject({ reach: 'lionel', by: wardens.map((w) => w.tag) });
+    for (const s of job.steps) expect(s.fail?.some((f) => f.down === 'lionel'), s.text).toBe(true);
+  });
+
+  it('PLANNING PERMISSION: Todd outside his Glass Heights hotel, driven to the ring road in Maple Flats, talking all the way', () => {
+    const job = main.find((m) => m.id === 's10-permission')!;
+    const [car, pick, drop] = job.steps;
+    expect(car).toMatchObject({ kind: 'enter' });
+    const todd = car.start?.find((a) => a.do === 'spawnPed');
+    if (todd?.do !== 'spawnPed') throw new Error('no Todd');
+    expect(todd).toMatchObject({ tag: 'todd', body: 'ped_slim' });
+    expect(todd.hostile).toBeUndefined();
+    expect(districtAt(todd.x, todd.z)).toBe('downtown');
+    expect(pick).toMatchObject({ kind: 'pickup', tag: 'todd', done: [{ do: 'board', tag: 'todd' }] });
+    // Spared until he's in.
+    for (const s of [car, pick]) expect(s.fail?.some((f) => f.down === 'todd'), s.text).toBe(true);
+    if (drop.kind !== 'deliver') throw new Error('not a deliver');
+    expect(drop).toMatchObject({ timeout: 'TODD MISSED HIS FLIGHT', done: [{ do: 'alight', tag: 'todd' }] });
+    expect(drop.tag).toBeUndefined();
+    expect(drop.timer).toBeGreaterThan(0);
+    // On the outer ring road, across town in Maple Flats.
+    expect(Math.abs(drop.z) + 12).toBeGreaterThan(MAX_NODE * 64);
+    expect(districtAt(drop.x, drop.z)).toBe('residential');
+    // He talks while you drive, only then, and enough to fill the drive.
+    const talk = drop.start?.find((a) => a.do === 'say');
+    if (talk?.do !== 'say') throw new Error('no talk');
+    expect(talk.lines.length).toBeGreaterThanOrEqual(4);
+    for (const l of talk.lines) expect(l.who).toBe('TODD');
+    for (const s of [car, pick]) expect(s.start?.some((a) => a.do === 'say') ?? false).toBe(false);
   });
 
   it("ALARM CALL: five parked cars to wire on the Mayor's Glass Heights street at night, then mayhem round her house", () => {
@@ -1009,6 +1132,30 @@ describe('KEEP IT LOUD, jobs 4 on, played through the engine', () => {
     tick(cold, v);
     expect(cold.index).toBe(1);
     expect(tick(cold, v, home.timer! + 1).at(-1)).toEqual({ kind: 'failed', reason: 'THE SPIT WENT COLD' });
+  });
+
+  it('PLANNING PERMISSION: a car, Todd picked up, the ring road in time; too slow and he misses his flight', () => {
+    const m = job('s10-permission');
+    const drop = m.steps[2];
+    if (drop.kind !== 'deliver') throw new Error('not a deliver');
+    const todd = m.steps[0].start?.find((a) => a.do === 'spawnPed');
+    if (todd?.do !== 'spawnPed') throw new Error('no Todd');
+    play(m, (i, v) => {
+      Object.assign(v, { inCar: true, speed: 0 });
+      if (i === 1) {
+        Object.assign(v, { x: todd.x + 2, z: todd.z });
+        v.peds.set('todd', { x: todd.x, z: todd.z, down: false });
+      }
+      if (i === 2) Object.assign(v, { x: drop.x, z: drop.z });
+    });
+    const late = new MissionRun(m);
+    const v = world();
+    Object.assign(v, { inCar: true, speed: 0, x: todd.x + 2, z: todd.z });
+    v.peds.set('todd', { x: todd.x, z: todd.z, down: false });
+    late.begin();
+    tick(late, v, 2);
+    expect(late.index).toBe(2);
+    expect(tick(late, v, drop.timer! + 1).at(-1)).toEqual({ kind: 'failed', reason: 'TODD MISSED HIS FLIGHT' });
   });
 
   it("ALARM CALL: fit the five alarms, then the points round the Mayor's house wake her", () => {

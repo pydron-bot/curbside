@@ -40,6 +40,8 @@ export interface ScannerDeps {
   radar: { setBlip(id: string, opts: BlipOptions): void; removeBlip(id: string): void };
   /** Take the subtitle down now (switched off, the title). */
   clear?: () => void;
+  /** Someone in the story has the subtitle (ScannerHud.speaking): the next line waits. */
+  busy?: () => boolean;
   log?: (kind: string, detail: string) => void;
 }
 
@@ -133,7 +135,8 @@ export class Scanner {
       if (this.district !== null && here !== this.district) this.feed.heading(this.suspect(), DISTRICT_NAMES[here], at.x, at.z, now);
       this.district = here;
     }
-    const line = this.feed.step(now, this.world);
+    // A story line on the subtitle: the dispatcher waits.
+    const line = this.feed.step(now, this.world, this.d.busy?.() ?? false);
     if (line) {
       this.d.bus.emit({ type: 'scanner', kind: line.topic, text: line.text, priority: line.priority, x: line.x, z: line.z, hold: line.hold });
       this.d.log?.('scanner', line.text);

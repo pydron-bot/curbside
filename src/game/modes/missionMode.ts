@@ -21,7 +21,7 @@
 import { driverDoorPosition, speed, type VehicleArchetype } from '../../entities/vehicle';
 import type { GlowSprites } from '../../render/glowSprites';
 import { MARK, beacon, gate, groundRing, nearView, type ProgressProps } from '../../render/progressLook';
-import { provoke, resumeWalking, spawnPed } from '../../systems/crowd';
+import { COP_SPEC, provoke, resumeWalking, spawnPed } from '../../systems/crowd';
 import {
   arcOf,
   arcRings,
@@ -30,6 +30,7 @@ import {
   inArea,
   MissionRun,
   MissionScenes,
+  MissionTalk,
   nextInArc,
   replayReward,
   routeLeg,
@@ -45,6 +46,7 @@ import {
 } from '../../systems/missions';
 import { towPose, type Pose } from '../../systems/emergency';
 import { routeToward } from '../../systems/pursuit';
+import { holdFor } from '../../systems/scanner';
 import { buildMissions } from '../../systems/missionsData';
 import type { DialogueCard } from '../../ui/progressScreens';
 import type { BlipOptions } from '../../ui/radar';
@@ -135,6 +137,10 @@ interface MissionPed {
   aboard: boolean;
   view: { x: number; z: number; down: boolean };
   wave: number;
+  /** Heading for this person (SpawnPed.walkTo), or null. */
+  walkTo: string | null;
+  /** Seconds until they come on (SpawnPed.delay). */
+  delay: number;
 }
 
 export class MissionMode implements Mode {
@@ -169,6 +175,8 @@ export class MissionMode implements Mode {
   private near: Spot | null = null;
   /** The scenes the job running asked for, and the city's starter for them (main.ts: useScenes). */
   private readonly scenes = new MissionScenes();
+  /** The step's 'say' lines (a talker in the passenger seat). */
+  private readonly talk = new MissionTalk();
   private sceneHost: SceneHost | null = null;
   /** The clock before a job pinned it (MIDNIGHT EXPRESS): its speed, and the hour a failed job puts back. */
   private savedClock: { speed: number; hour: number } | null = null;
@@ -177,6 +185,8 @@ export class MissionMode implements Mode {
   /** A car the job has on a truck's hook, until it's let go. */
   private hook: MissionHook | null = null;
   private readonly pose: Pose = { x: 0, z: 0, heading: 0 };
+  /** whereIs()'s answer (reused). */
+  private readonly markAt = { x: 0, z: 0 };
   /** A hook's look at its truck (reused). */
   private readonly hookView = { driven: false, taken: false, speed: 0, distance: 0 };
   private readonly view: MissionView;
@@ -217,11 +227,11 @@ export class MissionMode implements Mode {
       },
       ped(tag) {
         const m = self.peds.get(tag);
-        if (!m || (!m.ped && !m.down)) return null;
-        if (m.ped) {
-          m.view.x = m.ped.agent.s.x;
-          m.view.z = m.ped.agent.s.z;
-        }
+        // Not on yet; or off the street and going nowhere (a walker keeps walking off screen, so it counts where it's got to).
+        if (!m || m.delay > 0 || (!m.ped && !m.down && !m.walkTo && !self.walkedTo(tag))) return null;
+        // On the street, where they stand; off it, where they were left (or a walker has got to).
+        m.view.x = m.ped ? m.ped.agent.s.x : m.x;
+        m.view.z = m.ped ? m.ped.agent.s.z : m.z;
         m.view.down = m.down;
         return m.view;
       },
@@ -315,6 +325,8 @@ export class MissionMode implements Mode {
       this.tendCars(dt);
       const started = this.scenes.step(dt, at.x, at.z, this.sceneHost);
       if (started) ctx.deps.audio.ui('click');
+      const line = ctx.live ? this.talk.step(dt) : null;
+      if (line) ctx.deps.bus.emit({ type: 'voice', who: line.who, text: line.text, hold: holdFor(line.text) });
       const s = run.update(dt, this.view);
       if (s) this.signal(s);
       this.updateBlips();
@@ -400,6 +412,8 @@ export class MissionMode implements Mode {
     switch (s.kind) {
       case 'step':
         if (s.prev) this.act(s.prev.done);
+        // The last step's talk is over; this one's starts with its actions.
+        this.talk.end();
         this.act(s.step.start);
         this.clearBlips();
         if (s.index > 0) ctx.deps.audio.ui('confirm');
@@ -458,6 +472,7 @@ export class MissionMode implements Mode {
     this.hook = null;
     // Its scenes play on, but nothing is featured for it any more.
     this.scenes.end(this.sceneHost);
+    this.talk.end();
     this.calling = false;
     this.replaying = false;
     if (ctx.busy === 'mission') ctx.busy = null;
@@ -536,6 +551,8 @@ export class MissionMode implements Mode {
             aboard: false,
             view: { x: a.x, z: a.z, down: false },
             wave: 0,
+            walkTo: a.walkTo ?? null,
+            delay: a.delay ?? 0,
           };
           this.peds.set(a.tag, ped);
           this.pedList.push(ped);
@@ -578,6 +595,9 @@ export class MissionMode implements Mode {
         }
         case 'scene':
           this.scenes.request(a);
+          break;
+        case 'say':
+          this.talk.request(a);
           break;
       }
     }
@@ -673,11 +693,28 @@ export class MissionMode implements Mode {
     const at = ctx.deps.player.position;
     for (const m of this.pedList) {
       if (m.aboard || m.down) continue;
+      if (m.delay > 0) {
+        m.delay -= dt;
+        continue;
+      }
       if (m.ped && !pop.crowd.includes(m.ped)) {
         // Recycled out of sight: they'll be back where they were.
         m.x = m.ped.agent.s.x;
         m.z = m.ped.agent.s.z;
         m.ped = null;
+      }
+      const goal = m.walkTo ? this.whereIs(m.walkTo) : null;
+      if (!m.ped && goal && len2(at.x - m.x, at.z - m.z) > MATERIALISE) {
+        // Off screen, a walker still walks.
+        const dx = goal.x - m.x;
+        const dz = goal.z - m.z;
+        const d = len2(dx, dz);
+        const step = Math.min(d, COP_SPEC.walkSpeed * dt);
+        if (d > 0) {
+          m.x += (dx / d) * step;
+          m.z += (dz / d) * step;
+        }
+        continue;
       }
       if (!m.ped) {
         if (len2(at.x - m.x, at.z - m.z) > MATERIALISE) continue;
@@ -687,12 +724,19 @@ export class MissionMode implements Mode {
         agent.mode = 'arrest';
         agent.goalX = m.x;
         agent.goalZ = m.z;
+        agent.march = goal !== null;
         m.ped = pop.addPed(agent, m.shirt === undefined ? undefined : { shirt: m.shirt, pants: '#1d1d24' }, m.body);
       }
       const a = m.ped.agent;
       if (a.mode === 'down') {
         m.down = true;
         continue;
+      }
+      if (goal) {
+        // Back on the march after a scuffle they gave up on; always for where their mark stands now.
+        if (a.mode === 'walk') a.mode = 'arrest';
+        a.goalX = goal.x;
+        a.goalZ = goal.z;
       }
       const d = len2(at.x - a.s.x, at.z - a.s.z);
       if (m.hostile) {
@@ -711,6 +755,22 @@ export class MissionMode implements Mode {
         a.s.heading = Math.atan2(at.x - a.s.x, at.z - a.s.z);
       }
     }
+  }
+
+  /** Where a job's person is now (on the street or not), or null if there's no such person, they're aboard or not on yet. */
+  private whereIs(tag: string): { x: number; z: number } | null {
+    const m = this.peds.get(tag);
+    if (!m || m.aboard || m.delay > 0) return null;
+    const p = this.markAt;
+    p.x = m.ped ? m.ped.agent.s.x : m.x;
+    p.z = m.ped ? m.ped.agent.s.z : m.z;
+    return p;
+  }
+
+  /** Is `tag` the mark some walker heads for? (Then it counts where it stands, on the street or not.) */
+  private walkedTo(tag: string): boolean {
+    for (const m of this.pedList) if (m.walkTo === tag) return true;
+    return false;
   }
 
   /** What a job pays: the story reward, or a repeat's share. */

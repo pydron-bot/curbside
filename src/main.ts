@@ -1625,6 +1625,7 @@ const scanner = new Scanner({
   city: cityLife,
   radar,
   clear: () => scannerHud.clear(),
+  busy: () => scannerHud.speaking,
   log: (kind, detail) => logEvent(kind, detail),
 });
 /** The police scanner: say(topic) (now, at the player's), setEnabled(on), feed (pings, stars, said). */

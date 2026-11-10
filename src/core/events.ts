@@ -240,6 +240,12 @@ export type GameEvent =
    */
   | { type: 'scanner'; kind: ScannerTopic; text: string; priority: ScannerPriority; x: number; z: number; hold: number }
   /**
+   * Someone in the story says something mid-job (a passenger talking, a
+   * 'say' action): `who` the speaker's label, as on the call card. Shown on
+   * the scanner's subtitle for `hold` seconds; the dispatcher waits for it.
+   */
+  | { type: 'voice'; who: string; text: string; hold: number }
+  /**
    * A link in a chain one thing set off in the city (systems/mess.ts): an
    * adopted crash, its patrol and tow; shots, an alarm, the call, the patrol.
    * `root`: who started it; `depth`: links from the root (the root itself

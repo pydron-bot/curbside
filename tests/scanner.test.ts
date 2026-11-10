@@ -124,6 +124,18 @@ describe('scanner: cooldowns, the gap and priority', () => {
     expect(lines.map((l) => l.topic)).toEqual(['chase']);
   });
 
+  it('held while a story line has the subtitle: nothing is said, then the waiting line goes out once it is free', () => {
+    const feed = new ScannerFeed(first);
+    feed.street('alarm', 0, 0, 'NEON MILE', 10, 0);
+    for (let t = 0; t < 2; t += 1 / 60) expect(feed.step(t, STILL, true), `${t}`).toBeNull();
+    expect(feed.step(2, STILL)?.text).toBeTruthy();
+    // Held past STALE, it's dropped as any waiting line is.
+    const late = new ScannerFeed(first);
+    late.street('alarm', 0, 0, 'NEON MILE', 10, 0);
+    for (let t = 0; t < STALE + 0.5; t += 1 / 60) late.step(t, STILL, true);
+    expect(late.step(STALE + 0.6, STILL)).toBeNull();
+  });
+
   it('a waiting line goes stale', () => {
     const feed = new ScannerFeed(first);
     feed.street('alarm', 0, 0, 'NEON MILE', 10, 0);

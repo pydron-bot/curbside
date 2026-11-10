@@ -472,16 +472,18 @@ export class ScannerFeed {
 
   /**
    * Once a frame: keep the pings (asking `world` 4× a second), and return the
-   * line that's due, if any (`this.line`, reused), else null.
+   * line that's due, if any (`this.line`, reused), else null. `hold`: someone
+   * else has the subtitle (a story line), so nothing is said; what waits goes
+   * stale as usual.
    */
-  step(now: number, world: PingWorld): ScannerLine | null {
+  step(now: number, world: PingWorld, hold = false): ScannerLine | null {
     if (!this.enabled) return null;
     if (now - this.lastCheck >= PING_CHECK) {
       this.lastCheck = now;
       this.keepPings(now, world);
     }
     const o = this.pending;
-    if (!o.live) return null;
+    if (!o.live || hold) return null;
     // Stale, or the stars went up while it waited.
     if (!o.forced && (now - o.at > STALE || o.priority < minPriority(this.stars))) {
       o.live = false;

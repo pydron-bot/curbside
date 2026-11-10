@@ -88,6 +88,13 @@ function setup() {
   return { bus, player, progress, ctx, mode, cars, shown, notices, blips, step, begin };
 }
 
+/** A sedan on the fake street for the player to drive (pushed onto `cars`). */
+function setupCar(cars: Vehicle[]): Vehicle {
+  const v = { archetype: 'sedan', sim: { ...createVehicleState(0, 0, 0), body: VEHICLE_BODIES.sedan }, damage: createDamage(150), ai: null } as unknown as Vehicle;
+  cars.push(v);
+  return v;
+}
+
 /** Teleport the player (on foot) to (x, z). */
 function stand(player: Player, x: number, z: number): void {
   Object.assign(player.ped, { x, z, vx: 0, vz: 0 });
@@ -239,6 +246,93 @@ describe("RIBBON CUTTING and QUIETEST CITY: the Mayor's limo and the judges' coa
 });
 
 describe('KEEP IT LOUD, chapter 2', () => {
+  /** OPEN MIC, the player at Lionel's gig (the goto passed). */
+  function atGig() {
+    const t = setup();
+    const job = t.begin('s9-openmic');
+    const go = job.steps[0];
+    if (go.kind !== 'goto') throw new Error('no gig');
+    stand(t.player, go.x, go.z);
+    t.step(0.2);
+    const lionel = (t.ctx.deps.population.crowd as Array<{ agent: { s: { x: number; z: number } } }>)[0];
+    return { ...t, job, lionel };
+  }
+
+  it('OPEN MIC: the wardens come on in pairs on their timer and march (no running) at Lionel', () => {
+    const { step, ctx, lionel } = atGig();
+    const crowd = ctx.deps.population.crowd as Array<{ agent: { mode: string; march?: boolean; goalX: number; goalZ: number; temper: string } }>;
+    // Only Lionel until the first pair's due.
+    step(2);
+    expect(crowd).toHaveLength(1);
+    step(2);
+    expect(crowd).toHaveLength(3);
+    for (const w of crowd.slice(1)) {
+      expect(w.agent).toMatchObject({ mode: 'arrest', march: true, temper: 'fighter' });
+      expect([w.agent.goalX, w.agent.goalZ]).toEqual([lionel.agent.s.x, lionel.agent.s.z]);
+    }
+    // The next pair a wave later.
+    step(25);
+    expect(crowd).toHaveLength(5);
+  });
+
+  it("OPEN MIC: a warden who gives up a scuffle goes back to marching; one knocked down doesn't", () => {
+    const { step, ctx } = atGig();
+    step(4);
+    const crowd = ctx.deps.population.crowd as Array<{ agent: { mode: string } }>;
+    const [, a, b] = crowd;
+    a.agent.mode = 'walk';
+    b.agent.mode = 'down';
+    step(0.1);
+    expect(a.agent.mode).toBe('arrest');
+    expect(b.agent.mode).toBe('down');
+  });
+
+  it("OPEN MIC: wardens keep walking with nobody watching; walk off and they get to Lionel, and the gig's over", () => {
+    const { step, player, mode } = atGig();
+    stand(player, 900, 900);
+    step(15);
+    expect(mode.running?.id).toBe('s9-openmic');
+    step(15);
+    expect(mode.running).toBeNull();
+  });
+
+  it("PLANNING PERMISSION: Todd talks on the subtitle while you drive him, in order, and stops when he's dropped", () => {
+    const { cars, player, step, begin, bus, mode } = setup();
+    const job = begin('s10-permission');
+    const said: string[] = [];
+    bus.on('voice', (e) => {
+      expect(e.who).toBe('TODD');
+      expect(e.hold).toBeGreaterThan(2);
+      said.push(e.text);
+    });
+    const [, , drop] = job.steps;
+    if (drop.kind !== 'deliver') throw new Error('not a deliver');
+    const talk = drop.start?.find((a) => a.do === 'say');
+    if (talk?.do !== 'say') throw new Error('no talk');
+    // A car, and nothing said while you're on your way to Todd.
+    const car = setupCar(cars);
+    player.enter(car);
+    step(30);
+    expect(said).toEqual([]);
+    // Beside him: he gets in; a line a moment later, the next ones in order.
+    const todd = job.steps[0].start?.find((a) => a.do === 'spawnPed');
+    if (todd?.do !== 'spawnPed') throw new Error('no Todd');
+    Object.assign(car.sim, { x: todd.x + 2, z: todd.z, vx: 0, vz: 0 });
+    step(1.5);
+    expect(said).toEqual([]);
+    expect(mode.running?.id).toBe('s10-permission');
+    step(30);
+    expect(said.length).toBeGreaterThanOrEqual(2);
+    expect(said).toEqual(talk.lines.slice(0, said.length).map((l) => l.text));
+    // Dropped at the ring road: the rest go unsaid.
+    const before = said.length;
+    Object.assign(car.sim, { x: drop.x, z: drop.z, vx: 0, vz: 0 });
+    step(60);
+    expect(mode.running).toBeNull();
+    expect(said.length).toBe(before);
+  });
+
+
   it("ALARM CALL: the five cars on the Mayor's street are parked like the city's own, so a bump sets their alarms off", () => {
     const { cars, step, begin } = setup();
     begin('s11-alarmcall');
