@@ -199,6 +199,12 @@ describe('mission engine: failing', () => {
     expect(tick(run, world(), 1.1).at(-1)).toEqual({ kind: 'failed', reason: 'OUT OF TIME' });
   });
 
+  it('a step can say what running out of time means', () => {
+    const run = new MissionRun(def([{ kind: 'goto', x: 999, z: 0, timer: 1, timeout: 'THE SPIT WENT COLD', text: 'G' }]));
+    run.begin();
+    expect(tick(run, world(), 1.1).at(-1)).toEqual({ kind: 'failed', reason: 'THE SPIT WENT COLD' });
+  });
+
   it('a target car wrecked, or left behind', () => {
     const run = new MissionRun(
       def([{ kind: 'loseHeat', text: 'L', fail: [{ wrecked: 'car', reason: 'WRECKED' }, { lost: 'car', reason: 'LOST' }] }]),
@@ -436,7 +442,9 @@ describe('the story', () => {
   const night = missions.filter((m) => arcOf(m) === 'night');
 
   it('the main story (s-ids) and the Night Shift (m1-m13, ids unchanged), each job from a payphone, paying, with something to say', () => {
-    expect(main.map((m) => m.id)).toEqual(['s1-wrongstop', 's2-noise', 's3-quiet', 's4-problems', 's5-ribbon', 's6-quietest']);
+    // Chapter 2 is being built: the jobs it has so far, in story order.
+    expect(main.map((m) => m.id)).toEqual(['s1-wrongstop', 's2-noise', 's3-quiet', 's4-problems', 's5-ribbon', 's6-quietest', 's8-doner', 's11-alarmcall', 's12-loudest']);
+    expect(main.filter((m) => m.chapter === 2).map((m) => m.id)).toEqual(['s8-doner', 's11-alarmcall', 's12-loudest']);
     expect(night.map((m) => m.id)).toEqual([
       'm1-audition',
       'm2-tuna',
@@ -469,7 +477,7 @@ describe('the story', () => {
   it('chapters run in order within an arc, and only the last job of a chapter with another after it ends one', () => {
     for (const arc of [main, night]) for (let i = 1; i < arc.length; i++) expect(arc[i].chapter ?? 1).toBeGreaterThanOrEqual(arc[i - 1].chapter ?? 1);
     expect(night.filter((m) => endsChapter(night, m)).map((m) => m.id)).toEqual(['m8-lastcall']);
-    expect(main.filter((m) => endsChapter(main, m))).toEqual([]);
+    expect(main.filter((m) => endsChapter(main, m)).map((m) => m.id)).toEqual(['s6-quietest']);
     expect(endsChapter(night, { ...night[7] })).toBe(false); // not one of the story's
   });
 
@@ -489,7 +497,7 @@ describe('the story', () => {
   it('every speaker has a badge colour, in the card and in its stylesheet', () => {
     const css = readFileSync(new URL('../src/ui/progress.css', import.meta.url), 'utf8');
     const speakers = new Set(missions.flatMap((m) => [...m.intro, ...m.outro].map((l) => l.who)));
-    expect([...speakers].sort()).toEqual(["COMMISSIONER CLAMP", 'DEACON PIKE', 'DOREEN', "LIL' TUNA", 'LIONEL', 'MAYOR LULL', 'VEX']);
+    expect([...speakers].sort()).toEqual(["COMMISSIONER CLAMP", 'DEACON PIKE', 'DOREEN', "LIL' TUNA", 'LIONEL', 'MANNY', 'MAYOR LULL', 'VEX']);
     for (const who of speakers) {
       const badge = badgeFor(who);
       if (who !== 'VEX') expect(badge, who).not.toBe('vex');
@@ -622,9 +630,97 @@ describe('the story', () => {
     // The VIPERS' Neon Mile, a block from Glass Heights (the GLASS BOYS): a border to square up across.
     expect(districtAt(turf.x, turf.z)).toBe('arts');
     expect([-64, 64].some((d) => districtAt(turf.x + d, turf.z) === 'downtown' || districtAt(turf.x, turf.z + d) === 'downtown')).toBe(true);
-    // The judges tour at night (nine o'clock), and it's the story's last job.
+    // The judges tour at night (nine o'clock), and it's chapter 1's last job.
     expect(job.hour).toBe(21);
+    expect(endsChapter(main, job)).toBe(true);
+  });
+
+  it("DONER: Manny's spit in a council van at the impound in Glass Heights, home to his shop in Cobble Row before it cools", () => {
+    const job = main.find((m) => m.id === 's8-doner')!;
+    const [take, home] = job.steps;
+    expect(take).toMatchObject({ kind: 'enter', tag: 'spitvan' });
+    const van = take.start?.find((a) => a.do === 'spawnCar');
+    if (van?.do !== 'spawnCar') throw new Error('no van');
+    expect(van).toMatchObject({ archetype: 'van' });
+    expect(van.drive).toBeUndefined();
+    expect(districtAt(van.x, van.z)).toBe('downtown');
+    if (home.kind !== 'deliver') throw new Error('not a deliver');
+    expect(home).toMatchObject({ tag: 'spitvan', timeout: 'THE SPIT WENT COLD' });
+    // The clock runs from getting in, not from the call.
+    expect(take.timer).toBeUndefined();
+    expect(home.timer).toBeGreaterThan(0);
+    expect(districtAt(home.x, home.z)).toBe('oldtown');
+    const manny = home.start?.find((a) => a.do === 'spawnPed');
+    if (manny?.do !== 'spawnPed') throw new Error('no Manny');
+    expect(manny.tag).toBe('manny');
+    expect(districtAt(manny.x, manny.z)).toBe('oldtown');
+    expect(len2(manny.x - home.x, manny.z - home.z)).toBeLessThan(home.r ?? 6);
+    for (const s of job.steps) expect(s.fail?.some((f) => f.wrecked === 'spitvan'), s.text).toBe(true);
+    expect(home.fail?.some((f) => f.lost === 'spitvan')).toBe(true);
+  });
+
+  it("ALARM CALL: five parked cars to wire on the Mayor's Glass Heights street at night, then mayhem round her house", () => {
+    const job = main.find((m) => m.id === 's11-alarmcall')!;
+    expect(job.hour).toBe(22);
+    const [fit, wake] = job.steps;
+    if (fit.kind !== 'collect') throw new Error('not a collect');
+    const cars = (fit.start ?? []).flatMap((a) => (a.do === 'spawnCar' ? [a] : []));
+    expect(cars.map((a) => a.tag)).toEqual(['alarm1', 'alarm2', 'alarm3', 'alarm4', 'alarm5']);
+    expect(fit.points).toHaveLength(cars.length);
+    for (const [i, a] of cars.entries()) {
+      // The city's kind of parked car (its alarm goes off when hit), not driven.
+      expect(a.parked, a.tag).toBe(true);
+      expect(a.drive, a.tag).toBeUndefined();
+      expect(districtAt(a.x, a.z), a.tag).toBe('downtown');
+      // Its alarm is fitted from the pavement beside it.
+      const [px, pz] = fit.points[i];
+      expect(len2(px - a.x, pz - a.z), a.tag).toBeLessThan(8);
+    }
+    if (wake.kind !== 'mayhem' || !wake.near) throw new Error('not mayhem round a place');
+    expect(wake.near.tag).toBeUndefined();
+    expect(wake.near.district).toBeUndefined();
+    expect(districtAt(wake.near.x, wake.near.z)).toBe('downtown');
+    for (const a of cars) expect(len2(a.x - wake.near.x, a.z - wake.near.z), a.tag).toBeLessThan(wake.near.r!);
+  });
+
+  it("LOUDEST CITY: mayhem round Lull's convoy on its tour (Glass Heights, Cobble Row, the ring road, Neon Mile), then her limo; the story's last job", () => {
+    const job = main.find((m) => m.id === 's12-loudest')!;
     expect(main.at(-1)).toBe(job);
+    const [show, wreck] = job.steps;
+    if (show.kind !== 'mayhem' || !show.near) throw new Error('not mayhem round something');
+    expect(show.near).toMatchObject({ tag: 'lulllimo', r: 100 });
+    const convoy = (show.start ?? []).flatMap((a) => (a.do === 'spawnCar' ? [a] : []));
+    expect(convoy.map((a) => [a.tag, a.archetype])).toEqual([
+      ['lulllimo', 'limo'],
+      ['convoyvan1', 'van'],
+      ['convoyvan2', 'van'],
+    ]);
+    const [limo, ...vans] = convoy;
+    const route = limo.route;
+    if (!route) throw new Error('no route');
+    expect([show.near.x, show.near.z]).toEqual([limo.x, limo.z]);
+    for (const a of convoy) {
+      // One convoy: the same route at the same pace, from outside the Town Hall in Glass Heights, all facing the same way.
+      expect(a, a.tag).toMatchObject({ drive: true, cruise: limo.cruise, route, heading: limo.heading });
+      expect(districtAt(a.x, a.z), a.tag).toBe('downtown');
+    }
+    // The limo wakes from further off than a van plus the gap to it, so however you come at them it leads.
+    for (const v of vans) expect(limo.wait!, v.tag).toBeGreaterThan(v.wait! + len2(limo.x - v.x, limo.z - v.z));
+    // Out to the ring road and back, on the map.
+    for (const [ix, iz] of route) expect(Math.max(Math.abs(ix), Math.abs(iz))).toBeLessThanOrEqual(MAX_NODE);
+    expect(route.some(([ix, iz]) => Math.max(Math.abs(ix), Math.abs(iz)) === MAX_NODE)).toBe(true);
+    // An alarm, a race, a fire and a turf flare-up, each at a crossing of the route, in its order (one scene at a time).
+    const scenes = (show.start ?? []).flatMap((a) => (a.do === 'scene' ? [a] : []));
+    expect(scenes.map((a) => a.scene)).toEqual(['alarm', 'race', 'fire', 'turf']);
+    const at = scenes.map((a) => route.findIndex(([ix, iz]) => ix * 64 === a.x && iz * 64 === a.z));
+    for (const i of at) expect(i).toBeGreaterThanOrEqual(0);
+    expect([...at].sort((a, b) => a - b)).toEqual(at);
+    expect(scenes.map((a) => districtAt(a.x, a.z))).toEqual(['downtown', 'oldtown', 'arts', 'arts']);
+    // Then the limo, with the convoy's foot down.
+    expect(wreck).toMatchObject({ kind: 'destroy', tags: ['lulllimo'] });
+    const faster = (wreck.start ?? []).flatMap((a) => (a.do === 'drive' ? [a] : []));
+    expect(faster.map((a) => a.tag)).toEqual(convoy.map((a) => a.tag));
+    for (const a of faster) expect(a.cruise!, a.tag).toBeGreaterThan(limo.cruise!);
   });
 
   it('no main-story job fails on stars: none sets a wanted level, and only the cold open asks to lose the heat it brought', () => {
@@ -659,6 +755,7 @@ describe('the story', () => {
         if (s.kind === 'collect') for (const [x, z] of s.points) expect(blocked(x, z, 0.5)).toBe(false);
         if (s.kind === 'race') for (const [ix, iz] of s.nodes) expect(Math.max(Math.abs(ix), Math.abs(iz))).toBeLessThanOrEqual(MAX_NODE);
         for (const a of s.start ?? []) if (a.do === 'tow') expect(cars, m.id).toEqual(expect.arrayContaining([a.tag, a.truck]));
+        for (const a of s.start ?? []) if (a.do === 'drive') expect(cars, m.id).toContain(a.tag);
         for (const f of s.fail ?? []) for (const t of [f.wrecked, f.lost, f.damaged]) if (t) expect([...cars, ...(m.direct ? [GETAWAY_TAG] : [])], m.id).toContain(t);
         if (s.kind === 'mayhem' && s.near?.tag) expect([...cars, ...peds], m.id).toContain(s.near.tag);
       }
@@ -764,10 +861,14 @@ describe('the two arcs on the phones', () => {
     // The Night Shift was done: it rings repeats; the main story carries on from job 4.
     expect(nextInArc(missions, 'main', save.missions, save.stats.jobsReplayed, save.opening)).toMatchObject({ replay: false, job: { id: 's4-problems' } });
     expect(nextInArc(missions, 'night', save.missions, save.stats.jobsReplayed, save.opening)?.replay).toBe(true);
-    // Completion: half the main story is half the story's 30%; the thirteen Night Shift jobs add nothing to it.
+    // Completion: each main job is an even share of the story's 30%; the thirteen Night Shift jobs add nothing to it.
     const totals = { missions: ids('main'), frenzies: 1, packages: 1, races: [], exportOrders: 1 };
-    expect(completion(save, totals)).toBeCloseTo(COMPLETION_WEIGHTS.missions / 2, 6);
+    expect(completion(save, totals)).toBeCloseTo((COMPLETION_WEIGHTS.missions * 3) / ids('main').length, 6);
+    // Chapter 1 done: chapter 2 rings next (no repeats while it's to do).
     save.missions.push('s4-problems', 's5-ribbon', 's6-quietest');
+    expect(completionParts(save, totals).missions).toBeCloseTo(6 / ids('main').length, 6);
+    expect(nextInArc(missions, 'main', save.missions, 0, true)).toMatchObject({ replay: false, job: { id: 's8-doner' } });
+    save.missions.push(...ids('main').filter((id) => !save.missions.includes(id)));
     expect(completionParts(save, totals).missions).toBe(1);
     expect(nextInArc(missions, 'main', save.missions, 0, true)).toMatchObject({ replay: true, job: { id: 's2-noise' } });
   });
@@ -830,7 +931,7 @@ describe('driven mission cars', () => {
   });
 });
 
-describe('KEEP IT LOUD, jobs 4-6, played through the engine', () => {
+describe('KEEP IT LOUD, jobs 4 on, played through the engine', () => {
   const city = generateCity(1337);
   const grid = new StaticGrid(city.obstacles);
   const missions = buildMissions(placeDocks(city), SAFEHOUSE);
@@ -889,13 +990,66 @@ describe('KEEP IT LOUD, jobs 4-6, played through the engine', () => {
     });
   });
 
-  it("the judges' coach, steered for its next crossing, tours the route in order and passes each scene's crossing", () => {
-    const show = job('s6-quietest').steps[0];
-    const spawn = show.start?.find((a) => a.do === 'spawnCar');
-    if (spawn?.do !== 'spawnCar' || !spawn.route) throw new Error('no coach');
+  it('DONER: get in the spit van and get it to Manny in time; too slow and the spit goes cold', () => {
+    const m = job('s8-doner');
+    const home = m.steps[1];
+    if (home.kind !== 'deliver') throw new Error('not a deliver');
+    const drive = (v: ReturnType<typeof world>) => {
+      v.cars.set('spitvan', { x: v.x, z: v.z, wrecked: false });
+      Object.assign(v, { inCar: true, carTag: 'spitvan', carArchetype: 'van' });
+    };
+    play(m, (i, v) => {
+      if (i === 1) Object.assign(v, { x: home.x, z: home.z, speed: 0 });
+      drive(v);
+    });
+    const cold = new MissionRun(m);
+    const v = world();
+    drive(v);
+    cold.begin();
+    tick(cold, v);
+    expect(cold.index).toBe(1);
+    expect(tick(cold, v, home.timer! + 1).at(-1)).toEqual({ kind: 'failed', reason: 'THE SPIT WENT COLD' });
+  });
+
+  it("ALARM CALL: fit the five alarms, then the points round the Mayor's house wake her", () => {
+    const m = job('s11-alarmcall');
+    const [fit, wake] = m.steps;
+    if (fit.kind !== 'collect' || wake.kind !== 'mayhem' || !wake.near) throw new Error('wrong steps');
+    const near = wake.near;
+    play(m, (i, v, run) => {
+      if (i === 0) {
+        // Along the street, alarm by alarm.
+        for (const [x, z] of fit.points) {
+          Object.assign(v, { x, z });
+          tick(run, v);
+        }
+      } else {
+        Object.assign(v, { x: near.x + 20, z: near.z });
+        run.award(wake.points, v);
+      }
+    });
+  });
+
+  it("LOUDEST CITY: points round the limo wherever it's got to, then the limo wrecked", () => {
+    const m = job('s12-loudest');
+    play(m, (i, v, run) => {
+      v.cars.set('lulllimo', { x: -300, z: -500, wrecked: i === 1 });
+      Object.assign(v, { x: -300, z: -440 });
+      if (i === 0) run.award(6000, v);
+    });
+  });
+
+  for (const [id, tag] of [
+    ['s6-quietest', 'coach'],
+    ['s12-loudest', 'lulllimo'],
+  ] as const)
+    it(`${id}'s ${tag}, steered for its next crossing, tours the route in order and passes each scene's crossing`, () => {
+    const show = job(id).steps[0];
+    const spawn = show.start?.find((a) => a.do === 'spawnCar' && a.tag === tag);
+    if (spawn?.do !== 'spawnCar' || !spawn.route) throw new Error('no touring car');
     const route = spawn.route;
     const rand = random(7);
-    const car = { ...createVehicleState(spawn.x, spawn.z, spawn.heading), body: VEHICLE_BODIES.bus };
+    const car = { ...createVehicleState(spawn.x, spawn.z, spawn.heading), body: VEHICLE_BODIES[spawn.archetype] };
     const ai = driverFor(car, rand);
     ai.cruise = spawn.cruise ?? ai.cruise;
     const DT = 1 / 60;
@@ -907,7 +1061,7 @@ describe('KEEP IT LOUD, jobs 4-6, played through the engine', () => {
         leg = routeLeg(route, leg, ai.ix, ai.iz);
         ai.next = routeToward(ai.ix, ai.iz, ai.dir, route[leg][0] * 64, route[leg][1] * 64);
       }
-      stepVehicle(car, driveAi(ai, car, [], rand, DT), VEHICLE_SPECS.bus, DT);
+      stepVehicle(car, driveAi(ai, car, [], rand, DT), VEHICLE_SPECS[spawn.archetype], DT);
       collideVehicleStatic(car, grid);
       const key = `${ai.ix},${ai.iz}`;
       if (key !== last && route.some(([ix, iz]) => `${ix},${iz}` === key)) seen.push(key);

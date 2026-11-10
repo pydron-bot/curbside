@@ -704,6 +704,11 @@ body[data-device='touch'][data-mode='car'][data-hand='left'] #act-prompt {
   --who: #ece6d6;
 }
 
+/* Manny: kebab-shop chilli red. */
+.dlg-line[data-who='manny'] .dlg-who {
+  --who: #ff4f5e;
+}
+
 .dlg-text {
   display: grid;
   gap: 2px;

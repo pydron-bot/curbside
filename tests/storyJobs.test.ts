@@ -229,11 +229,58 @@ describe("RIBBON CUTTING and QUIETEST CITY: the Mayor's limo and the judges' coa
     coach.sim.x += 50;
     step(DT);
     expect(blips.get('m-coach')).toEqual({ x: coach.sim.x, z: coach.sim.z });
-    // Points round it count; it's the story's last: STORY COMPLETE.
+    // Points round it count; it's chapter 1's last, with chapter 2 to come: CHAPTER 1 COMPLETE.
     stand(player, coach.sim.x + 20, coach.sim.z);
     bus.emit({ type: 'award', award: { kind: 'boom', label: 'KABOOM', points: 5000, multiplier: 1 } });
     step(DT * 2);
     expect(progress.data.missions).toContain('s6-quietest');
+    expect(shown).toEqual(['CHAPTER 1 COMPLETE']);
+  });
+});
+
+describe('KEEP IT LOUD, chapter 2', () => {
+  it("ALARM CALL: the five cars on the Mayor's street are parked like the city's own, so a bump sets their alarms off", () => {
+    const { cars, step, begin } = setup();
+    begin('s11-alarmcall');
+    step(0.5);
+    expect(cars).toHaveLength(5);
+    for (const c of cars) {
+      expect(c.parked).toBe(true);
+      expect(c.ai).toBeNull();
+    }
+  });
+
+  it("DONER's spit van is the job's own car, not one of the city's parked ones", () => {
+    const { cars, step, begin } = setup();
+    begin('s8-doner');
+    step(0.5);
+    expect(cars.map((c) => [c.archetype, c.parked ?? false])).toEqual([['van', false]]);
+  });
+
+  it('LOUDEST CITY: the limo leads the convoy out, the convoy speeds up for the second step, and the limo wrecked is STORY COMPLETE', () => {
+    const { cars, player, step, begin, bus, progress, shown, mode } = setup();
+    const job = begin('s12-loudest');
+    progress.data.missions.push(...mode.missions.filter((m) => m.arc === 'main' && m !== job).map((m) => m.id));
+    const [limo, van1, van2] = cars;
+    expect([limo, van1, van2].map((c) => c.archetype)).toEqual(['limo', 'van', 'van']);
+    step(0.5);
+    for (const c of cars) expect(c.ai).toBeNull();
+    // Come at them from behind: the rear van wakes, and the limo ahead of it is already on its way.
+    stand(player, van2.sim.x - 58, van2.sim.z);
+    step(DT);
+    expect(van2.ai).not.toBeNull();
+    expect(limo.ai?.cruise).toBe(9);
+    // The middle van, further off, is still waiting.
+    expect(van1.ai).toBeNull();
+    // A send-off round the limo; then it and its vans put their foot down (the one still parked pulls out).
+    stand(player, limo.sim.x + 30, limo.sim.z);
+    bus.emit({ type: 'award', award: { kind: 'boom', label: 'KABOOM', points: 6000, multiplier: 1 } });
+    step(DT * 2);
+    expect(mode.running?.id).toBe('s12-loudest');
+    for (const c of cars) expect(c.ai?.cruise, c.archetype).toBe(14);
+    limo.damage.wrecked = true;
+    step(DT * 2);
+    expect(progress.data.missions).toContain('s12-loudest');
     expect(shown).toEqual(['STORY COMPLETE']);
   });
 });

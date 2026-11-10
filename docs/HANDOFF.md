@@ -79,10 +79,18 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
    - Any backend for an online leaderboard (`online-leaderboard` in BACKLOG).
    - The Old Town race's leg 1 lands a ramp jump at a corner checkpoint: keep
      it as a feature?
-5. **Next features (chosen, not started):** W3-C, four street scenes (QUIET
+5. **KEEP IT LOUD chapter 2, in progress** on branch `claude/story-ch2`
+   (script and status in [STORY.md](STORY.md)). Built: DONER, ALARM CALL,
+   LOUDEST CITY, with engine pieces `timeout`, `parked` and the `drive`
+   action ([progression.md](systems/progression.md)). To build: PLANNING
+   PERMISSION (a `say` action for lines during a job), OPEN MIC (wardens
+   walking in), NO KERB, NO CURBSIDE (a driven digger). Don't merge to
+   `main` until all six are in: the story would skip the reveal ALARM CALL
+   depends on. When it ships, it's a minor version.
+6. **Next features (chosen, not started):** W3-C, four street scenes (QUIET
    PLEASE march, roadworks, bin day with a tipper for Borrowed Blues, delivery
    rush; [V2_PLAN.md](V2_PLAN.md)).
-6. **Known gaps, low priority:** a police car retired by the police system
+7. **Known gaps, low priority:** a police car retired by the police system
    takes its sticky charge with it; ambient police cars aren't on the radar;
    the scooter stands in for a motorcycle; a tow can clip a neighbour in a
    tight car park; thrown props don't start scuffles; no busker music or

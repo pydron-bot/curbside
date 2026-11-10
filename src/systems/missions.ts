@@ -39,6 +39,12 @@ export type MissionAction =
   | { do: 'spawnPed'; tag: string; x: number; z: number; shirt?: string; armed?: boolean; hostile?: boolean; body?: BodyKind }
   | { do: 'wanted'; stars: number }
   | { do: 'give'; weapon: WeaponKind }
+  /**
+   * A tagged car (driven or still waiting) changes pace mid-job: its cruising
+   * speed and, if given, a new route from its first crossing. One still
+   * parked pulls out at once.
+   */
+  | { do: 'drive'; tag: string; cruise?: number; route?: ReadonlyArray<readonly [number, number]> }
   /** The tagged person gets into the player's car (off the street). */
   | { do: 'board'; tag: string }
   /**
@@ -71,6 +77,8 @@ export interface SpawnCar {
   cruise?: number;
   /** With `drive`: crossings (ix, iz) it heads for in turn, round and round (routeLeg); traffic's own turns if left out. */
   route?: ReadonlyArray<readonly [number, number]>;
+  /** Not driven: one of the city's parked cars, so a bump, a bullet or a blast sets its alarm off (game/scenes/alarms.ts). */
+  parked?: boolean;
 }
 
 /** The scenes a job can start (SceneStarter's, less the TEST menu's rain). */
@@ -115,6 +123,8 @@ interface StepBase {
   text: string;
   /** Seconds allowed for this step. */
   timer?: number;
+  /** What the fail says when the timer runs out (OUT OF TIME if left out). */
+  timeout?: string;
   start?: MissionAction[];
   done?: MissionAction[];
   fail?: MissionFail[];
@@ -248,7 +258,7 @@ export class MissionRun {
     this.stepTime += dt;
     if (this.timeLeft !== null) {
       this.timeLeft = Math.max(0, this.timeLeft - dt);
-      if (this.timeLeft <= 0) return this.fail('OUT OF TIME');
+      if (this.timeLeft <= 0) return this.fail(s.timeout ?? 'OUT OF TIME');
     }
     for (const f of s.fail ?? NO_FAILS) {
       if (f.wrecked) {

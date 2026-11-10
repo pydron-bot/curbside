@@ -253,11 +253,16 @@ are `src/game/modes/*Mode.ts`.
   loseHeat, collect, race and mayhem (score this many chaos points in an
   area: a district, a radius round a point, or round a tagged car or
   person; anywhere without one); each with objective text, an optional
-  timer, fail conditions (a tagged car wrecked, left behind or scratched:
+  timer (`timeout` says what running out means: THE SPIT WENT COLD; OUT
+  OF TIME if left out), fail conditions (a tagged car wrecked, left behind or scratched:
   `damaged`, under `below` of its health, 90% by default, the moment it
   is; a tagged person knocked down) and actions on start / end (spawn a
   car, parked or with `drive: true` pulling out into traffic with a
-  lane-following driver while staying pinned, or a person; set the wanted
+  lane-following driver while staying pinned, or a person; `parked: true`
+  flags a car as one of the city's parked ones, so a bump, a bullet or a
+  blast sets its alarm off (ALARM CALL's five); `{ do: 'drive', tag,
+  cruise?, route? }` changes a driven car's pace or route mid-job, and
+  pulls one still waiting out at once (LOUDEST CITY's convoy speeding up); set the wanted
   level, hand over a gun, a passenger boards / alights; start a city
   scene; put a car on a truck's hook). Score awards feed a
   mayhem step (`MissionRun.award(points, view)`, counted where the player
@@ -281,6 +286,9 @@ are `src/game/modes/*Mode.ts`.
     each; `routeToward`, as a pursuit steers, picks the turn for the next).
     A mayhem area with a `tag` follows its car: on the radar throughout
     (the route redrawn only once it has gone 24 m), ringed in the street.
+    A convoy is cars on one route at one pace, spawned nose to tail; the
+    lead's `wait` is longer than a follower's plus the gap to it, so
+    however the player comes at them the lead pulls out first.
   - **The hook** (`{ do: 'tow', tag, truck }`, `hookLetGo`): the car rides
     behind the truck as the city's tows carry theirs (`towPose`, no speed
     of its own) until it's let go where it stands: the truck's driver gone
@@ -295,8 +303,9 @@ are `src/game/modes/*Mode.ts`.
     PLEASE; NINETY-NINE PROBLEMS, Doreen's van off the Graveyard Shift's
     hook without a scratch; RIBBON CUTTING, the Mayor's limo; QUIETEST
     CITY, 5,000 round the judges' touring coach with a race, a fire and a
-    turf flare-up on its route), rings from sunrise to midnight from the
-    city's three phones. The
+    turf flare-up on its route; then chapter 2, `chapter: 2`, being built:
+    so far DONER, ALARM CALL and LOUDEST CITY, the last), rings from sunrise
+    to midnight from the city's three phones. The
     **Night Shift** side story (`arc: 'night'`, the old Graveyard Shift jobs
     `m1`–`m13` with their ids, so saves keep their progress: VEX's tow crew
     and LIL' TUNA, eight jobs against DEACON PIKE's Chrome Saints, then

@@ -495,6 +495,21 @@ export class MissionMode implements Mode {
           // A driven target pulls out into traffic (it stays pinned, so upkeep never recycles it), now or once you're close.
           if (a.drive && a.wait) car.wake = a.wait;
           else if (a.drive) this.drive(car);
+          // Parked like the city's own (its alarm goes off when hit); still pinned, so nothing tows or recycles it.
+          else if (a.parked) car.v.parked = true;
+          break;
+        }
+        case 'drive': {
+          const car = this.cars.get(a.tag);
+          if (!car || car.v.damage.wrecked || car.v === player.driving) break;
+          if (a.cruise !== undefined) car.cruise = a.cruise;
+          if (a.route) {
+            car.route = a.route;
+            car.leg = 0;
+          }
+          if (car.v.ai) {
+            if (car.cruise > 0) car.v.ai.cruise = car.cruise;
+          } else this.drive(car);
           break;
         }
         case 'tow': {

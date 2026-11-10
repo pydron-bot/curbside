@@ -1,6 +1,6 @@
 /**
  * The story jobs, in two arcs. The main story, KEEP IT LOUD (arc 'main', ids
- * s1-s6): Mayor Lull's Quiet Streets Act has banned car alarms, chimes and
+ * s1-s6, and chapter 2 from s7, being built): Mayor Lull's Quiet Streets Act has banned car alarms, chimes and
  * buskers, and the kerb traders (DOREEN of the ice cream van, LIONEL the
  * busker) hire the sacked alarm fitter to keep the city loud. It rings by
  * day and in the evening from the city's phones. The Night Shift side story
@@ -61,6 +61,7 @@ const CLAMP = 'COMMISSIONER CLAMP';
 const DOREEN = 'DOREEN';
 const LIONEL = 'LIONEL';
 const LULL = 'MAYOR LULL';
+const MANNY = 'MANNY';
 
 /** Clamp's tow trucks: traffic-cone orange, apart from the city's yellow ones. */
 const CLAMP_ORANGE = '#e0661f';
@@ -72,6 +73,8 @@ const SHIFT_BLUE = '#3c5a8c';
 const DOREEN_MINT = '#bfe8d8';
 /** Wardens' hi-vis (Clamp's in the Night Shift, Lull's in the main story). */
 const HI_VIS = '#d4e23c';
+/** The council's own vans: municipal white. */
+const COUNCIL_WHITE = '#e4e4dc';
 
 /** The jobs, with the map's edits (`edits`, default the map this page plays: phones the jobs ring from, spots moved; systems/storyEdits.ts). */
 export function buildMissions(docks: Point & { heading?: number; halfWidth?: number; halfLength?: number }, safehouse: Point, edits: MapEdits = ACTIVE_MAP): MissionDef[] {
@@ -134,6 +137,25 @@ function writtenMissions(docks: Point & { heading?: number; halfWidth?: number; 
   ];
   // Along it: a race in Cobble Row, a fire on the Mile, a turf flare-up where the Mile meets Glass Heights.
   const node = (i: number) => ({ x: tour[i][0] * BLOCK_SIZE, z: tour[i][1] * BLOCK_SIZE });
+  // KEEP IT LOUD, chapter 2. Manny's spit in a council van at the city impound (Glass Heights), and his shop in Cobble Row.
+  const spitVan = kerb(-1, 0, 2, 26);
+  const mannyShop = kerb(-5, -6, 1, 30);
+  const manny = kerbside(-5, -6, 1, 30);
+  // The Mayor's street in Glass Heights: five cars along it to wire, her house halfway down.
+  const lullStreet = [12, 20, 28, 36, 44];
+  const lullHouse = kerbside(2, 1, 2, 28);
+  // Her leaving convoy outside the Town Hall: the limo, then two warden vans behind it.
+  const convoy = [kerb(-2, 0, 1, 34), kerb(-2, 0, 1, 26), kerb(-2, 0, 1, 18)];
+  // Its tour: up out of Glass Heights, Cobble Row, the ring road across the top, down Neon Mile and home.
+  const sendOff: Array<[number, number]> = [
+    [-2, -3],
+    [-5, -5],
+    [-5, -8],
+    [3, -8],
+    [3, -3],
+    [0, -1],
+  ];
+  const via = (i: number) => ({ x: sendOff[i][0] * BLOCK_SIZE, z: sendOff[i][1] * BLOCK_SIZE });
 
   return [
     // ── KEEP IT LOUD (the main story) ──
@@ -340,6 +362,145 @@ function writtenMissions(docks: Point & { heading?: number; halfWidth?: number; 
             { do: 'scene', scene: 'race', ...node(1), r: 140 },
             { do: 'scene', scene: 'fire', ...node(3), r: 140 },
             { do: 'scene', scene: 'turf', ...node(4), r: 140 },
+          ],
+        },
+      ],
+    },
+    // ── KEEP IT LOUD, chapter 2: the Kerb Removal Order ──
+    {
+      id: 's8-doner',
+      title: 'DONER',
+      arc: 'main',
+      chapter: 2,
+      phone: 'phone-arts',
+      reward: 3000,
+      // Manny joins the traders. The impound is Vex's now (NO PARKING), on a council contract as in NINETY-NINE PROBLEMS.
+      intro: [
+        { who: DOREEN, text: "Lull's had Manny's kebab spit impounded. Twenty-two years it's turned. Never once stopped." },
+        { who: MANNY, text: 'It is still turning. In the impound. I can feel it. Bring it home before it goes cold.' },
+        { who: VEX, text: "Impound's mine now. Council contract. Can't hand it over. I can go for a very long tea, mind." },
+      ],
+      outro: [
+        { who: MANNY, text: 'Still turning. Twenty-two years. Tonight everybody eats free. Not you. You, half price.' },
+        { who: VEX, text: "Council asked where the spit went. I said thataway. Every way's thataway if you point enough." },
+        { who: DOREEN, text: "That's the three of us, then. The chimes, the hat and the kebab shop. Lovely." },
+      ],
+      steps: [
+        {
+          kind: 'enter',
+          tag: 'spitvan',
+          text: 'TAKE THE SPIT VAN',
+          start: [{ do: 'spawnCar', tag: 'spitvan', archetype: 'van', paint: COUNCIL_WHITE, ...spitVan }],
+          fail: [{ wrecked: 'spitvan', reason: 'THE SPIT VAN IS WRECKED' }],
+        },
+        {
+          kind: 'deliver',
+          tag: 'spitvan',
+          x: mannyShop.x,
+          z: mannyShop.z,
+          r: 9,
+          text: "GET IT TO MANNY'S BEFORE IT COOLS",
+          // The clock starts once you're in: the spit's lit, and it won't stay warm.
+          timer: 90,
+          timeout: 'THE SPIT WENT COLD',
+          // A white apron.
+          start: [{ do: 'spawnPed', tag: 'manny', ...manny, shirt: '#f2efe6', body: 'ped_stocky' }],
+          fail: [
+            { wrecked: 'spitvan', reason: 'THE SPIT VAN IS WRECKED' },
+            { lost: 'spitvan', reason: 'YOU LEFT THE SPIT BEHIND' },
+          ],
+        },
+      ],
+    },
+    {
+      id: 's11-alarmcall',
+      title: 'ALARM CALL',
+      arc: 'main',
+      chapter: 2,
+      phone: 'phone-oldtown',
+      reward: 4000,
+      // She's in bed at ten.
+      hour: 22,
+      // Pike's one main-story cameo: he introduces himself for players who never did the Night Shift.
+      intro: [
+        { who: PIKE, text: "Deacon Pike. You don't know me. I found the Mayor's diary in a bin. I live by the bin." },
+        { who: PIKE, text: "Tonight says: 'Bed at ten. Earplugs out. Sleep like a baby.' The page is twenty quid." },
+        { who: DOREEN, text: 'Paid him in cones. Five cars on her street, five of your alarms. Then wake her up.' },
+      ],
+      outro: [
+        { who: LULL, text: 'Mayor Lull. There are five car alarms outside my house. I have counted them. Many times.' },
+        { who: PIKE, text: "I've never been on this side of a good deed. It's itchy. Twenty quid, though." },
+        { who: DOREEN, text: 'Hear that? Every one of them yours. Twenty years of work in one street. Lovely.' },
+      ],
+      steps: [
+        {
+          kind: 'collect',
+          points: lullStreet.map((along) => pt(kerbside(2, 1, 2, along))),
+          text: "FIT 5 ALARMS ON THE MAYOR'S STREET",
+          // Posh cars, parked like the city's own: hit one and its alarm goes off.
+          start: lullStreet.map((along, i) => ({
+            do: 'spawnCar' as const,
+            tag: `alarm${i + 1}`,
+            archetype: (['sedan', 'sports', 'compact', 'sedan', 'sports'] as const)[i],
+            paint: ['#1f2a44', '#d9d4c7', '#6b1f2a', '#2f3a33', '#e8e2d0'][i],
+            ...kerb(2, 1, 2, along),
+            parked: true,
+          })),
+        },
+        {
+          kind: 'mayhem',
+          points: 2000,
+          near: { ...lullHouse, r: 60 },
+          text: 'WAKE THE MAYOR',
+        },
+      ],
+    },
+    {
+      id: 's12-loudest',
+      title: 'LOUDEST CITY',
+      arc: 'main',
+      chapter: 2,
+      phone: 'phone-suburbs',
+      reward: 7500,
+      // She leaves at dusk.
+      hour: 19,
+      intro: [
+        { who: LULL, text: 'Mayor Lull. Today I leave to present the award to its village. Please line the streets. Silently.' },
+        { who: DOREEN, text: "Limo, two warden vans, out by the ring road. Give her the send-off she's earned." },
+        { who: LIONEL, text: "Every busker in town's out. Every chime, every alarm. She'll hear us from the goat." },
+      ],
+      outro: [
+        { who: LULL, text: 'Mayor Lull. I have taken a post in the village. The goat is very quiet. We understand each other.' },
+        { who: LIONEL, text: "The council's new motto: 'Loud and proud.' Well. I'm shouting it from the Town Hall steps." },
+        { who: DOREEN, text: 'Kerbs back, chimes back, alarms back. Cones for life, Alarms. Medium ones. Lovely.' },
+      ],
+      steps: [
+        {
+          kind: 'mayhem',
+          points: 6000,
+          near: { x: convoy[0].x, z: convoy[0].z, r: 100, tag: 'lulllimo' },
+          text: 'GIVE LULL A SEND-OFF',
+          start: [
+            // The limo pulls out first (it wakes from further off), its vans behind it on the same route.
+            { do: 'spawnCar', tag: 'lulllimo', archetype: 'limo', paint: LULL_LIMO_PAINT, ...convoy[0], drive: true, wait: 80, cruise: 9, route: sendOff },
+            { do: 'spawnCar', tag: 'convoyvan1', archetype: 'van', paint: HI_VIS, ...convoy[1], drive: true, wait: 60, cruise: 9, route: sendOff },
+            { do: 'spawnCar', tag: 'convoyvan2', archetype: 'van', paint: HI_VIS, ...convoy[2], drive: true, wait: 60, cruise: 9, route: sendOff },
+            // Along the route, in its order: an alarm in Glass Heights, a race in Cobble Row, a fire on the ring road, a turf flare-up on the Mile.
+            { do: 'scene', scene: 'alarm', ...via(0), r: 140 },
+            { do: 'scene', scene: 'race', ...via(1), r: 140 },
+            { do: 'scene', scene: 'fire', ...via(3), r: 140 },
+            { do: 'scene', scene: 'turf', ...via(4), r: 140 },
+          ],
+        },
+        {
+          kind: 'destroy',
+          tags: ['lulllimo'],
+          text: "WRECK THE MAYOR'S LIMO",
+          // Seen off: the convoy puts its foot down.
+          start: [
+            { do: 'drive', tag: 'lulllimo', cruise: 14 },
+            { do: 'drive', tag: 'convoyvan1', cruise: 14 },
+            { do: 'drive', tag: 'convoyvan2', cruise: 14 },
           ],
         },
       ],
