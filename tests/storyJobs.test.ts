@@ -273,7 +273,9 @@ describe('KEEP IT LOUD, chapter 2', () => {
     // The middle van, further off, is still waiting.
     expect(van1.ai).toBeNull();
     // A send-off round the limo; then it and its vans put their foot down (the one still parked pulls out).
+    // Beside it for a step first: an award counts where the player was at the last step.
     stand(player, limo.sim.x + 30, limo.sim.z);
+    step(DT);
     bus.emit({ type: 'award', award: { kind: 'boom', label: 'KABOOM', points: 6000, multiplier: 1 } });
     step(DT * 2);
     expect(mode.running?.id).toBe('s12-loudest');
