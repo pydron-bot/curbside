@@ -6,7 +6,8 @@ line there, update it here too (and the other way round).
 
 There are two arcs on the payphones:
 
-- **KEEP IT LOUD**, the main story (`arc: 'main'`, ids `s1`–`s6`). Job 1
+- **KEEP IT LOUD**, the main story (`arc: 'main'`, ids `s1`–`s6`; chapter
+  2, `s7`–`s12`, is scripted below but not built yet). Job 1
   is the live cold open (no phone); the rest ring by day and in the evening
   (sunrise to midnight) from the city's three phones. It carries the
   story's 30% of completion.
@@ -62,6 +63,11 @@ every crash, bullet and blast sets off "your" alarms.
   - **Pike** was pompous in chapter 1 and is pompous and broke in chapter 2.
   - **Clamp** speaks like a council letter: formal, no contractions,
     "Good evening."
+  - **Manny** (main story, chapter 2) runs the kebab shop. Deadpan and
+    solemn, measures life in the spit's years: "Twenty-two years."
+  - **Todd** is Lull's American consultant (chapter 2, one job). Upbeat
+    business-speak that never stops; the only American English in the
+    story.
 - **Objective lines** are capitals, under about 38 characters (a test
   allows 40), and say what to do: `STEAL …`, `BRING IT TO …`,
   `MAKE COBBLE ROW LOUD`.
@@ -75,11 +81,13 @@ every crash, bullet and blast sets off "your" alarms.
 | `MAYOR LULL` | Mayor Prudence Lull. Wants the *Quietest City* award. Heard on the radio, never seen. | — | pearl |
 | `VEX` | Runs the Graveyard Shift. Orange hair, blue overalls, toolbelt. | `vex` GLB | pink |
 | `LIL' TUNA` | Vex's mechanic. Short, pink hoodie, big headphones. | `tuna` GLB | yellow |
-| `DEACON PIKE` | Leader of the Chrome Saints in chapter 1. Ruined and broke in chapter 2, and a reluctant informant. | `pike` GLB | steel blue |
+| `DEACON PIKE` | Leader of the Chrome Saints in chapter 1. Ruined and broke in chapter 2, and a reluctant informant. Sells Doreen the Mayor's diary (main story, job 11). | `pike` GLB | steel blue |
 | `COMMISSIONER CLAMP` | Parking Commissioner, runs the city impound. Grey suit, clipboard. | `ped_coat`, grey shirt | traffic-cone orange |
-| — | Lull's wardens (main story, job 3) and Clamp's (Night Shift job 13). Hi-vis yellow. | `ped_stocky` | — |
+| `MANNY` | Runs the kebab shop on Cobble Row; the third trader (main story, chapter 2). | `ped_stocky`, white shirt (apron) | chilli red (to add) |
+| `TODD` | Todd Bramble, of Bramble Strategic: Lull's American consultant, who wrote the Act (main story, job 10). | `ped_slim`, lanyard-blue shirt | to add |
+| — | Lull's wardens (main story, jobs 3, 9, 12) and Clamp's (Night Shift job 13). Hi-vis yellow. | `ped_stocky` | — |
 | — | The Graveyard Shift's tow truck (main story, job 4): Vex's crew, on a council contract. | `tow_truck`, Shift blue `#3c5a8c` | — |
-| — | Lull's limo (job 5), pearl; the award judges' coach (job 6), navy. Nobody inside is seen. | `limo`, `bus` | — |
+| — | Lull's limo (jobs 5 and 12), pearl; the award judges' coach (job 6), navy; the council's diggers (job 7), yellow. Nobody inside is seen. | `limo`, `bus`, a digger (to make) | — |
 | — | The Collector, Pike's money man (Night Shift job 7). | `pike` GLB | — |
 
 The card picks a badge colour from the speaker label (`badgeFor` and
@@ -92,11 +100,12 @@ speaker in the story has one.
 
 | District | Name | In the story |
 | --- | --- | --- |
-| downtown | GLASS HEIGHTS | Lull's wardens and Lionel (job 3); Lull's ribbon (job 5); where the judges' coach sets off (job 6); the safehouse, the city impound, Clamp's office |
-| oldtown | COBBLE ROW | the street you wired (job 2); Doreen's pitch (job 4); the coach's race (job 6); the Saints' vans (Night Shift) |
-| arts | NEON MILE | where Lionel plays (job 3); the Shift's truck with Doreen's van (job 4); the coach's fire and turf flare-up (job 6); Tuna's hide-outs, Clamp's tow-away zone (Night Shift) |
+| downtown | GLASS HEIGHTS | Lull's wardens and Lionel (job 3); Lull's ribbon (job 5); where the judges' coach sets off (job 6); the impound's spit van (job 8); Todd's hotel (job 10); the Mayor's street (job 11); the Town Hall, where her convoy leaves (job 12); the safehouse, the city impound, Clamp's office |
+| oldtown | COBBLE ROW | the street you wired (job 2); Doreen's pitch (job 4); the coach's race (job 6); the diggers and Lionel's kerb (job 7); Manny's kebab shop (job 8); the Saints' vans (Night Shift) |
+| arts | NEON MILE | where Lionel plays (jobs 3 and 9); the Shift's truck with Doreen's van (job 4); the coach's fire and turf flare-up (job 6); Tuna's hide-outs, Clamp's tow-away zone (Night Shift) |
 | industrial | RUSTWATER DOCKS | the docks yard and its phone: the Night Shift's |
-| residential | MAPLE FLATS | the Collector, Pike's bus shelter (Night Shift) |
+| residential | MAPLE FLATS | the Collector, Pike's bus shelter (Night Shift, and where Pike found the diary for job 11) |
+| — | the outer ring road | Todd's drop (job 10); the convoy's way out (job 12) |
 
 There are four payphones. The main story (after the cold open) rings from three
 (`phone-oldtown`, which stands just inside Glass Heights by Cobble Row,
@@ -263,48 +272,216 @@ point: YOU SCRATCHED DOREEN'S VAN) or, once it's yours, left behind.
 The debrief says **STORY COMPLETE**; the main story's phones then ring
 with its jobs again as REPEAT JOBs.
 
-### Chapter 2 (outline only)
+## KEEP IT LOUD, chapter 2 (6 jobs, $24,500)
 
-Not in the game: an outline to write from (`s7`–`s12`, `chapter: 2`, when
-it is).
+**Scripted, not in the game yet.** The ids, phones, pay and steps below
+are what `missionsData.ts` should get (`chapter: 2`). What the engine and
+assets still need is under *Building chapter 2* at the end.
 
 Lull loses the award to the goat and blames "the Curbside". Her answer is
-the **Kerb Removal Order**: no kerb, no kerbside, no Curbside. The
-council's diggers start taking the kerbs out of Cobble Row, and the
-traders (Doreen, Lionel and, at last, the kebab shop) go to war with
-noise.
+the **Kerb Removal Order**: no kerb, no kerbside, no Curbside. Her diggers
+start on Cobble Row. The kebab shop joins the traders at last. Her
+consultant leaks the Act's first draft, which exempts the Mayor's own
+street. You wire that street with alarms, and Lull leaves town for the
+goat's village with the whole city going off around her convoy.
 
-```
-JOB 7: NO KERB, NO CURBSIDE
-MAYOR LULL: Mayor Lull. From Monday, kerbs are abolished. Pavements will simply... end. Quietly.
-DOREEN: She's digging up Cobble Row. Every kerb. Lionel's been sat on one since six.
-OBJECTIVE: WRECK THE COUNCIL'S 3 DIGGERS (driven: they pull out as you come)
+| # | Id | Job | Phone | Pay | What happens |
+| --- | --- | --- | --- | --- | --- |
+| 7 | `s7-nokerb` | NO KERB, NO CURBSIDE | oldtown | $3,000 | Wreck the council's three diggers while they rip up Cobble Row's kerbs. |
+| 8 | `s8-doner` | DONER | arts | $3,000 | Steal Manny's impounded kebab spit back from the impound and get it home before it goes cold. The Night Shift's second and last cameo. |
+| 9 | `s9-openmic` | OPEN MIC | suburbs | $3,500 | Keep Lull's wardens off Lionel's comeback gig on Neon Mile for three minutes. |
+| 10 | `s10-permission` | PLANNING PERMISSION | oldtown | $3,500 | Drive Lull's consultant to the ring road for the Act's first draft. He talks the whole way. |
+| 11 | `s11-alarmcall` | ALARM CALL | arts | $4,000 | Fit five alarms on the Mayor's street, then set them all off. |
+| 12 | `s12-loudest` | LOUDEST CITY | suburbs | $7,500 | Give Lull's leaving convoy a send-off, then wreck her limo. **STORY COMPLETE.** |
 
-JOB 8: DONER (the kebab shop, the third trader)
-The kebab shop's spit is impounded. Get it back from the city impound, now Vex's
-yard since NO PARKING (a second and last Night Shift cameo, by day).
+No two jobs in a row ring from the same phone, `s6` included (suburbs, then
+oldtown). Chapter 2 rings once `s6` is passed. `s6`'s debrief then says
+CHAPTER 1 COMPLETE (`endsChapter()`), and `s12` takes STORY COMPLETE.
 
-JOB 9: OPEN MIC
-Lionel's comeback gig on Neon Mile. Keep the crowd safe from Lull's wardens for
-three minutes: a survive step, hostile wardens walking in from both ends.
+### 7. NO KERB, NO CURBSIDE
 
-JOB 10: PLANNING PERMISSION
-Lull's American consultant, who spelt it "curbside", flies out tonight. Get him and
-the Act's first draft to the ring road. He talks the whole way.
+`s7-nokerb` · phone-oldtown · $3,000
 
-JOB 11: ALARM CALL
-The player's trade pays off: wire Lull's own street. Fit five alarms round Glass
-Heights (a collect step), then set them all off at once (mayhem round her house).
+> **MAYOR LULL:** Mayor Lull. From Monday, kerbs are abolished. Pavements will simply... end. Quietly.
+> **LIONEL:** Three diggers in Cobble Row. One's eyeing up my kerb. I've told it I'm a listed building.
+> **DOREEN:** No kerb, no kerbside, no us. Wreck her diggers before they're done with Cobble Row.
 
-JOB 12: LOUDEST CITY (finale)
-Lull leaves to present the award to the goat's village. Wreck her convoy and make
-the city go off as it goes (mayhem round the convoy's lead car).
-MAYOR LULL (outro): I have taken a post in the village. The goat is very quiet. We understand each other.
-```
+1. **WRECK THE COUNCIL'S 3 DIGGERS.** Each digger works a Cobble Row kerb
+   inside a roadworks pen (barriers, cones, a trench; the W3-C roadworks
+   scene is the dressing). When you get within 50 m (or it's hit), it climbs
+   out and trundles off into traffic at 6 m/s, slow and heavy, so it takes
+   some wrecking. Driven, like Clamp's tow trucks in TOW-AWAY ZONE.
+   Lionel sits on his kerb by the third digger, so mind him.
 
-Threads it can pull: Pike (a bus shelter, an informant) selling Lull's
-diary to Doreen; the Quiet Wardens (V2-15) as the chapter's foot soldiers
-in free roam.
+> **LIONEL:** My kerb lives! Fourteen years I've sat on that kerb. It knows all my sad songs.
+> **MAYOR LULL:** Mayor Lull. Three council diggers have been lost. Kerbs will now be removed by hand. Quietly.
+> **DOREEN:** By hand. Those kerbs are older than she is. Let her try. Lovely.
+
+### 8. DONER
+
+`s8-doner` · phone-arts · $3,000
+
+Manny, who runs the kebab shop on Cobble Row, joins the traders. The spit
+is at the city impound in Glass Heights, which Vex's crew now runs on a
+council contract (the Night Shift's ending, and Vex's council work in
+NINETY-NINE PROBLEMS). The lines make sense whether or not the player has
+played the Night Shift.
+
+> **DOREEN:** Lull's had Manny's kebab spit impounded. Twenty-two years it's turned. Never once stopped.
+> **MANNY:** It is still turning. In the impound. I can feel it. Bring it home before it goes cold.
+> **VEX:** Impound's mine now. Council contract. If someone nicked that spit, I'd have to ring the cops.
+
+1. **TAKE THE SPIT VAN.** A council van at the impound kerb in Glass
+   Heights, with the spit in the back, still lit.
+2. **GET IT TO MANNY'S BEFORE IT COOLS.** 150 s, 2 stars (Vex rings the
+   cops, as promised). Manny waits outside his shop on Cobble Row, in an
+   apron.
+
+The job fails if the van is wrecked or left behind, or the time runs out:
+THE SPIT WENT COLD.
+
+> **MANNY:** Still turning. Twenty-two years. Tonight everybody eats free. Not you. You, half price.
+> **VEX:** Told the cops it went thataway. Every way's thataway if you point enough.
+> **DOREEN:** That's the three of us, then. The chimes, the hat and the kebab shop. Lovely.
+
+### 9. OPEN MIC
+
+`s9-openmic` · phone-suburbs · $3,500 · evening (20:00)
+
+> **LIONEL:** My comeback gig. Neon Mile, eight o'clock. Three minutes. It's one song, but it builds.
+> **MAYOR LULL:** Mayor Lull. Unlicensed singing will be met by wardens. From both ends of the street.
+> **DOREEN:** Keep them off him till he's done. All of it. Even the kazoo bit.
+
+1. **GET TO LIONEL'S GIG ON NEON MILE.** Lionel stands on a Mile pavement
+   with his hat out and the night crowd round him.
+2. **KEEP THE WARDENS OFF LIONEL.** Survive 180 s. Lull's wardens (hi-vis,
+   unarmed but they fight) walk in from both ends of the block in pairs,
+   about every 25 s, heading for Lionel. Flatten them, run them down or
+   block the pavement.
+
+The job fails if a warden reaches Lionel (LIONEL'S BEEN WRITTEN UP) or you
+knock him down (NOT LIONEL! HE WAS ON YOUR SIDE). Hitting the crowd doesn't
+fail it.
+
+> **LIONEL:** They shouted 'more'! Or possibly 'no more'. Either way, they were listening.
+> **MAYOR LULL:** Mayor Lull. Fourteen wardens have resigned. They say the song is still in their heads.
+> **DOREEN:** Fourteen wardens and a kazoo solo. You've earned a cone. Lovely.
+
+(Fourteen is about what three minutes of pairs comes to. Keep the line
+matching if the timing changes.)
+
+### 10. PLANNING PERMISSION
+
+`s10-permission` · phone-oldtown · $3,500
+
+Todd Bramble is Lull's American consultant and wrote the Quiet Streets
+Act. He has quit and wants out of the city. American English is his alone,
+and so is the only callback to the spelling: he confesses it, once, in the
+car.
+
+> **DOREEN:** Lull's consultant has quit. Wrote her Act, he did. He'll swap us the first draft for a lift.
+> **TODD:** Todd Bramble, Bramble Strategic. Love what you're doing. Get me to the ring road, we'll circle back.
+> **LIONEL:** He's outside the hotel in Glass Heights. Bring a car. And earplugs. He's been talking since Tuesday.
+
+1. **GET A CAR.**
+2. **PICK UP TODD IN GLASS HEIGHTS.** He's outside the hotel with a wheelie
+   case.
+3. **GET TODD TO THE RING ROAD.** 150 s, 2 stars: Lull has reported her
+   consultant stolen. The drop is a kerb on the outer ring road, on the far
+   side of the city from Glass Heights.
+
+Until Todd's in the car the job fails if he's knocked down (THAT WAS YOUR
+LIFT HOME, TODD). It also fails if the time runs out (TODD MISSED HIS
+FLIGHT).
+
+**In the car** Todd talks the whole way. One line about every 15 s, on the
+feed, not a card; in this order, and the rest are dropped if you arrive
+early:
+
+> **TODD:** So the Act. Fun story. The brief was 'quiet'. I heard 'quiet' and thought: synergy.
+> **TODD:** Is this a stick shift? I've never been in a stick shift. Is that legal here?
+> **TODD:** Are those sirens for us? Love that. That's engagement.
+> **TODD:** Small thing. The spelling in the Act? Me. Nobody corrected me. Very polite country.
+> **TODD:** Your driving is extremely disruptive. In my industry that's the highest compliment.
+> **TODD:** I'm writing a book about this ride. Chapter one: Disruption. Chapter two: also you.
+
+> **TODD:** This is me. Love the energy. The draft's in your glovebox. Page four. Have a great life.
+> **DOREEN:** Page four. 'Exempt: the Mayor's own street, for essential noise.' She's got a hot tub.
+> **LIONEL:** If her street's exempt, an alarm there's perfectly legal. Now who do we know who fits alarms?
+
+### 11. ALARM CALL
+
+`s11-alarmcall` · phone-arts · $4,000 · night (22:00)
+
+Pike's cameo in the main story. He's down on his luck, living by a Maple
+Flats bus shelter (the Night Shift's FALLEN SAINT), and introduces himself
+for players who don't know him.
+
+> **DEACON PIKE:** Deacon Pike. You don't know me. I found the Mayor's diary in a bin. I live by the bin.
+> **DEACON PIKE:** Tonight says: 'Bed at ten. Earplugs out. Sleep like a baby.' The page is twenty quid.
+> **DOREEN:** Paid him in cones. Five cars on her street, five of your alarms. Then wake her up.
+
+1. **FIT 5 ALARMS ON THE MAYOR'S STREET.** Five cars parked along a quiet
+   Glass Heights street outside Lull's house. Walk up to each (a `collect`
+   step; the cars are spawned parked, tagged `alarm1`–`alarm5`).
+2. **WAKE THE MAYOR · 0 / 2,500.** A `mayhem` step, 60 m round her house.
+   Hitting the cars you wired sets their alarms off (the alarms scene), which
+   is the quickest way to the points.
+
+> **MAYOR LULL:** Mayor Lull. There are five car alarms outside my house. I have counted them. Many times.
+> **DEACON PIKE:** I've never been on this side of a good deed. It's itchy. Twenty quid, though.
+> **DOREEN:** Hear that? Every one of them yours. Twenty years' work in one street. Lovely.
+
+### 12. LOUDEST CITY
+
+`s12-loudest` · phone-suburbs · $7,500 · dusk (19:00)
+
+> **MAYOR LULL:** Mayor Lull. Today I leave to present the award to its village. Please line the streets. Silently.
+> **DOREEN:** Limo, two warden vans, out by the ring road. Give her the send-off she's earned.
+> **LIONEL:** Every busker in town's out. Every chime, every alarm. She'll hear us from the goat.
+
+1. **GIVE LULL A SEND-OFF · 0 / 6,000.** A `mayhem` step, 100 m round the
+   limo wherever it's got to. The convoy (Lull's pearl limo, then two
+   hi-vis warden vans) waits outside the Town Hall in Glass Heights until
+   you're within 60 m, then tours at 9 m/s, round and round: Glass Heights,
+   Cobble Row, down Neon Mile, then a stretch of the ring road. Along its
+   route, each once you're within 140 m: a **street race**, a **car fire**,
+   a **turf flare-up** and an **alarms** scene, all `scene` actions,
+   featured, none needed.
+2. **WRECK THE MAYOR'S LIMO.** The convoy speeds up (14 m/s) and makes for
+   the ring road. Wrecking a warden van doesn't count.
+
+> **MAYOR LULL:** Mayor Lull. I have taken a post in the village. The goat is very quiet. We understand each other.
+> **LIONEL:** The council's new motto: 'Loud and proud.' Well. I'm shouting it from the Town Hall steps.
+> **DOREEN:** Kerbs back, chimes back, alarms back. Cones for life, Alarms. Medium ones. Lovely.
+
+The debrief says **STORY COMPLETE**, and the phones then ring with all twelve
+jobs as REPEAT JOBs.
+
+### Building chapter 2
+
+What the script needs that the game doesn't have yet:
+
+| Job | Needs | Notes |
+| --- | --- | --- |
+| 7 | A driven **digger** | `mini_digger` is only a static street prop. It needs a vehicle: a GLB per `docs/BLENDER_TODO.md`, a `VehicleArchetype`, slow and heavy. A yellow `van` could stand in to start with. The roadworks pen comes with W3-C. |
+| 8 | **Manny** | A ped (`ped_stocky`, white shirt for the apron) and a badge colour: `MANNY` in `BADGES` and `progress.css` (chilli red). |
+| 9 | **Wardens walking in** | A new start action: waves of hostile peds that walk to a tagged ped. Plus a fail when one reaches him (`reached`). |
+| 10 | **Todd**; **lines during a job** | A ped (`ped_slim`, a lanyard blue shirt) and badge `TODD`. A `say` action: timed feed lines while a step runs (the feed already shows mission text), skipped once the step ends. It's the one new engine feature here and reusable everywhere. The drop point comes from `roads.ts`'s outer ring road. |
+| 11 | Nothing new | `collect`, parked `spawnCar` and `mayhem` with `near`. Pike's GLB exists. Optional: a step that counts tagged cars whose alarms have gone off. |
+| 12 | **A convoy** | Two vans following the limo. Either a `follow: tag` option on driven cars, or three cars on the same route with staggered starts. Also a speed change between steps (`cruise` set by a later step's start). |
+
+Also:
+
+- **Completion:** the story stays 30% of completion, split over 12 jobs.
+  A save that finished chapter 1 drops from 30% to 15% for the story part,
+  as happened when the Night Shift grew a chapter.
+- **The dialogue tests** cover chapter 2 as soon as it's in
+  `missionsData.ts`: three lines a call, about 100 characters a line,
+  objectives under 40, a badge for every speaker, and people in the
+  districts the lines name.
+- **An order to build in:** 11, 12 and 8 need the least (8 needs only
+  Manny). Then 10 (`say`), 9 (waves), and 7 (the digger).
 
 ## The Night Shift (side story)
 
@@ -475,8 +652,12 @@ another game.
 ## Threads for later
 
 - **The Mayor** owes the Graveyard Shift (Clamp's files) and is the main
-  story's villain: who tells whom?
-- **Pike** has a redemption arc going and is living in a bus shelter.
+  story's villain: who tells whom? (Chapter 2 doesn't settle it: Vex just
+  runs the impound on a council contract.)
+- **Pike** has a redemption arc going, is living in a bus shelter and, in
+  ALARM CALL, has done his first good deed. A third main-story or Night
+  Shift turn for him could follow.
+- **Who runs the city** after Lull leaves for the goat's village.
 - **The VIPERS** run Neon Mile in free roam and never appear in the story.
 - **Clamp as a lollipop man** outside a Maple Flats school: a cameo
   waiting to happen.
