@@ -74,6 +74,14 @@ const SHIFT_BLUE = '#3c5a8c';
 const DOREEN_MINT = '#bfe8d8';
 /** Wardens' hi-vis (Clamp's in the Night Shift, Lull's in the main story). */
 const HI_VIS = '#d4e23c';
+/**
+ * The council's diggers (NO KERB, NO CURBSIDE). A stand-in until there's a
+ * digger to drive (a GLB per docs/BLENDER_TODO.md and a VehicleArchetype;
+ * world/streetProps.ts's mini_digger is a still prop): works-yellow pickups.
+ */
+const DIGGER = { archetype: 'pickup', paint: '#f2b705' } as const;
+/** They trundle, m/s. */
+const DIGGER_CRUISE = 6;
 /** OPEN MIC: Lionel's set, s, and a pair of wardens every this long (seven pairs: the fourteen Lull's outro counts). */
 const GIG_SECONDS = 180;
 const WAVE_EVERY = 25;
@@ -141,7 +149,10 @@ function writtenMissions(docks: Point & { heading?: number; halfWidth?: number; 
   ];
   // Along it: a race in Cobble Row, a fire on the Mile, a turf flare-up where the Mile meets Glass Heights.
   const node = (i: number) => ({ x: tour[i][0] * BLOCK_SIZE, z: tour[i][1] * BLOCK_SIZE });
-  // KEEP IT LOUD, chapter 2. Manny's spit in a council van at the city impound (Glass Heights), and his shop in Cobble Row.
+  // KEEP IT LOUD, chapter 2. The council's three diggers taking up Cobble Row's kerbs; Lionel sat on his, by the third.
+  const diggers = [kerb(-6, -4, 1, 26), kerb(-4, -6, 2, 26), kerb(-2, -7, 3, 26)];
+  const lionelKerb = kerbside(-2, -7, 3, 14);
+  // Manny's spit in a council van at the city impound (Glass Heights), and his shop in Cobble Row.
   const spitVan = kerb(-1, 0, 2, 26);
   const mannyShop = kerb(-5, -6, 1, 30);
   const manny = kerbside(-5, -6, 1, 30);
@@ -379,6 +390,38 @@ function writtenMissions(docks: Point & { heading?: number; halfWidth?: number; 
       ],
     },
     // ── KEEP IT LOUD, chapter 2: the Kerb Removal Order ──
+    {
+      id: 's7-nokerb',
+      title: 'NO KERB, NO CURBSIDE',
+      arc: 'main',
+      chapter: 2,
+      phone: 'phone-oldtown',
+      reward: 3000,
+      intro: [
+        { who: LULL, text: 'Mayor Lull. From Monday, kerbs are abolished. Pavements will simply... end. Quietly.' },
+        { who: LIONEL, text: "Three diggers in Cobble Row. One's eyeing up my kerb. I've told it I'm a listed building." },
+        { who: DOREEN, text: "No kerb, no kerbside, no us. Wreck her diggers before they're done with Cobble Row." },
+      ],
+      outro: [
+        { who: LIONEL, text: 'My kerb lives! Fourteen years I\'ve sat on that kerb. It knows all my sad songs.' },
+        { who: LULL, text: 'Mayor Lull. Three council diggers have been lost. Kerbs will now be removed by hand. Quietly.' },
+        { who: DOREEN, text: 'By hand. Those kerbs are older than she is. Let her try. Lovely.' },
+      ],
+      steps: [
+        {
+          kind: 'destroy',
+          tags: ['digger1', 'digger2', 'digger3'],
+          text: "WRECK THE COUNCIL'S 3 DIGGERS",
+          // Each at its kerb until you're close (or it's hit), then off at a trundle.
+          start: [
+            ...diggers.map((p, i) => ({ do: 'spawnCar' as const, tag: `digger${i + 1}`, ...DIGGER, ...p, drive: true, wait: 50, cruise: DIGGER_CRUISE })),
+            // His red waistcoat, on his kerb.
+            { do: 'spawnPed', tag: 'lionel', ...lionelKerb, shirt: '#a8322b', body: 'ped_slim' },
+          ],
+          fail: spareLionel,
+        },
+      ],
+    },
     {
       id: 's8-doner',
       title: 'DONER',

@@ -79,14 +79,14 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
    - Any backend for an online leaderboard (`online-leaderboard` in BACKLOG).
    - The Old Town race's leg 1 lands a ramp jump at a corner checkpoint: keep
      it as a feature?
-5. **KEEP IT LOUD chapter 2, in progress** on branch `claude/story-ch2`
-   (script and status in [STORY.md](STORY.md)). Built: DONER, ALARM CALL,
-   LOUDEST CITY, with engine pieces `timeout`, `parked` and the `drive`
-   action ([progression.md](systems/progression.md)). To build: PLANNING
-   PERMISSION (a `say` action for lines during a job), OPEN MIC (wardens
-   walking in), NO KERB, NO CURBSIDE (a driven digger). Don't merge to
-   `main` until all six are in: the story would skip the reveal ALARM CALL
-   depends on. When it ships, it's a minor version.
+5. **KEEP IT LOUD chapter 2, built, not shipped:** all six jobs on branch
+   `claude/story-ch2` (script in [STORY.md](STORY.md), engine pieces in
+   [progression.md](systems/progression.md)). To ship: the owner's say-so,
+   a changelog entry and a minor version (0.33.0), the smoke test, merge.
+   Still a stand-in: the diggers are works-yellow pickups until there's a
+   digger to drive (a GLB and a `VehicleArchetype`; `DIGGER` in
+   `missionsData.ts`). Not yet played on the phone: OPEN MIC's pace (pairs
+   every 25 s), the convoy splitting at lights, Todd's subtitle.
 6. **Next features (chosen, not started):** W3-C, four street scenes (QUIET
    PLEASE march, roadworks, bin day with a tipper for Borrowed Blues, delivery
    rush; [V2_PLAN.md](V2_PLAN.md)).

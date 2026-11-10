@@ -256,13 +256,19 @@ are `src/game/modes/*Mode.ts`.
   timer (`timeout` says what running out means: THE SPIT WENT COLD; OUT
   OF TIME if left out), fail conditions (a tagged car wrecked, left behind or scratched:
   `damaged`, under `below` of its health, 90% by default, the moment it
-  is; a tagged person knocked down) and actions on start / end (spawn a
+  is; a tagged person knocked down; `reach`: one of `by`, standing, within
+  2 m of the tagged person, OPEN MIC's wardens getting to Lionel) and
+  actions on start / end (spawn a
   car, parked or with `drive: true` pulling out into traffic with a
   lane-following driver while staying pinned, or a person; `parked: true`
   flags a car as one of the city's parked ones, so a bump, a bullet or a
   blast sets its alarm off (ALARM CALL's five); `{ do: 'drive', tag,
   cruise?, route? }` changes a driven car's pace or route mid-job, and
-  pulls one still waiting out at once (LOUDEST CITY's convoy speeding up); set the wanted
+  pulls one still waiting out at once (LOUDEST CITY's convoy speeding up);
+  a person with `walkTo: tag` marches (a walk, never a run: the crowd
+  agent's `march`) at another job person and keeps at it, back on the march
+  after a scuffle they gave up, still walking off screen, until knocked
+  down; `delay: s` brings one on that long after the action (waves); set the wanted
   level, hand over a gun, a passenger boards / alights; start a city
   scene; put a car on a truck's hook). Score awards feed a
   mayhem step (`MissionRun.award(points, view)`, counted where the player
@@ -279,6 +285,14 @@ are `src/game/modes/*Mode.ts`.
     stars, apart from a chase's); the job unfeatures it when it ends, by a
     pass, a fail, WASTED, BUSTED or a quit. One featured kind at a time
     (the last started).
+  - **Lines during a step** (`{ do: 'say', lines, first?, every? }`,
+    `MissionTalk`): the first `first` s in (4), then one every `every` s
+    (12), in order; when the step ends the rest are dropped. Each goes out
+    as a `voice {who, text, hold}` event, shown on the scanner's subtitle
+    under the speaker's name (`ScannerHud`, tone `story`); while it's up
+    the dispatcher holds his own (`ScannerFeed.step(.., hold)`,
+    `ScannerDeps.busy`). Not heard: GameAudio ignores it. At most 72
+    characters a line (two lines of the phone's subtitle; a test).
   - **Driven cars** (`SpawnCar`, glue in `MissionMode.tendCars`): with
     `drive`, `wait: m` keeps it parked until the player is that close (or
     it's hurt), `cruise` sets its pace, and `route` gives it crossings to
@@ -303,9 +317,10 @@ are `src/game/modes/*Mode.ts`.
     PLEASE; NINETY-NINE PROBLEMS, Doreen's van off the Graveyard Shift's
     hook without a scratch; RIBBON CUTTING, the Mayor's limo; QUIETEST
     CITY, 5,000 round the judges' touring coach with a race, a fire and a
-    turf flare-up on its route; then chapter 2, `chapter: 2`, being built:
-    so far DONER, ALARM CALL and LOUDEST CITY, the last), rings from sunrise
-    to midnight from the city's three phones. The
+    turf flare-up on its route; then chapter 2, `chapter: 2`, the Kerb
+    Removal Order: NO KERB, NO CURBSIDE, DONER, OPEN MIC, PLANNING
+    PERMISSION, ALARM CALL and LOUDEST CITY), rings from sunrise to
+    midnight from the city's three phones. The
     **Night Shift** side story (`arc: 'night'`, the old Graveyard Shift jobs
     `m1`–`m13` with their ids, so saves keep their progress: VEX's tow crew
     and LIL' TUNA, eight jobs against DEACON PIKE's Chrome Saints, then

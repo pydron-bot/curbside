@@ -500,9 +500,22 @@ describe('the story', () => {
   const night = missions.filter((m) => arcOf(m) === 'night');
 
   it('the main story (s-ids) and the Night Shift (m1-m13, ids unchanged), each job from a payphone, paying, with something to say', () => {
-    // Chapter 2 is being built: the jobs it has so far, in story order.
-    expect(main.map((m) => m.id)).toEqual(['s1-wrongstop', 's2-noise', 's3-quiet', 's4-problems', 's5-ribbon', 's6-quietest', 's8-doner', 's9-openmic', 's10-permission', 's11-alarmcall', 's12-loudest']);
-    expect(main.filter((m) => m.chapter === 2).map((m) => m.id)).toEqual(['s8-doner', 's9-openmic', 's10-permission', 's11-alarmcall', 's12-loudest']);
+    expect(main.map((m) => m.id)).toEqual([
+      's1-wrongstop',
+      's2-noise',
+      's3-quiet',
+      's4-problems',
+      's5-ribbon',
+      's6-quietest',
+      's7-nokerb',
+      's8-doner',
+      's9-openmic',
+      's10-permission',
+      's11-alarmcall',
+      's12-loudest',
+    ]);
+    const mainChapter = (n: number) => main.filter((m) => (m.chapter ?? 1) === n).length;
+    expect([mainChapter(1), mainChapter(2)]).toEqual([6, 6]);
     expect(night.map((m) => m.id)).toEqual([
       'm1-audition',
       'm2-tuna',
@@ -693,6 +706,30 @@ describe('the story', () => {
     // The judges tour at night (nine o'clock), and it's chapter 1's last job.
     expect(job.hour).toBe(21);
     expect(endsChapter(main, job)).toBe(true);
+  });
+
+  it("NO KERB, NO CURBSIDE: three diggers at Cobble Row's kerbs that trundle off as you come, Lionel on his kerb by one", () => {
+    const job = main.find((m) => m.id === 's7-nokerb')!;
+    expect(job.steps).toHaveLength(1);
+    const [wreck] = job.steps;
+    expect(wreck).toMatchObject({ kind: 'destroy', tags: ['digger1', 'digger2', 'digger3'] });
+    const diggers = (wreck.start ?? []).flatMap((a) => (a.do === 'spawnCar' ? [a] : []));
+    expect(diggers.map((a) => a.tag)).toEqual(['digger1', 'digger2', 'digger3']);
+    for (const a of diggers) {
+      // Driven, slow, waiting at its kerb until you're close.
+      expect(a, a.tag).toMatchObject({ drive: true, archetype: diggers[0].archetype, paint: diggers[0].paint });
+      expect(a.wait, a.tag).toBeGreaterThan(0);
+      expect(a.cruise!, a.tag).toBeLessThanOrEqual(8);
+      expect(districtAt(a.x, a.z), a.tag).toBe('oldtown');
+    }
+    // Spread out: one at a time, mostly.
+    for (let i = 1; i < diggers.length; i++) expect(len2(diggers[i].x - diggers[i - 1].x, diggers[i].z - diggers[i - 1].z)).toBeGreaterThan(80);
+    const lionel = wreck.start?.find((a) => a.do === 'spawnPed');
+    if (lionel?.do !== 'spawnPed') throw new Error('no Lionel');
+    expect(districtAt(lionel.x, lionel.z)).toBe('oldtown');
+    expect(lionel.hostile).toBeUndefined();
+    expect(Math.min(...diggers.map((a) => len2(a.x - lionel.x, a.z - lionel.z)))).toBeLessThan(20);
+    expect(wreck.fail?.some((f) => f.down === 'lionel')).toBe(true);
   });
 
   it("DONER: Manny's spit in a council van at the impound in Glass Heights, home to his shop in Cobble Row before it cools", () => {
@@ -990,7 +1027,7 @@ describe('the two arcs on the phones', () => {
     // Chapter 1 done: chapter 2 rings next (no repeats while it's to do).
     save.missions.push('s4-problems', 's5-ribbon', 's6-quietest');
     expect(completionParts(save, totals).missions).toBeCloseTo(6 / ids('main').length, 6);
-    expect(nextInArc(missions, 'main', save.missions, 0, true)).toMatchObject({ replay: false, job: { id: 's8-doner' } });
+    expect(nextInArc(missions, 'main', save.missions, 0, true)).toMatchObject({ replay: false, job: { id: 's7-nokerb' } });
     save.missions.push(...ids('main').filter((id) => !save.missions.includes(id)));
     expect(completionParts(save, totals).missions).toBe(1);
     expect(nextInArc(missions, 'main', save.missions, 0, true)).toMatchObject({ replay: true, job: { id: 's2-noise' } });
@@ -1110,6 +1147,17 @@ describe('KEEP IT LOUD, jobs 4 on, played through the engine', () => {
       expect(run.mayhem).toBe(4000);
       Object.assign(v, { x: 300, z: -250 });
       run.award(1000, v);
+    });
+  });
+
+  it('NO KERB, NO CURBSIDE: the three diggers wrecked, in any order', () => {
+    const m = job('s7-nokerb');
+    let n = 0;
+    play(m, (_, v, run) => {
+      n++;
+      for (let i = 1; i <= 3; i++) v.cars.set(`digger${i}`, { x: 0, z: 0, wrecked: i <= n });
+      v.peds.set('lionel', { x: 0, z: 0, down: false });
+      if (n < 3) expect(run.state).toBe('running');
     });
   });
 

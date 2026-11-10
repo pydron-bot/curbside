@@ -53,6 +53,10 @@ ROW. TWO CARS, TWO TEMPERS.") with a radar ping on the incident:
   non-positional, `sfx.squelch`); the session log gets a `scanner` line.
   Nothing behind the title (the show's scenes stay quiet); a fresh run
   starts clean.
+- **Story lines share it:** a `voice` event (a job's `say` lines, Todd
+  in the passenger seat) takes the subtitle under the speaker's name in
+  the mission card's cyan, no on-air light; while it's up the dispatcher
+  holds his line (`busy`; it goes stale as any waiting line does).
 - **Subtitle:** one element, `SCANNER` and an on-air light over the line
   (two lines at most), faded in for its `hold` (3.2–5.5 s by length) on
   the frame clock, so it waits while paused. On touch it runs along the

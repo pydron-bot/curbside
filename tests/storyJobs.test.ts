@@ -246,6 +246,18 @@ describe("RIBBON CUTTING and QUIETEST CITY: the Mayor's limo and the judges' coa
 });
 
 describe('KEEP IT LOUD, chapter 2', () => {
+  it('NO KERB, NO CURBSIDE: each digger waits at its kerb until you come, then trundles off', () => {
+    const { cars, player, step, begin } = setup();
+    begin('s7-nokerb');
+    step(0.5);
+    expect(cars).toHaveLength(3);
+    for (const c of cars) expect(c.ai).toBeNull();
+    stand(player, cars[0].sim.x + 30, cars[0].sim.z);
+    step(DT);
+    expect(cars[0].ai?.cruise).toBe(6);
+    expect(cars[1].ai).toBeNull();
+  });
+
   /** OPEN MIC, the player at Lionel's gig (the goto passed). */
   function atGig() {
     const t = setup();

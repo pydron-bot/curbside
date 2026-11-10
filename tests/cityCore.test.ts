@@ -63,7 +63,7 @@ describe('the core city (today’s 16 × 16) at any size', () => {
         hospital: placeHospital(city),
         missions: buildMissions(docks, SAFEHOUSE),
       }),
-    ).toBe('2b4fcab9');
+    ).toBe('2d93fb62');
     expect.soft(hash(placeHangouts())).toBe('446c0e20');
   });
 

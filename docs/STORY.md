@@ -7,7 +7,7 @@ line there, update it here too (and the other way round).
 There are two arcs on the payphones:
 
 - **KEEP IT LOUD**, the main story (`arc: 'main'`, ids `s1`–`s6`; chapter
-  2, `s7`–`s12`, is scripted below and half built). Job 1
+  2, `s7`–`s12`, on branch `claude/story-ch2` until it ships). Job 1
   is the live cold open (no phone); the rest ring by day and in the evening
   (sunrise to midnight) from the city's three phones. It carries the
   story's 30% of completion.
@@ -84,7 +84,7 @@ every crash, bullet and blast sets off "your" alarms.
 | `DEACON PIKE` | Leader of the Chrome Saints in chapter 1. Ruined and broke in chapter 2, and a reluctant informant. Sells Doreen the Mayor's diary (main story, job 11). | `pike` GLB | steel blue |
 | `COMMISSIONER CLAMP` | Parking Commissioner, runs the city impound. Grey suit, clipboard. | `ped_coat`, grey shirt | traffic-cone orange |
 | `MANNY` | Runs the kebab shop on Cobble Row; the third trader (main story, chapter 2). | `ped_stocky`, white shirt (apron) | chilli red |
-| `TODD` | Todd Bramble, of Bramble Strategic: Lull's American consultant, who wrote the Act (main story, job 10). | `ped_slim`, lanyard-blue shirt | to add |
+| `TODD` | Todd Bramble, of Bramble Strategic: Lull's American consultant, who wrote the Act (main story, job 10). | `ped_slim`, lanyard-blue shirt | lanyard blue |
 | — | Lull's wardens (main story, jobs 3, 9, 12) and Clamp's (Night Shift job 13). Hi-vis yellow. | `ped_stocky` | — |
 | — | The Graveyard Shift's tow truck (main story, job 4): Vex's crew, on a council contract. | `tow_truck`, Shift blue `#3c5a8c` | — |
 | — | Lull's limo (jobs 5 and 12), pearl; the award judges' coach (job 6), navy; the council's diggers (job 7), yellow. Nobody inside is seen. | `limo`, `bus`, a digger (to make) | — |
@@ -274,12 +274,10 @@ chapter 2), and chapter 2 rings next.
 
 ## KEEP IT LOUD, chapter 2 (6 jobs, $24,500)
 
-**Being built** (`chapter: 2`). DONER, ALARM CALL and LOUDEST CITY are
-in `missionsData.ts`; NO KERB, NO CURBSIDE, OPEN MIC and PLANNING
-PERMISSION are still script only. What those need is under *Building
-chapter 2* at the end. Don't ship chapter 2 to `main` until all six are
-in: ALARM CALL leans on PLANNING PERMISSION's reveal (the Mayor's street
-is exempt).
+All six jobs are in `missionsData.ts` (`chapter: 2`). The diggers are a
+stand-in until there's a digger to drive (*Building chapter 2* at the
+end). Ship the chapter whole: ALARM CALL leans on PLANNING PERMISSION's
+reveal (the Mayor's street is exempt).
 
 Lull loses the award to the goat and blames "the Curbside". Her answer is
 the **Kerb Removal Order**: no kerb, no kerbside, no Curbside. Her diggers
@@ -311,12 +309,13 @@ CHAPTER 1 COMPLETE (`endsChapter()`), and `s12` takes STORY COMPLETE.
 > **LIONEL:** Three diggers in Cobble Row. One's eyeing up my kerb. I've told it I'm a listed building.
 > **DOREEN:** No kerb, no kerbside, no us. Wreck her diggers before they're done with Cobble Row.
 
-1. **WRECK THE COUNCIL'S 3 DIGGERS.** Each digger works a Cobble Row kerb
-   inside a roadworks pen (barriers, cones, a trench; the W3-C roadworks
-   scene is the dressing). When you get within 50 m (or it's hit), it climbs
-   out and trundles off into traffic at 6 m/s, slow and heavy, so it takes
-   some wrecking. Driven, like Clamp's tow trucks in TOW-AWAY ZONE.
-   Lionel sits on his kerb by the third digger, so mind him.
+1. **WRECK THE COUNCIL'S 3 DIGGERS.** Three diggers at Cobble Row kerbs,
+   well apart. Each waits at its kerb until you're within 50 m (or it's
+   hit), then trundles off into traffic at 6 m/s. Driven, like Clamp's tow
+   trucks in TOW-AWAY ZONE. Lionel sits on his kerb by the third, in his
+   red waistcoat: knock him down and it fails (NOT LIONEL! HE WAS ON YOUR
+   SIDE). For now the diggers are works-yellow pickups (`DIGGER` in
+   `missionsData.ts`), and there's no roadworks pen round them yet (W3-C).
 
 > **LIONEL:** My kerb lives! Fourteen years I've sat on that kerb. It knows all my sad songs.
 > **MAYOR LULL:** Mayor Lull. Three council diggers have been lost. Kerbs will now be removed by hand. Quietly.
@@ -357,14 +356,18 @@ THE SPIT WENT COLD.
 > **MAYOR LULL:** Mayor Lull. Unlicensed singing will be met by wardens. From both ends of the street.
 > **DOREEN:** Keep them off him till he's done. All of it. Even the kazoo bit.
 
-1. **GET TO LIONEL'S GIG ON NEON MILE.** Lionel stands on a Mile pavement
-   with his hat out and the night crowd round him.
+1. **GET TO LIONEL'S GIG ON NEON MILE.** Lionel stands mid-block on a Mile
+   pavement in his red waistcoat.
 2. **KEEP THE WARDENS OFF LIONEL.** Survive 180 s. Lull's wardens (hi-vis,
-   unarmed but they fight) walk in from both ends of the block in pairs,
-   about every 25 s, heading for Lionel. Flatten them, run them down or
-   block the pavement.
+   unarmed but they fight) come on in pairs every 25 s, one from each end
+   of the street, 44 m off, and march (`walkTo`: a walk, never a run) at
+   Lionel. One who comes within 18 m of you turns on you instead; one who
+   gives up the scuffle goes back to marching. Only knocking them down
+   stops them, and they keep walking off screen, so leaving doesn't save
+   him.
 
-The job fails if a warden reaches Lionel (LIONEL'S BEEN WRITTEN UP) or you
+The job fails if a warden gets within 2 m of Lionel, standing (a `reach`
+fail: LIONEL'S BEEN WRITTEN UP), or you
 knock him down (NOT LIONEL! HE WAS ON YOUR SIDE). Hitting the crowd doesn't
 fail it.
 
@@ -372,12 +375,12 @@ fail it.
 > **MAYOR LULL:** Mayor Lull. Fourteen wardens have resigned. They say the song is still in their heads.
 > **DOREEN:** Fourteen wardens and a kazoo solo. You've earned a cone. Lovely.
 
-(Fourteen is about what three minutes of pairs comes to. Keep the line
-matching if the timing changes.)
+(Fourteen is seven pairs, the last on at 153 s and in reach of Lionel
+before the end. A test keeps the count and the line together.)
 
 ### 10. PLANNING PERMISSION
 
-`s10-permission` · phone-oldtown · $3,500
+`s10-permission` · phone-arts · $3,500
 
 Todd Bramble is Lull's American consultant and wrote the Quiet Streets
 Act. He has quit and wants out of the city. American English is his alone,
@@ -392,24 +395,26 @@ car.
 2. **PICK UP TODD IN GLASS HEIGHTS.** He's outside the hotel with a wheelie
    case.
 3. **GET TODD TO THE RING ROAD.** 150 s. The drop is a kerb on the outer
-   ring road, on the far side of the city from Glass Heights.
+   ring road in Maple Flats, across the city from Glass Heights.
 
-Until Todd's in the car the job fails if he's knocked down (THAT WAS YOUR
-LIFT HOME, TODD). It also fails if the time runs out (TODD MISSED HIS
+Until Todd's in the car the job fails if he's knocked down (NOT TODD! HE
+HAS THE DRAFT). It also fails if the time runs out (TODD MISSED HIS
 FLIGHT).
 
-**In the car** Todd talks the whole way. One line about every 15 s, on the
-feed, not a card; in this order, and the rest are dropped if you arrive
-early:
+**In the car** Todd talks the whole way (a `say` action): his first line 4
+s after he gets in, then one every 12 s, in this order, on the scanner's
+subtitle under TODD, not a card. The rest are dropped when you arrive, so
+a quick drive hears fewer. Each fits the phone's subtitle (72 characters at
+most, a test checks):
 
-> **TODD:** So the Act. Fun story. The brief was 'quiet'. I heard 'quiet' and thought: synergy.
-> **TODD:** Is this a stick shift? I've never been in a stick shift. Is that legal here?
+> **TODD:** The brief was 'quiet'. I heard 'quiet' and I thought: synergy.
+> **TODD:** A stick shift? I've never been in a stick shift. Is that legal here?
 > **TODD:** Was that a speed camera? Wave! Always wave. That's engagement.
-> **TODD:** Small thing. The spelling in the Act? Me. Nobody corrected me. Very polite country.
-> **TODD:** Your driving is extremely disruptive. In my industry that's the highest compliment.
-> **TODD:** I'm writing a book about this ride. Chapter one: Disruption. Chapter two: also you.
+> **TODD:** The spelling in the Act? Me. Nobody corrected me. Very polite country.
+> **TODD:** Your driving is very disruptive. In my industry, that's a compliment.
+> **TODD:** I'm writing a book about this ride. Chapter one: Disruption.
 
-> **TODD:** This is me. Love the energy. The draft's in your glovebox. Page four. Have a great life.
+> **TODD:** This is me. Love the energy. The draft is in your glovebox. Page four. Have a great life.
 > **DOREEN:** Page four. 'Exempt: the Mayor's own street, for essential noise.' She's got a hot tub.
 > **LIONEL:** If her street's exempt, an alarm there's perfectly legal. Now who do we know who fits alarms?
 
@@ -469,27 +474,26 @@ jobs as REPEAT JOBs.
 
 ### Building chapter 2
 
-What each job needed; the three marked Done are in the game:
+What each job needed from the engine (`docs/systems/progression.md` has
+the API):
 
-| Job | Needs | Notes |
-| --- | --- | --- |
-| 7 | A driven **digger** | `mini_digger` is only a static street prop. It needs a vehicle: a GLB per `docs/BLENDER_TODO.md`, a `VehicleArchetype`, slow and heavy. A yellow `van` could stand in to start with. The roadworks pen comes with W3-C. |
-| 8 | Done | Manny is a `ped_stocky` in a white apron with a chilli-red badge. The timer's own fail line is the step's `timeout`. |
-| 9 | **Wardens walking in** | A new start action: waves of hostile peds that walk to a tagged ped. Plus a fail when one reaches him (`reached`). |
-| 10 | **Todd**; **lines during a job** | A ped (`ped_slim`, a lanyard blue shirt) and badge `TODD`. A `say` action: timed feed lines while a step runs (the feed already shows mission text), skipped once the step ends. It's the one new engine feature here and reusable everywhere. The drop point comes from `roads.ts`'s outer ring road. |
-| 11 | Done | Built from `collect`, `spawnCar` with `parked: true` (so the alarms go off) and `mayhem` with `near`. |
-| 12 | Done | The convoy is three cars on one route; the limo's longer `wait` makes it lead. The `drive` action speeds them up for step 2. |
+| Job | Built with |
+| --- | --- |
+| 7 | Driven cars with `wait` and `cruise`. **Still to do:** a real digger to drive (a GLB per `docs/BLENDER_TODO.md` and a `VehicleArchetype`, slow and heavy; `world/streetProps.ts`'s `mini_digger` is only a still prop). Until then `DIGGER` in `missionsData.ts` is a works-yellow `pickup`, one line to swap. A roadworks pen round each would come with W3-C. |
+| 8 | Manny, a `ped_stocky` in a white apron with a chilli-red badge; the step's `timeout` line. |
+| 9 | `walkTo` and `delay` on `spawnPed` (marching wardens, `march` on the crowd agent), and a `reach` fail. |
+| 10 | Todd, a `ped_slim` in lanyard blue with his own badge; the `say` action (`MissionTalk`) and the `voice` event on the scanner's subtitle, which holds the dispatcher while it's up. |
+| 11 | `spawnCar` with `parked: true`, so the alarms go off. |
+| 12 | A convoy on one route (the limo's longer `wait` makes it lead) and the `drive` action to speed it up. |
 
 Also:
 
 - **Completion:** the story stays 30% of completion, split over 12 jobs.
   A save that finished chapter 1 drops from 30% to 15% for the story part,
   as happened when the Night Shift grew a chapter.
-- **The dialogue tests** cover chapter 2 as soon as it's in
-  `missionsData.ts`: three lines a call, about 100 characters a line,
-  objectives under 40, a badge for every speaker, and people in the
-  districts the lines name.
-- **Still to build:** 10 (`say`), 9 (waves), and 7 (the digger).
+- **Tests** (`tests/missions.test.ts`, `tests/storyJobs.test.ts`): each
+  job's places, people and fails, a play-through of each through the
+  engine, the glue for the new pieces, and the dialogue limits.
 
 ## The Night Shift (side story)
 
