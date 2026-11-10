@@ -885,3 +885,19 @@ most this.
   `fastForward(seconds)`) and judge draw calls/correctness, not fps.
 - Kill dev servers by PID; `pkill -f "vite --port …"` matches the calling
   shell's own command line and kills it.
+
+## Since 0.29.0
+
+- **0.33.0 (2026-11-10), KEEP IT LOUD chapter 2.** Scripted from the
+  outline in STORY.md, then built three jobs at a time on
+  `claude/story-ch2`: DONER, ALARM CALL and LOUDEST CITY first (they
+  needed least: a step's `timeout`, `parked` mission cars so the alarms go
+  off, the `drive` action for the convoy), then PLANNING PERMISSION (`say`
+  and the `voice` event on the scanner's subtitle), OPEN MIC (`walkTo`,
+  `delay`, the crowd's `march`, the `reach` fail) and NO KERB, NO CURBSIDE.
+  Changes from the script while building: no job sets a wanted level (the
+  main-story rule; DONER's and PLANNING PERMISSION's stars came out), the
+  phones of jobs 10 and 11 swapped so none rings twice running, DONER's
+  timer 90 s, ALARM CALL's target 2,000, Todd's in-car lines cut to fit the
+  phone's subtitle. Shipped with the diggers as works-yellow pickups
+  (`DIGGER`): no digger to drive yet, and no Blender in that session.

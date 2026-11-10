@@ -15,6 +15,16 @@ export interface Release {
 
 export const CHANGELOG: readonly Release[] = [
   {
+    version: '0.33.0',
+    date: '2026-11-10',
+    title: 'Kerb Removal Order',
+    notes: [
+      'KEEP IT LOUD, chapter 2: six new story jobs once QUIETEST CITY is done. Lull blames the goat on "the Curbside" and orders the kerbs dug up. Wreck her diggers, steal back a kebab spit before it goes cold, keep her wardens off Lionel\'s comeback gig, give her consultant a lift, wire up the Mayor\'s own street, and see her out of town. It ends on STORY COMPLETE.',
+      'New faces: Manny of the kebab shop, and Todd, Lull\'s consultant, who talks the whole way to the ring road. His lines come up where the police scanner\'s do, and the scanner waits for him.',
+      'QUIETEST CITY now closes chapter 1. The story\'s share of completion is spread over all twelve jobs, so a finished chapter 1 counts for half of it.',
+    ],
+  },
+  {
     version: '0.32.3',
     date: '2026-11-06',
     title: 'Travelling light',

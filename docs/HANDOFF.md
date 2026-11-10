@@ -6,9 +6,9 @@ its notes to [HISTORY.md](HISTORY.md) and drop it here. How each system works
 is in [`docs/systems/`](systems/) (index in the README); per-release notes in
 `src/core/changelog.ts`.
 
-## Where it is (2026-11-06)
+## Where it is (2026-11-10)
 
-- **Live:** **0.32.3** at https://deeek.org/curbside/, deployed by
+- **Live:** **0.33.0** at https://deeek.org/curbside/, deployed by
   `.github/workflows/pages.yml` on every push to `main` (tests → build with
   `CURBSIDE_BASE=/curbside/` → deploy). The `github-pages` environment may
   ask for approval on the Actions run ("Review deployments").
@@ -20,7 +20,12 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
   checks it: tests, types, GLB contracts, smoke test) and merges to `main` to
   deploy. Old stream branches are kept on GitHub; everything shipped is in
   `main`'s history.
-- **Latest work (0.29–0.32):** map editor round 3 and IMPORT
+- **0.33.0:** KEEP IT LOUD chapter 2, six story jobs (script and cast in
+  [STORY.md](STORY.md)), with new mission-engine pieces: lines said mid-job
+  on the scanner's subtitle, people who march at someone, convoys, timeout
+  lines ([progression.md](systems/progression.md)). **Ask the owner** how
+  it plays on the phone (the device pass below).
+- **Earlier (0.29–0.32):** map editor round 3 and IMPORT
   ([W3D_MAP.md](W3D_MAP.md)); dappled tree shadows; Diagnostics tools for
   hunting iPhone slowness: GPU BREAKDOWN (0.31.0) and LOW POWER TESTS
   (0.32.0), plus a frame "tail" stat; the player's pose in bug reports
@@ -48,7 +53,10 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
      WASTED's 3 s; the home-screen icon and launch screen; TOUCH TUNING's
      `TUNE` line (the numbers to bake in).
    - *Play:* the cold open (STEAL THIS CAR over the bus); s4 fairness, s5
-     grenades on touch, s6 pace; chapter 2's timers; CRED pacing; how the
+     grenades on touch, s6 pace; KEEP IT LOUD chapter 2 (0.33.0): OPEN
+     MIC's pace (a pair of wardens every 25 s), LOUDEST CITY's convoy
+     splitting at lights, Todd's lines on the scanner's subtitle, DONER's
+     90 s; the Night Shift chapter 2's timers; CRED pacing; how the
      witnesses' delayed heat feels; RACE CRASHER, VAN NICKED, adopted crashes
      and DOMINO pay; whether bodies, dogs, umbrellas, phone screens, coins,
      cuffed suspects, the taser's wires, the stinger strip and a stuck charge
@@ -79,18 +87,13 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
    - Any backend for an online leaderboard (`online-leaderboard` in BACKLOG).
    - The Old Town race's leg 1 lands a ramp jump at a corner checkpoint: keep
      it as a feature?
-5. **KEEP IT LOUD chapter 2, built, not shipped:** all six jobs on branch
-   `claude/story-ch2` (script in [STORY.md](STORY.md), engine pieces in
-   [progression.md](systems/progression.md)). To ship: the owner's say-so,
-   a changelog entry and a minor version (0.33.0), the smoke test, merge.
-   Still a stand-in: the diggers are works-yellow pickups until there's a
-   digger to drive (a GLB and a `VehicleArchetype`; `DIGGER` in
-   `missionsData.ts`). Not yet played on the phone: OPEN MIC's pace (pairs
-   every 25 s), the convoy splitting at lights, Todd's subtitle.
-6. **Next features (chosen, not started):** W3-C, four street scenes (QUIET
+5. **Next features (chosen, not started):** W3-C, four street scenes (QUIET
    PLEASE march, roadworks, bin day with a tipper for Borrowed Blues, delivery
    rush; [V2_PLAN.md](V2_PLAN.md)).
-7. **Known gaps, low priority:** a police car retired by the police system
+6. **Known gaps, low priority:** NO KERB, NO CURBSIDE's diggers are
+   works-yellow pickups until there's a digger to drive (a GLB per
+   [BLENDER_TODO.md](BLENDER_TODO.md) and a `VehicleArchetype`; swap
+   `DIGGER` in `missionsData.ts`); a police car retired by the police system
    takes its sticky charge with it; ambient police cars aren't on the radar;
    the scooter stands in for a motorcycle; a tow can clip a neighbour in a
    tight car park; thrown props don't start scuffles; no busker music or

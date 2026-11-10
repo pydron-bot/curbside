@@ -7,7 +7,7 @@ line there, update it here too (and the other way round).
 There are two arcs on the payphones:
 
 - **KEEP IT LOUD**, the main story (`arc: 'main'`, ids `s1`–`s6`; chapter
-  2, `s7`–`s12`, on branch `claude/story-ch2` until it ships). Job 1
+  2, `s7`–`s12`, from 0.33.0). Job 1
   is the live cold open (no phone); the rest ring by day and in the evening
   (sunrise to midnight) from the city's three phones. It carries the
   story's 30% of completion.
