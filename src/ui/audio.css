@@ -139,6 +139,27 @@ body:not([data-scene='play']) #radio {
   display: none;
 }
 
+/* One thing at a time top centre: under a job card the radio card shrinks
+   to one line (the station), and everything below steps down by the
+   card's own measured height (--radio-step, radioToast.ts). */
+body[data-activity] #radio {
+  gap: 7px;
+  padding: 4px 13px 4px 10px;
+}
+
+body[data-activity] #radio .radio-text small,
+body[data-activity] #radio .radio-song {
+  display: none;
+}
+
+body[data-activity] #radio .radio-text b {
+  font-size: 12px;
+}
+
+body[data-activity] #radio .radio-eq {
+  height: 11px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   #radio { transition: opacity 0.2s; transform: translate(-50%, 0); }
   .radio-eq i { animation: none; height: 10px; }

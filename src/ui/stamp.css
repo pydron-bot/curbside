@@ -21,7 +21,7 @@ body[data-activity] #stamp {
 }
 
 body:has(#radio.in) #stamp {
-  --stamp-radio: 46px;
+  --stamp-radio: var(--radio-step, 46px);
 }
 
 .stamp-box {

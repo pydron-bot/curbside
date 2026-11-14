@@ -29,7 +29,7 @@ body:not([data-scene='play']) #wanted {
 /* The radio's "now playing" card takes the same spot for a few seconds
    after getting in a car: step down below it. */
 body:has(#radio.in) #wanted {
-  transform: translate(-50%, 46px);
+  transform: translate(-50%, var(--radio-step, 46px));
 }
 
 .w-stars {

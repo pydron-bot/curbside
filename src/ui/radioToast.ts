@@ -50,6 +50,14 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
   // the card leaves as a stamp lands and waits for its show to end.
   let waitTimer = 0;
 
+  // How far the activity card, stars and stamp step down while the card is in:
+  // its own height (one line under a job card, up to three otherwise) and a gap.
+  const step = () => document.body.style.setProperty('--radio-step', `${el.offsetHeight + 6}px`);
+  // A job card coming or going while the card is in changes its height.
+  new MutationObserver(() => {
+    if (!el.hidden) step();
+  }).observe(document.body, { attributes: true, attributeFilter: ['data-activity'] });
+
   const hide = () => {
     window.clearTimeout(waitTimer);
     window.clearTimeout(hideTimer);
@@ -74,6 +82,7 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
     window.clearTimeout(hideTimer);
     window.clearTimeout(goneTimer);
     el.hidden = false;
+    step();
     // Next frame, so the slide-in transition runs from the hidden position.
     requestAnimationFrame(() => el.classList.add('in'));
     hideTimer = window.setTimeout(hide, SHOW_MS);
@@ -92,6 +101,7 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
     // Retuning: the new station's first song lands a bar later, so just update the card.
     if (!el.hidden) {
       if (!chaseShown()) setSong();
+      step();
     } else if (inCar) show(s);
   });
   events.on('enterVehicle', () => {
