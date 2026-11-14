@@ -29,6 +29,7 @@
 import type { EventBus } from '../core/events';
 import { CAR_BODY, VEHICLE_SPECS, isPoliceArchetype } from '../entities/vehicle';
 import {
+  NPC_BAT_REACH,
   cower,
   hurtPed,
   provoke,
@@ -94,6 +95,25 @@ const NPC_FAR_DAMAGE = 6;
 const NPC_VEHICLE_SHARE = 0.45;
 const NPC_PED_DAMAGE = 20;
 export const NPC_SHOT_RANGE = 26;
+/**
+ * The bat (stage 6): a swing lands at the Swing clip's contact, 40% of its
+ * 0.417 s (BLENDER_TODO §19), on everyone in reach in front. BAT_KNOCK
+ * floors an ordinary person (a heavy only staggers: crowd.ts HEAVY_KNOCK);
+ * WEAPONS.bat.damage per hit, and each swing that lands wears it one hit.
+ */
+export const SWING_CONTACT = 0.417 * 0.4;
+const BAT_KNOCK = 4.5;
+const BAT_ARC_COS = 0.25;
+/** A rusher's bat on the player, and how much further than its reach still connects, HP / m. */
+export const NPC_BAT_DAMAGE = 15;
+const NPC_BAT_SLACK = 0.3;
+/** A heavy's shotgun: pellets a shot, their spread (radians), reach, and damage each (less from far off), m / HP. */
+const NPC_SHOTGUN_PELLETS = 5;
+const NPC_SHOTGUN_SPREAD = 0.2;
+const NPC_SHOTGUN_RANGE = 16;
+export const NPC_PELLET_DAMAGE = 5;
+const NPC_PELLET_FAR = 9;
+const NPC_PELLET_FAR_DAMAGE = 3;
 /** Random aim error of NPC shooters, radians; a running target is harder to hit. */
 export const NPC_SPREAD = 0.14;
 const NPC_SPREAD_MOVING = 0.6;
@@ -156,8 +176,8 @@ export interface CombatDeps {
   stars(): number;
   /** Smoke grenades' clouds, shared with the police (Heat); Combat makes its own if left out. */
   smoke?: SmokeClouds;
-  /** The player's body, for punch, recoil and throw poses (optional: tests leave it out). */
-  pose?: { punch(step: number): void; shoot(): void; throw?(): void };
+  /** The player's body, for punch, recoil, throw and swing poses (optional: tests leave it out). */
+  pose?: { punch(step: number): void; shoot(): void; throw?(): void; swingBat?(): void };
 }
 
 /** How the player is aiming this frame (see main.ts). */
@@ -184,6 +204,15 @@ interface Candidate extends LockCandidate {
 }
 
 const PED_HIT_RADIUS = 0.45;
+
+/** A bat swing on its way to the contact point: the player's (`who` null) or a rusher's. */
+interface PendingSwing {
+  live: boolean;
+  /** Seconds to contact. */
+  t: number;
+  who: CrowdPed | null;
+}
+const MAX_SWINGS = 8;
 
 export class Combat {
   readonly projectiles = new Projectiles();
@@ -218,6 +247,7 @@ export class Combat {
   private readonly target = { x: 0, z: 0 };
   private readonly place = { x: 0, z: 0, ax: 1, az: 0 };
   private readonly world: ProjectileWorld;
+  private readonly swings: PendingSwing[] = Array.from({ length: MAX_SWINGS }, () => ({ live: false, t: 0, who: null }));
 
   constructor(private readonly d: CombatDeps) {
     this.smoke = d.smoke ?? new SmokeClouds();
@@ -248,6 +278,7 @@ export class Combat {
     this.comboStep = -1;
     this.comboTimer = 0;
     this.sinceShot = Infinity;
+    for (const w of this.swings) w.live = false;
   }
 
   /** One sim step: things in flight, fires, people burning, smoke, the combo clock. */
@@ -261,6 +292,7 @@ export class Combat {
     this.charges.step(dt, me.x, me.z, this.present);
     this.smoke.step(dt);
     this.stepSmoke(dt);
+    this.stepSwings(dt);
   }
 
   // --- Aim ------------------------------------------------------------------
@@ -332,6 +364,7 @@ export class Combat {
     if (spec.mode === 'throw') return this.throwIt(kind as 'grenade' | 'molotov' | 'stinger' | 'smoke' | 'charge', aim);
     if (spec.mode === 'horn') return this.blowHorn(aim);
     if (spec.mode === 'taser') return this.tase(aim);
+    if (spec.mode === 'melee') return this.swing(kind, aim);
     // Spread before this shot's bloom; running sprays more.
     const moving = len2(p.ped.vx, p.ped.vz) > 3.5;
     const spread = p.arsenal.spread * (moving ? RUN_SPREAD : 1);
@@ -705,6 +738,74 @@ export class Combat {
     d.bus.emit({ type: 'chargeBlast', x: v.sim.x, z: v.sim.z, onCar: true, gift, byPlayer });
   }
 
+  // --- The bat ------------------------------------------------------------------------
+
+  /** Swing the bat: face the aim (or whoever's closest in front); it lands at the clip's contact. */
+  private swing(kind: WeaponKind, aim: AimInput): boolean {
+    const p = this.d.player;
+    if (!p.arsenal.tryFire()) return false;
+    if (aim.heading !== null) p.ped.heading = aim.heading;
+    else this.faceNearest(WEAPONS[kind].range + 0.4);
+    this.d.pose?.swingBat?.();
+    this.queueSwing(null);
+    return true;
+  }
+
+  private queueSwing(who: CrowdPed | null): void {
+    for (const w of this.swings) {
+      if (w.live) continue;
+      w.live = true;
+      w.t = SWING_CONTACT;
+      w.who = who;
+      return;
+    }
+  }
+
+  private stepSwings(dt: number): void {
+    for (const w of this.swings) {
+      if (!w.live || (w.t -= dt) > 0) continue;
+      w.live = false;
+      if (w.who) this.npcSwingLands(w.who);
+      else this.swingLands();
+      w.who = null;
+    }
+  }
+
+  /** The player's swing at its contact point: everyone in reach in front takes it; a swing that lands wears the bat. */
+  private swingLands(): void {
+    const p = this.d.player;
+    if (p.driving || !p.ready) return;
+    const reach = WEAPONS.bat.range;
+    const { x, z, heading } = p.ped;
+    const fx = Math.sin(heading);
+    const fz = Math.cos(heading);
+    let landed = false;
+    for (const c of this.d.crowd) {
+      const a = c.agent;
+      const dx = a.s.x - x;
+      const dz = a.s.z - z;
+      const d = len2(dx, dz);
+      if (a.mode === 'down' || d > reach || (dx * fx + dz * fz) / (d || 1) < BAT_ARC_COS) continue;
+      landed = true;
+      const res = hurtPed(a, WEAPONS.bat.damage, x, z, BAT_KNOCK);
+      this.resolve(c, res, 'punch', x, z, true);
+    }
+    const broke = landed && p.arsenal.wear('bat');
+    this.d.bus.emit({ type: 'punch', x: x + fx * 1.1, z: z + fz * 1.1, hit: landed, byPlayer: true, bat: true, broke });
+    if (landed) this.alarm(x, z);
+  }
+
+  /** A rusher's bat at its contact point: the player, if still in reach and not rolling clear. */
+  private npcSwingLands(c: CrowdPed): void {
+    const p = this.d.player;
+    const a = c.agent;
+    if (a.mode === 'down' || a.stagger > 0 || !this.d.crowd.includes(c)) return;
+    const hit = !p.driving && p.alive && this.d.playing() && len2(p.ped.x - a.s.x, p.ped.z - a.s.z) < NPC_BAT_REACH + NPC_BAT_SLACK;
+    const landed = hit && !p.rolling;
+    if (landed) p.hurt(NPC_BAT_DAMAGE);
+    this.d.bus.emit({ type: 'punch', x: a.s.x + Math.sin(a.s.heading), z: a.s.z + Math.cos(a.s.heading), hit: landed, byPlayer: false, bat: true });
+  }
+
   // --- Punches --------------------------------------------------------------------
 
   /** Throw the next punch of the combo (jab, jab, hook). */
@@ -716,7 +817,7 @@ export class Combat {
     this.comboTimer = COMBO_WINDOW;
     p.punchCooldown = PUNCH_COOLDOWN[step];
     if (aimHeading !== null) p.ped.heading = aimHeading;
-    else this.faceNearest();
+    else this.faceNearest(PUNCH_ASSIST);
     this.d.pose?.punch(step);
     const { x, z, heading } = p.ped;
     const fx = Math.sin(heading);
@@ -736,13 +837,13 @@ export class Combat {
     this.d.bus.emit({ type: 'punch', x: x + fx * 0.6, z: z + fz * 0.6, hit: landed, byPlayer: true, combo: step });
   }
 
-  /** Without an aim, swing at whoever's closest in front (within a step or two). */
-  private faceNearest(): void {
+  /** Without an aim, swing at whoever's closest in front (within `reach`, a step or two). */
+  private faceNearest(reach: number): void {
     const p = this.d.player.ped;
     const fx = Math.sin(p.heading);
     const fz = Math.cos(p.heading);
     let best: PedAgent | null = null;
-    let bestD = PUNCH_ASSIST;
+    let bestD = reach;
     for (const c of this.d.crowd) {
       const a = c.agent;
       if (a.mode === 'down') continue;
@@ -763,10 +864,44 @@ export class Combat {
   npcPunch(c: CrowdPed): void {
     const p = this.d.player;
     if (p.driving || !p.alive || !this.d.playing()) return;
+    // A rusher's bat: wound up now, lands at the clip's contact (a roll gets you clear).
+    if (c.agent.bat) {
+      c.model.swingBat();
+      this.queueSwing(c);
+      return;
+    }
     const hit = len2(p.ped.x - c.agent.s.x, p.ped.z - c.agent.s.z) < PUNCH_RANGE + 0.2;
     this.d.bus.emit({ type: 'punch', x: c.agent.s.x, z: c.agent.s.z, hit, byPlayer: false });
     c.model.punch();
     if (hit) p.hurt(NPC_PUNCH_DAMAGE);
+  }
+
+  /** An armed ped's shot along (dirX, dirZ): a heavy's shotgun spreads pellets, anyone else's gun fires one round. */
+  npcFire(c: CrowdPed, dirX: number, dirZ: number): void {
+    const s = c.agent.s;
+    if (c.gun !== 'shotgun') {
+      this.npcShoot(s.x, s.z, dirX, dirZ);
+      return;
+    }
+    const d = this.d;
+    const p = d.player;
+    const at = p.position;
+    const moving = Math.min(1, len2(at.vx, at.vz) / 6);
+    const base = Math.atan2(dirX, dirZ);
+    const ox = s.x + dirX * 0.6;
+    const oz = s.z + dirZ * 0.6;
+    d.bus.emit({ type: 'shot', x: ox, z: oz, dirX, dirZ, weapon: 'shotgun', byPlayer: false });
+    const far = len2(at.x - s.x, at.z - s.z) > NPC_PELLET_FAR;
+    for (let i = 0; i < NPC_SHOTGUN_PELLETS; i++) {
+      const a = base + (d.rand() * 2 - 1) * (NPC_SHOTGUN_SPREAD + NPC_SPREAD * NPC_SPREAD_MOVING * moving);
+      const hit = this.traceBullet(ox, oz, Math.sin(a), Math.cos(a), NPC_SHOTGUN_RANGE, false);
+      if (hit.kind === 'player') p.hurt(far ? NPC_PELLET_FAR_DAMAGE : NPC_PELLET_DAMAGE);
+      else if (hit.v) applyDamage(hit.v.damage, NPC_PELLET_DAMAGE * NPC_VEHICLE_SHARE);
+      else if (hit.ped && hit.ped !== c) {
+        const res = hurtPed(hit.ped.agent, NPC_PED_DAMAGE / 2, s.x, s.z);
+        this.resolve(hit.ped, res, 'shot', s.x, s.z, false);
+      }
+    }
   }
 
   /** An NPC (an armed ped, the police) shoots from (sx, sz) along unit (dirX, dirZ). */

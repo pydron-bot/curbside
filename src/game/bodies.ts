@@ -6,10 +6,10 @@
  */
 import { publicUrl } from '../core/paths';
 
-export type BodyKind = 'player' | 'player_f' | 'ped_slim' | 'ped_stocky' | 'ped_coat' | 'cop' | 'vex' | 'tuna' | 'pike';
+export type BodyKind = 'player' | 'player_f' | 'ped_slim' | 'ped_stocky' | 'ped_coat' | 'cop' | 'vex' | 'tuna' | 'pike' | 'heavy';
 
 /** Every body, in the order their batches are drawn. */
-export const BODY_KINDS: readonly BodyKind[] = ['player', 'player_f', 'ped_slim', 'ped_stocky', 'ped_coat', 'cop', 'vex', 'tuna', 'pike'];
+export const BODY_KINDS: readonly BodyKind[] = ['player', 'player_f', 'ped_slim', 'ped_stocky', 'ped_coat', 'cop', 'vex', 'tuna', 'pike', 'heavy'];
 
 /** Story characters: they keep the colours they were built with (no random outfit). */
 export const STORY_BODIES: readonly BodyKind[] = ['vex', 'tuna', 'pike'];
@@ -25,6 +25,14 @@ export const CROWD_BODIES: ReadonlyArray<readonly [BodyKind, number]> = [
   ['ped_stocky', 0.24],
   ['ped_coat', 0.22],
 ];
+
+/**
+ * Enemies by kind (stage 6, P10), told apart from above by build: a rusher
+ * is the slim body, a shooter the stocky or coated one, a heavy its own
+ * broad, helmeted body (BLENDER_TODO §20). Never on the ordinary street.
+ */
+export const RUSHER_BODY: BodyKind = 'ped_slim';
+export const HEAVY_BODY: BodyKind = 'heavy';
 
 /** A body for someone on the pavement. */
 export function pickCrowdBody(rand: () => number): BodyKind {

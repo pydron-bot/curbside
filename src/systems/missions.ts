@@ -18,6 +18,7 @@ import type { BodyKind } from '../game/bodies';
 import type { SceneId } from '../game/sceneStarter';
 import type { VehicleArchetype } from '../entities/vehicle';
 import type { WeaponKind } from './weapons';
+import type { EnemyKind } from './crowd';
 import { SUNRISE, SUNSET } from '../render/timeOfDay';
 import { districtAt, type District } from '../world/districts';
 import { len2 } from '../core/len';
@@ -80,6 +81,9 @@ export interface SpawnPed {
   walkTo?: string;
   /** Comes on this long after the action, s (a step's later waves). */
   delay?: number;
+  /** A rusher or a heavy (systems/crowd.ts makeEnemy; `bat`: a rusher's): hostile whatever `hostile` says. */
+  enemy?: EnemyKind;
+  bat?: boolean;
 }
 
 export interface SpawnCar {

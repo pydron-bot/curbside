@@ -387,7 +387,7 @@ export class CharacterBatch {
  * How a character holds a weapon up: not at all, one-handed (pistol: Aim),
  * two-handed (SMG, shotgun: AimBoth) or on the shoulder (launcher: AimRocket).
  */
-export type ArmedPose = false | 'one' | 'two' | 'rocket';
+export type ArmedPose = false | 'one' | 'two' | 'rocket' | 'bat';
 
 /** The aim pose for a weapon in hand (throwables are held low, ready to throw). */
 export function poseFor(weapon: WeaponKind | null): ArmedPose {
@@ -401,18 +401,21 @@ export function poseFor(weapon: WeaponKind | null): ArmedPose {
       return 'two';
     case 'rocket':
       return 'rocket';
+    case 'bat':
+      return 'bat';
     default:
       return false;
   }
 }
 
-const AIM_CLIP = { one: 'Aim', two: 'AimBoth', rocket: 'AimRocket' } as const;
-const SHOOT_CLIP = { one: 'Shoot', two: 'ShootBoth', rocket: 'ShootRocket' } as const;
+/** The bat's carry is AimBat (BLENDER_TODO §19); its "shot" is the Swing. */
+const AIM_CLIP = { one: 'Aim', two: 'AimBoth', rocket: 'AimRocket', bat: 'AimBat' } as const;
+const SHOOT_CLIP = { one: 'Shoot', two: 'ShootBoth', rocket: 'ShootRocket', bat: 'Swing' } as const;
 /** The combo: jab, left hook, uppercut. */
 const PUNCH_CLIP = ['Punch', 'Punch2', 'Uppercut'] as const;
 
 /** What the whole body is doing over (or instead of) walking. */
-type FullState = 'none' | 'fall' | 'down' | 'getup' | 'arrested' | 'cower' | 'cheer' | 'enter' | 'ride' | 'stagger';
+type FullState = 'none' | 'fall' | 'down' | 'getup' | 'arrested' | 'cower' | 'cheer' | 'enter' | 'ride' | 'stagger' | 'roll';
 /** Per state: its clip, whether it loops, and the crossfade into it (s). */
 const FULL: Record<Exclude<FullState, 'none'>, { clip: string; loop: boolean; fade: number }> = {
   fall: { clip: 'Fall', loop: false, fade: 0.06 },
@@ -424,9 +427,11 @@ const FULL: Record<Exclude<FullState, 'none'>, { clip: string; loop: boolean; fa
   enter: { clip: 'EnterCar', loop: false, fade: 0.06 },
   ride: { clip: 'Ride', loop: true, fade: 0.15 },
   stagger: { clip: 'Stagger', loop: false, fade: 0.04 },
+  // The dodge (§18): in place, the root turning a full circle; the game moves the body.
+  roll: { clip: 'Roll', loop: false, fade: 0.03 },
 };
 /** States the legs don't walk through (the locomotion base still runs under them, unseen). */
-const OUT_OF_PLAY = new Set<FullState>(['fall', 'down', 'getup', 'arrested', 'cower', 'enter', 'ride']);
+const OUT_OF_PLAY = new Set<FullState>(['fall', 'down', 'getup', 'arrested', 'cower', 'enter', 'ride', 'roll']);
 
 /** Locomotion: walk below RUN_FROM m/s, run above RUN_TO, blended between. */
 const RUN_FROM = 3;
@@ -511,7 +516,7 @@ export class CharacterModel {
   private fullState: FullState = 'none';
   private downPhase: 'none' | 'fall' | 'down' | 'getup' = 'none';
   private aimPose: ArmedPose = false;
-  private actKind: 'none' | 'shoot' | 'punch' | 'throw' | 'hail' = 'none';
+  private actKind: 'none' | 'shoot' | 'punch' | 'throw' | 'hail' | 'swing' = 'none';
   private gait = Math.random();
   private idleTime = Math.random() * 2;
   private walkSpeed = 1.6;
@@ -533,6 +538,9 @@ export class CharacterModel {
   private hailTime = 0;
   private cheerTime = 0;
   private enterTime = 0;
+  /** Seconds left of a dodge roll, and how long the whole roll takes (the clip is played to fit). */
+  private rollTime = 0;
+  private rollFor = 0.35;
   /** Seconds the weapon stays hidden (just thrown). */
   private hideWeapon = 0;
   private wasDown = false;
@@ -643,6 +651,7 @@ export class CharacterModel {
     this.hailTime = Math.max(0, this.hailTime - dt);
     this.cheerTime = Math.max(0, this.cheerTime - dt);
     this.enterTime = Math.max(0, this.enterTime - dt);
+    this.rollTime = Math.max(0, this.rollTime - dt);
     this.hideWeapon = Math.max(0, this.hideWeapon - dt);
     this.punchTime = Math.max(0, this.punchTime - dt);
     this.shootTime = Math.max(0, this.shootTime - dt);
@@ -676,7 +685,9 @@ export class CharacterModel {
         full.rate = 1 / FULL_FADE_OUT;
       } else {
         const spec = FULL[want];
-        const [clip, speed] = want === 'getup' ? this.getUp(lyingDown, downLeft) : [this.clipFor(want)!, 1];
+        const clip0 = want === 'getup' ? null : this.clipFor(want)!;
+        const [clip, speed] =
+          want === 'getup' ? this.getUp(lyingDown, downLeft) : want === 'roll' ? [clip0!, clip0!.duration / Math.max(0.05, this.rollFor)] : [clip0!, 1];
         full.play(clip, spec.loop, 0, speed, spec.fade);
         full.target = 1;
         full.rate = 1 / spec.fade;
@@ -807,6 +818,21 @@ export class CharacterModel {
     }
   }
 
+  /** A dodge roll lasting `seconds` (Roll played to fit; without the clip they just slide). */
+  roll(seconds: number): void {
+    this.rollFor = seconds;
+    this.rollTime = seconds;
+    // A fresh roll restarts the clip.
+    if (this.fullState === 'roll') this.fullState = 'none';
+  }
+
+  /** A bat's swing (Swing over whatever the legs do; without the clip, the throw's arm sweep). */
+  swingBat(): void {
+    const clip = this.bank?.get('Swing');
+    if (clip) this.startAct('swing', clip, false, 0, 1, 0.04);
+    else this.throwTime = THROW_SECONDS;
+  }
+
   /** Reel from a hit for `seconds` (a fresh hit restarts the Stagger). */
   stagger(seconds = STAGGER_SECONDS): void {
     if (seconds > this.staggerTime + 0.05) this.restagger = this.staggerTime > 0;
@@ -858,7 +884,8 @@ export class CharacterModel {
     gripQ.identity();
     for (let o: Object3D | null = arm; o && o !== this.rig; o = o.parent) gripQ.premultiply(o.quaternion);
     gripQ.multiply(g.quaternion);
-    gripQ.slerp(IDENTITY_Q, clamp01(this.aimAmount));
+    // A gun points straight ahead as it's raised; a bat always follows the arm (carry and swing alike).
+    if (this.weapon !== 'bat') gripQ.slerp(IDENTITY_Q, clamp01(this.aimAmount));
     gripP.copy(g.position).applyMatrix4(arm.matrixWorld);
     out.compose(gripP, gripQ, ONE);
     return true;
@@ -884,7 +911,7 @@ export class CharacterModel {
     this.armed = false;
     this.fakeAim = 0;
     this.punchTime = this.shootTime = this.throwTime = this.staggerTime = 0;
-    this.hailTime = this.cheerTime = this.enterTime = this.hideWeapon = 0;
+    this.hailTime = this.cheerTime = this.enterTime = this.hideWeapon = this.rollTime = 0;
     this.body.rotation.x = 0;
     this.body.position.y = 0;
   }
@@ -963,6 +990,7 @@ export class CharacterModel {
     if (this.enterTime > 0) return this.has('EnterCar') ? 'enter' : 'none';
     if (this.cowering && this.has('Cower')) return 'cower';
     if (this.cheerTime > 0 && speed < 0.8 && this.has('Cheer')) return 'cheer';
+    if (this.rollTime > 0 && this.has('Roll')) return 'roll';
     if (this.staggerTime > 0 && this.has('Stagger')) return 'stagger';
     return 'none';
   }

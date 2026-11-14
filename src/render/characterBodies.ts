@@ -17,6 +17,7 @@ const START_ROWS: Record<BodyKind, number> = {
   vex: 4,
   tuna: 4,
   pike: 4,
+  heavy: 4,
 };
 
 /**

@@ -34,6 +34,11 @@ export const ICONS = {
     '<path d="M6 10.5V8.2a1.6 1.6 0 0 1 3.2 0V7a1.6 1.6 0 0 1 3.2 0v.3a1.6 1.6 0 0 1 3.2 0v.6a1.6 1.6 0 0 1 3.2 0v5.6c0 3.6-2.6 6.5-6.3 6.5h-.9C8.3 20 6 17.6 6 14.6z" fill="currentColor"/>' +
       '<path d="M9.2 8.2v3M12.4 7.3v3.6M15.6 7.9v3.2M6 12.5c1.6-.7 3.4-.4 4.6.8" fill="none" stroke="rgb(0 0 0 / .45)" stroke-width="1.2" stroke-linecap="round"/>',
   ),
+  /** A baseball bat, taped handle down-left. */
+  bat: svg(
+    '<path d="M19.6 3.1c1 .9 1 2.5 0 3.5L9.4 16.8l-2.2-2.2L17.4 4.1c.9-1 1.9-1.4 2.2-1z" fill="currentColor"/>' +
+      '<path d="M8.3 15.7l-3.6 3.6M4 18.6l1.4 1.4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>',
+  ),
   pistol: svg(
     '<path d="M3 7h17.5v4H11l-1.2 1.5.9 6.5H6.3l-.4-6.1L3 11z" fill="currentColor"/><path d="M11.4 11.6l1.4 2.6h-2" fill="none" stroke="currentColor" stroke-width="1.5"/>',
   ),
@@ -120,6 +125,12 @@ export const ICONS = {
     '<path d="M9.5 6h5v2.2c1.6.7 2.5 2.1 2.5 3.8V20a1.4 1.4 0 0 1-1.4 1.4H8.4A1.4 1.4 0 0 1 7 20v-8c0-1.7.9-3.1 2.5-3.8z" fill="currentColor"/>' +
       '<path d="M10.5 2.6h3V6h-3z" fill="currentColor" opacity=".8"/>' +
       '<path d="M12.8 10.5l-2.6 4.2h2.2l-1.2 4 3.4-5h-2.2l1.2-3.2z" fill="rgb(0 0 0 / .5)"/>',
+  ),
+  /** The dodge roll: a body-sized loop with an arrow out of it. */
+  roll: svg(
+    '<path d="M6.2 15.5A6 6 0 1 1 15 17.6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>' +
+      '<path d="M12.6 20.4l2.6-2.9-3.4-1.6" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<circle cx="11" cy="11.4" r="2.1" fill="currentColor"/>',
   ),
   swap: svg(
     '<path d="M4 8.5h13.5M14 5l3.5 3.5L14 12M20 15.5H6.5M10 12l-3.5 3.5L10 19" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',

@@ -974,10 +974,11 @@ function simulate(dt: number) {
 
   copyPedState(player.prev, player.ped);
   if (!driving && !hold) {
-    stepPedestrian(player.ped, player.down || attract.active ? NO_MOVE : input.readMove(), PLAYER_ON_FOOT, dt);
+    // Mid-roll the roll moves them (game/roll.ts); otherwise the stick does.
+    if (!player.roll.move(player.ped, dt)) stepPedestrian(player.ped, player.down || attract.active ? NO_MOVE : input.readMove(), PLAYER_ON_FOOT, dt);
     // Twin-stick: face the lock-on or the aim while walking (strafe), not the way you walk.
     const face = combat.lockHeading() ?? aimHeadingNow;
-    if (face !== null && !player.down) {
+    if (face !== null && !player.down && !player.rolling) {
       player.ped.heading = approachAngle(player.ped.heading, face, AIM_TURN_RATE * dt);
     }
   }
@@ -1010,7 +1011,7 @@ function simulate(dt: number) {
       if (own) cityLife.shoot(c, event.dirX, event.dirZ);
       else if (!holdsFire(c.agent.role, heat.wanted.level)) {
         c.model.shoot();
-        npcShoot(c.agent.s.x, c.agent.s.z, event.dirX, event.dirZ);
+        combat.npcFire(c, event.dirX, event.dirZ);
       }
     }
   }
@@ -1373,6 +1374,8 @@ function frame(now: number) {
   const pressed = input.consumePunch();
   const cycle = input.consumeCycle();
   const acted = input.consumeAction();
+  // Dodge roll (C, the pad's B, ROLL): drained every frame, on foot in play only.
+  if (input.consumeRoll() && control && !player.driving) player.tryRoll(input.readMove());
   // DETONATE (G, D-pad down, BOOM): drained every frame, acted on only in play (systems/charges.ts canDetonate).
   if (
     input.consumeDetonate() &&
@@ -1560,6 +1563,7 @@ function updateHud(frameSeconds: number) {
   carButtons.update(v ? (gun && WEAPONS[gun].driveBy ? gun : player.arsenal.driveByGun()) : null, nitro.charge, nitro.charge >= NITRO_MIN || nitro.boosting, tool);
   touch.setWeapon(gun, gun !== null || ownsGun());
   touch.setDetonate(combat.charges.live && !attract.active);
+  touch.setRoll(player.roll.readiness);
   touch.setMode(v ? 'car' : 'foot', nearCar !== null);
 }
 requestAnimationFrame(frame);
@@ -1593,6 +1597,8 @@ events.on('charge', (e) => {
   if (e.what === 'full') hud.score.notice('CHARGES OUT · SET THEM OFF', 'weapon');
   else if (combat.charges.count === 1) hud.score.notice(detonateHint(input.lastDevice), 'weapon');
 });
+// The bat's last hit: say so (the hand's already back to fists or the next weapon).
+events.on('punch', (e) => e.broke && hud.score.notice('BAT BROKE', 'weapon'));
 new StampHud(document.getElementById('hud')!, events);
 // The life's best stamped moment, photographed as it lands and shown on WASTED / BUSTED (ui/momentCard.ts).
 const moment = new MomentCard(document.getElementById('wasted')!, {

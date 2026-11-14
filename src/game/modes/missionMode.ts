@@ -21,7 +21,7 @@
 import { driverDoorPosition, speed, type VehicleArchetype } from '../../entities/vehicle';
 import type { GlowSprites } from '../../render/glowSprites';
 import { MARK, beacon, gate, groundRing, nearView, type ProgressProps } from '../../render/progressLook';
-import { COP_SPEC, provoke, resumeWalking, spawnPed } from '../../systems/crowd';
+import { COP_SPEC, makeEnemy, provoke, resumeWalking, spawnPed, type EnemyKind } from '../../systems/crowd';
 import {
   arcOf,
   arcRings,
@@ -130,6 +130,9 @@ interface MissionPed {
   body: BodyKind | undefined;
   armed: boolean;
   hostile: boolean;
+  /** A rusher or a heavy (SpawnPed.enemy), and a rusher's bat. */
+  enemy: EnemyKind | undefined;
+  bat: boolean;
   ped: CrowdPed | null;
   /** Knocked down at some point (sticky). */
   down: boolean;
@@ -545,7 +548,9 @@ export class MissionMode implements Mode {
             shirt: a.shirt ?? (a.body && STORY_BODIES.includes(a.body) ? undefined : '#e5e5e5'),
             body: a.body,
             armed: a.armed === true,
-            hostile: a.hostile === true,
+            hostile: a.hostile === true || a.enemy !== undefined,
+            enemy: a.enemy,
+            bat: a.bat === true,
             ped: null,
             down: false,
             aboard: false,
@@ -721,11 +726,13 @@ export class MissionMode implements Mode {
         const agent = spawnPed(0, 0, 0, 0, ctx.deps.rand);
         Object.assign(agent.s, { x: m.x, z: m.z, vx: 0, vz: 0 });
         agent.temper = m.armed ? 'armed' : m.hostile ? 'fighter' : 'calm';
+        if (m.enemy) makeEnemy(agent, m.enemy, m.bat);
         agent.mode = 'arrest';
         agent.goalX = m.x;
         agent.goalZ = m.z;
         agent.march = goal !== null;
         m.ped = pop.addPed(agent, m.shirt === undefined ? undefined : { shirt: m.shirt, pants: '#1d1d24' }, m.body);
+        if (m.enemy === 'heavy') m.ped.gun = 'shotgun';
       }
       const a = m.ped.agent;
       if (a.mode === 'down') {

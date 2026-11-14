@@ -13,6 +13,10 @@
  * or the third punch of a combo, knocks them over; at 0 HP they're knocked
  * out, down for KO_SECONDS, and then run (no grudge left in them). Police
  * officers take hits the same way.
+ *
+ * Enemies come in three kinds (stage 6): the shooter (an armed ped, as
+ * always), the rusher (fast and lighter, closing in with fists or a bat)
+ * and the heavy (armoured and slow, a shotgun): makeEnemy() sets one up.
  */
 import { PLAYER_ON_FOOT, createPedState, stepPedestrian, type PedSpec, type PedState } from '../entities/pedestrian';
 import { type VehicleState } from '../entities/vehicle';
@@ -25,6 +29,8 @@ export type PedMode = 'walk' | 'flee' | 'down' | 'fight' | 'shoot' | 'arrest';
 export type PedRole = 'civilian' | 'cop';
 /** How a ped reacts to being attacked. */
 export type Temper = 'calm' | 'fighter' | 'armed';
+/** The two enemy kinds besides the shooter (an armed ped with no kind). */
+export type EnemyKind = 'rusher' | 'heavy';
 
 /** Something a hostile ped did this step, for the game to resolve. */
 export type CrowdEvent =
@@ -95,10 +101,20 @@ export interface PedAgent {
   suspect?: boolean;
   /** In 'arrest' mode, walks to the goal rather than running (a warden marching on a busker). */
   march?: boolean;
+  /** A rusher or a heavy (makeEnemy); unset for everyone else, shooters included. */
+  kind?: EnemyKind;
+  /** Fights with a bat (a rusher's): longer reach, a slower, harder swing. */
+  bat?: boolean;
 }
 
 /** Hit points everyone starts with. */
 export const PED_HP = 100;
+/** A rusher: lighter... */
+export const RUSHER_HP = 70;
+/** ...and a heavy, whose armour takes this share of every hit off... */
+export const HEAVY_TAKEN = 0.5;
+/** ...and who's only knocked over by a push of at least this much (a car, a blast; not a punch or a bat), m/s. */
+export const HEAVY_KNOCK = 6;
 /** A hit staggers for this long, s, and pushes the next attack back as much. */
 export const STAGGER_SECONDS = 0.3;
 /** Knocked out (0 HP): down this long, s. */
@@ -113,6 +129,17 @@ const INJURED_HOLD = 3;
 export const NPC_SPEC: PedSpec = { ...PLAYER_ON_FOOT, walkSpeed: 2.2, runSpeed: 5.2 };
 /** Chase speed for fighters: a little slower than a sprinting player, so you can escape. */
 const FIGHTER_SPEC: PedSpec = { ...NPC_SPEC, runSpeed: 4.6 };
+/** Rushers close in fast: a hair under the player's 6 m/s sprint, so running still (just) works. */
+export const RUSHER_SPEC: PedSpec = { ...NPC_SPEC, runSpeed: 5.7, accel: 34 };
+/** Heavies plod: easy to outrun, hard to put down. */
+export const HEAVY_SPEC: PedSpec = { ...NPC_SPEC, walkSpeed: 1.5, runSpeed: 3, accel: 12, turnRate: 6 };
+/** A rusher punches this often, s; with a bat, swings this often from this far, s / m. */
+const RUSHER_PUNCH_EVERY = 0.75;
+const BAT_SWING_EVERY = 1.15;
+export const NPC_BAT_REACH = 1.9;
+/** A heavy's shotgun: this often, from this close (it walks in to it), s / m. */
+const HEAVY_SHOOT_EVERY = 1.7;
+const HEAVY_SHOOT_RANGE = 13;
 /** Officers on foot: quicker than a fighter, still slower than the player's 6 m/s sprint. */
 export const COP_SPEC: PedSpec = { ...NPC_SPEC, runSpeed: 5 };
 /** Officers fire less often than an armed civilian, but from further. */
@@ -254,6 +281,11 @@ export type HurtResult = 'none' | 'hit' | 'down' | 'ko';
  */
 export function hurtPed(p: PedAgent, damage: number, fromX: number, fromZ: number, knock = 0): HurtResult {
   if (p.mode === 'down' || damage <= 0) return 'none';
+  // Armour: half of every hit, and only a big push floors them.
+  if (p.kind === 'heavy') {
+    damage *= HEAVY_TAKEN;
+    if (knock < HEAVY_KNOCK) knock = 0;
+  }
   p.hp = Math.max(0, p.hp - damage);
   p.cower = 0;
   if (p.hp <= 0) {
@@ -277,6 +309,23 @@ export function hurtPed(p: PedAgent, damage: number, fromX: number, fromZ: numbe
   p.s.vx = (dx / d) * 1.6;
   p.s.vz = (dz / d) * 1.6;
   return 'hit';
+}
+
+/**
+ * Make `p` an enemy of `kind`: a rusher (RUSHER_HP, a fighter: fists, or a
+ * bat with `bat`) or a heavy (armoured, armed: the caller hands them the
+ * shotgun). Shooters need nothing: an armed ped is one.
+ */
+export function makeEnemy(p: PedAgent, kind: EnemyKind, bat = false): void {
+  p.kind = kind;
+  p.hp = kind === 'rusher' ? RUSHER_HP : PED_HP;
+  p.temper = kind === 'rusher' ? 'fighter' : 'armed';
+  p.bat = kind === 'rusher' && bat;
+}
+
+/** How a ped moves when running at someone (a fight, an arrest). */
+function chaseSpec(p: PedAgent, base: PedSpec): PedSpec {
+  return p.kind === 'rusher' ? RUSHER_SPEC : p.kind === 'heavy' ? HEAVY_SPEC : base;
 }
 
 /** Set a ped alight for `seconds` (a molotov's fire): they run about in a panic. */
@@ -517,7 +566,7 @@ function stepArrest(p: PedAgent, target: Target | undefined, dt: number): void {
   copMove.x = run ? dx / d : 0;
   copMove.y = run ? -dz / d : 0;
   copMove.sprint = d > 2.5 && !p.march;
-  stepPedestrian(p.s, copMove, COP_SPEC, dt);
+  stepPedestrian(p.s, copMove, chaseSpec(p, COP_SPEC), dt);
   if (run) return;
   if (target) p.s.heading = Math.atan2(target.x - p.s.x, target.z - p.s.z);
 }
@@ -538,31 +587,36 @@ function stepHostile(p: PedAgent, target: Target | undefined, dt: number): Crowd
   const uz = dz / (d || 1);
 
   if (p.mode === 'fight') {
-    if (d > PUNCH_REACH) {
-      stepPedestrian(p.s, move(ux, -uz, true), FIGHTER_SPEC, dt);
+    const reach = p.bat ? NPC_BAT_REACH : PUNCH_REACH;
+    if (d > reach) {
+      stepPedestrian(p.s, move(ux, -uz, true), chaseSpec(p, FIGHTER_SPEC), dt);
       return null;
     }
     stepPedestrian(p.s, move(0, 0, false), NPC_SPEC, dt);
     p.s.heading = Math.atan2(ux, uz);
     if (p.attackCooldown > 0) return null;
-    p.attackCooldown = PUNCH_EVERY;
+    p.attackCooldown = p.bat ? BAT_SWING_EVERY : p.kind === 'rusher' ? RUSHER_PUNCH_EVERY : PUNCH_EVERY;
     return { kind: 'punch' };
   }
 
   // Shooter: hold a middle distance, face the target, fire on a cadence.
   // Officers keep advancing instead (they want the arrest), at a run when far.
+  const heavy = p.kind === 'heavy';
   if (cop) {
     copMove.x = d > 3 ? ux * 0.8 : 0;
     copMove.y = d > 3 ? -uz * 0.8 : 0;
     copMove.sprint = d > 16;
-    stepPedestrian(p.s, copMove, COP_SPEC, dt);
+    stepPedestrian(p.s, copMove, chaseSpec(p, COP_SPEC), dt);
   }
+  // A heavy keeps walking in to shotgun range and never backs off.
+  else if (heavy) stepPedestrian(p.s, move(d > 6 ? ux : 0, d > 6 ? -uz : 0, true), HEAVY_SPEC, dt);
   else if (d > 12) stepPedestrian(p.s, move(ux * 0.8, -uz * 0.8, false), NPC_SPEC, dt);
   else if (d < 6) stepPedestrian(p.s, move(-ux * 0.6, uz * 0.6, false), NPC_SPEC, dt);
   else stepPedestrian(p.s, move(0, 0, false), NPC_SPEC, dt);
   p.s.heading = Math.atan2(ux, uz);
-  if (p.attackCooldown > 0 || d > (cop ? COP_SHOOT_RANGE : SHOOT_RANGE)) return null;
-  p.attackCooldown = cop ? COP_SHOOT_EVERY : SHOOT_EVERY;
+  const range = heavy ? HEAVY_SHOOT_RANGE : cop ? COP_SHOOT_RANGE : SHOOT_RANGE;
+  if (p.attackCooldown > 0 || d > range) return null;
+  p.attackCooldown = heavy ? HEAVY_SHOOT_EVERY : cop ? COP_SHOOT_EVERY : SHOOT_EVERY;
   return { kind: 'shoot', dirX: ux, dirZ: uz };
 }
 

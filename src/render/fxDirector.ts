@@ -95,6 +95,7 @@ const PICKUP_COLOUR: Record<PickupKind, Rgb> = {
   health: { r: 0.35, g: 1, b: 0.45 },
   armour: { r: 0.3, g: 0.8, b: 1 },
   ammo: { r: 1, g: 0.85, b: 0.3 },
+  bat: { r: 1, g: 0.55, b: 0.25 },
   pistol: { r: 1, g: 0.78, b: 0.3 },
   smg: { r: 1, g: 0.65, b: 0.2 },
   shotgun: { r: 1, g: 0.5, b: 0.2 },
@@ -156,6 +157,8 @@ export class FxDirector {
     bus.on('tyresBurst', (e) => this.onTyresBurst(e));
     bus.on('bulletHit', (e) => this.onBulletHit(e));
     bus.on('punch', (e) => this.onPunch(e));
+    // The dodge roll: a little kicked-up dust where it starts.
+    bus.on('roll', (e) => this.d.effects.dustRing(e.x + e.dirX * 0.6, e.z + e.dirZ * 0.6, Math.max(2, Math.round(4 * this.d.effects.scale)), 0.3, 1.4));
     bus.on('pedDown', (e) => this.onPedDown(e));
     bus.on('pickup', (e) => {
       const c = PICKUP_COLOUR[e.kind];
@@ -460,6 +463,8 @@ export class FxDirector {
 
   private onPunch(e: EventOf<'punch'>): void {
     const fx = this.d.effects;
+    // The bat breaking: a spray of pale splinters.
+    if (e.broke) fx.burst(e.x, e.z, 0.9, 0.8, 0.6, Math.max(4, Math.round(10 * fx.scale)), 1.6);
     if (e.hit) {
       fx.flare(e.x, 1.15, e.z, 1.1, 0.09, 2.6, 2.5, 2.2);
       fx.light(e.x, 0.1, e.z, 0.3, 1.6, 0.9, 0.85, 0.75, 0.18, GLOW.ring);

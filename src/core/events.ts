@@ -152,7 +152,8 @@ export type GameEvent =
    * A punch was thrown from (x, z); hit = it connected. combo: the player's
    * combo step (0, 1 jabs, 2 the knock-down hook).
    */
-  | { type: 'punch'; x: number; z: number; hit: boolean; byPlayer: boolean; combo?: number }
+  /** A punch, or a bat's swing (`bat`; `broke`: that hit broke it). */
+  | { type: 'punch'; x: number; z: number; hit: boolean; byPlayer: boolean; combo?: number; bat?: boolean; broke?: boolean }
   /** A pedestrian (or the player, isPlayer) was knocked over. */
   | {
       type: 'pedDown';
@@ -206,6 +207,8 @@ export type GameEvent =
   | { type: 'horn'; x: number; z: number; duration: number }
   /** A car was resprayed at a Pay 'n' Spray; `cleared`: it lost the police too. */
   | { type: 'respray'; x: number; z: number; cleared: boolean }
+  /** The player dodge-rolled from (x, z) along (dirX, dirZ) (game/roll.ts): a whoosh and a puff of dust. */
+  | { type: 'roll'; x: number; z: number; dirX: number; dirZ: number }
   /** The police put a roadblock up across the road ahead of the player, at (x, z), facing them from -dir. */
   | { type: 'roadblock'; x: number; z: number; dirX: number; dirZ: number }
   /**
