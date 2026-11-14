@@ -119,14 +119,14 @@ built for the owner to choose from.
 |---|---|---|---|
 | L5 | **Three day looks to choose from.** Three candidate `look.json` files (sunny pastel, hazy gold, high-contrast comic), each with a sheet; the owner picks one or tunes it in the LOOK panel. Sun shadows take their colour from the sky (violet-blue, not black); add sliders for shadow tint and softness if they're missing. This also closes HANDOFF's "waiting on a look.json". | `look.json`, `lookTuning.ts`, `post.ts`, `timeOfDay.ts` | M |
 | L6 | **Road and pavement surface.** In the ground shader: aggregate grain, polished wheel tracks, patch repairs, cracks, oil stains at stop lines and bays, drain covers, a kerb highlight and gutter shadow, painted arrows and bus lanes, and pavement slabs that differ by district. Costs fragment time, so it's measured with GPU BREAKDOWN and the low tier keeps today's ground. | `world/ground.ts` | M |
-| L7 | **Things on the pavement.** Café tables, crates, A-boards and market stalls outside arts and old-town shopfronts; newspaper boxes, bike racks, planters, parked scooters; leaves and litter in the gutters. All in the existing knock-over prop families, so it's also more to smash. Includes the roadworks kit W3-C already needs. | `blender/generators/props.py` (pip `bpy`), `world/streetProps.ts` | L |
+| L7 | **Things on the pavement.** Café tables, crates, A-boards and market stalls outside arts and old-town shopfronts; newspaper boxes, bike racks, planters, parked scooters; leaves and litter in the gutters. All in the existing knock-over prop families, so it's also more to smash. Includes the roadworks kit W3-C already needs. | `world/streetProps.ts`; new props are BLENDER_TODO §17 | L |
 
 ### Stage 3 · Cars and crashes
 
 | # | Item | Where | Size |
 |---|---|---|---|
 | L8 | **Damage you can see.** A per-car damage value for front, rear, left and right, fed by where each hit lands, drives the car's vertex shader: panels crumple inward, glass darkens and cracks, a headlight or tail light goes out, paint scuffs. A bonnet or bumper comes off as debris when the car starts smoking. | `systems/damage.ts`, `vehicleBatch.ts`, `fxDebris.ts` | L |
-| L9 | **Cars that read from above.** A Blender pass on all 22 vehicles for the top view: roof and bonnet colour breaks, stripes, spoilers, roof racks, sunroofs, mirrors, wheel arches; two or three liveries per model by shader mask (taxi checks, delivery logos, race numbers). The GLB contracts don't change. | `blender/generators/vehicles.py`, `vehicleBatch.ts` | L |
+| L9 | **Cars that read from above.** A Blender pass on all 22 vehicles for the top view: roof and bonnet colour breaks, stripes, spoilers, roof racks, sunroofs, mirrors, wheel arches; two or three liveries per model by shader mask (taxi checks, delivery logos, race numbers). The GLB contracts don't change. | BLENDER_TODO §16; `carMesh.ts`, `vehicleBatch.ts` (`paint2`) | L |
 | L10 | **Crash juice.** A burst of glass and plastic on hard hits, paint-transfer scrapes on walls, sparks while grinding along one, and a beat of slow motion on a big side-on hit. Cap a blast's brightness so a fireball stays orange with its shape and the wrecks stay visible through it on desktop. Mostly tuning systems that exist. | `fxDirector.ts`, `fxDriving.ts`, `fxDecals.ts` | M |
 
 ### Stage 4 · Chases worth having
@@ -151,9 +151,9 @@ built for the owner to choose from.
 
 | # | Item | Where | Size |
 |---|---|---|---|
-| P9 | **A dodge roll:** about 4 m in 0.35 s during which nothing lands, on a short cooldown. Needs a `Roll` clip for the bodies and a touch binding. | `game/player.ts`, `combat.ts`, `blender/generators/characters.py`, `touchControls.ts` | M |
-| P10 | **Three kinds of enemy** from the parts there are: a rusher (fast, 70 HP, fists or a bat), the shooter as now, and a heavy (armoured, a shotgun, slow), told apart by build and colour (L1). Used by the VIPERS, SWAT and story jobs. | `systems/crowd.ts`, `game/population.ts`, `missionsData.ts` | M |
-| P11 | **A bat to pick up:** one swing floors someone, a few swings and it breaks. | `systems/weapons.ts`, `weapons.glb` | M |
+| P9 | **A dodge roll:** about 4 m in 0.35 s during which nothing lands, on a short cooldown. Needs a `Roll` clip for the bodies and a touch binding. | `game/player.ts`, `combat.ts`, `touchControls.ts`; the clip is BLENDER_TODO §18 | M |
+| P10 | **Three kinds of enemy** from the parts there are: a rusher (fast, 70 HP, fists or a bat), the shooter as now, and a heavy (armoured, a shotgun, slow), told apart by build and colour (L1). Used by the VIPERS, SWAT and story jobs. | `systems/crowd.ts`, `game/population.ts`, `missionsData.ts`; the heavy's body is BLENDER_TODO §20 | M |
+| P11 | **A bat to pick up:** one swing floors someone, a few swings and it breaks. | `systems/weapons.ts`; the model and clip are BLENDER_TODO §19 | M |
 
 ### Later, not scheduled here
 

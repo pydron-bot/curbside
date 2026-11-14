@@ -873,3 +873,139 @@ instanced mesh as before, with the blinking light moved 0.096 m along the charge
 onto the detonator box (checked in game at headings 0°, 90° and 180°). `charge_glow` is drawn
 flat; the blinking sprite over it is the light. `STAND_INS.charge` is gone from
 `heldWeapons.ts`. The debris panels and Pike's coat needed no code change.
+
+## 16. V3: cars that read from above (requested 2026-11-14)
+
+_§16–§20 are the Blender work for [V3_PLAN.md](V3_PLAN.md). Branch off
+`claude/v3`, keep to `blender/`, `public/assets/` and this file as before,
+and note what landed under each section. The code streams
+(`claude/v3-look`, `claude/v3-play`) ship with stand-ins and pick the
+models up by name. In priority order: §16, §18, §17, §19, §20._
+
+From the game camera (20–45 m up, near top-down) the common cars are a
+bonnet, a windscreen, a roof and a boot, four boxes each, and one model
+looks much like the next. They sit at 260–310 triangles of a 1,500 budget
+(`python3 blender/check_assets.py` lists them), so there's room. Rework
+every root in `vehicles.glb` for the top view, the nine most seen first:
+`sedan`, `compact`, `sports`, `van`, `taxi`, `pickup`, `muscle`, `police`,
+`police_suv`; then the rest. Same contract as before (root name = archetype
+key, `<arch>_wheel_FL` / `_FR` with the origin at the hub, `<arch>_seat` on
+the bikes, origin at ground centre, facing game +Z, flat colours), and
+**keep each car's footprint, wheelbase, height and headlight positions**
+(collision boxes, the beams' `lampX`, door and seat positions and the
+sticky charge's seat all read them).
+
+- **A silhouette of its own from above.** Suggestions: `sports` a wedge
+  with a rear spoiler and side intakes; `compact` a short hatch with roof
+  rails; `sedan` three clear boxes and a sunroof; `van` a ribbed roof with
+  a ladder rack; `taxi` a roof sign and a chequer band; `pickup` an open
+  bed with something in it; `muscle` a bonnet scoop and fat rear arches;
+  `limo` a long glass roof panel; `bus` roof hatches and an air-con box;
+  `police` / `police_suv` a bolder light bar and a roof panel for a number.
+  Wing mirrors, wheel arches that show past the body, bumpers and a
+  windscreen raked enough to show as its own shape, on all of them.
+- **Bevel the plan view.** Corners and the bonnet and boot edges chamfered
+  so the body isn't a rectangle.
+- **A second body colour: material `paint2`.** Roof panels, bonnet and
+  boot stripes, sills and mirror caps that should take a second tint go in
+  a material named exactly `paint2`. The code side will tint it per car
+  (the same as `paint` for a plain car, a contrast colour for a two-tone
+  or striped one). Until that lands `paint2` is a fixed colour, so give it
+  a charcoal base colour (about 0.12 linear) that suits any paint. Not on
+  `police`, `police_suv`, `swat`, `ambulance`, `firetruck`, `taxi` or
+  `ice_cream_van`, whose liveries are fixed colours as now.
+- **Liveries in fixed colours** where the vehicle has one: the taxi's
+  chequers, a stripe and roof number on the police cars, a logo block on
+  the van's roof (`paint2`, so only some vans show it).
+- **Vertices to crumple.** The code side is adding visible damage: a
+  vertex shader pushes the front, rear, left and right of the body inward
+  as that side takes hits. A bonnet that is one quad can't fold, so give
+  the bonnet, boot, roof edge and each flank at least one extra edge loop
+  across and along, and keep the bumpers as their own `trim` geometry
+  standing proud of the body.
+- **Glass** stays `glass`; add the sunroofs and rear windows that show
+  from above. Lamps stay `headlight` / `taillight` (the tail lamps should
+  show from above: wrap them onto the top face a little).
+- **Budget:** ≤ 900 triangles for the nine common cars (they're drawn up
+  to 48 at once), ≤ 1,500 for the rest as now.
+
+Code side, for the notes: `PART.paint2` in `src/render/carMesh.ts` and a
+second per-instance colour in `vehicleBatch.ts`; nothing else changes if
+the footprints hold.
+
+## 17. V3: street props, round 3 (`props.glb`, requested 2026-11-14)
+
+Daytime pavements are bare outside the shopfronts. The code side is
+placing more of the §10 props (café tables, planters, bike racks, fruit
+stands) and wants these new roots, same contract as §10 (origin on the
+ground at the middle of the footprint, game +Z the front, flat colours,
+the `street` family, so the same per-root budgets apply). The code side
+draws box stand-ins from `src/render/propStandIns.ts` until a root of the
+same name is in `props.glb`.
+
+| Root | Footprint W × D × H (m) | Front (+Z) | Notes | Tris |
+|---|---|---|---|---|
+| `a_board` | 0.6 × 0.5 × 1.0 | either face | a shop's pavement sign: two panels in an A, each face `paint` (tinted per shop), a white band for the chalk; make the top edge bold, as `roadwork_sign` | ≤ 30 |
+| `crate_stack` | 0.8 × 0.6 × 0.9 | any | two or three delivery crates stacked a little askew, one `paint` | ≤ 40 |
+| `bin_bags` | 0.9 × 0.7 × 0.5 | any | three black sacks slumped together, one split with something pale showing | ≤ 40 |
+| `market_stall` | 2.4 × 1.4, canopy 2.6 × 1.8 × 2.3 | the customers' side | a trestle of goods under a striped canopy on four poles: stripes alternate cream and `paint`; goods in three or four fixed colours showing past the canopy's front edge | ≤ 140 |
+| `flower_stand` | 1.4 × 0.8 × 1.1 | the customers' side | stepped buckets of flowers (pink, yellow, white, red), no canopy, so the colour shows from above | ≤ 80 |
+| `news_stand` | 1.8 × 1.2 × 2.2 | the counter | a green kiosk, light roof with a `stripe_news` front edge, magazines in a row on the counter | ≤ 100 |
+| `water_barrier` | 1.5 × 0.45 × 0.8 | across its face | the plastic road barrier: one root, `paint` (the game alternates red and white) | ≤ 30 |
+| `scaffold` | 4.0 × 1.4 × 6.0 | away from the wall | two lifts of poles and boards standing against a façade (the wall at −Z), a debris net on the outer face in `stripe_net`, a ladder; people walk under it, so nothing solid below 2.2 m but the four standards at the corners | ≤ 200 |
+| `leaf_pile` | 1.0 × 0.8 × 0.15 | any | swept leaves in the gutter, autumn colours, flat enough to drive over (drawn only) | ≤ 16 |
+
+If there's appetite, the two older asks from HANDOFF's known gaps: a
+`work_van` vehicle root (car contract) and a drivable `digger` (NO KERB,
+NO CURBSIDE uses works-yellow pickups until there is one).
+
+## 18. V3: the dodge roll (`Roll`, every character GLB, requested 2026-11-14)
+
+The player is getting a dodge on foot: about 4 m in 0.35 s. One new clip
+on every body (`player`, `player_f`, the three `ped_*`, `cop`, `vex`,
+`tuna`, `pike`), same rules as §1 and §8:
+
+| Clip | Length | Notes |
+|---|---|---|
+| `Roll` | 0.35 s one-shot | a forward shoulder roll **in place** (the game moves the body): from standing, tuck and dive, one full turn about the body's side-to-side axis, back up onto the feet in the `Run` pose's first frame so it cuts to a sprint. It's a whole-body clip (it moves the root bone, like `Fall` / `GetUp`), so the game doesn't tip the instance while it plays. From above it should read as the body going low and round: arms in, knees up. |
+
+Until it lands the code fakes it (the body ducked and spun), as it does
+for any missing clip.
+
+## 19. V3: the bat (requested 2026-11-14)
+
+A melee weapon to pick up: one swing floors someone, a few swings and it
+breaks.
+
+- **`weapons.glb` root `bat`**: a baseball bat about 0.85 m, held in the
+  right fist at the grip with the barrel pointing game +Z (the pistol's
+  grip contract, §4/§8), a bold taped handle and a pale barrel so it reads
+  from above; drawn above life size like the guns. A `muzzle` extra at the
+  barrel's tip (the swing's trail starts there). ≤ 60 tris.
+- **`pickups.glb` root `bat_pickup`**: the bat lying flat with its origin
+  at the middle, modelled about 1.5× life size (the pickups' note in the
+  stage-6 section), no crate. The game rings it; ≤ 60 tris.
+- **Clip `Swing`** on every body: 0.4 s one-shot on the arms, chest and
+  head (it layers over the legs like `Punch`): both hands on the bat, wound
+  back over the right shoulder, swung flat across to the left, contact at
+  about 40% of the clip, a short follow-through, back toward the carry
+  pose.
+- **Clip `AimBat`** (optional): a 0.3 s hold, the bat cocked over the
+  right shoulder, for walking about with it in hand. Without it the game
+  carries the bat lowered along the arm like a gun.
+
+## 20. V3: a heavy (requested 2026-11-14, optional)
+
+On-foot enemies are getting three kinds: a rusher, the shooter as now and
+a heavy. The rusher is an existing body in its own colours (code only).
+The heavy wants a silhouette of its own from above:
+
+- **`heavy.glb`**, a tenth body on the same rig, bone names, palette
+  suffixes and clip set as §2 (it needs every clip the others have,
+  `Roll` and `Swing` excepted): broad shoulders about 1.3× `ped_stocky`'s,
+  a helmet in `*_hair`, a padded vest with a raised collar and shoulder
+  plates in `*_shirt`, heavy boots in `*_shoes`. ≤ 600 tris. It costs a
+  draw call (two with the shadow pass) only while one is on screen.
+
+Until it lands the code draws a heavy as `ped_stocky` scaled up in dark
+colours.
