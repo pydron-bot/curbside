@@ -11,7 +11,9 @@ no page or console errors, under 150 draw calls, and a named-mayhem stamp
 (`__ub.stamp(id)`, held mid-show) clear of the stars, radar, status,
 activity card and score feed (on the phones in a Chaos Run too), and the
 police scanner's subtitle (`__ub.scanner.say()`) clear of all that, the
-stamp, the radio's card and the thumbs, on foot and in a car; a fresh
+stamp, the radio's card and the thumbs, on foot and in a car; the radio's
+card (a song on) clear of the activity card, stars, status, stamp, score
+and radar, free roam and (phones) under a Chaos Run's card; a fresh
 save's title is PLAY and SETTINGS (OBSERVE too with Test tools on) and
 gains OBSERVE, CHARACTER and HOW TO PLAY after the cold open; the
 best-moment picture on WASTED (a forced stamp, then death: the photo and
@@ -31,6 +33,12 @@ profile's time is in the output. CI (`.github/workflows/ci.yml`) runs the four p
 jobs, beside the unit tests, types and GLB contracts, on every branch and
 pull request; Pages (`pages.yml`) runs the tests and contracts before deploying
 main.
+
+**Look sheet** (`tools/look/lookSheet.mjs`, [tools/look/README.md](../../tools/look/README.md)):
+16 fixed views at the phone profile stitched into one labelled sheet, with
+the player's size on screen and the roof share worked out from the camera
+and city data, plus draw calls and programs. Every look change is judged
+on a before/after pair of these (V3 plan).
 
 ## Tuning harnesses
 

@@ -56,6 +56,20 @@ focusZ, playing)` once per frame after placing cars and people.
   fight. Mouse aim leans the view toward the cursor (`rig.aimAt`: 30% of
   the cursor's ground offset, at most 8 m, eased), so you see what you
   shoot at.
+  *Camera trial* (V3 L3, LOOK panel → CAMERA (TRIAL)): presets TODAY 0.12,
+  TILT 0.2 and TILT 0.3 (`lookTuning` CAMERA_PRESETS) and sliders for tilt,
+  on-foot height and field of view, on `rig.trial` (main points it at the
+  live look). They apply only through `rig.follow()`, the play camera;
+  the title, observe and the map editor drive `update()` and keep
+  `opts.tilt` and the 45° lens. The shipped default is today's camera.
+  A steeper tilt looks across the street from the south, so the buildings
+  on its south side stand between the camera and the player: from a 0.14
+  tilt (`cutawayFor`, full at 0.18) the building shader, the city's box
+  props and props.glb's kit above 1.5 m discard a dithered cone from the
+  camera to the player (`shaderLib` UB_CUTAWAY, `uCutaway` set by
+  `Look.update`; the colour pass only, so sun shadows stay whole; one
+  uniform test while off). Neon halos on a cut roof stay; the look-ahead
+  limits are the same shares of the view.
   `prefers-reduced-motion` keeps a third of the shake, no roll or FOV
   punches, and softer exposure and combo-edge flashes. A blast out of
   sight (over 55 m from the view centre) doesn't flash the screen.
