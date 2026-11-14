@@ -54,6 +54,8 @@ const RANGE_PER_MPS = 2.6;
 const RANGE_MAX = 190;
 const MAX_DPR = 2;
 const WAYPOINT = '#ffd23f';
+/** Where the police think you are: their search ring and the last-seen mark. */
+const SEARCH = '#8fb4ff';
 
 /**
  * A circular north-up radar (the camera never rotates, so north-up matches
@@ -77,6 +79,10 @@ export class Radar {
   /** The same blips as an array: drawing iterates it without allocating. */
   private readonly blipList: Blip[] = [];
   private waypoint: { x: number; z: number } | null = null;
+  /** The police search (setSearch): centre, radius, on. Numbers only, so moving it allocates nothing. */
+  private readonly search = { on: false, x: 0, z: 0, r: 0 };
+  /** The search ring's dash pattern, filled in place (setLineDash copies it). */
+  private readonly dash = [0, 0];
   private readonly route: number[] = [];
   private range = RANGE_FOOT;
   private acc = 1;
@@ -139,6 +145,23 @@ export class Radar {
   }
 
   /**
+   * Where the police believe the player is while they've lost them: a mark
+   * on the last sighting and a dashed ring of radius `r` m that the units
+   * search (heat.md, WHERE THEY THINK YOU ARE).
+   */
+  setSearch(x: number, z: number, r: number): void {
+    const s = this.search;
+    s.on = true;
+    s.x = x;
+    s.z = z;
+    s.r = r;
+  }
+
+  clearSearch(): void {
+    this.search.on = false;
+  }
+
+  /**
    * Per frame: the player's position, heading (vehicle convention) and
    * speed (m/s), and the car they're driving (not drawn as traffic).
    */
@@ -190,6 +213,7 @@ export class Radar {
     const reach = this.range * 1.45;
 
     if (this.waypoint) this.drawRoute(ctx, px, pz, k, R);
+    if (this.search.on) this.drawSearch(ctx, px, pz, k, R, d);
 
     // Traffic: faint oriented boxes.
     for (const v of this.sources.vehicles) {
@@ -269,6 +293,39 @@ export class Radar {
     }
   }
 
+  /** The police search: a dashed ring, faintly filled, round a cross on where they last saw you. */
+  private drawSearch(ctx: CanvasRenderingContext2D, px: number, pz: number, k: number, R: number, d: number): void {
+    const s = this.search;
+    const x = R + (s.x - px) * k;
+    const y = R + (s.z - pz) * k;
+    const r = Math.max(4 * d, s.r * k);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(79, 139, 255, 0.12)';
+    ctx.fill();
+    this.dash[0] = 4 * d;
+    this.dash[1] = 3 * d;
+    ctx.setLineDash(this.dash);
+    ctx.lineDashOffset = -this.time * 6 * d;
+    ctx.strokeStyle = SEARCH;
+    ctx.lineWidth = 1.6 * d;
+    ctx.stroke();
+    ctx.setLineDash(NO_DASH);
+    // The last-seen cross.
+    const c = 3.5 * d;
+    ctx.beginPath();
+    ctx.moveTo(x - c, y - c);
+    ctx.lineTo(x + c, y + c);
+    ctx.moveTo(x + c, y - c);
+    ctx.lineTo(x - c, y + c);
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+    ctx.lineWidth = 3.4 * d;
+    ctx.stroke();
+    ctx.strokeStyle = SEARCH;
+    ctx.lineWidth = 1.8 * d;
+    ctx.stroke();
+  }
+
   /** Copy the part of the pre-rendered city under the radar (clamped to the map's edges). */
   private drawMap(ctx: CanvasRenderingContext2D, px: number, pz: number, k: number): void {
     const map = this.map!;
@@ -342,6 +399,8 @@ export class Radar {
     }
   }
 }
+
+const NO_DASH: number[] = [];
 
 function dot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, colour: string, d: number): void {
   ctx.beginPath();

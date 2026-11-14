@@ -36,6 +36,8 @@ export interface ScannerDeps {
   driving: () => { archetype: VehicleArchetype; paint: ColorRepresentation } | null;
   /** The wanted level now. */
   stars: () => number;
+  /** Some cop can see the player now: a car switched out of sight goes unreported (NEW WHEELS). */
+  seen?: () => boolean;
   city: ScannerCity;
   radar: { setBlip(id: string, opts: BlipOptions): void; removeBlip(id: string): void };
   /** Take the subtitle down now (switched off, the title). */
@@ -98,9 +100,12 @@ export class Scanner {
       this.feed.wanted(e.level, e.prev, e.reason, this.suspect(), place(at.x, at.z), at.x, at.z, this.d.now());
     });
     d.bus.on('enterVehicle', () => {
-      if (!this.d.live() || this.feed.stars <= 0) return;
+      if (!this.d.live() || this.feed.stars <= 0 || !(this.d.seen?.() ?? true)) return;
       const at = this.d.position();
       this.feed.switched(this.suspect(), place(at.x, at.z), at.x, at.z, this.d.now());
+    });
+    d.bus.on('roadblock', (e) => {
+      if (this.d.live()) this.feed.roadblock(place(e.x, e.z), e.x, e.z, this.d.now());
     });
     onSettingsChange(() => this.apply());
     this.apply();

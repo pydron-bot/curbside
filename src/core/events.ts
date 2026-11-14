@@ -191,13 +191,23 @@ export type GameEvent =
    * star at a time while evading, or straight to 0 (evaded, resprayed,
    * busted, died, a fresh run).
    */
-  | { type: 'wanted'; level: number; prev: number; reason: WantedReason }
+  | {
+      type: 'wanted';
+      level: number;
+      prev: number;
+      reason: WantedReason;
+      /** On 'evaded': the chase's peak stars and its seconds at 2 stars or more (a getaway's pay). */
+      peak?: number;
+      chaseTime?: number;
+    }
   /** The police arrested the player; `fine` points came off the run score. */
   | { type: 'busted'; fine: number }
   /** A driver leant on the horn at (x, z) (blocked by the player, panicking). */
   | { type: 'horn'; x: number; z: number; duration: number }
   /** A car was resprayed at a Pay 'n' Spray; `cleared`: it lost the police too. */
   | { type: 'respray'; x: number; z: number; cleared: boolean }
+  /** The police put a roadblock up across the road ahead of the player, at (x, z), facing them from -dir. */
+  | { type: 'roadblock'; x: number; z: number; dirX: number; dirZ: number }
   /**
    * A car took off from a ramp at (x, z) at `speed` m/s; `airtime` is the
    * flight time to expect (s). involvesPlayer: it's the player's car.

@@ -59,7 +59,7 @@ export type StreetTopic =
   | 'smoke';
 
 /** The player's own: a star up, a district crossed or a car switched while wanted, and how it ended. */
-export type YouTopic = 'wanted' | 'heading' | 'switched' | 'evaded' | 'respray' | 'busted';
+export type YouTopic = 'wanted' | 'heading' | 'switched' | 'roadblock' | 'evaded' | 'respray' | 'busted';
 
 export type ScannerTopic = StreetTopic | YouTopic;
 
@@ -216,6 +216,8 @@ export const TOPICS: Readonly<Record<ScannerTopic, TopicSpec>> = {
   wanted: { priority: 4, cooldown: 0, lines: [] },
   heading: { priority: 4, cooldown: 30, lines: ['{suspect} HEADING INTO {place}.', '{suspect} NOW IN {place}. STAY ON IT.'] },
   switched: { priority: 4, cooldown: 15, lines: ["SUSPECT'S SWITCHED MOTORS. NOW {aSuspect}."] },
+  // Said as it goes up, a few seconds before the player gets there (it's on the radar too).
+  roadblock: { priority: 4, cooldown: 10, lines: ['ROADBLOCK UP IN {place}. LET THEM COME TO US.', 'UNITS ACROSS THE ROAD IN {place}. SUSPECT INBOUND.'] },
   evaded: { priority: 4, cooldown: 0, lines: ['LOST THE SUSPECT IN {place}. STAND DOWN.', 'NO SIGN OF THEM IN {place}. ALL UNITS STAND DOWN.'] },
   respray: { priority: 4, cooldown: 0, lines: ["SUSPECT VEHICLE'S VANISHED. CHECK THE PAINT SHOPS."] },
   busted: { priority: 4, cooldown: 0, lines: ["SUSPECT IN CUSTODY, {place}. PAPERWORK'S YOURS, SARGE."] },
@@ -461,6 +463,12 @@ export class ScannerFeed {
   /** While wanted, the player got into another vehicle (`suspect` describes it). */
   switched(suspect: string, place: string, x: number, z: number, now: number): void {
     this.you('switched', suspect, place, x, z, now);
+  }
+
+  /** While wanted, a roadblock went up ahead of the player in `place`. */
+  roadblock(place: string, x: number, z: number, now: number): void {
+    if (!this.enabled || this.stars <= 0 || this.cooling('roadblock', now)) return;
+    this.offer('roadblock', fill(this.pick(TOPICS.roadblock.lines), place), 4, x, z, now, false);
   }
 
   /** Say `topic` next step whatever the cooldowns, gap and stars (debug, smoke test). */

@@ -1,7 +1,7 @@
 import type { GameAudio } from '../audio/gameAudio';
 import type { SirenStyle } from '../audio/loops';
 import type { EventBus } from '../core/events';
-import type { PoliceUnit } from '../systems/police';
+import { searchRadius, type PoliceUnit } from '../systems/police';
 import { evadeBonus } from '../systems/score';
 import type { BlipOptions, Radar } from '../ui/radar';
 import type { ScoreHud } from '../ui/scoreHud';
@@ -97,6 +97,19 @@ export class HeatPresenter {
       b.colour = BLUE;
       for (const u of police.units) for (const p of u.officers) if (n < MAX_OFFICER_BLIPS) this.officer(n++, p.agent.s.x, p.agent.s.z);
       for (const p of police.strays) if (n < MAX_OFFICER_BLIPS) this.officer(n++, p.agent.s.x, p.agent.s.z);
+      // A roadblock ahead: one marker across the road, pulsing and pinned to the rim when off it (P3).
+      let roadblock = false;
+      for (const u of police.units) if (u.role === 'roadblock' && !u.dismissed && u.vehicle) roadblock = true;
+      if (roadblock) {
+        b.x = police.roadblock.x;
+        b.z = police.roadblock.z;
+        b.colour = RED;
+        b.icon = '=';
+        b.size = 6;
+        b.pulse = true;
+        b.edgeArrow = true;
+        this.set('roadblock', b);
+      }
       if (h.active && !h.leaving) {
         b.x = h.x;
         b.z = h.z;
@@ -108,6 +121,10 @@ export class HeatPresenter {
         this.set('heli', b);
       }
     }
+    // Lost you: where they think you are, and how wide they're looking.
+    const t = police.target;
+    if (playing && heat.wanted.level > 0 && !t.known) this.radar.setSearch(t.x, t.z, searchRadius(police.lostFor));
+    else this.radar.clearSearch();
     // Drop blips for units and officers that are gone.
     this.shown.forEach(this.dropStale);
     this.updateShopBlips(x, z);
@@ -117,6 +134,9 @@ export class HeatPresenter {
     f.searching = heat.wanted.searching;
     f.arrest = heat.bust.progress;
     f.spray = heat.shop ? heat.sprayProgress : 0;
+    f.hideout = heat.hideout ? heat.hideout.kind : null;
+    f.lyingLow = heat.wanted.lyingLow;
+    f.newWheels = heat.wanted.newWheels;
     this.hud.update(dt, f);
   }
 

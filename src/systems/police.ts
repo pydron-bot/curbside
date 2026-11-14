@@ -29,15 +29,15 @@ import { HELI_FROM, HELI_GONE, HELI_REFUEL, HELI_SHIFT, HELI_SPAWN, stepHelicopt
 import { lineOfSight, sees } from './sight';
 import { createDaze, driveDazed, stepDaze, type Daze, type SmokeView } from './smoke';
 import { knockDown, resumeWalking, spawnPed, type PedRole } from './crowd';
-import { createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from './pursuit';
+import { RAM_COOLDOWN, createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from './pursuit';
 import { CRUISE_SPEED, TURN_SPEED, createDriver, rerouteAi, spawnAi, type AiDriver, type Obstacle } from './traffic';
 import { len2 } from '../core/len';
 
 // --- Tunables -------------------------------------------------------------
 /** Units chasing at each wanted level (index = stars). */
-export const UNITS_BY_STARS = [0, 2, 3, 4, 6, 7] as const;
+export const UNITS_BY_STARS = [0, 2, 3, 4, 5, 6] as const;
 /** Of those, dark SWAT trucks. */
-export const SWAT_BY_STARS = [0, 0, 0, 0, 2, 3] as const;
+export const SWAT_BY_STARS = [0, 0, 0, 0, 1, 2] as const;
 /** At 1–2 stars a unit may come on a police bike (fast, fragile, one officer): this share of new units, at most one. */
 export const BIKE_SHARE = 0.5;
 export const BIKES_FROM = 1;
@@ -48,10 +48,12 @@ const SUV_SHARE = 0.5;
 /** Police bikes chase this much faster than the cars' top speed for the level. */
 const BIKE_PACE = 1.1;
 /** Seconds between new units arriving, by stars (the first comes quicker). */
-const SPAWN_EVERY = [0, 5, 3, 2, 1.6, 1.2] as const;
+const SPAWN_EVERY = [0, 5, 3, 2, 2.2, 2] as const;
 const FIRST_SPAWN = 0.6;
 /** New units appear this far away, m (off-screen, see VIEW_MARGIN). */
 export const SPAWN_RANGE = [75, 140] as const;
+/** While the police have lost the player, no unit arrives closer to them than this, m. */
+export const LOST_SPAWN_CLEAR = 110;
 /** New units arrive already doing this, m/s. */
 const SPAWN_SPEED = 16;
 /** Spawns stay this far outside the visible ground, m. */
@@ -63,6 +65,8 @@ export const CAR_PROXIMITY = 20;
 /** ...and with a clear line of sight this close. */
 export const CAR_SIGHT = 62;
 export const OFFICER_PROXIMITY = 15;
+/** Lying low (Suspect.hidden): seen regardless only this close, m. */
+export const HIDDEN_PROXIMITY = 7;
 export const OFFICER_SIGHT = 40;
 /** Line-of-sight checks per unit per second (staggered). */
 const SIGHT_HZ = 4;
@@ -78,14 +82,29 @@ const OFFICER_DESPAWN = 90;
 const SHOOT_FROM = 7;
 /** On foot, unarmed and slower than this: giving up (officers hold fire and come to cuff), m/s. */
 const SURRENDER_SPEED = 1;
-/** From 4 stars, passengers shoot at the player's car from this close, m, this often, s. */
+/** From 4 stars, passengers shoot at the player's car from this close, m... */
 const CAR_SHOT_RANGE = 20;
-const CAR_SHOT_EVERY = 2.2;
+/** ...each car this often (by stars; it was 2.2 s), s... */
+export const CAR_SHOT_EVERY = [0, 0, 0, 0, 5, 6] as const;
+/**
+ * ...and the force as a whole at most this often, however many cars are
+ * alongside, s. A 5-star car used to be shot to pieces in half a minute.
+ */
+export const FORCE_SHOT_GAP = [0, 0, 0, 0, 3, 4] as const;
+/**
+ * A roadblock's officers fire at a car coming through from this close, m.
+ * Other officers on foot don't shoot at a moving car (they run for their
+ * own, or for its door once it stops): between them they did most of the
+ * bullet damage in a 5-star chase.
+ */
+const ROADBLOCK_SHOT_RANGE = 8;
 /** Pursuit speeds by stars: cruise when following roads, top when chasing, m/s. */
-const CRUISE_BY_STARS = [0, 20, 22, 25, 26, 27] as const;
+const CRUISE_BY_STARS = [0, 20, 22, 25, 23, 23] as const;
 const TOP_BY_STARS = [0, 30, 32, 36, 38, 40] as const;
-/** Ramming and PITs from this many stars. */
+/** Ramming and PITs from this many stars... */
 export const RAM_FROM = 3;
+/** ...hanging back this long after each one (by stars), s. */
+export const RAM_EVERY_BY_STARS = [RAM_COOLDOWN, RAM_COOLDOWN, RAM_COOLDOWN, RAM_COOLDOWN, 3.4, 4] as const;
 /** Roadblocks from this many stars, this often (when driving fast), s. */
 export const ROADBLOCK_FROM = 3;
 const ROADBLOCK_EVERY = 25;
@@ -161,6 +180,12 @@ export interface Suspect {
   car: VehicleState | null;
   /** In play (alive, free, not behind the title): otherwise nobody chases. */
   active: boolean;
+  /**
+   * Lying low: stopped in a car park or an alley (heat.md). Cars and
+   * officers then need a clear line to see them past HIDDEN_PROXIMITY
+   * (the walls and parked cars are cover); the helicopter still looks down.
+   */
+  hidden?: boolean;
 }
 
 export interface PoliceContext {
@@ -202,13 +227,22 @@ export class PoliceForce {
   };
   /** Somebody (any unit, officer or the helicopter) can see the player now. */
   seen = false;
+  /** Seconds since the police last knew where the player was (0 while they do). */
+  lostFor = 0;
   /** Where the police believe the player is: shared over the radio. */
   readonly target: PursuitTarget = { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: false, seen: false, known: false };
   private readonly byVehicle = new Map<Vehicle, PoliceUnit>();
   private nextId = 1;
   private spawnIn = FIRST_SPAWN;
   private roadblockIn = ROADBLOCK_EVERY / 2;
+  /** Roadblocks put up so far, and the latest one's centre and the way the player's coming (P3: the radar and scanner). */
+  roadblocks = 0;
+  readonly roadblock = { x: 0, z: 0, dirX: 0, dirZ: 0 };
+  /** Seconds until any passenger may fire at the player's car again (FORCE_SHOT_GAP). */
+  private carShotIn = 0;
   private stars = 0;
+  /** This step's suspect (for spawnBlocked). */
+  private suspect: Suspect | null = null;
 
   constructor(
     private readonly depot: PoliceDepot,
@@ -230,14 +264,17 @@ export class PoliceForce {
   /** Advance one sim step: sight, spawning, roadblocks, officers, the helicopter. */
   step(dt: number, ctx: PoliceContext): void {
     const s = ctx.suspect;
+    this.suspect = s;
     this.stars = s.active ? ctx.stars : 0;
     this.checkUnits(s, ctx);
     this.updateSight(dt, ctx);
     const known = this.seen || (ctx.tracked && s.active);
     if (known) this.report(s);
+    this.lostFor = known ? 0 : this.lostFor + dt;
     this.target.seen = this.seen;
     this.target.known = known;
     this.staff(dt, ctx);
+    this.carShotIn -= dt;
     if (this.stars >= ROADBLOCK_FROM) this.maybeRoadblock(dt, ctx);
     for (let i = this.units.length - 1; i >= 0; i--) this.stepUnit(this.units[i], dt, ctx);
     for (let i = this.strays.length - 1; i >= 0; i--) this.stepStray(i, ctx);
@@ -348,6 +385,7 @@ export class PoliceForce {
     this.heli.shift = 0;
     this.seen = false;
     this.target.seen = this.target.known = false;
+    this.lostFor = 0;
     this.spawnIn = FIRST_SPAWN;
     this.roadblockIn = ROADBLOCK_EVERY / 2;
   }
@@ -439,7 +477,7 @@ export class PoliceForce {
     // mostly ahead.
     const t = this.target;
     const ahead = this.seen ? 0.3 : 0.65;
-    const spot = policeSpawnPoint(t.x, t.z, t.vx, t.vz, ctx.view, ctx.rand, (x, z) => this.crowded(x, z), ahead);
+    const spot = policeSpawnPoint(t.x, t.z, t.vx, t.vz, ctx.view, ctx.rand, this.spawnBlocked, ahead);
     if (!spot) return null;
     const v = this.borrowCar(kind, spot.x, spot.z, spot.heading, SPAWN_SPEED, ctx.rand);
     return this.addUnit(v, kind, 'pursuit', spot.driver);
@@ -486,7 +524,7 @@ export class PoliceForce {
       seesPlayer: false,
       direct: false,
       sightIn: this.units.length / (SIGHT_HZ * 8),
-      shootIn: CAR_SHOT_EVERY,
+      shootIn: CAR_SHOT_EVERY[5],
       dismissed: false,
       age: 0,
       daze: createDaze(),
@@ -518,6 +556,7 @@ export class PoliceForce {
     const stars = Math.max(1, this.stars);
     u.driver.aggression = stars >= RAM_FROM ? 1 : 0;
     u.driver.cruise = CRUISE_BY_STARS[stars];
+    u.driver.ramEvery = RAM_EVERY_BY_STARS[stars];
     u.driver.topSpeed = TOP_BY_STARS[stars] * (u.kind === 'swat' ? 0.85 : u.kind === 'bike' ? BIKE_PACE : 1);
 
     for (let i = u.officers.length - 1; i >= 0; i--) this.stepOfficer(u, i, ctx);
@@ -586,8 +625,9 @@ export class PoliceForce {
     }
     // From 4 stars, passengers shoot at the player's car.
     if (this.stars >= 4 && s.inCar && u.aboard > 0 && u.seesPlayer && d < CAR_SHOT_RANGE) {
-      if ((u.shootIn -= dt) <= 0) {
-        u.shootIn = CAR_SHOT_EVERY * (0.8 + ctx.rand() * 0.4);
+      if ((u.shootIn -= dt) <= 0 && this.carShotIn <= 0) {
+        u.shootIn = CAR_SHOT_EVERY[this.stars] * (0.8 + ctx.rand() * 0.4);
+        this.carShotIn = FORCE_SHOT_GAP[this.stars];
         const dx = (s.x - v.sim.x) / (d || 1);
         const dz = (s.z - v.sim.z) / (d || 1);
         this.shoot(v.sim.x + dx * 1.6, v.sim.z + dz * 1.6, dx, dz);
@@ -683,7 +723,7 @@ export class PoliceForce {
     }
     if (u.role === 'roadblock' && s.inCar && len2(s.vx, s.vz) > 4) {
       // Holding the line behind the cars: guns up as the car comes.
-      a.mode = this.stars >= ROADBLOCK_FROM && d < CAR_SHOT_RANGE ? 'shoot' : 'arrest';
+      a.mode = this.stars >= ROADBLOCK_FROM && d < ROADBLOCK_SHOT_RANGE ? 'shoot' : 'arrest';
       a.goalX = a.s.x;
       a.goalZ = a.s.z;
       return;
@@ -697,7 +737,7 @@ export class PoliceForce {
     if (s.inCar) {
       const fast = len2(s.vx, s.vz) > 4;
       if (fast) {
-        a.mode = this.stars >= 4 && d < CAR_SHOT_RANGE ? 'shoot' : 'arrest';
+        a.mode = 'arrest';
         a.goalX = s.x;
         a.goalZ = s.z;
         return;
@@ -763,7 +803,7 @@ export class PoliceForce {
             const d = len2(v.sim.x - s.x, v.sim.z - s.z);
             if (!ctx.smoke?.blocks(v.sim.x, v.sim.z, s.x, s.z)) {
               direct = d < 6 || (d <= CAR_SIGHT && lineOfSight(ctx.grid, v.sim.x, v.sim.z, s.x, s.z));
-              carSees = direct || d < CAR_PROXIMITY;
+              carSees = direct || d < (s.hidden ? HIDDEN_PROXIMITY : CAR_PROXIMITY);
             }
           }
           u.seesPlayer = !u.dismissed && (carSees || this.officersSee(u, s, ctx.grid, ctx.smoke));
@@ -773,7 +813,7 @@ export class PoliceForce {
       }
       for (const p of this.strays) {
         const d = len2(p.agent.s.x - s.x, p.agent.s.z - s.z);
-        if (p.agent.mode !== 'down' && d < OFFICER_PROXIMITY && !ctx.smoke?.blocks(p.agent.s.x, p.agent.s.z, s.x, s.z)) seen = true;
+        if (p.agent.mode !== 'down' && d < (s.hidden ? HIDDEN_PROXIMITY : OFFICER_PROXIMITY) && !ctx.smoke?.blocks(p.agent.s.x, p.agent.s.z, s.x, s.z)) seen = true;
       }
       if (this.heli.active && !this.heli.leaving && this.heli.sees) seen = true;
     } else {
@@ -786,7 +826,7 @@ export class PoliceForce {
   private officersSee(u: PoliceUnit, s: Suspect, grid: StaticGrid, smoke?: SmokeView): boolean {
     for (const p of u.officers) {
       if (p.agent.mode === 'down') continue;
-      if (sees(grid, p.agent.s.x, p.agent.s.z, s.x, s.z, OFFICER_PROXIMITY, OFFICER_SIGHT, smoke)) return true;
+      if (sees(grid, p.agent.s.x, p.agent.s.z, s.x, s.z, s.hidden ? HIDDEN_PROXIMITY : OFFICER_PROXIMITY, OFFICER_SIGHT, smoke)) return true;
     }
     return false;
   }
@@ -805,6 +845,7 @@ export class PoliceForce {
     }
     this.roadblockIn = ROADBLOCK_EVERY;
     const cars = this.stars >= 4 ? 3 : 2;
+    let placed = 0;
     for (let i = 0; i < cars; i++) {
       const c = spot.cars[i];
       if (this.crowded(c.x, c.z)) continue;
@@ -812,6 +853,7 @@ export class PoliceForce {
       const road = createDriver(0, 0, 0, ctx.rand);
       rerouteAi(road, v.sim, ctx.rand);
       const u = this.addUnit(v, 'patrol', 'roadblock', road);
+      placed++;
       // The crew stands behind the cars, guns out.
       this.deploy(u, ctx.rand, 1);
       const o = u.officers[0];
@@ -824,7 +866,28 @@ export class PoliceForce {
         Object.assign(o.prev, o.agent.s);
       }
     }
+    if (placed === 0) return;
+    const r = this.roadblock;
+    r.x = r.z = 0;
+    for (let i = 0; i < cars; i++) {
+      r.x += spot.cars[i].x / cars;
+      r.z += spot.cars[i].z / cars;
+    }
+    r.dirX = spot.dirX;
+    r.dirZ = spot.dirZ;
+    this.roadblocks++;
   }
+
+  /**
+   * A spawn spot that won't do: another unit's there, or the police have lost
+   * the player and it's near them (a car appearing round the corner from
+   * someone nobody knows the whereabouts of hands the chase straight back).
+   */
+  private readonly spawnBlocked = (x: number, z: number): boolean => {
+    if (this.crowded(x, z)) return true;
+    const s = this.suspect;
+    return !this.target.known && s !== null && len2(x - s.x, z - s.z) < LOST_SPAWN_CLEAR;
+  };
 
   private crowded(x: number, z: number): boolean {
     for (const u of this.units) {
@@ -971,6 +1034,18 @@ export function roadblockSpot(px: number, pz: number, vx: number, vz: number, vi
     return { dirX, dirZ, cars };
   }
   return null;
+}
+
+/** The police search (the radar's ring): this wide when they've just lost you, m... */
+export const SEARCH_RING_MIN = 20;
+/** ...growing this fast (about how far someone could have got, slowed by not knowing which way), m/s... */
+export const SEARCH_RING_GROWTH = 7;
+/** ...up to this, m. */
+export const SEARCH_RING_MAX = 140;
+
+/** How far round the last sighting the police are searching, `lostFor` seconds after losing you, m. */
+export function searchRadius(lostFor: number): number {
+  return Math.min(SEARCH_RING_MAX, SEARCH_RING_MIN + SEARCH_RING_GROWTH * Math.max(0, lostFor));
 }
 
 /** The heat no longer calls for this unit (its crew-wait clock starts now). */

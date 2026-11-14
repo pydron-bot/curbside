@@ -77,14 +77,31 @@ export const EVADE_PER_STAR = 3;
  * crime far from any patrol car would be forgotten before one arrived, s.
  */
 export const RESPONSE_GRACE = 8;
+/**
+ * NEW WHEELS: getting into a car the chase hasn't seen you in, while no cop
+ * can see you, cuts the wait for the current star to drop to this share
+ * (until it drops, or they spot you).
+ */
+export const NEW_WHEELS_SHARE = 0.5;
+/** LYING LOW: stopped (or still on foot) and unseen in a car park or an alley, the evasion clock runs this much faster. */
+export const LIE_LOW_RATE = 2;
+/** Time wanted counts toward a getaway's pay from this many stars (game/heat.ts getawayPay). */
+export const CHASE_TIME_FROM = 2;
 /** Below one star, heat fades this fast (per second)... */
 export const COOL_RATE = 0.03;
 /** ...once this long has passed since the last crime, s. */
 export const COOL_AFTER = 10;
 
+/**
+ * At 4 and 5 stars the wait per star stops growing (it was 18 and 21 s): a
+ * 5-star chase needs 75 s out of sight in all to shake, too long to do in
+ * one car under a helicopter (the 5-star harness, docs/systems/heat.md).
+ */
+export const EVADE_TOP = [Infinity, Infinity, Infinity, Infinity, 15, 16] as const;
+
 /** Seconds out of sight it takes to lose one star while holding `stars`. */
 export function evadeSeconds(stars: number): number {
-  return EVADE_BASE + EVADE_PER_STAR * stars;
+  return Math.min(EVADE_BASE + EVADE_PER_STAR * stars, EVADE_TOP[Math.max(0, Math.min(5, Math.floor(stars)))]);
 }
 
 export function starsFor(heat: number): number {
@@ -100,6 +117,17 @@ export class Wanted {
   peak = 0;
   /** Time out of sight to lose a star is multiplied by this (the GHOST perk). */
   evadeScale = 1;
+  /**
+   * LYING LOW (set by the caller each step): stopped in a car park or an
+   * alley. While unseen, the evasion clock runs LIE_LOW_RATE times as fast.
+   */
+  hiding = false;
+  /** Seconds wanted at CHASE_TIME_FROM stars or more, this chase (a getaway's pay); 0 when clean. */
+  chaseTime = 0;
+  /** The star NEW WHEELS is shortening (0: none). */
+  private wheelsAt = 0;
+  /** Some cop could see the player on the last step. */
+  private seenNow = false;
   private time = 0;
   private lastCrime = -Infinity;
   /** Seconds left of RESPONSE_GRACE. */
@@ -131,7 +159,36 @@ export class Wanted {
   /** 0..1 progress toward losing the current star. */
   get evadeProgress(): number {
     const lvl = this.level;
-    return lvl > 0 ? Math.min(1, this.unseen / (evadeSeconds(lvl) * this.evadeScale)) : 0;
+    return lvl > 0 ? Math.min(1, this.unseen / this.evadeNeeded(lvl)) : 0;
+  }
+
+  /** NEW WHEELS is shortening the wait for this star. */
+  get newWheels(): boolean {
+    const lvl = this.level;
+    return lvl > 0 && this.wheelsAt === lvl;
+  }
+
+  /** LYING LOW right now: wanted, hiding and nobody can see you (the clock runs double). */
+  get lyingLow(): boolean {
+    return this.level > 0 && this.hiding && !this.seenNow;
+  }
+
+  /**
+   * The player got into a car the chase hasn't seen them in (the caller
+   * judges that: not a police car, not one they've driven this chase).
+   * Unseen, the wait for the current star to drop is cut to NEW_WHEELS_SHARE;
+   * seen, it's no use. Once per star. True if it took.
+   */
+  switchedCar(seen: boolean): boolean {
+    const lvl = this.level;
+    if (lvl === 0 || seen || this.wheelsAt === lvl) return false;
+    this.wheelsAt = lvl;
+    return true;
+  }
+
+  /** Seconds unseen it takes to drop `lvl` now (perks and NEW WHEELS applied). */
+  private evadeNeeded(lvl: number): number {
+    return evadeSeconds(lvl) * this.evadeScale * (this.wheelsAt === lvl ? NEW_WHEELS_SHARE : 1);
   }
 
   /**
@@ -168,7 +225,9 @@ export class Wanted {
    */
   step(dt: number, seen: boolean): void {
     this.time += dt;
+    this.seenNow = seen;
     const lvl = this.level;
+    if (lvl >= CHASE_TIME_FROM) this.chaseTime += dt;
     if (lvl === 0) {
       this.unseen = 0;
       if (this.heat > 0 && this.time - this.lastCrime > COOL_AFTER) this.heat = Math.max(0, this.heat - COOL_RATE * dt);
@@ -177,6 +236,8 @@ export class Wanted {
     if (seen) {
       this.unseen = 0;
       this.grace = 0;
+      // They've clocked the new car.
+      this.wheelsAt = 0;
       return;
     }
     if (this.grace > 0) {
@@ -184,15 +245,17 @@ export class Wanted {
       this.grace -= dt;
       return;
     }
-    this.unseen += dt;
-    if (this.unseen < evadeSeconds(lvl) * this.evadeScale) return;
+    this.unseen += this.hiding ? dt * LIE_LOW_RATE : dt;
+    if (this.unseen < this.evadeNeeded(lvl)) return;
     // Lost them for now: one star down, and the clock starts on the next.
     this.unseen = 0;
+    this.wheelsAt = 0;
     this.heat = lvl - 1;
     if (lvl - 1 === 0) {
-      this.bus.emit({ type: 'wanted', level: 0, prev: lvl, reason: 'evaded' });
-      // The bonus listener has read it; the chase is over.
+      this.bus.emit({ type: 'wanted', level: 0, prev: lvl, reason: 'evaded', peak: this.peak, chaseTime: this.chaseTime });
+      // The bonus listeners have read it; the chase is over.
       this.peak = 0;
+      this.chaseTime = 0;
     } else {
       this.bus.emit({ type: 'wanted', level: lvl - 1, prev: lvl, reason: 'lost' });
     }
@@ -204,6 +267,8 @@ export class Wanted {
     this.heat = 0;
     this.unseen = 0;
     this.grace = 0;
+    this.wheelsAt = 0;
+    this.chaseTime = 0;
     this.lastCrime = -Infinity;
     this.gunfire.reset();
     this.nuisance.reset();
@@ -222,7 +287,8 @@ export class Wanted {
     if (this.level > prev) this.raised(prev);
     else if (this.level < prev) this.bus.emit({ type: 'wanted', level: this.level, prev, reason: this.level === 0 ? 'reset' : 'lost' });
     // Forced clean: the chase is over (no EVADED bonus carried into the next one).
-    if (this.level === 0) this.peak = 0;
+    if (this.level === 0) this.peak = this.chaseTime = 0;
+    if (this.wheelsAt !== this.level) this.wheelsAt = 0;
   }
 
   private raised(prev: number): void {
@@ -231,6 +297,7 @@ export class Wanted {
     this.peak = Math.max(this.peak, lvl);
     this.grace = RESPONSE_GRACE;
     this.unseen = 0;
+    this.wheelsAt = 0;
     this.bus.emit({ type: 'wanted', level: lvl, prev, reason: 'crime' });
   }
 }

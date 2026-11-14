@@ -7,7 +7,7 @@
 
 import { len2 } from '../core/len';
 export const HELI_FROM = 5;
-const HELI_SPEED = 27;
+const HELI_SPEED = 24;
 const HELI_ACCEL = 7;
 /** The spotlight's radius on the ground: inside it, the player is seen, m. */
 export const SPOT_RADIUS = 7.5;
@@ -20,8 +20,8 @@ export const HELI_GONE = 260;
  * It stays on station this long, then leaves to refuel for HELI_REFUEL:
  * the window to break away from a 5-star chase, s.
  */
-export const HELI_SHIFT = 45;
-export const HELI_REFUEL = 30;
+export const HELI_SHIFT = 30;
+export const HELI_REFUEL = 40;
 
 export interface Helicopter {
   /** In the air near the player (or leaving). */
