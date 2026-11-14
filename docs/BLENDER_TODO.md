@@ -876,6 +876,9 @@ flat; the blinking sprite over it is the light. `STAND_INS.charge` is gone from
 
 ## 16. V3: cars that read from above (requested 2026-11-14)
 
+**Done 2026-11-14** (branch `blender/v3`, local Blender 5.2.3, `npm run assets`). Notes for the
+code side are at the end of this section.
+
 _§16–§20 are the Blender work for [V3_PLAN.md](V3_PLAN.md). Branch off
 `claude/v3`, keep to `blender/`, `public/assets/` and this file as before,
 and note what landed under each section. The code streams
@@ -932,6 +935,48 @@ sticky charge's seat all read them).
 Code side, for the notes: `PART.paint2` in `src/render/carMesh.ts` and a
 second per-instance colour in `vehicleBatch.ts`; nothing else changes if
 the footprints hold.
+
+### §16 notes (2026-11-14, cars from above)
+
+- **Footprints held exactly.** Measured as `dimsOf()` does (bounding box, `lampX` from the
+  headlight vertices): `halfWidth`, `front`, `rear` and `lampX` are unchanged on every root;
+  heights are within 1 cm (sedan 1.565 → 1.558, sports 1.185 → 1.175, pickup 1.865 → 1.855,
+  van 2.225 → 2.226). Wheelbases, wheel names and hub origins are as before.
+- **The body is a loft** (`loft()` / `body_ring()` in `vehicles.py`): seven points a
+  cross-section (sill, flank, shoulder each side, a centre line on top) at 7–9 stations from
+  nose to tail: the bumper ends, the axles' neighbourhood, the windscreen base, mid-cabin, the
+  cabin's back and the middles of the bonnet and boot. So the bonnet, boot, roof edge and each
+  flank have loops across and along for the crumple shader. The ends are narrowed (0.86) and
+  dropped 6 cm, which chamfers the corners in plan; the shoulder inset chamfers the bonnet and
+  boot edges. The roof is its own three-station loft, crowned, its top at the old height.
+- **Common to every car:** a raked glasshouse (the windscreen inset about twice the back
+  glass), trim bumpers standing proud of the chamfered ends, trim arches over the wheels
+  (out to the wheels' width, no further), wing mirrors at the windscreen base (cap in `paint2`
+  where the car has it, `trim` otherwise), tail lamps wrapped onto the boot top
+  (`<arch>_tailtop_L/R`, `taillight`).
+- **`paint2`** (charcoal, (97, 97, 100) sRGB ≈ 0.12 linear) is on: `sedan` sills and mirrors;
+  `compact` the whole roof and mirrors; `sports` twin bonnet and boot stripes, the wing and
+  mirrors; `van` the roof logo block and mirrors; `pickup` the bed rails and mirrors; `muscle`
+  twin stripes nose to tail over the roof, and mirrors; `limo` sills and mirrors. None on
+  `police`, `police_suv`, `taxi` or the trucks.
+- **Each archetype's top:** `sedan` sunroof and back window; `compact` short hatch (little
+  back rake), two-tone roof, roof rails; `sports` a wedge (the nose at 62% of the body height,
+  rising to the tail), a wing on two posts, dark intakes on the rear shoulders; `van` four roof
+  ribs, a ladder rack (chrome rungs); `taxi` two-row chequer bands along the bonnet's
+  shoulders and a row across the boot (the sign is unchanged, still `headlight`, so `lampX`
+  holds at 0.522); `pickup` crates (`cargo`) and a lashed tarp (`tarp`) in the bed;
+  `muscle` pinched at the doors (93%), full width over the rear wheels, scoop and ducktail;
+  `limo` one long glass roof panel; `police` / `police_suv` a wider light bar (1.3 m) on a trim
+  base, a white roof panel (`livery_white`) with **17** reading upright when the car heads up
+  the screen, and a `livery_blue` stripe along each flank. Trucks: wing mirrors on every cab
+  (inside the wheels' width) and two roof hatches on the `bus`.
+- **New fixed-colour materials:** `paint2`, `cargo`, `tarp`, `livery_white`, `livery_blue`.
+  `partKind()` maps them to `PART.other` (fixed colour) until `PART.paint2` lands.
+- **Triangles** (`check_assets.py` now holds the nine common cars to 900): sedan 520,
+  compact 496, sports 580, van 616, taxi 676, pickup 580, muscle 568, police 592,
+  police_suv 604, limo 532; trucks +24 each (bus +48).
+- Seen in the game at 13:00 (desktop, `tools/look/spot.mjs` with a taxi): the chequers and
+  the sign read at the game's zoom.
 
 ## 17. V3: street props, round 3 (`props.glb`, requested 2026-11-14)
 

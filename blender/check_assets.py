@@ -25,6 +25,8 @@ CHAR_CLIPS = {
     "Ride": (1.0, 0.05),
 }
 CHARACTER_FILES = re.compile(r"^(player(_f)?|ped_\w+|cop|vex|tuna|pike)\.glb$")
+# V3 (§16): the nine most-seen cars are drawn up to 48 at once.
+COMMON_CARS = {k: 900 for k in ("sedan", "compact", "sports", "van", "taxi", "pickup", "muscle", "police", "police_suv")}
 TWO_WHEELERS = {"scooter": 600, "cop_bike": 600}
 BUDGET = {"pigeon": 40, "character": 600, "vehicle": 1500, "vehicle_heli": 1500, "prop": 300, "debris": 80}
 # Large props that are allowed more than the small-prop budget.
@@ -140,7 +142,7 @@ def check_multi_root(path, gltf, kind, allowed_kinds=None):
         if kind == "prop":
             budget = PROP_BUDGET_OVERRIDE.get(name, budget)
         if kind == "vehicle":
-            budget = TWO_WHEELERS.get(name, budget)
+            budget = TWO_WHEELERS.get(name, COMMON_CARS.get(name, budget))
         flag = "" if tris <= budget else f"  (> {budget})"
         print(f"  {name:16s} {tris:5d} tris  {', '.join(sorted(mats))}{flag}")
         if tris > budget:

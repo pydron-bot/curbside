@@ -6,6 +6,7 @@ applied so the game can yaw front wheels freely) and light bars.
 
 Material names are a contract with the game (src/render/vehicleModels.ts):
   "paint"      tinted per car at runtime
+  "paint2"     a second tint (V3: roof panels, stripes, sills, mirror caps); charcoal until the code tints it
   "glass", "tyre", "headlight", "taillight", "trim", fixed colours
 Wheel objects are named "<arch>_wheel_FL/FR/RL/RR".
 """
@@ -22,14 +23,18 @@ THUMBS = Path(__file__).resolve().parents[1] / "thumbs"
 # Dimensions in metres. Length runs along Blender Y (front = -Y).
 ARCHETYPES = {
     "sedan": dict(length=4.4, width=1.9, body_h=0.62, clearance=0.32, cabin_len=2.2, cabin_off=0.2,
-                  cabin_h=0.58, taper=0.32, wheelbase=2.7, wheel_r=0.34),
+                  cabin_h=0.58, taper=0.32, wheelbase=2.7, wheel_r=0.34,
+                  sunroof=True, sills=True, rear_rake=0.6, rear_window=True),
     "compact": dict(length=3.8, width=1.75, body_h=0.62, clearance=0.3, cabin_len=2.0, cabin_off=0.15,
-                    cabin_h=0.62, taper=0.25, wheelbase=2.4, wheel_r=0.31),
+                    cabin_h=0.62, taper=0.25, wheelbase=2.4, wheel_r=0.31,
+                    roof2=True, rails=True, rear_rake=0.1),
     "sports": dict(length=4.4, width=1.95, body_h=0.48, clearance=0.24, cabin_len=1.6, cabin_off=0.35,
-                   cabin_h=0.42, taper=0.45, wheelbase=2.6, wheel_r=0.34),
+                   cabin_h=0.42, taper=0.45, wheelbase=2.6, wheel_r=0.34,
+                   wedge=True, wing=True, intakes=True, stripes=True, rake=0.9),
     # Short bonnet up front, tall box to the back: from above, the low end reads as the nose.
     "van": dict(length=4.8, width=2.0, body_h=0.95, clearance=0.38, cabin_len=3.95, cabin_off=0.33,
-                cabin_h=0.85, taper=0.12, wheelbase=3.0, wheel_r=0.38),
+                cabin_h=0.85, taper=0.12, wheelbase=3.0, wheel_r=0.38,
+                van_roof=True),
     "police": dict(length=4.5, width=1.9, body_h=0.62, clearance=0.32, cabin_len=2.2, cabin_off=0.2,
                    cabin_h=0.58, taper=0.32, wheelbase=2.75, wheel_r=0.34, lightbar=True),
     "taxi": dict(length=4.5, width=1.9, body_h=0.62, clearance=0.32, cabin_len=2.2, cabin_off=0.2,
@@ -41,9 +46,11 @@ ARCHETYPES = {
                        cabin_h=0.66, taper=0.14, wheelbase=2.9, wheel_r=0.4, lightbar=True, police_livery=True),
     # Long bonnet, short fastback cabin set well back, bonnet scoop and a ducktail.
     "muscle": dict(length=4.8, width=1.95, body_h=0.55, clearance=0.28, cabin_len=1.7, cabin_off=0.55,
-                   cabin_h=0.48, taper=0.4, wheelbase=2.85, wheel_r=0.36, scoop=True, spoiler=True),
+                   cabin_h=0.48, taper=0.4, wheelbase=2.85, wheel_r=0.36, scoop=True, spoiler=True,
+                   hips=True, stripes="full"),
     "limo": dict(length=6.8, width=1.95, body_h=0.6, clearance=0.3, cabin_len=4.3, cabin_off=0.3,
-                 cabin_h=0.56, taper=0.12, wheelbase=4.6, wheel_r=0.34, chrome=True),
+                 cabin_h=0.56, taper=0.12, wheelbase=4.6, wheel_r=0.34, chrome=True,
+                 glass_roof=True, sills=True),
 }
 
 # Cab-over-body vehicles: built by build_truck(); wheels list axle Y positions (front first).
@@ -67,27 +74,6 @@ TRUCKS = {
 }
 
 
-def tapered_box(name, length, width, height, taper, z0, y_center, mat):
-    """Box whose top face is inset by `taper` (fraction) front/back and a bit at the sides."""
-    mesh = bpy.data.meshes.new(name)
-    bm = bmesh.new()
-    hl, hw = length / 2, width / 2
-    tl, tw = hl * (1 - taper), hw * (1 - taper * 0.35)
-    bottom = [(-hw, -hl, 0), (hw, -hl, 0), (hw, hl, 0), (-hw, hl, 0)]
-    top = [(-tw, -tl, height), (tw, -tl, height), (tw, tl, height), (-tw, tl, height)]
-    vs = [bm.verts.new((x, y + y_center, z + z0)) for x, y, z in bottom + top]
-    for f in ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)):
-        bm.faces.new([vs[i] for i in f])
-    bm.normal_update()
-    bm.to_mesh(mesh)
-    bm.free()
-    obj = bpy.data.objects.new(name, mesh)
-    bpy.context.scene.collection.objects.link(obj)
-    obj.data.materials.append(mat)
-    shade_flat(obj)
-    return obj, tl * 2, tw * 2
-
-
 def wheel(name, radius, width, location, mat):
     bpy.ops.mesh.primitive_cylinder_add(vertices=10, radius=radius, depth=width, location=location,
                                         rotation=(0, 1.5707963, 0))
@@ -99,69 +85,289 @@ def wheel(name, radius, width, location, mat):
     return obj
 
 
+def loft(name, rings, mat, caps=True):
+    """A closed shell through `rings` (each a closed loop of (x, y, z), all the same length), flat-shaded.
+
+    Every ring is an edge loop across the body and every ring vertex runs an edge along it, so
+    the game's crumple shader (V3, BLENDER_TODO §16) has vertices to push on the bonnet, boot,
+    roof edge and flanks.
+    """
+    mesh = bpy.data.meshes.new(name)
+    bm = bmesh.new()
+    loops = [[bm.verts.new(v) for v in ring] for ring in rings]
+    n = len(rings[0])
+    for a, b in zip(loops, loops[1:]):
+        for i in range(n):
+            j = (i + 1) % n
+            bm.faces.new((a[i], a[j], b[j], b[i]))
+    if caps:
+        bm.faces.new(loops[0])
+        bm.faces.new(list(reversed(loops[-1])))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bmesh.ops.triangulate(bm, faces=[f for f in bm.faces if len(f.verts) > 4])
+    bm.normal_update()
+    bm.to_mesh(mesh)
+    bm.free()
+    obj = bpy.data.objects.new(name, mesh)
+    bpy.context.scene.collection.objects.link(obj)
+    obj.data.materials.append(mat)
+    shade_flat(obj)
+    return obj
+
+
+def body_ring(y, half_w, z0, top, waist=0.5, shoulder=0.86, crown=0.0, tuck=0.94):
+    """One cross-section of a car body at station y: a bevelled, slightly tucked-under profile.
+
+    Seven points: sill, flank and shoulder on each side and a centre point on top (the edge
+    loop along the bonnet, roof and boot). `shoulder` insets the top edge, which chamfers the
+    bonnet and boot edges from above.
+    """
+    h = top - z0
+    side = [(tuck, 0.0), (1.0, waist), (shoulder, 1.0)]
+    left = [(half_w * f, y, z0 + h * k) for f, k in side]
+    right = [(-x, y, z) for x, y, z in reversed(left)]
+    return left + [(0.0, y, top + crown)] + right
+
+
+# Archetypes whose `paint2` parts take a second tint (V3); the rest have fixed liveries.
+PAINT2 = {"sedan", "compact", "sports", "van", "pickup", "muscle", "limo"}
+
+
 def build_vehicle(arch, p, mats):
+    """A car, reworked for the top-down camera (V3, BLENDER_TODO §16).
+
+    Same footprint, wheelbase, height and headlights as before: the body is lofted through
+    cross-sections, its corners chamfered in plan, and the details that read from 20-45 m up
+    (mirrors, arches, bumpers, raked glass, wrapped tail lamps, each archetype's own top) are
+    added round it.
+    """
     root = bpy.data.objects.new(arch, None)
     bpy.context.scene.collection.objects.link(root)
     parts = []
 
     L, W = p["length"], p["width"]
-    z_body = p["clearance"]
-    body_top = z_body + p["body_h"]
-    paint = mats["trim"] if arch == "police" else mats["paint"]
+    hw = W / 2
+    z0 = p["clearance"]
+    body_top = z0 + p["body_h"]
+    roof_top = body_top + p["cabin_h"] + 0.045  # the old roof slab's top: the height the game measures
+    two = mats["paint2"] if arch in PAINT2 else mats["trim"]
+    roof_mat = mats["trim"] if arch == "police" or p.get("police_livery") else mats["paint"]
+    cab0 = p["cabin_off"] - p["cabin_len"] / 2  # windscreen base (front is -Y)
+    cab1 = p["cabin_off"] + p["cabin_len"] / 2
 
-    # Lower body; police get a white-door band via a second, slightly wider box.
-    parts.append(box(f"{arch}_body", (W, L, p["body_h"]), (0, 0, z_body + p["body_h"] / 2), mats["paint"], bevel=0.06))
+    # --- the body: stations nose to tail, each a ring; the ends chamfered in plan.
+    def top_at(y):
+        if p.get("wedge"):  # sports: a low nose rising to the tail
+            t = (y + L / 2) / L
+            return z0 + p["body_h"] * (0.62 + 0.38 * min(1.0, t * 1.6))
+        return body_top
+
+    def width_at(y):
+        if p.get("hips"):  # muscle: pinched at the doors, fat over the rear wheels
+            rear = p["wheelbase"] / 2
+            if abs(y - rear) < 0.7:
+                return hw
+            if cab0 < y < cab1:
+                return hw * 0.93
+        return hw
+
+    nose, tail = -L / 2 + 0.03, L / 2 - 0.03
+    stations = [nose, -L / 2 + 0.3, (-L / 2 + cab0) / 2, cab0, (cab0 + cab1) / 2, cab1,
+                (cab1 + L / 2) / 2, L / 2 - 0.3, tail]
+    stations = sorted(set(round(y, 4) for y in stations if nose <= y <= tail))
+    rings = []
+    for y in stations:
+        end = y in (nose, tail)
+        w = width_at(y) * (0.86 if end else 1.0)
+        top = top_at(y) - (0.06 if end else 0.0)
+        crown = 0.0 if end else 0.02
+        rings.append(body_ring(y, w, z0, top, shoulder=0.8 if end else 0.88, crown=crown))
+    parts.append(loft(f"{arch}_body", rings, mats["paint"]))
+
+    # Police doors and push bar, as before.
     if p.get("police_livery"):
-        paint = mats["trim"]
         parts.append(box(f"{arch}_doors", (W + 0.02, p["cabin_len"] * 0.75, p["body_h"] * 0.55),
-                         (0, p["cabin_off"], z_body + p["body_h"] * 0.5), mats["trim"]))
+                         (0, p["cabin_off"], z0 + p["body_h"] * 0.5), mats["trim"]))
         parts.append(box(f"{arch}_pushbar", (W * 0.7, 0.12, p["body_h"] * 0.7),
-                         (0, -L / 2 - 0.07, z_body + p["body_h"] * 0.4), mats["trim"]))
+                         (0, -L / 2 - 0.07, z0 + p["body_h"] * 0.4), mats["trim"]))
+    if arch == "police":
+        parts.append(box(f"{arch}_doors", (W + 0.02, L * 0.42, p["body_h"] * 0.7),
+                         (0, -p["cabin_off"] * 0.5, z0 + p["body_h"] * 0.45), mats["trim"]))
+
+    # --- the glasshouse: a raked windscreen (the front inset more than the back), so it
+    # reads from above as its own shape between bonnet and roof.
+    ct = top_at(cab0)
+    rake_f = p["cabin_len"] * p["taper"] * p.get("rake", 0.75)
+    rake_r = p["cabin_len"] * p["taper"] * p.get("rear_rake", 0.35)
+    base_w = hw * 0.88
+    top_w = hw * (1 - p["taper"] * 0.35) * 0.9
+    zr = body_top + p["cabin_h"]
+    glass = [(x * base_w, y, ct) for x in (-1, 1) for y in (cab0, cab1)]
+    glass += [(x * top_w, y, zr) for x in (-1, 1) for y in (cab0 + rake_f, cab1 - rake_r)]
+    parts.append(hull(f"{arch}_cabin", glass, mats["glass"]))
+
+    # The roof: three stations so it can dent, its crown at the old height.
+    r0, r1 = cab0 + rake_f + 0.06, cab1 - rake_r - 0.04
+    rw = top_w * 0.98
+    roof_crown = roof_top - zr - 0.01
+
+    def roof_ring(y):
+        return [(rw, y, zr - 0.005), (rw, y, zr + roof_crown * 0.7), (0, y, zr + roof_crown),
+                (-rw, y, zr + roof_crown * 0.7), (-rw, y, zr - 0.005)]
+
+    parts.append(loft(f"{arch}_roof", [roof_ring(y) for y in (r0, (r0 + r1) / 2, r1)],
+                      mats["paint2"] if p.get("roof2") else roof_mat))
+
+    # --- bumpers: trim, standing proud of the chamfered ends, under the lamps.
+    bz = z0 + 0.1
+    for end, sgn in (("front", -1), ("rear", 1)):
+        parts.append(box(f"{arch}_bumper_{end}", (W * 0.86, 0.14, 0.2), (0, sgn * (L / 2 - 0.035), bz), mats["trim"]))
+
+    # --- lights: the heads where they were (the beams start there); tails wrap onto the top.
+    lz = z0 + p["body_h"] * 0.6
+    for x in (-W * 0.32, W * 0.32):
+        side = "L" if x > 0 else "R"
+        parts.append(box(f"{arch}_head_{side}", (0.38, 0.1, 0.14), (x, -L / 2 - 0.01 + 0.02, lz), mats["headlight"]))
+        parts.append(box(f"{arch}_tail_{side}", (0.38, 0.1, 0.14), (x, L / 2 - 0.01, lz), mats["taillight"]))
+        parts.append(box(f"{arch}_tailtop_{side}", (0.36, 0.16, 0.02), (x, L / 2 - 0.12, top_at(L / 2 - 0.12) - 0.02),
+                         mats["taillight"]))
+
+    # --- wing mirrors at the windscreen base, and arches over the wheels (both show past the body).
+    for x in (-1, 1):
+        side = "L" if x > 0 else "R"
+        parts.append(box(f"{arch}_mirror_{side}", (0.16, 0.08, 0.09), (x * (hw - 0.05), cab0 + 0.12, ct + 0.1), two))
+        for tag, y in (("F", -p["wheelbase"] / 2), ("R", p["wheelbase"] / 2)):
+            r = p["wheel_r"]
+            parts.append(hull(f"{arch}_arch_{tag}{side}", [
+                (x * (hw - 0.06), y + dy, 2 * r + dz) for dy, dz in ((-r * 1.15, -0.12), (-r * 0.6, 0.06),
+                                                                       (r * 0.6, 0.06), (r * 1.15, -0.12))
+            ] + [(x * (hw + 0.03), y + dy, 2 * r + dz) for dy, dz in ((-r * 1.05, -0.1), (-r * 0.55, 0.05),
+                                                                       (r * 0.55, 0.05), (r * 1.05, -0.1))],
+                mats["trim"]))
+
+    # --- each archetype's own top.
+    if p.get("sunroof"):
+        parts.append(box(f"{arch}_sunroof", (rw * 1.1, (r1 - r0) * 0.4, 0.01),
+                         (0, (r0 + r1) / 2 - (r1 - r0) * 0.1, roof_top - 0.012), mats["glass"]))
+    if p.get("glass_roof"):  # limo: one long panel
+        parts.append(box(f"{arch}_glassroof", (rw * 1.2, (r1 - r0) * 0.75, 0.01), (0, (r0 + r1) / 2, roof_top - 0.012),
+                         mats["glass"]))
+    if p.get("rear_window"):
+        rwy = cab1 - rake_r * 0.5
+        parts.append(box(f"{arch}_rearwin", (top_w * 1.4, max(rake_r * 0.7, 0.12), 0.01),
+                         (0, rwy, (ct + zr) / 2 + 0.02), mats["glass"]))
+    if p.get("sills"):  # a paint2 sill along each side, seen past the doors
+        for x in (-1, 1):
+            parts.append(box(f"{arch}_sill_{'L' if x > 0 else 'R'}", (0.06, p["wheelbase"] - 2 * p["wheel_r"] - 0.2, 0.1),
+                             (x * (hw * 0.95), 0, z0 + 0.06), two))
+    if p.get("rails"):  # compact: roof rails
+        for x in (-1, 1):
+            parts.append(box(f"{arch}_rail_{'L' if x > 0 else 'R'}", (0.05, r1 - r0, 0.03),
+                             (x * (rw - 0.04), (r0 + r1) / 2, roof_top - 0.015), mats["trim"]))
+    if p.get("stripes"):  # twin stripes, nose over the roof to the tail
+        for x in (-0.16, 0.16):
+            parts.append(box(f"{arch}_stripe_bonnet{x:+.2f}", (0.16, cab0 - nose - 0.25, 0.012),
+                             (x, (nose + cab0) / 2 - 0.05, top_at((nose + cab0) / 2) + 0.022), two))
+            parts.append(box(f"{arch}_stripe_boot{x:+.2f}", (0.16, tail - cab1 - 0.3, 0.012),
+                             (x, (cab1 + tail) / 2, top_at((cab1 + tail) / 2) + 0.022), two))
+            if p.get("stripes") == "full":
+                parts.append(box(f"{arch}_stripe_roof{x:+.2f}", (0.16, r1 - r0 - 0.1, 0.01),
+                                 (x, (r0 + r1) / 2, roof_top - 0.011), two))
+    if p.get("intakes"):  # sports: dark intakes cut into the rear shoulders
+        for x in (-1, 1):
+            parts.append(box(f"{arch}_intake_{'L' if x > 0 else 'R'}", (0.14, 0.5, 0.03),
+                             (x * (hw * 0.82), cab1 + 0.15, top_at(cab1 + 0.15) + 0.006), mats["trim"]))
     if p.get("scoop"):
         parts.append(box(f"{arch}_scoop", (0.55, 0.9, 0.1), (0, -L / 2 + 1.1, body_top + 0.05), mats["trim"]))
     if p.get("spoiler"):
-        parts.append(box(f"{arch}_spoiler", (W * 0.92, 0.25, 0.08), (0, L / 2 - 0.15, body_top + 0.04), mats["paint"]))
+        parts.append(box(f"{arch}_spoiler", (W * 0.92, 0.25, 0.08), (0, L / 2 - 0.15, top_at(L / 2) + 0.04),
+                         mats["paint"]))
+    if p.get("wing"):  # sports: a wing on two posts, wider than the boot
+        sy = L / 2 - 0.22
+        st = top_at(sy)
+        for x in (-0.55, 0.55):
+            parts.append(box(f"{arch}_wingpost{x:+.1f}", (0.05, 0.08, 0.16), (x, sy, st + 0.08), mats["trim"]))
+        parts.append(box(f"{arch}_wing", (W * 0.94, 0.26, 0.04), (0, sy, st + 0.18), two))
     if p.get("chrome"):
         for x in (-1, 1):
             parts.append(box(f"{arch}_chrome_{'L' if x > 0 else 'R'}", (0.02, L * 0.8, 0.05),
-                             (x * (W / 2 + 0.005), 0, z_body + p["body_h"] * 0.55), mats["chrome"]))
-    if arch == "police":
-        parts.append(box(f"{arch}_doors", (W + 0.02, L * 0.42, p["body_h"] * 0.7),
-                         (0, -p["cabin_off"] * 0.5, z_body + p["body_h"] * 0.45), mats["trim"]))
-
-    cabin, top_len, top_w = tapered_box(f"{arch}_cabin", p["cabin_len"], W * 0.9, p["cabin_h"], p["taper"],
-                                        body_top, p["cabin_off"], mats["glass"])
-    parts.append(cabin)
-    parts.append(box(f"{arch}_roof", (top_w * 0.98, top_len * 0.98, 0.05),
-                     (0, p["cabin_off"], body_top + p["cabin_h"] + 0.02), paint))
-
-    # Lights: front is -Y.
-    for x in (-W * 0.32, W * 0.32):
-        parts.append(box(f"{arch}_head_{'L' if x > 0 else 'R'}", (0.38, 0.06, 0.14),
-                         (x, -L / 2 - 0.01, z_body + p["body_h"] * 0.6), mats["headlight"]))
-        parts.append(box(f"{arch}_tail_{'L' if x > 0 else 'R'}", (0.38, 0.06, 0.14),
-                         (x, L / 2 + 0.01, z_body + p["body_h"] * 0.6), mats["taillight"]))
+                             (x * (hw + 0.005), 0, z0 + p["body_h"] * 0.55), mats["chrome"]))
 
     if p.get("taxi_sign"):
         roof_z = body_top + p["cabin_h"] + 0.14
         parts.append(box(f"{arch}_sign", (0.7, 0.22, 0.2), (0, p["cabin_off"], roof_z), mats["headlight"]))
+        # A two-row chequer band along both shoulders of the bonnet and boot: reads as a cab from above.
+        sq = 0.17
+        for x in (-1, 1):
+            for y_from, y_to in ((nose + 0.3, cab0 - 0.05), (cab1 + 0.05, L / 2 - 0.65)):
+                n = int((y_to - y_from) / sq)
+                for i in range(n):
+                    for row in (0, 1):
+                        if (i + row) % 2:
+                            continue
+                        y = y_from + (i + 0.5) * sq
+                        cx = x * (hw * 0.78 - (row - 0.5) * sq)
+                        parts.append(box(f"{arch}_cheq_{'L' if x > 0 else 'R'}{row}_{y:+.2f}", (sq, sq, 0.012),
+                                         (cx, y, top_at(y) + 0.02 * (1 - abs(cx) / (hw * 0.88)) + 0.006), mats["trim"]))
+        for i in range(0, 7, 2):
+            x = -0.6 + i * 0.2
+            parts.append(box(f"{arch}_cheq_boot{i}", (0.2, 0.2, 0.012), (x, L / 2 - 0.45, top_at(L / 2 - 0.45) + 0.02),
+                             mats["trim"]))
 
     if p.get("bed"):
-        # Low walls and tailgate around the load bed, behind the cab.
-        bed_front = p["cabin_off"] + p["cabin_len"] / 2
+        # Low walls and tailgate around the load bed, behind the cab, and something in it.
+        bed_front = cab1
         bed_len = L / 2 - bed_front
         bed_mid = bed_front + bed_len / 2
         wall_h = 0.3
         for x in (-1, 1):
             parts.append(box(f"{arch}_bedwall_{'L' if x > 0 else 'R'}", (0.08, bed_len, wall_h),
-                             (x * (W / 2 - 0.04), bed_mid, body_top + wall_h / 2), mats["paint"]))
-        parts.append(box(f"{arch}_tailgate", (W, 0.08, wall_h), (0, L / 2 - 0.04, body_top + wall_h / 2), mats["paint"]))
+                             (x * (hw - 0.04), bed_mid, body_top + wall_h / 2), mats["paint"]))
+            parts.append(box(f"{arch}_bedrail_{'L' if x > 0 else 'R'}", (0.1, bed_len, 0.03),
+                             (x * (hw - 0.04), bed_mid, body_top + wall_h + 0.015), two))
+        parts.append(box(f"{arch}_tailgate", (W - 0.1, 0.08, wall_h), (0, L / 2 - 0.08, body_top + wall_h / 2), mats["paint"]))
         parts.append(box(f"{arch}_bedfloor", (W - 0.16, bed_len - 0.1, 0.02), (0, bed_mid, body_top + 0.01), mats["trim"]))
+        # Load: two crates and a lashed tarp bundle.
+        parts.append(rotate(box(f"{arch}_crate_a", (0.6, 0.5, 0.4), (-0.38, bed_front + 0.45, body_top + 0.2),
+                                mats["cargo"]), (0, 0, 8)))
+        parts.append(box(f"{arch}_crate_b", (0.5, 0.45, 0.32), (-0.42, bed_front + 1.0, body_top + 0.16), mats["cargo"]))
+        parts.append(hull(f"{arch}_tarp", [(x, y, body_top + z) for x in (0.08, 0.78) for y in (bed_front + 0.2, L / 2 - 0.3)
+                                           for z in (0.02,)] +
+                          [(x, y, body_top + 0.42) for x in (0.2, 0.66) for y in (bed_front + 0.35, L / 2 - 0.45)],
+                          mats["tarp"]))
+
+    if p.get("van_roof"):
+        # Ribbed roof, a ladder rack (trim) and a logo block (paint2: only some vans show it).
+        for i in range(4):
+            y = r0 + (i + 0.5) * (r1 - r0) / 4
+            parts.append(box(f"{arch}_rib{i}", (rw * 1.9, 0.06, 0.025), (0, y, zr + roof_crown * 0.75), mats["trim"]))
+        rack_z = roof_top - 0.03
+        for x in (-0.42, 0.42):
+            parts.append(box(f"{arch}_rack{x:+.1f}", (0.05, r1 - r0 - 0.2, 0.04), (x, (r0 + r1) / 2, rack_z), mats["trim"]))
+        for i in range(5):
+            y = r0 + 0.2 + i * (r1 - r0 - 0.4) / 4
+            parts.append(box(f"{arch}_rung{i}", (0.84, 0.04, 0.03), (0, y, rack_z), mats["chrome"]))
+        parts.append(box(f"{arch}_logo", (rw * 1.5, 0.7, 0.012), (0, r0 + 0.5, roof_top - 0.005), two))
 
     if p.get("lightbar"):
+        # A bolder bar on a trim base, and a white roof panel with a number behind it.
         roof_z = body_top + p["cabin_h"] + 0.1
-        parts.append(box(f"{arch}_bar_red", (0.5, 0.25, 0.12), (-0.28, p["cabin_off"], roof_z), mats["siren_red"]))
-        parts.append(box(f"{arch}_bar_blue", (0.5, 0.25, 0.12), (0.28, p["cabin_off"], roof_z), mats["siren_blue"]))
+        y = p["cabin_off"] - 0.1 if p.get("police_livery") else p["cabin_off"]
+        parts.append(box(f"{arch}_bar_base", (1.3, 0.3, 0.05), (0, y, roof_z - 0.07), mats["trim"]))
+        parts.append(box(f"{arch}_bar_red", (0.6, 0.3, 0.12), (-0.33, y, roof_z), mats["siren_red"]))
+        parts.append(box(f"{arch}_bar_blue", (0.6, 0.3, 0.12), (0.33, y, roof_z), mats["siren_blue"]))
+        ny = y + 0.55
+        parts.append(box(f"{arch}_number", (0.8, 0.5, 0.01), (0, ny, roof_top - 0.008), mats["livery_white"]))
+        # "17": a one and a seven in trim bars, read upright with the car heading up the screen.
+        # (Front is -Y: heading up the screen, the car's +X is on the left.)
+        parts.append(box(f"{arch}_num1", (0.07, 0.34, 0.006), (0.18, ny, roof_top), mats["trim"]))
+        parts.append(box(f"{arch}_num7a", (0.24, 0.07, 0.006), (-0.12, ny - 0.135, roof_top), mats["trim"]))
+        parts.append(rotate(box(f"{arch}_num7b", (0.07, 0.3, 0.006), (-0.18, ny + 0.02, roof_top), mats["trim"]),
+                            (0, 0, -22)))
+        # A stripe along each flank under the windows.
+        for x in (-1, 1):
+            parts.append(box(f"{arch}_stripe_{'L' if x > 0 else 'R'}", (0.02, L * 0.86, 0.09),
+                             (x * (hw + 0.012), 0, z0 + p["body_h"] * 0.72), mats["livery_blue"]))
 
     r = p["wheel_r"]
     for tag, x, y in (("FL", 1, -1), ("FR", -1, -1), ("RL", 1, 1), ("RR", -1, 1)):
@@ -217,7 +423,13 @@ def cab(arch, p, mats):
     for x in (-1, 1):
         parts.append(box(f"{arch}_sidewin_{'L' if x > 0 else 'R'}", (0.04, cab_len * 0.55, glass_h * 0.75),
                          (x * (W / 2 + 0.005), y, z0 + cab_h + glass_h * 0.45), mats["glass"]))
+        parts.append(mirror(arch, x, W, -L / 2 + 0.3, z0 + cab_h + glass_h * 0.5, mats))
     return parts, z0 + cab_h + glass_h
+
+
+def mirror(arch, x, W, y, z, mats):
+    """A truck's wing mirror on its arm, inside the wheels' width so the footprint holds (V3)."""
+    return box(f"{arch}_mirror_{'L' if x > 0 else 'R'}", (0.12, 0.08, 0.3), (x * (W / 2 + 0.0), y, z), mats["trim"])
 
 
 def build_truck(arch, p, mats):
@@ -243,6 +455,10 @@ def build_truck(arch, p, mats):
         parts.append(box(f"{arch}_sign", (W * 0.7, 0.05, 0.25), (0, -L / 2 - 0.02, H - 0.2), mats["sign"]))
         parts.append(box(f"{arch}_bumper", (W + 0.04, 0.16, 0.25), (0, -L / 2 - 0.05, z0 + 0.12), mats["trim"]))
         parts.append(box(f"{arch}_ac", (1.6, 2.4, 0.3), (0, 2.5, H + 0.25), mats["trim"]))
+        for i, y in enumerate((-3.6, -0.6)):  # roof hatches (V3)
+            parts.append(box(f"{arch}_hatch{i}", (0.9, 0.9, 0.06), (0, y, H + 0.15), mats["chrome"]))
+        for x in (-1, 1):
+            parts.append(mirror(arch, x, W, -L / 2 + 0.25, z0 + body_h * 0.75, mats))
         parts += lights(arch, W, L, z0 + 0.45, mats)
     else:
         cab_parts, cab_top = cab(arch, p, mats)
@@ -458,6 +674,8 @@ def build(out_dir: Path, thumbs: bool = False):
         "headlight": material("headlight", (255, 244, 194), 0.3),
         "taillight": material("taillight", (220, 40, 30), 0.3),
         "trim": material("trim", (24, 26, 30), 0.6),
+        # A second body colour (V3): the code side tints it per car; until then a charcoal (~0.12 linear).
+        "paint2": material("paint2", (97, 97, 100), 0.45),
         "siren_red": material("siren_red", (230, 30, 30), 0.3),
         "siren_blue": material("siren_blue", (30, 80, 240), 0.3),
         # Fixed colours (not tinted): liveries and fittings.
@@ -472,6 +690,10 @@ def build(out_dir: Path, thumbs: bool = False):
         "scoop_cream": material("scoop_cream", (250, 238, 210), 0.6),
         "awning_pink": material("awning_pink", (240, 110, 160), 0.6),
         "awning_white": material("awning_white", (245, 245, 245), 0.6),
+        "cargo": material("cargo", (168, 120, 66), 0.85),
+        "tarp": material("tarp", (52, 92, 70), 0.9),
+        "livery_white": material("livery_white", (240, 240, 236), 0.5),
+        "livery_blue": material("livery_blue", (30, 70, 200), 0.5),
     }
     objects = []
     for i, (arch, params) in enumerate(ARCHETYPES.items()):
