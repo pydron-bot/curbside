@@ -20,7 +20,7 @@ import {
 } from 'three';
 import { BREACH_FRAGMENT_GLSL, BREACH_VERTEX_GLSL, breachUniforms } from '../render/breachScars';
 import { shaderLookGlsl } from '../render/lookTuning';
-import { UB_COMMON, UB_LAMP_LIST, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from '../render/shaderLib';
+import { UB_COMMON, UB_CUTAWAY, UB_LAMP_LIST, UB_STREET_LIGHT, after, replace, useWorldUniforms, worldUniforms } from '../render/shaderLib';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, type City, type Rect } from './city';
 import { AWNING_DEPTH, AWNING_HEIGHT, planBuildings, NEON_ANIM, type BuildingPlan, type NeonAnim, type RoofNeon, type RoofProp, type Side } from './buildingPlans';
 import { DISTRICTS, DISTRICT_STYLES, ROOF_TYPES, type District, type RoofType } from './districts';
@@ -761,13 +761,14 @@ export function propMaterial(opts: { lampList?: boolean } = {}): MeshLambertMate
     shader.fragmentShader = after(
       shader.fragmentShader,
       '#include <common>',
-      `varying float vGlow;\nvarying vec3 vPropWorld;\nvarying vec3 vPropNormal;\nvarying vec3 vPropLocal;\nvarying vec3 vPropScale;\nvarying float vPropSeed;\n${UB_COMMON}\n${UB_STREET_LIGHT}\n${BILLBOARD_GLSL}` +
+      `varying float vGlow;\nvarying vec3 vPropWorld;\nvarying vec3 vPropNormal;\nvarying vec3 vPropLocal;\nvarying vec3 vPropScale;\nvarying float vPropSeed;\n${UB_COMMON}\n${UB_CUTAWAY}\n${UB_STREET_LIGHT}\n${BILLBOARD_GLSL}` +
         (listed ? `\nflat varying vec4 vPropLamps;\n${UB_LAMP_LIST}` : ''),
     );
     shader.fragmentShader = after(
       shader.fragmentShader,
       '#include <emissivemap_fragment>',
-      `// Neon (cityMesh neonGlow): |aGlow| = 100 × animation + brightness; negative stutters now and then. Seeded per 32 m cell.
+      `if (vPropWorld.y > 1.5 && ubCutaway(vPropWorld)) discard;
+      // Neon (cityMesh neonGlow): |aGlow| = 100 × animation + brightness; negative stutters now and then. Seeded per 32 m cell.
       float glowAbs = abs(vGlow);
       // A painted sign: its advert by day (diffuse), its neon fading in with the night.
       float painted = step(${PAINTED - 0.5}, glowAbs);
@@ -909,6 +910,7 @@ function buildingMaterial(): MeshLambertMaterial {
       uniform vec4 uDistWin[${DISTRICTS.length}];
       uniform vec3 uDistGlass[${DISTRICTS.length}];
       ${UB_COMMON}
+      ${UB_CUTAWAY}
       ${UB_STREET_LIGHT}
       ${BUILDING_GLSL}
       ${BREACH_FRAGMENT_GLSL}`,
@@ -916,7 +918,8 @@ function buildingMaterial(): MeshLambertMaterial {
     shader.fragmentShader = replace(
       shader.fragmentShader,
       '#include <color_fragment>',
-      `#include <color_fragment>
+      `if (ubCutaway(vWorldB)) discard;
+      #include <color_fragment>
       vec3 bGlow = vec3(0.0);
       vec3 bNormal = vBN;
       vec3 bl = vLocal * vSize;

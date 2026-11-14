@@ -6,7 +6,7 @@ import type { StreetProps } from '../world/streetProps';
 import type { Landmarks } from '../world/landmarkProps';
 import { createGround, refreshGround } from '../world/ground';
 import type { Pickup } from '../world/pickups';
-import type { CameraRig } from './cameraRig';
+import { cutawayFor, type CameraRig } from './cameraRig';
 import { CharacterBodies } from './characterBodies';
 import { ContactShadows } from './contactShadows';
 import { Flyovers } from './flyovers';
@@ -221,6 +221,9 @@ export class Look {
     this.cars.envIntensity = sky.envIntensity;
     this.post.setNight(sky.night, look.bloom);
     this.city.update(sky.night);
+    // The camera trial: past today's near-vertical tilt, what stands between the camera and the player dithers away.
+    const cut = player && player.alive ? cutawayFor(this.rig.tiltNow) : 0;
+    worldUniforms.uCutaway.value.set(player?.x ?? 0, player?.driving ? 0.9 : 1.2, player?.z ?? 0, cut);
   }
 
   /** Draw a frame: fill the batched renderers for this view, fit the shadows, render. */

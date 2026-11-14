@@ -40,6 +40,14 @@ export const LEAD_FOOT: LeadSettings = { seconds: 0.45, maxX: 0.22, maxZ: 0.28, 
 const DEG = Math.PI / 180;
 
 /**
+ * How strongly the building cutaway works (shaderLib UB_CUTAWAY) at a camera
+ * tilt: none at today's 0.12, where nothing hides the player, full from 0.18.
+ */
+export function cutawayFor(tilt: number): number {
+  return Math.min(1, Math.max(0, (tilt - 0.14) / 0.04));
+}
+
+/**
  * Near-overhead chase camera: looks almost straight down with a slight tilt
  * (so building sides show a little parallax), leads in the direction of
  * travel, and climbs as speed rises so you can see what's coming.
@@ -91,6 +99,17 @@ export class CameraRig {
    * run on ahead of a frozen car and spring back; shake keeps real time.
    */
   timeScale = 1;
+  /**
+   * The camera trial (LOOK panel → CAMERA): tilt, on-foot height (a share of
+   * the heights set) and field of view (a share of 45°), applied only while
+   * following the player (follow()); the title, observe and editor cameras
+   * drive update() and keep `opts.tilt` and the plain lens. main points it
+   * at the live look; these are today's camera.
+   */
+  trial: { readonly cameraTilt: number; readonly footHeight: number; readonly fieldOfView: number } = { cameraTilt: 0.12, footHeight: 1, fieldOfView: 1 };
+  /** Following the player this frame (follow()): the trial applies. */
+  private playing = false;
+  private onFoot = false;
 
   constructor(
     aspect: number,
@@ -190,16 +209,41 @@ export class CameraRig {
     this.apply();
   }
 
+  /** The play camera: update() with the camera trial applied (`onFoot`: its on-foot height too). */
+  follow(dt: number, targetX: number, targetZ: number, vx: number, vz: number, onFoot: boolean): void {
+    this.playing = true;
+    this.onFoot = onFoot;
+    this.step(dt, targetX, targetZ, vx, vz);
+  }
+
+  /** Any other camera (title, observe): no trial. */
   update(dt: number, targetX: number, targetZ: number, vx: number, vz: number): void {
+    this.playing = false;
+    this.step(dt, targetX, targetZ, vx, vz);
+  }
+
+  /** The tilt in use this frame: the trial's while following the player, else the rig's own. */
+  get tiltNow(): number {
+    return this.playing ? this.trial.cameraTilt : this.opts.tilt;
+  }
+
+  /** The lens now, degrees (before FOV punches). */
+  private get lensFov(): number {
+    return this.playing ? this.baseFov * this.trial.fieldOfView : this.baseFov;
+  }
+
+  private step(dt: number, targetX: number, targetZ: number, vx: number, vz: number): void {
     const o = this.opts;
     const speed = len2(vx, vz);
-    let wantHeight = Math.min(o.maxHeight, o.minHeight + speed * o.heightPerSpeed);
-    if (speed > 1) wantHeight += (wantHeight - o.minHeight) * ((o.verticalClimb * vz * vz) / (speed * speed));
+    const k = this.playing && this.onFoot ? this.trial.footHeight : 1;
+    const minH = o.minHeight * k;
+    let wantHeight = Math.min(o.maxHeight * k, minH + speed * o.heightPerSpeed);
+    if (speed > 1) wantHeight += (wantHeight - minH) * ((o.verticalClimb * vz * vz) / (speed * speed));
     this.height += (wantHeight - this.height) * (1 - Math.exp(-o.zoomRate * dt));
     this.liftNow += (this.lift - this.liftNow) * (1 - Math.exp(-2 * dt));
 
     // Lead per axis, limited to a share of what's visible on that axis.
-    const halfH = (this.height + this.liftNow) * Math.tan((this.baseFov * DEG) / 2);
+    const halfH = (this.height + this.liftNow) * Math.tan((this.lensFov * DEG) / 2);
     const halfW = halfH * this.camera.aspect;
     const l = this.lead;
     const wantX = softClamp(vx * l.seconds, halfW * l.maxX);
@@ -278,7 +322,7 @@ export class CameraRig {
 
   private apply(): void {
     const h = this.height + this.liftNow;
-    const back = h * this.opts.tilt;
+    const back = h * this.tiltNow;
     const s = this.trauma.shake * (this.reducedMotion ? 0.35 : 1);
     const t = this.noiseTime;
     const amp = s * h * this.opts.shakeOffset;
@@ -293,7 +337,7 @@ export class CameraRig {
     const uz = -Math.cos(roll);
     this.camera.up.set(ux * cy + uz * sy, 0, uz * cy - ux * sy);
     this.camera.lookAt(this.x + jx, 0, this.z + jz);
-    const fov = this.baseFov + this.fov.value;
+    const fov = this.lensFov + this.fov.value;
     if (Math.abs(fov - this.camera.fov) > 1e-4) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();

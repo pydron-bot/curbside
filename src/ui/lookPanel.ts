@@ -1,5 +1,5 @@
 import type { GameAudio } from '../audio/gameAudio';
-import { LOOK_GROUPS, LOOK_SPECS, formatLook, lookDistance, type LookGroup, type LookKey, type LookSpec, type LookTuning } from '../render/lookTuning';
+import { CAMERA_PRESETS, LOOK_GROUPS, LOOK_SPECS, formatLook, lookDistance, type LookGroup, type LookKey, type LookSpec, type LookTuning } from '../render/lookTuning';
 import { getDevice } from '../render/quality';
 import './lookPanel.css';
 
@@ -202,9 +202,31 @@ export class LookPanel {
       if (open) this.prefs.open.push(group);
       this.savePrefs();
     });
+    if (group === 'camera') rows.append(this.cameraChips());
     for (const spec of specs) rows.append(this.buildRow(spec));
     this.groups.set(group, { el: sec, sub: sec.querySelector('small')! });
     this.body.append(sec);
+  }
+
+  /** The camera trial's presets: one tap sets tilt, on-foot height and field of view. */
+  private cameraChips(): HTMLElement {
+    const chips = document.createElement('div');
+    chips.className = 'lookp-chips';
+    for (const p of CAMERA_PRESETS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'lookp-chip';
+      b.textContent = p.label;
+      b.addEventListener('click', () => {
+        this.audio.ui('click');
+        this.tuning.set('cameraTilt', p.cameraTilt);
+        this.tuning.set('footHeight', p.footHeight);
+        this.tuning.set('fieldOfView', p.fieldOfView);
+        this.refresh();
+      });
+      chips.append(b);
+    }
+    return chips;
   }
 
   private buildRow(spec: LookSpec): HTMLElement {
