@@ -1,8 +1,17 @@
 # Curbside V3 — look better, play better
 
-_Draft for the owner's review, written 2026-11-14 against 0.33.0. Nothing
-here is started. Items are sized S (part of a session), M (one session) or
-L (a stream of its own, several sessions)._
+_Written 2026-11-14 against 0.33.0. Items are sized S (part of a session),
+M (one session) or L (a stream of its own, several sessions)._
+
+**Decided 2026-11-14 (the owner):** stages 1, 2, 3, 4 and 6 go ahead, with
+stage 0 as their baseline; stage 5 isn't chosen. Blender work isn't done
+by the code streams: it's written up in
+[BLENDER_TODO.md](BLENDER_TODO.md) §16 on for another session, and the code
+side ships with stand-ins until the GLBs land. At most two subagents.
+Streams: `claude/v3-look` (stages 1–3) and `claude/v3-play` (stages 4 and
+6), integrated on `claude/v3`. The dodge roll gets a button on touch
+unless the owner says otherwise; the camera presets and the day looks are
+built for the owner to choose from.
 
 ## How this was put together
 
@@ -129,7 +138,7 @@ L (a stream of its own, several sessions)._
 | P3 | **See it coming.** A roadblock is on the radar and the scanner a few seconds before you reach it. | `systems/police.ts`, `scanner.ts`, `radar.ts` | S |
 | P4 | **Pay for getting away.** GOT AWAY pays cash by peak stars and time wanted, and counts toward the life's CRED. | `game/heat.ts`, `progressBank.ts` | S |
 
-### Stage 5 · Reasons to keep playing
+### Stage 5 · Reasons to keep playing (not chosen)
 
 | # | Item | Where | Size |
 |---|---|---|---|
