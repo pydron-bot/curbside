@@ -22,7 +22,7 @@ CHAR_CLIPS = {
     "GetUp": (0.9, 0.05), "GetUpFast": (0.5, 0.05), "EnterCar": (0.5, 0.05), "Arrested": (1.0, 0.05),
     "Throw": (0.4, 0.05), "AimRocket": (0.3, 0.05), "ShootRocket": (0.2, 0.03), "Punch2": (0.33, 0.05),
     "Uppercut": (0.4, 0.05), "Stagger": (0.3, 0.05), "Hail": (1.0, 0.05), "Cower": (1.0, 0.05), "Cheer": (1.0, 0.05),
-    "Ride": (1.0, 0.05),
+    "Ride": (1.0, 0.05), "Roll": (0.35, 0.03),
 }
 CHARACTER_FILES = re.compile(r"^(player(_f)?|ped_\w+|cop|vex|tuna|pike)\.glb$")
 # V3 (§16): the nine most-seen cars are drawn up to 48 at once.

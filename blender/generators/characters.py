@@ -24,6 +24,7 @@ Every clip keys every bone, so any clip can be played or crossfaded alone.
 The game scales Walk/Run playback with speed; `walkSpeed` / `runSpeed` (the
 ground speeds the cycles are authored for) are exported as custom properties.
 """
+import math
 from pathlib import Path
 
 import bmesh
@@ -584,10 +585,66 @@ def animate(rig, d):
     key_pose(rig, 12, {**ride, "chest": (13, 2, 0), "head": (-10, -2, 0)}, (0, drop, 0))
     key_pose(rig, 24, ride, (0, drop, 0))
 
+    roll(rig, d)
+
     rig.animation_data.action = None
     for pb in rig.pose.bones:
         pb.rotation_euler = (0, 0, 0)
         pb.location = (0, 0, 0)
+
+
+def lowest_point(rig, frame):
+    """The lowest world z of the body's parts (all rigid on bones) at `frame`."""
+    scene = bpy.context.scene
+    scene.frame_set(int(frame), subframe=frame - int(frame))
+    bpy.context.view_layer.update()
+    low = float("inf")
+    for part in rig.children:
+        if part.type != "MESH":
+            continue
+        mw = part.matrix_world
+        for v in part.data.vertices:
+            low = min(low, (mw @ v.co).z)
+    return low
+
+
+def roll(rig, d):
+    """Roll (V3, BLENDER_TODO §18): 0.35 s forward shoulder roll in place, a whole-body clip.
+
+    One full turn of `root` about the body's side-to-side axis. The turn is keyed about a point
+    in the tucked body (a third of the way up the hips), not about the feet, so the body goes
+    round its own middle; each key in the turn is then lifted or dropped so its lowest point
+    just touches the ground. It ends on the Run clip's first frame (contact pose, same drop), so
+    the game can cut straight to a sprint.
+    """
+    new_action(rig, "Roll")
+    end = 0.35 * FPS  # 8.4 frames
+    c = d.hip_z * 0.55  # the turn's centre, up the root bone
+    tuck = {"hips": (20, 0, 0), "chest": (55, 0, 0), "head": (40, 0, 0),
+            "arm.L": (-45, 0, 14), "arm.R": (-45, 0, -14), "leg.L": (-115, 0, 4), "leg.R": (-115, 0, -4)}
+    keys = [
+        (0.0, STAND, 0),
+        (1.4, {"chest": (35, 0, 0), "head": (25, 0, 0), "arm.L": (-75, 0, 6), "arm.R": (-75, 0, -6),
+               "leg.L": (-40, 0, 0), "leg.R": (25, 0, 0)}, 35),
+        (2.8, tuck, 115),
+        (4.2, tuck, 195),
+        (5.6, {**tuck, "leg.L": (-105, 0, 4), "leg.R": (-105, 0, -4)}, 275),
+        (7.0, {"hips": (10, 0, 0), "chest": (30, 0, 0), "head": (10, 0, 0), "arm.L": (-40, 0, 8),
+               "arm.R": (-40, 0, -8), "leg.L": (-60, 0, 0), "leg.R": (-20, 0, 0)}, 335),
+    ]
+    for frame, pose, turn in keys:
+        t = math.radians(turn)
+        loc = (0, c - c * math.cos(t), -c * math.sin(t)) if turn else (0, 0, 0)
+        key_pose(rig, frame, {**pose, "root": (turn, 0, 0)}, loc)
+    run = {"hips": (8, 0, 0), "chest": (8, -10, 0), "head": (-10, 8, 0),
+           "leg.L": (50, 0, 0), "leg.R": (-46, 0, 0), "arm.L": (-55, 0, 8), "arm.R": (45, 0, 0)}
+    key_pose(rig, end, {**run, "root": (360, 0, 0)}, (0, -0.07, 0))
+    # Fit the turning keys to the ground (not the first or last: those stand on it already).
+    for frame, pose, turn in keys[1:]:
+        low = lowest_point(rig, frame)
+        t = math.radians(turn)
+        loc = (0, c - c * math.cos(t) - low + 0.01, -c * math.sin(t))
+        key_pose(rig, frame, {**pose, "root": (turn, 0, 0)}, loc)
 
 
 def build_one(out_dir, name, spec, thumbs):

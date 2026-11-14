@@ -1006,6 +1006,16 @@ NO CURBSIDE uses works-yellow pickups until there is one).
 
 ## 18. V3: the dodge roll (`Roll`, every character GLB, requested 2026-11-14)
 
+**Done 2026-11-14** (`roll()` in `blender/generators/characters.py`), on all nine bodies.
+`check_assets.py` checks it (`Roll` 0.35 s ± 0.03; it exports at 0.333 s, eight frames at
+24 fps, like `Punch`). The turn is keyed about a point 55% of the way up to the hips, not the
+feet, and each key in the turn is lifted so its lowest vertex sits 1 cm above the ground, so
+the body goes round its own middle without sinking. Keys: stand (0), dive with the arms
+reaching (1.4), tucked (2.8–5.6: chest and head down, arms in, legs piked up to the chest,
+since there are no knees), opening (7.0), and the `Run` clip's first frame with its drop
+(8.4 → 8), `root` at 360° (the same as `Run`'s 0°). The root moves, so the game shouldn't tip
+the instance while it plays.
+
 The player is getting a dodge on foot: about 4 m in 0.35 s. One new clip
 on every body (`player`, `player_f`, the three `ped_*`, `cop`, `vex`,
 `tuna`, `pike`), same rules as §1 and §8:
