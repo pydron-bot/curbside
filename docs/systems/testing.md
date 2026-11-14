@@ -55,10 +55,28 @@ medians rammer 9.0k / 5.3k, weaver 15.3k / 19.1k, drifter 7.5k / 10.2k.
   6.5k (p75 11.3k, max 24.5k), 4 bronze; weaver 12.7k (22.6k, 30.1k), 10
   bronze; drifter 7.8k (12.4k, 33.3k), 4 bronze; no silver or gold. Boom and
   smash are half to three quarters of the points (the weaver: drift 39%).
-- **`heat.mjs [chases=20] [--stars 5] [--secs 180] [--tough] [--perks] [--seed 1]`**:
+- **`heat.mjs [chases=20] [--stars 5] [--secs 180] [--tough] [--perks] [--seed 1] [--wheels] [--lielow] [--believed] [--lost]`**:
   chases from a built-up 3 stars to `--stars`, a junction-to-junction
-  evader; escapes, busts, wrecks, time to each lower star, crashes, shots
-  taken, helicopter time on you. `--tough` keeps the car healthy to test
+  evader; escapes, busts, wrecks, time to each lower star, how long the car
+  lasted (escapes and chases still going count as the whole run), the
+  damage split (walls, bullets, other cars: estimated from the crash table
+  and bullet hits), shots taken (and the share fired from beside a police
+  car), helicopter time on you, and GOT AWAY's pay. The ways out as bot
+  habits: `--wheels` (lost, no unit within 60 m: stop by a parked car, 2 s,
+  take it), `--lielow` (lost, no unit within 70 m: into the nearest car park
+  or alley outside the search ring, stop until seen), `--believed` (lost:
+  also steer away from where the police think you are); `--lost` starts
+  each chase already shaken off (4–5 blocks from the last sighting), the
+  phase those are for. `VERBOSE=1` lists each chase, `TRACE=1` its hits.
+  Stage 4's before and after are in [heat.md](heat.md) (*Tuning*); the
+  before, at 0.33.0 (2026-11-14, 20 each): 5★ stock car lost in 20, median
+  40 s, 3 down to 4★; 5★ tough none escaped, 4 busted, 8 to 4★, 2 to 3★;
+  3★ stock 1–2 escaped (two runs of the same seeds differed by one),
+  car lost 18–19, median 39 s;
+  3★ tough 4 escaped. Chaos Run the same day (`chaos.mjs 20 --bot all`):
+  rammer median 7.3k, 3 bronze; weaver 27.5k, 5 silver 10 bronze; drifter
+  12.7k, 2 silver 8 bronze. After stage 4: rammer 7.3k, 3 bronze; weaver
+  23.4k, 3 silver 12 bronze; drifter 12.8k, 1 silver 5 bronze. `--tough` keeps the car healthy to test
   the evasion rules alone. Baseline 2026-10-31 (20 chases, 5 stars): stock
   sports car lost in 18, busted 2, median end 26 s, 1 drop to 4 stars;
   tough car: none escaped, 12 down to 4 stars (median 84 s), 3 to 3 stars,
