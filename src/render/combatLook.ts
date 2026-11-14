@@ -35,6 +35,7 @@ import type { Combat } from '../game/combat';
 import type { CrowdPed } from '../game/population';
 import { GRENADE_FUSE, THROW_GRAVITY, THROW_HEIGHT, throwVelocity, type Projectile } from '../systems/projectiles';
 import type { Rect } from '../world/city';
+import { peopleDraw } from './characterModel';
 import type { Effects } from './effects';
 import { GLOW, uploadRange, type GlowSprites } from './glowSprites';
 import type { Look } from './look';
@@ -289,12 +290,27 @@ export class CombatLook {
         glows.addFlat(p.x + this.arc.vx * s, Math.max(0.1, y), p.z + this.arc.vz * s, 0, 0.32, 0.32, 1.4 * a, 0.9 * a, 0.5 * a, GLOW.disc);
       }
     }
-    // Lock-on: a red ring under the target.
+    // Lock-on: a red ring under the target (round the drawn body, which is larger than life).
     const lock = c.lock;
     if (lock) {
       const s = lock.agent.s;
       const k = 0.8 + 0.2 * Math.sin(t * 12);
-      glows.addFlat(s.x, 0.06, s.z, -t * 3, 1.9, 1.9, 2.2 * k, 0.25 * k, 0.2 * k, GLOW.ring);
+      const r = 1.9 * Math.max(1, peopleDraw.scale * 0.85);
+      glows.addFlat(s.x, 0.06, s.z, -t * 3, r, r, 2.2 * k, 0.25 * k, 0.2 * k, GLOW.ring);
+    }
+    // Anyone coming for the player stands in a faint red pool (the body's red edge is in the character shader).
+    const hk = peopleDraw.hostile;
+    if (hk > 0) {
+      const glow = (0.5 + 0.35 * night) * hk * (0.85 + 0.15 * Math.sin(t * 7));
+      const r = 0.95 * peopleDraw.scale;
+      for (const p of this.crowd) {
+        const m = p.model;
+        if (m.hostile <= 0 || !m.root.visible) continue;
+        const x = m.root.position.x;
+        const z = m.root.position.z;
+        if (x < view.minX - 2 || x > view.maxX + 2 || z < view.minZ - 2 || z > view.maxZ + 2) continue;
+        glows.addFlat(x, 0.05, z, 0, r, r, glow, 0.06 * glow, 0.04 * glow, GLOW.disc);
+      }
     }
     // Fire patches glow, flickering; brighter at night.
     const strength = 0.55 + 0.7 * night;

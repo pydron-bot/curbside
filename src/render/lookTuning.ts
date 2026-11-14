@@ -18,13 +18,15 @@ import type { KeyValueStore } from '../core/sessionLog';
 export const LOOK_KEY = 'curbside.look';
 export const LOOK_FILE_VERSION = 1;
 
-export type LookGroup = 'sky' | 'grade' | 'night' | 'day';
+export type LookGroup = 'sky' | 'grade' | 'night' | 'day' | 'read' | 'camera';
 
 export const LOOK_GROUPS: ReadonlyArray<readonly [LookGroup, string]> = [
   ['sky', 'SKY & LIGHT'],
   ['grade', 'COLOUR GRADE'],
   ['night', 'NEON & NIGHT'],
   ['day', 'DAYTIME'],
+  ['read', 'PEOPLE & ROOFS'],
+  ['camera', 'CAMERA (TRIAL)'],
 ];
 
 export interface LookSpec {
@@ -58,6 +60,16 @@ const pct = <K extends string>(key: K, label: string, group: LookGroup, hint: st
 /** A shift either way from the code's colour, −100%..+100% (0 = as written). */
 const shift = <K extends string>(key: K, label: string, group: LookGroup, hint: string): LookSpec & { key: K } => ({ key, label, group, def: 0, min: -1, max: 1, step: 0.01, unit: '%', hint });
 const deg = <K extends string>(key: K, label: string, group: LookGroup, hint: string): LookSpec & { key: K } => ({ key, label, group, def: 0, min: -40, max: 40, step: 1, unit: '°', hint });
+
+/** People are drawn this much larger than life by default (PEOPLE SIZE). */
+export const PEOPLE_SCALE = 1.35;
+
+/** The camera trial's presets (LOOK panel chips): tilt, on-foot height and field of view. */
+export const CAMERA_PRESETS: ReadonlyArray<{ label: string; cameraTilt: number; footHeight: number; fieldOfView: number }> = [
+  { label: 'TODAY 0.12', cameraTilt: 0.12, footHeight: 1, fieldOfView: 1 },
+  { label: 'TILT 0.2', cameraTilt: 0.2, footHeight: 1, fieldOfView: 1 },
+  { label: 'TILT 0.3', cameraTilt: 0.3, footHeight: 1.1, fieldOfView: 1 },
+];
 
 /** In the order the panel shows them. */
 export const LOOK_SPECS = [
@@ -117,6 +129,17 @@ export const LOOK_SPECS = [
   pct('gullSize', 'GULL SIZE', 'day', 'The seagulls at the docks', 0.5, 2),
   pct('streetArt', 'STREET ART', 'day', 'Crossings, murals, logos, bay numbers', 0, 2.5),
   pct('billboards', 'BILLBOARDS BY DAY', 'day', 'How strongly the painted adverts show'),
+  // Readability (V3 stage 1): people drawn larger than life (drawing only:
+  // the sim, collisions, doors and seats are life size), lit edges, hostiles
+  // marked; roofs a step back by day so the street leads.
+  pct('peopleScale', 'PEOPLE SIZE', 'read', 'Drawn size against life size (100%)', 1, 1.6, { def: PEOPLE_SCALE }),
+  pct('peopleRim', 'PEOPLE EDGE LIGHT', 'read', 'A lit outline that lifts people off the street', 0, 2.5),
+  pct('hostileMark', 'HOSTILE MARKING', 'read', 'Red edge and ring on anyone coming for you', 0, 2),
+  pct('roofStepBack', 'ROOFS STEP BACK', 'read', 'Day roofs darker and greyer (0% = as before)', 0, 2),
+  // The camera trial (owner's choice on the phone); the code's values are today's camera.
+  pct('cameraTilt', 'CAMERA TILT', 'camera', 'How far behind the camera sits, share of its height', 0.08, 0.4, { def: 0.12 }),
+  pct('footHeight', 'ON-FOOT HEIGHT', 'camera', 'Camera height on foot', 0.7, 1.4),
+  pct('fieldOfView', 'FIELD OF VIEW', 'camera', 'Lens width (100% = 45°)', 0.8, 1.3),
 ] as const satisfies readonly LookSpec[];
 
 export type LookKey = (typeof LOOK_SPECS)[number]['key'];
@@ -141,6 +164,8 @@ export const SHADER_LOOK: ReadonlyArray<readonly [LookKey, string]> = [
   ['streetArt', 'LK_ART'],
   ['billboards', 'LK_BILLBOARD'],
   ['treeSway', 'LK_SWAY'],
+  ['peopleRim', 'LK_RIM'],
+  ['roofStepBack', 'LK_ROOF'],
 ];
 /** Floats in `uLook`. */
 export const SHADER_LOOK_FLOATS = 16;

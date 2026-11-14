@@ -29,6 +29,21 @@ NODE_PATH=$(npm root -g) node tools/look/spot.mjs out/x desktop arts:150:-448:22
   pixel change against the frame-to-frame noise (`FLAT` = no visible
   change), and the program count before and after (it must not grow).
   Don't edit `src/` while it runs: the dev server reloads the page.
+- `lookSheet.mjs <outdir> [--port 5351] [--only name] [--tag TEXT] [--set key=value] [--mask]`:
+  the V3 look sheet (judge every look change on it, before and after): 16
+  fixed views at the phone profile (852×393) with a veteran save (no cold
+  open) and time frozen: on foot on the Neon Mile by day and night, by a
+  roof garden, two stars with officers coming; in a sports car at the spawn
+  (9.5, 9.5), downtown (0, 8) and the Neon Mile (224, −248) at 13:00, 18:42
+  and 22:00; rain; a car blown up (in slow motion so the fireball is
+  caught); a 4-star chase at night. Writes one PNG a view, `sheet.png`
+  (labelled) and `metrics.json`. Per view, from the camera and the city
+  data: the player's size on screen (CSS px across a standing person's
+  bounding box at the drawn people scale; in a car, as if standing there)
+  and the share of the frame that is roof (and wall), from a 107 × 49 grid
+  of rays against every building box (`--mask` tints what it counted, to
+  check it); plus draw calls and programs. `--set` moves LOOK sliders
+  before the shots (not saved). About 4 minutes.
 - `sheet.py <dir> <phone|desktop> <out.png>`: a 3×3 contact sheet of a
   `views.mjs` set.
 

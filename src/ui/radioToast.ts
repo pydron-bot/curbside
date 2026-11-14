@@ -50,6 +50,15 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
   // the card leaves as a stamp lands and waits for its show to end.
   let waitTimer = 0;
 
+  // How far the activity card, stars and stamp step down while the card is in:
+  // its own height (one line under a job card, up to three otherwise) and a gap.
+  const step = () => document.body.style.setProperty('--radio-step', `${el.offsetHeight + 6}px`);
+  // Its height changes with a song line, or a job card coming or going (one line under one).
+  if (typeof ResizeObserver !== 'undefined')
+    new ResizeObserver(() => {
+      if (!el.hidden) step();
+    }).observe(el);
+
   const hide = () => {
     window.clearTimeout(waitTimer);
     window.clearTimeout(hideTimer);
@@ -74,6 +83,7 @@ export function mountRadioToast(root: HTMLElement, audio: GameAudio): { show(sta
     window.clearTimeout(hideTimer);
     window.clearTimeout(goneTimer);
     el.hidden = false;
+    step();
     // Next frame, so the slide-in transition runs from the hidden position.
     requestAnimationFrame(() => el.classList.add('in'));
     hideTimer = window.setTimeout(hide, SHOW_MS);

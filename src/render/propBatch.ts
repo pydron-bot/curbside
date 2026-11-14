@@ -23,7 +23,7 @@ import { SIGNAL_GLSL } from '../world/signals';
 import { uploadRange } from './glowSprites';
 import { VERTS_PER_ROW, chunkSize, chunksOf } from './propChunks';
 import { SURF, type PropModels } from './propModels';
-import { UB_COMMON, UB_LAMP_LIST, UB_STREET_LIGHT, after, lampList, replace, useWorldUniforms, worldUniforms } from './shaderLib';
+import { UB_COMMON, UB_CUTAWAY, UB_LAMP_LIST, UB_STREET_LIGHT, after, lampList, replace, useWorldUniforms, worldUniforms } from './shaderLib';
 
 /** Floats per static prop: matrix (16), aProp (4), aTint (3), aLamps (4). */
 const STRIDE = 27;
@@ -702,13 +702,16 @@ function propMaterial(verts: IUniform<DataTexture>, sway: IUniform<number>): Mes
       varying float vPropSurf;
       flat varying vec4 vPropLamps;
       ${UB_COMMON}
+      ${UB_CUTAWAY}
       ${UB_STREET_LIGHT}
       ${UB_LAMP_LIST}`,
     );
     shader.fragmentShader = replace(
       shader.fragmentShader,
       '#include <color_fragment>',
-      `diffuseColor.rgb = vPropColor * ubCloudShade(vPropWorld.xz);
+      `// Rooftop kit and canopies go with the building cut away in front of the player (camera trial).
+      if (vPropWorld.y > 1.5 && ubCutaway(vPropWorld)) discard;
+      diffuseColor.rgb = vPropColor * ubCloudShade(vPropWorld.xz);
       vec3 propGlow = vPropGlow;
       if (abs(vPropSurf - 9.0) < 0.5) {
         // Ramp deck: yellow-and-black chevrons pointing up the slope (+Z), bright edges.

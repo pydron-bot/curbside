@@ -164,7 +164,7 @@ body:not([data-scene='play']) #activity {
 
 /* The radio's "now playing" card takes this spot for a few seconds. */
 body:has(#radio.in) #activity {
-  transform: translate(-50%, 46px);
+  transform: translate(-50%, var(--radio-step, 46px));
 }
 
 /* The wanted stars step down under the card while it's up. */
@@ -367,6 +367,27 @@ body:not([data-scene='play']) #act-banner {
 #act-banner[data-tone='info'] b {
   font-size: clamp(18px, 6vmin, 32px);
   line-height: 1.1;
+}
+
+/* It's in the card's goal line too: after a beat it rises into the card and
+   fades, so it isn't sat over the car for its whole time. */
+#act-banner[data-tone='info'] {
+  animation: banner-to-card 0.45s 1.2s ease-in forwards;
+}
+
+@keyframes banner-to-card {
+  to {
+    opacity: 0;
+    transform: translate(-50%, -170%) scale(0.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes banner-to-card {
+    to {
+      opacity: 0;
+    }
+  }
 }
 
 @keyframes banner-slam {

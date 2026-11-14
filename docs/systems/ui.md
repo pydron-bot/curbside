@@ -24,6 +24,15 @@ before `fn` (so Enter can't click a mouse-focused button as well).
 `MenuNav.add` uses it for every item; a new one-off button should too, never
 a bare `click` listener.
 
+Top centre on a phone holds one thing at a time: the radio's NOW PLAYING
+card (`radioToast.ts`, `audio.css`) sits under the pause button, and the
+activity card, stars and stamp step down by its measured height
+(`--radio-step` on `body`, set when it shows); under a job card
+(`body[data-activity]`) it shrinks to one line, the station. A mission's
+new objective (`#act-banner[data-tone='info']`) rises into the card and
+fades after 1.2 s rather than sitting over the car. `smoke.mjs`
+`radioCheck` holds this.
+
 Safe areas come from `env(safe-area-inset-*)` through `--safe-t/r/b/l` on
 `:root`; a test can override those to emulate a notched phone
 (`safeArea.ts` reads them back for JS layout). The touch layout is checked

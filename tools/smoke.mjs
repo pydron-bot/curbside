@@ -14,7 +14,9 @@
  * refused). On every profile, a named-mayhem stamp (and on the phones one
  * in a Chaos Run) must stay clear of the stars, radar, activity card and
  * score feed, and the police scanner's subtitle clear of all that, the
- * radio's card and the thumbs, on foot and in a car. OBSERVE, from the pause
+ * radio's card and the thumbs, on foot and in a car; the radio's card (a
+ * song on) clear of the activity card, stars, status, stamp, score and
+ * radar, and on the phones under a Chaos Run's card too. OBSERVE, from the pause
  * menu and from the title: no HUD, under the budget at the widest zoom, and
  * back out to the paused run or the title. On desktop, the map editor: a
  * block edit, CHANGES, EXPORT's file, undo, and the districts left as
@@ -323,6 +325,70 @@ async function chargeCheck(page, label) {
     return !window.__ub.combat.charges.live && getComputedStyle(document.querySelector('.btn-detonate')).visibility === 'hidden';
   });
   check(gone, `${label}: tapping BOOM sets the charge off and the button goes`);
+}
+
+/** What the radio's card must never cover (top centre: one thing at a time). */
+const RADIO_CLEAR_OF = ['#activity', '#wanted .w-stars', '.hud-status', '#stamp .stamp-box', '#score', '#radar'];
+
+/**
+ * The radio's card (a song on) with the stars up, `withCard`: under the
+ * activity card (a Chaos Run's, left running by stampCheck): on screen and
+ * clear of the activity card, stars, status line, a stamp, score and radar.
+ */
+async function radioCheck(page, label, withCard) {
+  const r = await page.evaluate(
+    async ({ clearOf, withCard }) => {
+      const u = window.__ub;
+      const frames = async (n) => {
+        for (let i = 0; i < n; i++) await new Promise((res) => requestAnimationFrame(() => res()));
+      };
+      if (u.paused) u.setPaused(false);
+      u.testTools.wanted(3);
+      // Free roam: no card (the run may still have one from the cold open; set aside for the check, put back after).
+      const act = document.querySelector('#activity');
+      const had = { flag: document.body.dataset.activity, hidden: act.hidden };
+      if (!withCard) {
+        delete document.body.dataset.activity;
+        act.hidden = true;
+      }
+      await new Promise((res) => setTimeout(res, 600));
+      const radio = document.querySelector('#radio');
+      const song = radio.querySelector('.radio-song');
+      // The longest card: hint, station and a song line.
+      radio.querySelector('b').textContent = 'BREAKNECK FM';
+      song.textContent = 'Overdrive Hearts — The Night Kerbs';
+      song.hidden = false;
+      radio.hidden = false;
+      radio.classList.add('in');
+      await frames(3);
+      await Promise.race([Promise.all(document.getAnimations().filter((a) => a instanceof CSSTransition).map((a) => a.finished.catch(() => {}))), new Promise((res) => setTimeout(res, 5000))]);
+      const rect = (el) => {
+        const b = el.getBoundingClientRect();
+        return { left: b.left, top: b.top, right: b.right, bottom: b.bottom, w: b.width, h: b.height };
+      };
+      const s = rect(radio);
+      const hits = [];
+      for (const sel of clearOf) {
+        for (const el of document.querySelectorAll(sel)) {
+          const b = rect(el);
+          if (b.w === 0 || b.h === 0 || getComputedStyle(el).visibility === 'hidden') continue;
+          if (s.left < b.right && b.left < s.right && s.top < b.bottom && b.top < s.bottom) hits.push(`${sel} ${Math.round(b.left)},${Math.round(b.top)}–${Math.round(b.right)},${Math.round(b.bottom)}`);
+        }
+      }
+      const card = !act.hidden && act.getBoundingClientRect().height > 0;
+      if (!withCard) {
+        if (had.flag !== undefined) document.body.dataset.activity = had.flag;
+        act.hidden = had.hidden;
+      }
+      return { hits, s, inside: s.left >= 0 && s.right <= innerWidth && s.top >= 0 && s.bottom <= innerHeight, card };
+    },
+    { clearOf: RADIO_CLEAR_OF, withCard },
+  );
+  const where = `${label} ${withCard ? 'under a job card' : 'free roam'}`;
+  check(r.inside && (!withCard || r.card), `${where}: radio card on screen (${Math.round(r.s.left)},${Math.round(r.s.top)} ${Math.round(r.s.w)}×${Math.round(r.s.h)}${withCard ? ', activity card up' : ''})`);
+  check(r.hits.length === 0, `${where}: radio card clear of the job card, stars, status, stamp, score and radar${r.hits.length ? ` (covers ${r.hits.join(', ')})` : ''}`);
+  if (withCard) await page.screenshot({ path: path.join(opt.out, `${label}-radio.png`), timeout: 120000 });
+  await page.evaluate(() => document.querySelector('#radio').classList.remove('in'));
 }
 
 /** What the scanner's subtitle must stay clear of: the stamp's list, the stamp itself, the radio's card, the prompts, the thumbs. */
@@ -992,8 +1058,10 @@ try {
       if (saved?.testTools) await bugReport(page, label);
       await stampCheck(page, label, false);
       await scannerCheck(page, label);
+      await radioCheck(page, label, false);
       // The phones: the Chaos Run's card and stars up too (stamps stay on there).
       if (label.startsWith('iphone')) await stampCheck(page, label, true);
+      if (label.startsWith('iphone')) await radioCheck(page, label, true);
       if (label.startsWith('iphone')) await chargeCheck(page, label);
       await observeCheck(page, label);
       if (label.startsWith('desktop')) await mapEditorCheck(page, label);

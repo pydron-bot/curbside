@@ -233,6 +233,8 @@ expose('dressing', dressing);
 const collision = new StaticGrid([...city.obstacles, ...dressing.solids]);
 const rand = mulberry32(Date.now() >>> 0);
 const rig = new CameraRig(1);
+// The LOOK panel's camera trial (live values; today's camera as shipped).
+rig.trial = lookTuning.look;
 expose('rig', rig);
 // Lights, time of day, ground, city, props, and the batched people/car/glow renderers.
 const look = new Look(renderer, scene, city, rig, pickups, app, dressing.street);
@@ -1471,9 +1473,9 @@ function frame(now: number) {
   else if (attract.active) titleCam.update(frameSeconds, viewW);
   else if (player.driving) {
     const v = player.driving;
-    rig.update(frameSeconds, v.mesh.root.position.x, v.mesh.root.position.z, v.sim.vx, v.sim.vz);
+    rig.follow(frameSeconds, v.mesh.root.position.x, v.mesh.root.position.z, v.sim.vx, v.sim.vz, false);
   } else {
-    rig.update(frameSeconds, px, pz, ped.vx, ped.vz);
+    rig.follow(frameSeconds, px, pz, ped.vx, ped.vz, true);
   }
   audioFrame.x = focus.x;
   audioFrame.z = focus.z;

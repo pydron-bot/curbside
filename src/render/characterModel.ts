@@ -59,6 +59,16 @@ const START_CAPACITY = 16;
  */
 export const CULL_MARGIN = 8;
 
+/**
+ * How people are drawn (render/lookLive.ts sets it from the LOOK sliders):
+ * `scale` larger than life, about the feet (a rider about the seat), for
+ * the drawing only: the sim, collisions, car doors and seats stay life
+ * size; `hostile` the strength of the hostile marking.
+ */
+export const peopleDraw = { scale: 1, hostile: 1 };
+/** A rider's seat is this far above their root (Ride: root = seat − 0.75 m): they grow from it. */
+const SEAT_UP = 0.75;
+
 /** The skeleton and clips every character of one body shares, built once from its GLB. */
 interface Template {
   /** Bone hierarchy only (meshes stripped): cloned per character for its own pose. */
@@ -112,6 +122,8 @@ export class CharacterBatch {
   private data: Float32Array;
   private readonly uniforms: Record<string, IUniform>;
   private readonly m = new Matrix4();
+  /** The drawn scale (peopleDraw), about the feet or a rider's seat. */
+  private readonly drawScale = new Matrix4();
   private warned = false;
 
   constructor(
@@ -188,6 +200,8 @@ export class CharacterBatch {
     let live = 0;
     const shown = this.shown;
     shown.length = 0;
+    const k = peopleDraw.scale;
+    const grow = this.drawScale.makeScale(k, k, k);
     for (const model of this.models) {
       if (!isShown(model.root)) continue;
       live++;
@@ -200,19 +214,20 @@ export class CharacterBatch {
         break;
       }
       model.body.updateMatrix();
-      this.m.multiplyMatrices(model.root.matrixWorld, model.body.matrix);
+      grow.elements[13] = model.riding ? SEAT_UP * (1 - k) : 0;
+      this.m.multiplyMatrices(model.root.matrixWorld, grow).multiply(model.body.matrix);
       model.instanceMatrix.copy(this.m);
       this.mesh.setMatrixAt(row, this.m);
       model.write(this.data, row * this.rowTexels * 4, this.boneCount);
       const e = this.m.elements;
       if (model.lying) {
         // Knocked down: flat on the back, head ~1.7 m behind the feet.
-        shadows?.add(e[12] - e[8] * 0.8, e[14] - e[10] * 0.8, Math.atan2(e[8], e[10]), 0.4, 0.9, 0.25, 0.45);
+        shadows?.add(e[12] - e[8] * 0.8, e[14] - e[10] * 0.8, Math.atan2(e[8], e[10]), 0.4 * k, 0.9 * k, 0.25 * k, 0.55);
       } else if (model.kneeling) {
         // Kneeling (busted, cowering): the legs lie back along the ground.
-        shadows?.add(e[12] - e[8] * 0.35, e[14] - e[10] * 0.35, Math.atan2(e[8], e[10]), 0.35, 0.6, 0.25, 0.5);
+        shadows?.add(e[12] - e[8] * 0.35, e[14] - e[10] * 0.35, Math.atan2(e[8], e[10]), 0.35 * k, 0.6 * k, 0.25 * k, 0.6);
       } else {
-        shadows?.add(e[12], e[14], 0, 0.3, 0.3, 0.25, 0.5);
+        shadows?.add(e[12], e[14], 0, 0.32 * k, 0.32 * k, 0.24 * k, 0.68);
       }
       shown.push(model);
       row++;
@@ -335,7 +350,7 @@ export class CharacterBatch {
       uniform int uBoneCount;
       attribute float aBone;
       attribute float aSlot;
-      ${lit ? 'varying vec3 vPartColor;\nvarying float vFlash;\nvarying vec3 vCrowdWorld;\nvarying vec3 vCrowdNormal;' : ''}`,
+      ${lit ? 'varying vec3 vPartColor;\nvarying vec3 vFlash;\nvarying vec3 vCrowdWorld;\nvarying vec3 vCrowdNormal;' : ''}`,
     );
     if (lit) {
       shader.vertexShader = replace(
@@ -344,7 +359,7 @@ export class CharacterBatch {
         `${fetch}
         int crowdExtra = uBoneCount * 4;
         vPartColor = texelFetch(uCrowdTex, ivec2(crowdExtra + int(aSlot + 0.5), crowdRow), 0).rgb;
-        vFlash = texelFetch(uCrowdTex, ivec2(crowdExtra + ${SLOTS.length}, crowdRow), 0).r;
+        vFlash = texelFetch(uCrowdTex, ivec2(crowdExtra + ${SLOTS.length}, crowdRow), 0).rgb;
         #include <beginnormal_vertex>
         objectNormal = mat3(crowdM) * objectNormal;`,
       );
@@ -363,13 +378,21 @@ export class CharacterBatch {
       shader.fragmentShader = after(
         shader.fragmentShader,
         '#include <common>',
-        `varying vec3 vPartColor;\nvarying float vFlash;\nvarying vec3 vCrowdWorld;\nvarying vec3 vCrowdNormal;\n${UB_COMMON}\n${UB_STREET_LIGHT}`,
+        `varying vec3 vPartColor;\nvarying vec3 vFlash;\nvarying vec3 vCrowdWorld;\nvarying vec3 vCrowdNormal;\n${UB_COMMON}\n${UB_STREET_LIGHT}`,
       );
       shader.fragmentShader = replace(shader.fragmentShader, '#include <color_fragment>', 'diffuseColor.rgb *= vPartColor * ubCloudShade(vCrowdWorld.xz);');
       shader.fragmentShader = after(
         shader.fragmentShader,
         '#include <emissivemap_fragment>',
-        'totalEmissiveRadiance += vec3(vFlash) + diffuseColor.rgb * ubStreetLight(vCrowdWorld, normalize(vCrowdNormal));',
+        `vec3 crowdN = normalize(vCrowdNormal);
+        totalEmissiveRadiance += vec3(vFlash.x) + diffuseColor.rgb * ubStreetLight(vCrowdWorld, crowdN);
+        // Edge light: lifts people off the street from above (moon-cyan at night), the
+        // player's (vFlash.z) brighter and gold; hostiles (vFlash.y) a hot red that throbs.
+        float crowdRim = pow(1.0 - clamp(dot(crowdN, normalize(cameraPosition - vCrowdWorld)), 0.0, 1.0), 1.7);
+        vec3 rimC = mix(vec3(1.0, 0.95, 0.86) * 0.45, vec3(0.45, 0.75, 1.0) * 0.45, uNight);
+        rimC = mix(rimC, vec3(1.0, 0.82, 0.4) * mix(0.75, 0.7, uNight), vFlash.z) * LK_RIM;
+        rimC = mix(rimC, vec3(1.0, 0.12, 0.08) * (0.95 + 0.35 * sin(uTime * 7.0)), min(vFlash.y, 1.0));
+        totalEmissiveRadiance += crowdRim * rimC * (1.0 + vFlash.y);`,
       );
     } else {
       shader.vertexShader = replace(
@@ -493,6 +516,10 @@ export class CharacterModel {
   cowering = false;
   /** Seated on a two-wheeler (Ride): put the root at the seat minus 0.75 m. */
   riding = false;
+  /** Coming for the player (fighting, shooting, an officer making an arrest): marked red. 0..1, set by the game each frame. */
+  hostile = 0;
+  /** The player: a brighter, gold edge light. */
+  focus = 0;
   /** root × body, as drawn last frame (for what this person holds). */
   readonly instanceMatrix = new Matrix4();
   private template: Template | null = null;
@@ -880,6 +907,7 @@ export class CharacterModel {
     this.restagger = false;
     this.simStagger = 0;
     this.arrested = this.cowering = this.riding = false;
+    this.hostile = 0;
     this.weapon = null;
     this.armed = false;
     this.fakeAim = 0;
@@ -918,6 +946,8 @@ export class CharacterModel {
       o += 4;
     }
     data[o] = this.flashTime > 0 ? 0.9 : 0;
+    data[o + 1] = this.hostile * peopleDraw.hostile;
+    data[o + 2] = this.focus;
   }
 
   private has(name: string): boolean {

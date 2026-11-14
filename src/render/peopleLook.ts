@@ -12,6 +12,7 @@ import { Muggings } from '../game/scenes/muggings';
 import type { Witnesses } from '../game/scenes/witnesses';
 import type { Rect } from '../world/city';
 import { near, type CityLookPart } from './cityLifeLook';
+import { peopleDraw } from './characterModel';
 import { GLOW, type GlowSprites } from './glowSprites';
 import { worldUniforms } from './shaderLib';
 
@@ -69,15 +70,17 @@ export function peopleLook(life: CityLife): CityLookPart {
         const p = m.root.position;
         if (!near(view, p.x, p.z, 2)) continue;
         const h = m.root.rotation.y;
+        // People are drawn larger than life: the hand is higher and further out.
+        const k = peopleDraw.scale;
         const fx = Math.sin(h);
         const fz = Math.cos(h);
         // Right of heading h is (-cos h, sin h).
-        const x = p.x + fx * PHONE_AHEAD - fz * PHONE_RIGHT;
-        const z = p.z + fz * PHONE_AHEAD + fx * PHONE_RIGHT;
+        const x = p.x + (fx * PHONE_AHEAD - fz * PHONE_RIGHT) * k;
+        const z = p.z + (fz * PHONE_AHEAD + fx * PHONE_RIGHT) * k;
         const blink = ph.role === 'film' && Math.sin(time * 6) > 0.6 ? 1.6 : 1;
         // A touch larger than life, so it reads from the camera's height.
-        glows.addFlat(x, PHONE_Y, z, h, 0.24, 0.38, 1.3 * lit, 1.6 * lit, 2.2 * lit * blink, GLOW.bar);
-        glows.addFlat(x, PHONE_Y - 0.02, z, h, 0.9, 0.9, 0.25 * lit, 0.32 * lit, 0.5 * lit, GLOW.disc);
+        glows.addFlat(x, PHONE_Y * k, z, h, 0.24, 0.38, 1.3 * lit, 1.6 * lit, 2.2 * lit * blink, GLOW.bar);
+        glows.addFlat(x, PHONE_Y * k - 0.02, z, h, 0.9, 0.9, 0.25 * lit, 0.32 * lit, 0.5 * lit, GLOW.disc);
       }
     },
   };

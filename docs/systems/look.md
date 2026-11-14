@@ -184,14 +184,43 @@ the first time it comes into view.
       vertex shader (`aWing`: gliding M, beating in bouts); one draw call
       while any is in view; shadows cast down the sun's ray as contact
       shadows.
+  - *Readable (V3 stage 1)*, no new draw call or program:
+    - *People larger than life*: drawn at PEOPLE SIZE (`PEOPLE_SCALE`
+      1.35, `peopleDraw.scale` in `characterModel.ts`) about the feet, a
+      rider about the seat; the sim, collisions, doors and seats are life
+      size. Guns in hand, muzzles and the phone glow follow the drawn body;
+      the lock-on ring and contact shadows grow with it (shadows darker
+      too). Street outfits are brighter and more saturated (no yellow: the
+      player's). The character shader adds an edge light (warm by day,
+      moon-cyan at night, gold on the player: misc texel `.b`); anyone
+      coming for the player (`model.hostile`, from the crowd mode in
+      `peoplePose`: fight, shoot, an officer's arrest run) gets a throbbing
+      red edge (texel `.g`) and a faint red pool in the glow batch
+      (`combatLook`). Sliders: PEOPLE SIZE, PEOPLE EDGE LIGHT (`LK_RIM`),
+      HOSTILE MARKING.
+    - *Roofs step back by day* (`roofSurface`, `LK_ROOF`, ROOFS STEP
+      BACK): ordinary roofs a little greyer and 15-26% darker (brighter
+      ones more) with a broad shade inside the parapet; landmark roofs
+      (helipads, murals, logos, bay numbers) mostly keep their colour;
+      nothing at night (`uNight`). Rooftop pools are props and unchanged.
+      Roof gardens are rows of round plants in their beds, one crop a bed,
+      some in flower, blended to their average far off (was a noise fill).
+    - *Camera trial and cutaway*: see [effects-and-camera.md](effects-and-camera.md).
+    - Judged on `tools/look/lookSheet.mjs` (phone views with the player's
+      size on screen and the roof share, from the camera and the city
+      data). 0.33.0 → stage 1 at the phone profile: the player on foot
+      14 → 20 px, in a car 11 → 15 px; roof share unchanged (21-35% on
+      foot by roofs, 0-15% in a car; TILT 0.3 raises it to 39% on the
+      Neon Mile with the cutaway opening the street).
   - *HUD*: a pink-cyan-violet radar rim, violet-navy map streets, a hot
     pink health bar, a cyan healthy-car ring. *Settings → Extras → Neon
     filter* (`screenFilter`, off by default): the title's edge light and
     scanlines as a CSS layer (`mountNeonFilter`).
 - **Tuning (the LOOK panel, 0.27.0).** TEST → LOOK opens a slim panel
   down one edge of live play (`ui/lookPanel.ts`; folds to a tab, ⇆ swaps
-  sides): about fifty plain-named sliders in four groups (sky and light by
-  part of the day, the colour grade, neon and night, daytime), a clock that
+  sides): about sixty plain-named sliders in six groups (sky and light by
+  part of the day, the colour grade, neon and night, daytime, people and
+  roofs, the camera trial with its preset chips), a clock that
   holds at any hour (a cheat, like FREEZE; the sliders aren't), each slider's
   distance from the shipped look with a reset, RESET ALL, and EXPORT
   (downloads and copies `look.json`). The sliders are
@@ -219,7 +248,8 @@ the first time it comes into view.
     slot per shader slider (`lookTuning` SHADER_LOOK), read through `LK_*`
     macros: neon, halos, windows, wet sheen, cloud shadow and cover, flyer
     shadows, glints, tree sway, dapple, rainbow, mist spread, street art,
-    billboards. A slot holds the distance from the code's value, so a
+    billboards, people's edge light, roofs stepping back (all 16 floats are
+    used: a new shader slider grows `uLook` to vec4[5]). A slot holds the distance from the code's value, so a
     material that misses the uniform draws the shipped look.
   - *Everything else* is JS read each frame: lamp colour and brightness
     (`uLampColor`), headlights, underglow and trails, siren wash

@@ -184,8 +184,10 @@ export function trafficPaint(archetype: VehicleArchetype, rand: () => number): s
   return LIVERY[archetype] ?? (own ? pick(own, rand) : pick(PAINTS, rand));
 }
 const PAINTS = ['#c8342b', '#2f6fc0', '#d9d6cc', '#e8b923', '#3d7a4a', '#1f2328', '#8a8f96', '#7a2f5a', '#c86a2b'];
-const SHIRTS = ['#c94f4f', '#4f7cc9', '#5aa36a', '#d8d2c0', '#2f2f35', '#a0662f', '#7d4fc9', '#e08a3c'];
-const PANTS = ['#2e3a5c', '#3b3b3b', '#6b5a45', '#1f2a24', '#59606b'];
+// Bright and saturated (V3 readability): people separate from grey pavement by day and night. No
+// yellow: the yellow jacket stays the player's.
+const SHIRTS = ['#e64a3f', '#3d8cf2', '#38c060', '#f2ecdc', '#3a3a48', '#d0782c', '#9650ec', '#f5902a', '#ec4f9e', '#24c4c0'];
+const PANTS = ['#34477e', '#46464f', '#806a4e', '#26473a', '#68717f'];
 const SKIN = ['#e0ac84', '#c68e63', '#8d5a3b', '#f1c9a5', '#5e3b26'];
 const HAIR = ['#281c16', '#5a3a22', '#bfa06a', '#1a1a1a', '#8c8c8c', '#7a3a1a'];
 

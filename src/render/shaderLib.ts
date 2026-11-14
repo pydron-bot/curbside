@@ -47,6 +47,8 @@ export const worldUniforms = {
   uDarkCount: { value: 0 },
   /** The LOOK panel's shader sliders (lookTuning SHADER_LOOK): each the distance from the code's value, read through LK_* macros. */
   uLook: { value: new Float32Array(SHADER_LOOK_FLOATS) },
+  /** The camera trial's cutaway (x, y, z of the player's middle, strength 0..1): walls and roofs between the camera and the player dither away (UB_CUTAWAY). */
+  uCutaway: { value: new Vector4() },
 } satisfies Record<string, IUniform>;
 
 /** Add the shared world uniforms to a shader being compiled. */
@@ -68,6 +70,32 @@ export function setDarkLamps(city: City): void {
   }
   worldUniforms.uDarkCount.value = n;
 }
+
+/**
+ * The camera trial's cutaway (fragment shaders only, after UB_COMMON): true
+ * where this fragment stands between the camera and the player, in a cone
+ * widening toward them, thinned by a 4×4 ordered dither so a ghost of the
+ * building stays. Off (one uniform test) while uCutaway.w is 0: today's
+ * near-vertical camera, the title, observe, the map editor. Only the
+ * colour pass discards: the building still casts its sun shadow.
+ */
+export const UB_CUTAWAY = /* glsl */ `
+uniform vec4 uCutaway;
+bool ubCutaway(vec3 p) {
+  if (uCutaway.w <= 0.0) return false;
+  vec3 ab = uCutaway.xyz - cameraPosition;
+  float len = length(ab);
+  vec3 d = ab / len;
+  float t = dot(p - cameraPosition, d);
+  if (t > len - 0.8) return false;
+  float r = length(p - cameraPosition - d * t);
+  float reach = 1.4 + 5.2 * clamp(t / len, 0.0, 1.0);
+  float k = (1.0 - smoothstep(reach * 0.65, reach, r)) * uCutaway.w * 0.82;
+  const float BAYER[16] = float[16](0.0, 8.0, 2.0, 10.0, 12.0, 4.0, 14.0, 6.0, 3.0, 11.0, 1.0, 9.0, 15.0, 7.0, 13.0, 5.0);
+  ivec2 f = ivec2(mod(gl_FragCoord.xy, 4.0));
+  return k > (BAYER[f.x + f.y * 4] + 0.5) / 16.0;
+}
+`;
 
 /** Declarations + helpers; include once per shader stage that needs them. */
 export const UB_COMMON = /* glsl */ `
