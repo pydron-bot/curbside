@@ -15,6 +15,7 @@ import { BLOCKS_PER_SIDE, BLOCK_SIZE, HALF_EXTENT, ROAD_WIDTH, SIDEWALK, isCarPa
 import { DISTRICTS, DISTRICT_STYLES, PAVINGS } from './districts';
 import { roadRules } from './roadRules';
 import { setDarkLamps } from '../render/shaderLib';
+import { getQuality, onQualityChange } from '../render/quality';
 
 /** Ground extends one block past the city on every side (ring road, walls, then the water). */
 const GROUND_SIZE = 2 * HALF_EXTENT + 2 * BLOCK_SIZE;
@@ -38,10 +39,19 @@ const LOT_KIND = { buildings: 0, park: 1, plaza: 2, parking: 3, lot: 4 } as cons
  * ROAD_WIDTH, SIDEWALK), and per-block facts (lot kind, district) from a
  * 16×16 data texture, so markings always match the roads cars drive on.
  */
-export function createGround(city: City): Mesh {
+/** A bus stop as the ground paints its box: where the shelter stands (streetStops.ts BusStop). */
+export interface GroundBusStop {
+  x: number;
+  z: number;
+}
+
+export function createGround(city: City, busStops: readonly GroundBusStop[] = []): Mesh {
   const blocks = blockTexture(city);
   const ao = contactShadowTexture(city);
-  const roadMap = roadMapTexture(city);
+  const roadMap = roadMapTexture(city, busStops);
+  // V3 L6: the close-up detail, off on the 'low' tier (a uniform: nothing recompiles when the tier changes).
+  const detail = { value: getQuality().groundDetail ? 1 : 0 };
+  onQualityChange((t) => (detail.value = t.groundDetail ? 1 : 0));
   const streets = { value: hasStreets(city) ? 1 : 0 };
   setDarkLamps(city);
   const mat = new MeshLambertMaterial({ color: '#ffffff' });
@@ -51,6 +61,7 @@ export function createGround(city: City): Mesh {
     shader.uniforms.uAo = { value: ao };
     shader.uniforms.uRoadMap = { value: roadMap };
     shader.uniforms.uStreets = streets;
+    shader.uniforms.uGroundDetail = detail;
     shader.vertexShader = after(shader.vertexShader, '#include <common>', 'varying vec2 vGroundXZ;');
     shader.vertexShader = after(
       shader.vertexShader,
@@ -65,6 +76,7 @@ export function createGround(city: City): Mesh {
       uniform sampler2D uAo;
       uniform sampler2D uRoadMap;
       uniform float uStreets;
+      uniform float uGroundDetail;
       ${UB_COMMON}
       ${UB_STREET_LIGHT}
       ${GROUND_GLSL}`,
@@ -104,7 +116,7 @@ export function createGround(city: City): Mesh {
 }
 
 /** The map editor's live rebuild: the ground's per-block facts and contact shadows for `city`, in the textures it has. */
-export function refreshGround(ground: Mesh, city: City): void {
+export function refreshGround(ground: Mesh, city: City, busStops: readonly GroundBusStop[] = []): void {
   const t = ground.userData.textures as { blocks: DataTexture; ao: DataTexture; roadMap: DataTexture } | undefined;
   if (!t) return;
   (ground.userData.streets as { value: number }).value = hasStreets(city) ? 1 : 0;
@@ -112,7 +124,7 @@ export function refreshGround(ground: Mesh, city: City): void {
   for (const [tex, next] of [
     [t.blocks, blockTexture(city)],
     [t.ao, contactShadowTexture(city)],
-    [t.roadMap, roadMapTexture(city)],
+    [t.roadMap, roadMapTexture(city, busStops)],
   ] as const) {
     (tex.image.data as Uint8Array).set(next.image.data as Uint8Array);
     tex.needsUpdate = true;
@@ -154,8 +166,10 @@ function hasStreets(_city: City): boolean {
  * world/roadRules.ts STREET_*), G and B where it sits in a merged block (low
  * 4 bits: blocks from the merge's north-west one; high: its size − 1). All
  * zero for an unedited city (the shader doesn't read it then: uStreets).
+ * A: a bus stop along one of its sides (V3 L6, the painted box): bit 7 set,
+ * bits 5–6 the side, bits 0–4 where along it in 2 m steps (busStopByte).
  */
-function roadMapTexture(city: City): DataTexture {
+function roadMapTexture(city: City, busStops: readonly GroundBusStop[] = []): DataTexture {
   const n = BLOCKS_PER_SIDE;
   const data = new Uint8Array(n * n * 4);
   const rules = roadRules();
@@ -173,10 +187,34 @@ function roadMapTexture(city: City): DataTexture {
       }
     }
   }
+  for (const stop of busStops) {
+    const at = busStopByte(stop.x, stop.z);
+    if (at) data[(at.bz * n + at.bx) * 4 + 3] = at.byte;
+  }
   const tex = new DataTexture(data, n, n, RGBAFormat, UnsignedByteType);
   tex.minFilter = tex.magFilter = NearestFilter;
   tex.needsUpdate = true;
   return tex;
+}
+
+/**
+ * The block a bus shelter at (x, z) stands in and the byte the ground reads
+ * for its box: 0x80 | side << 5 | (t / 2), side the kerb it's by (0 N, 1 E,
+ * 2 S, 3 W), t how far along that side from the block's west / north corner
+ * (its road centreline), m. Pure; null outside the city.
+ */
+export function busStopByte(x: number, z: number): { bx: number; bz: number; byte: number } | null {
+  const gx = x + HALF_EXTENT;
+  const gz = z + HALF_EXTENT;
+  const bx = Math.floor(gx / BLOCK_SIZE);
+  const bz = Math.floor(gz / BLOCK_SIZE);
+  if (bx < 0 || bz < 0 || bx >= BLOCKS_PER_SIDE || bz >= BLOCKS_PER_SIDE) return null;
+  const px = gx - bx * BLOCK_SIZE;
+  const pz = gz - bz * BLOCK_SIZE;
+  const toSide = [pz, BLOCK_SIZE - px, BLOCK_SIZE - pz, px];
+  const side = toSide.indexOf(Math.min(...toSide));
+  const t = side === 0 || side === 2 ? px : pz;
+  return { bx, bz, byte: 0x80 | (side << 5) | Math.min(31, Math.max(0, Math.round(t / 2))) };
 }
 
 /**
@@ -632,6 +670,125 @@ void gStreets(vec2 cell, vec2 g, vec2 lp, vec2 r, inout float kerb, inout vec4 b
   }
 }
 
+/** V3 L6 close-up detail strength (uGroundDetail × the ROAD & PAVEMENT DETAIL slider), set by groundColour; 0 skips it all. */
+float gDetail = 0.0;
+
+/**
+ * The road's close-up detail over the old asphalt: an aggregate mottle,
+ * polished wheel tracks, an older sealed patch, oil where cars park at the
+ * kerb, gully grates in the gutters, straight-on arrows in the lane before
+ * the stop line, bus-stop boxes (uRoadMap A), and litter and leaves along
+ * the gutter. Everything finer than a few pixels fades out by px (fwidth of
+ * world position), so nothing shimmers at the phone's render scale or under
+ * dynamic resolution. kerbD = metres from the kerb (> 0 on the road).
+ */
+vec3 gRoadDetail(vec3 c, vec2 w, vec2 p, float a, float b, float roadAxis, bool horizontal, float px, float segId, float kerbD, vec2 cell, vec2 r) {
+  float k = gDetail;
+  float kc = min(k, 1.0);
+  float fine = 1.0 - smoothstep(0.03, 0.08, px);
+  // Aggregate: stones in the binder as a mottle (value noise is smooth: no shimmer).
+  float agg = (ubNoise(w * 3.3 + 41.0) - 0.5) * fine + (ubNoise(w * 1.1 + 17.0) - 0.5) * 0.35;
+  c *= 1.0 + 0.12 * k * agg;
+  if (roadAxis < 0.5) return c;
+  float aa = abs(a);
+  float ab = abs(b);
+  float incoming = horizontal ? step(a * b, 0.0) : step(0.0, a * b);
+  // Polished wheel tracks: smoother and a little lighter, in both lanes, away from the junction.
+  float track = ubLine(abs(ab - 4.0) - 0.82, 0.36, 0.3) * smoothstep(12.0, 16.0, aa);
+  c = mix(c, c * 1.08 + 0.004, track * 0.55 * kc);
+  // An older patch: a long strip along one lane, darker, with sealed seams.
+  float h2 = ubHash(vec2(segId, 23.0));
+  vec2 pd2 = abs(vec2(aa - (19.0 + h2 * 9.0), b - (h2 > 0.72 ? 2.4 : -5.6))) - vec2(2.5 + h2 * 3.0, 0.85);
+  float e2 = max(pd2.x, pd2.y);
+  float has2 = step(0.45, h2);
+  c = mix(c, c * 0.84, (1.0 - smoothstep(-px, px, e2)) * has2 * kc);
+  c *= 1.0 - (1.0 - smoothstep(0.0, 0.05 + px, abs(e2))) * has2 * 0.3 * kc;
+  // Oil where cars stand at the kerb, in drips along the parking line.
+  float park = ubLine(ab - 6.4, 0.7, 0.5) * smoothstep(13.0, 17.0, aa);
+  float drips = smoothstep(0.62, 0.86, ubNoise(vec2(a * 0.7, b * 1.6) + segId * 3.1));
+  c *= 1.0 - 0.22 * drips * park * kc;
+  // Gully grates in the gutter every 16 m (between the lamps), bars across the flow.
+  float gu = mod(aa, 16.0) - 8.0;
+  float grate = ubLine(gu, 0.45, px) * ubLine(ab - 7.48, 0.24, px) * step(12.5, aa);
+  float bars = ubLine(fract(gu / 0.12) - 0.5, 0.2, px / 0.12);
+  vec3 iron = mix(srgb(0.24, 0.24, 0.25), srgb(0.05, 0.05, 0.055), bars * fine + 0.45 * (1.0 - fine));
+  c = mix(c, iron, grate * kc);
+  c *= 1.0 - 0.4 * ubLine(abs(gu) - 0.47, 0.04, px) * ubLine(ab - 7.48, 0.26, px) * step(12.5, aa) * kc;
+  // Straight-on arrows in the lane before the stop line, on most roads.
+  if (incoming > 0.5 && ubHash(vec2(segId, sign(a) + 41.0)) < 0.7) {
+    float ax = ab - 4.0;
+    float au = aa - 15.0;
+    float shaft = ubLine(ax, 0.13, px) * ubBand(au, 1.3, 5.0, px);
+    float head = ubBand(au, 0.0, 1.35, px) * (1.0 - smoothstep(-px, px, abs(ax) - 0.55 * au / 1.35));
+    float wear = 0.65 + 0.35 * ubNoise(w * 2.1 + 3.0);
+    c = mix(c, srgb(0.86, 0.85, 0.8), max(shaft, head) * wear * kc);
+  }
+  // A bus stop's box in the kerbside lane (uRoadMap A: the block beside this lane).
+  float side = horizontal ? (r.y < 0.0 ? 2.0 : 0.0) : (r.x < 0.0 ? 1.0 : 3.0);
+  uint bs = uint(texelFetch(uRoadMap, ivec2(cell), 0).a * 255.0 + 0.5);
+  if ((bs & 128u) != 0u && float((bs >> 5u) & 3u) == side) {
+    float t = horizontal ? p.x : p.y;
+    float du = abs(t - float(bs & 31u) * 2.0);
+    float inBox = ubBand(du, -1.0, 7.5, px) * ubBand(ab, 4.9, 7.75, px);
+    float edge = inBox * (1.0 - ubBand(du, -1.0, 7.32, px) * ubBand(ab, 5.08, 7.57, px));
+    c = mix(c, c * vec3(1.18, 0.86, 0.78), inBox * 0.45 * kc);
+    c = mix(c, srgb(0.92, 0.72, 0.14), edge * 0.9 * kc);
+  }
+  // Litter and leaves along the gutter: a speck in some 0.6 m cells, gone before it's sub-pixel.
+  float gl = ab - 7.45;
+  if (abs(gl) < 0.55) {
+    float along = horizontal ? w.x : w.y;
+    float cellA = floor(along / 0.6);
+    float h = ubHash(vec2(cellA, segId * 0.37 + sign(b) * 5.0));
+    vec2 at = vec2((cellA + 0.2 + 0.6 * fract(h * 13.0)) * 0.6, 7.45 + (fract(h * 31.0) - 0.5) * 0.7);
+    // A little irregular: squashed along one way or the other per speck.
+    float d = length(vec2(along - at.x, ab - at.y) * (fract(h * 17.0) < 0.5 ? vec2(1.0, 1.7) : vec2(1.6, 1.0)));
+    float leafy = (abs(gDistrict - ${DISTRICTS.indexOf('oldtown')}.0) < 0.5 || abs(gDistrict - ${DISTRICTS.indexOf('residential')}.0) < 0.5) ? 0.55 : 0.12;
+    float speck = step(1.0 - 0.22 - leafy * 0.3, h) * (1.0 - smoothstep(0.065 - px, 0.065 + px, d)) * (1.0 - smoothstep(0.035, 0.07, px));
+    vec3 bit = fract(h * 7.0) < leafy ? mix(srgb(0.72, 0.38, 0.12), srgb(0.56, 0.2, 0.1), fract(h * 3.0)) : (fract(h * 5.0) < 0.8 ? srgb(0.86, 0.84, 0.78) : srgb(0.62, 0.2, 0.16));
+    c = mix(c, bit, speck * kc);
+  }
+  return c;
+}
+
+/**
+ * The pavement's close-up detail: kerbstones with joints and a lit edge,
+ * tactile paving where a crossing meets the kerb, the odd replaced or
+ * cracked slab, gum spots in the busy districts. d = signed distance to the
+ * kerb (negative on the pavement); r = offset from the road centrelines.
+ */
+vec3 gPavementDetail(vec3 c, vec2 w, vec2 r, float d, float px) {
+  float k = min(gDetail, 1.0);
+  float fine = 1.0 - smoothstep(0.03, 0.08, px);
+  // Kerbstones: 0.9 m long, a joint between each, the top edge catching the light.
+  float along = abs(r.x) < abs(r.y) ? w.y : w.x;
+  float stone = ubBand(-d, 0.02, 0.32, px);
+  float joint = ubLine(fract(along / 0.9) - 0.5, 0.47, px / 0.9);
+  c = mix(c, c * (1.0 - 0.22 * (1.0 - joint) * fine), stone * k);
+  c = mix(c, c * 1.12 + 0.01, ubBand(-d, 0.02, 0.09, px) * k);
+  // Tactile paving (buff blisters) where each crossing lands on the kerb.
+  vec2 ar = abs(r);
+  float tv = ubBand(ar.x, 8.05, 8.85, px) * ubBand(ar.y, 8.8, 11.3, px);
+  float th = ubBand(ar.y, 8.05, 8.85, px) * ubBand(ar.x, 8.8, 11.3, px);
+  float tactile = max(tv, th);
+  float dots = ubLine(length(fract(w / 0.11) - 0.5), 0.22, px / 0.11);
+  vec3 buff = srgb(0.74, 0.6, 0.36) * (1.0 - 0.18 * (1.0 - dots) * fine);
+  c = mix(c, buff, tactile * k);
+  // The odd replaced slab (fresher) or cracked one, per 1.2 m cell.
+  vec2 sc = floor(w / 1.2);
+  float hs = ubHash(sc + 77.0);
+  c *= hs > 0.97 ? 1.0 + 0.12 * k : (hs < 0.025 ? 1.0 - 0.16 * k : 1.0);
+  // Chewing gum in the busy districts: pale dots, faded before they're sub-pixel.
+  if (abs(gDistrict - ${DISTRICTS.indexOf('downtown')}.0) < 0.5 || abs(gDistrict - ${DISTRICTS.indexOf('arts')}.0) < 0.5) {
+    vec2 gc = floor(w / 0.35);
+    float hg = ubHash(gc + 5.0);
+    vec2 gp = (fract(w / 0.35) - 0.5) * 0.35;
+    float gum = step(0.9, hg) * (1.0 - smoothstep(0.03 - px, 0.03 + px, length(gp))) * (1.0 - smoothstep(0.02, 0.045, px));
+    c = mix(c, c * 0.8 + 0.03, gum * k);
+  }
+  return c;
+}
+
 vec3 groundColour(vec2 w, inout vec3 glow) {
   // Derivatives first, outside any branch.
   vec2 dw = fwidth(w);
@@ -658,6 +815,7 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
   float ped = -1.0;
   if (uStreets > 0.5 && inCity) gStreets(cell, g, lp, r, kerb, blk, lotP, lotHalf, ped);
   gDistrict = inCity ? blk.g : -1.0;
+  gDetail = uGroundDetail * LK_ROAD;
   vec3 c;
 
   if (kerb > 0.0) {
@@ -670,6 +828,7 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
       ? floor(g.x / UB_BLOCK) * 31.0 + floor(g.y / UB_BLOCK + 0.5)
       : floor(g.y / UB_BLOCK) * 37.0 + floor(g.x / UB_BLOCK + 0.5) + 900.0;
     c = asphalt(w, a, b, roadAxis, hz, px, segId);
+    if (gDetail > 0.0 && inCity) c = gRoadDetail(c, w, p, a, b, roadAxis, hz, px, segId, kerb, cell, r);
     if (roadAxis > 0.5) {
       vec4 paint = roadPaint(w, a, b, hz, px, segId);
       c = mix(c, paint.rgb, paint.a);
@@ -688,6 +847,7 @@ vec3 groundColour(vec2 w, inout vec3 glow) {
   } else if (max(abs(lotP.x) - lotHalf.x, abs(lotP.y) - lotHalf.y) > 0.0) {
     // With street edits the paving's pattern runs on across block edges (a merge's or a pedestrian street's pavement has no seam).
     c = paving(w, uStreets > 0.5 ? g : p, blk.a, kerb, px);
+    if (gDetail > 0.0) c = gPavementDetail(c, w, r, kerb, px);
     // A pedestrian street: the paving runs across it, with a drainage channel down the middle.
     if (ped >= 0.0) c *= 1.0 - 0.3 * ubLine(ped, 0.2, px) - 0.08 * ubLine(ped - 0.45, 0.05, px);
     // Kerb lip: a lighter edge with a thin shadow line at the drop.

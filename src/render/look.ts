@@ -111,7 +111,7 @@ export class Look {
    * so nothing compiles; returns how many 256 m chunks were rebuilt.
    */
   rebuildCity(city: City, streetProps: StreetProps, landmarks: Landmarks): number {
-    refreshGround(this.ground, city);
+    refreshGround(this.ground, city, streetProps.busStops);
     const plans = this.plans as BuildingPlan[];
     plans.splice(0, plans.length, ...planBuildings(city));
     const n = this.city.rebuild(city, plans);
@@ -134,7 +134,7 @@ export class Look {
   ) {
     this.lighting = new SceneLighting(scene);
     this.sunShadow = new SunShadow(renderer, this.lighting.sun);
-    this.ground = createGround(city);
+    this.ground = createGround(city, streetProps.busStops);
     scene.add(this.ground);
     const plans = planBuildings(city);
     this.plans = plans;
