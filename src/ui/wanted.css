@@ -212,6 +212,34 @@ body:has(#radio.in) #wanted {
   background: linear-gradient(90deg, var(--neon-cyan), var(--neon-pink), var(--neon-yellow));
 }
 
+/* LYING LOW / NEW WHEELS: a small tag beside the stars, not under them:
+   on foot at 852×393 the player stands just below the stars (wantedHud.ts updateCue). */
+.w-cue {
+  position: absolute;
+  left: calc(100% + 6px);
+  top: calc(3px + var(--star) / 2);
+  transform: translateY(-50%);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.42);
+  font: 900 10px/1.3 var(--hud-font);
+  letter-spacing: 0.16em;
+  white-space: nowrap;
+  color: #9cc0ff;
+}
+
+.w-cue[hidden] {
+  display: none;
+}
+
+.w-cue[data-tone='low'] {
+  color: var(--neon-green);
+}
+
+.w-cue[data-tone='wheels'] {
+  color: var(--neon-yellow);
+}
+
 /* --- BUSTED: the WASTED screen in police blue --- */
 #wasted.busted {
   background: radial-gradient(ellipse at center, rgb(0 20 70 / 0.4), rgb(0 0 0 / 0.8));

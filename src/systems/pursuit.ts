@@ -60,6 +60,8 @@ export interface PursuitDriver {
   attempts: number;
   /** Seconds before it rams again (after a hit it drops back and lines up). */
   ramCooldown: number;
+  /** How long it hangs back after each ram or PIT, s. */
+  ramEvery: number;
   /** Lane follower used while routing. */
   road: AiDriver;
 }
@@ -83,8 +85,8 @@ export const FOOT_STOP = 7;
 const STEER_GAIN = 2.3;
 const STUCK_SECONDS = 1.2;
 const REVERSE_SECONDS = 1;
-/** After a ram, hang back this long before the next. */
-const RAM_COOLDOWN = 2.6;
+/** After a ram, hang back this long before the next (the police set `ramEvery` by stars). */
+export const RAM_COOLDOWN = 2.6;
 /** Meeting the quarry head-on inside this range: slow to ONCOMING_SPEED and pass PASS_OFFSET to the side. */
 const ONCOMING_RANGE = 45;
 const ONCOMING_SPEED = 12;
@@ -108,6 +110,7 @@ export function createPursuit(road: AiDriver, aggression: number, cruise: number
     reversing: 0,
     attempts: 0,
     ramCooldown: 0,
+    ramEvery: RAM_COOLDOWN,
     road,
   };
 }
@@ -244,7 +247,7 @@ export function drivePursuit(
     aim.z = t.z + t.vz * 0.25;
     want = t.inCar ? quarrySpeed + RAM_CLOSING : 10;
     // Contact (or as good as): back off and line up the next one.
-    if (distance < 5) d.ramCooldown = RAM_COOLDOWN;
+    if (distance < 5) d.ramCooldown = d.ramEvery;
   } else if (mode === 'pit') {
     // The rear quarter: just behind their back axle.
     const fx = Math.sin(t.heading);
@@ -252,7 +255,7 @@ export function drivePursuit(
     aim.x = t.x - fx * 1.4 + t.vx * 0.15;
     aim.z = t.z - fz * 1.4 + t.vz * 0.15;
     want = quarrySpeed + 3;
-    if (distance < 3.6) d.ramCooldown = RAM_COOLDOWN;
+    if (distance < 3.6) d.ramCooldown = d.ramEvery;
   } else if (headOn(car, t) && distance < ONCOMING_RANGE) {
     // Coming the other way: slow, and pass them on our right (keeps to our
     // side of the road), then turn round after them.

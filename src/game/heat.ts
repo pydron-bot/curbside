@@ -14,13 +14,14 @@ import type { EventBus } from '../core/events';
 import { VEHICLE_HEALTH, isPoliceArchetype, speed, type VehicleControls } from '../entities/vehicle';
 import { DOOR_RANGE, BustMeter, type ArrestSituation } from '../systems/arrest';
 import { scare } from '../systems/crowd';
-import { createDamage } from '../systems/damage';
+import { createDamage, playerCrashShare } from '../systems/damage';
 import { PoliceForce, type PoliceContext, type Suspect } from '../systems/police';
 import { createPursuit, drivePursuit, type PursuitTarget } from '../systems/pursuit';
 import { evadeBonus, type Award, type Score } from '../systems/score';
 import type { SmokeView } from '../systems/smoke';
 import { driveAi, reactToHit, rerouteAi, scareDriver, shouldYield, YIELD_RANGE, type Obstacle } from '../systems/traffic';
 import { CRIME_FLOOR, Wanted, WITNESS_RANGE, type Crime } from '../systems/wanted';
+import { Hideouts, type Hideout } from '../systems/hideouts';
 import { DELAYED_CRIMES } from '../systems/witnesses';
 import type { City, Rect } from '../world/city';
 import type { StaticGrid } from '../world/collision';
@@ -53,6 +54,30 @@ const YIELD_EVERY = 0.2;
 const TRACK_AFTER_SIGHTING = 2;
 /** A second ram on the same police car within this long doesn't count again, s. */
 const RAM_REPEAT = 1.5;
+/** LYING LOW: a car slower than this is stopped, m/s; on foot, slower than this is standing still. */
+const HIDE_CAR_SPEED = 0.6;
+const HIDE_FOOT_SPEED = 0.4;
+
+/**
+ * GOT AWAY (losing the heat without a respray): cash by the chase's peak
+ * stars, plus so much a second wanted at 2 stars or more (Wanted.chaseTime,
+ * the first GETAWAY_SECONDS of it), capped. Nothing below 2 stars, so a star
+ * gained and lost in a loop is worth nothing; a respray you paid for pays
+ * nothing back (it's reason 'respray', not 'evaded'). Sized against the
+ * economy: a good story job pays about $1,000, a respray costs $400.
+ */
+export const GETAWAY_BASE = [0, 0, 75, 200, 400, 700] as const;
+export const GETAWAY_PER_SECOND = [0, 0, 0.5, 1, 2, 3] as const;
+export const GETAWAY_SECONDS = 180;
+export const GETAWAY_CAP = 1500;
+
+/** What losing a chase that peaked at `peak` stars, wanted `seconds` at 2+, pays (whole dollars). */
+export function getawayPay(peak: number, seconds: number): number {
+  const s = Math.max(0, Math.min(5, Math.floor(peak)));
+  if (GETAWAY_BASE[s] <= 0) return 0;
+  const t = Math.max(0, Math.min(GETAWAY_SECONDS, Number.isFinite(seconds) ? seconds : 0));
+  return Math.min(GETAWAY_CAP, Math.round(GETAWAY_BASE[s] + GETAWAY_PER_SECOND[s] * t));
+}
 
 export interface HeatDeps {
   bus: EventBus;
@@ -118,6 +143,14 @@ export class Heat {
   sprayProgress = 0;
   /** The police saw the car drive into the bay: a respray won't lose them. */
   sprayWatched = false;
+  /** Car parks and alleys (LYING LOW). */
+  hideouts: Hideouts;
+  /** The hideout the player is in now (null when not in one). */
+  hideout: Hideout | null = null;
+  /** Roadblocks the police have put up so far (one `roadblock` event each). */
+  private roadblocksSeen = 0;
+  /** Cars the player has been in this chase: NEW WHEELS needs one that isn't. */
+  private readonly chaseCars = new Set<Vehicle>();
   private readonly suspect: Suspect = { x: 0, z: 0, vx: 0, vz: 0, heading: 0, inCar: false, armed: false, down: false, car: null, active: false };
   private readonly ctx: PoliceContext;
   private readonly situation: ArrestSituation = {
@@ -149,6 +182,7 @@ export class Heat {
     );
     this.shops = placeSprayShops(deps.city);
     this.station = placeStation(deps.city);
+    this.hideouts = new Hideouts(deps.city);
     this.ctx = { stars: 0, tracked: false, suspect: this.suspect, view: deps.view(), grid: deps.grid, rand: deps.rand, smoke: deps.smoke };
 
     // --- Crimes, as the simulation reports them ---
@@ -185,6 +219,7 @@ export class Heat {
     });
     bus.on('enterVehicle', (e) => {
       if (e.police) this.crime('copCarStolen', deps.player.ped.x, deps.player.ped.z);
+      this.switchedCar(e.police === true);
     });
     // A chase that ends in death is over too.
     bus.on('playerDied', () => {
@@ -194,7 +229,23 @@ export class Heat {
     });
     bus.on('wanted', (e) => {
       if (e.reason === 'evaded') deps.award(this.evadedAward());
+      // A fresh chase: the car you're in is known; a chase over forgets them all.
+      if (e.prev === 0 && e.level > 0) {
+        this.chaseCars.clear();
+        const car = deps.player.driving;
+        if (car) this.chaseCars.add(car);
+      } else if (e.level === 0) this.chaseCars.clear();
     });
+  }
+
+  /**
+   * The player's car's share of crash damage now: less in a big chase
+   * (systems/damage.ts PURSUIT_CRASH_SHARE), by the chase's peak, so a car
+   * that's brought a 5-star chase down to 3 isn't suddenly made of glass.
+   */
+  get crashShare(): number {
+    const w = this.wanted;
+    return playerCrashShare(w.level > 0 ? Math.max(w.level, w.peak) : 0);
   }
 
   /** In play: not behind the title, alive and free. */
@@ -214,7 +265,13 @@ export class Heat {
     // Dispatch tracks them on a fresh call, and for a few seconds after a sighting.
     this.ctx.tracked = this.wanted.responding || (level > 0 && this.wanted.unseen < TRACK_AFTER_SIGHTING);
     this.ctx.view = this.deps.view();
+    this.updateHideout();
     this.police.step(dt, this.ctx);
+    if (this.police.roadblocks !== this.roadblocksSeen) {
+      this.roadblocksSeen = this.police.roadblocks;
+      const r = this.police.roadblock;
+      this.deps.bus.emit({ type: 'roadblock', x: r.x, z: r.z, dirX: r.dirX, dirZ: r.dirZ });
+    }
     this.wanted.step(dt, this.police.seen);
     this.stepArrest(dt);
     this.stepRespray(dt);
@@ -314,6 +371,8 @@ export class Heat {
   remap(): void {
     this.shops = placeSprayShops(this.deps.city);
     this.station = placeStation(this.deps.city);
+    this.hideouts = new Hideouts(this.deps.city);
+    this.hideout = null;
     this.shop = null;
     this.sprayProgress = 0;
   }
@@ -325,12 +384,38 @@ export class Heat {
     this.shop = null;
     this.sprayProgress = 0;
     this.rammed.clear();
+    this.chaseCars.clear();
+    this.hideout = null;
+    this.roadblocksSeen = this.police.roadblocks;
     for (const v of this.deps.vehicles) {
       if (v.pursuit && !v.police && v.ai) {
         v.pursuit = null;
         v.ai.mood = 'calm';
       }
     }
+  }
+
+  /** In a car park or an alley? Stopped there (or standing still), the evasion clock runs double. */
+  private updateHideout(): void {
+    const s = this.suspect;
+    const h = s.active ? this.hideouts.at(s.x, s.z) : null;
+    this.hideout = h;
+    const still = len2(s.vx, s.vz) < (s.inCar ? HIDE_CAR_SPEED : HIDE_FOOT_SPEED);
+    this.wanted.hiding = h !== null && still;
+    // Under cover there: the police need a clear line to see you (systems/police.ts HIDDEN_PROXIMITY).
+    s.hidden = this.wanted.hiding && this.wanted.level > 0;
+  }
+
+  /**
+   * The player got into a car (already in it): NEW WHEELS if it's one this
+   * chase hasn't seen them in, not a police car, and no cop is watching.
+   */
+  private switchedCar(police: boolean): void {
+    const car = this.deps.player.driving;
+    if (!car || !this.live || this.wanted.level === 0) return;
+    const fresh = !this.chaseCars.has(car);
+    this.chaseCars.add(car);
+    if (fresh && !police) this.wanted.switchedCar(this.police.seen);
   }
 
   /** The player as the police see them, refreshed. */

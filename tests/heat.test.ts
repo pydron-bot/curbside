@@ -15,6 +15,7 @@ import type { CarMesh } from '../src/render/carMesh';
 import type { CharacterModel } from '../src/render/characterModel';
 import { stepCrowdPed } from '../src/systems/crowd';
 import { createDamage } from '../src/systems/damage';
+import { Hideouts } from '../src/systems/hideouts';
 import { collidePedStatic, collidePedVehicle, collideVehicleStatic, collideVehicles } from '../src/systems/physics';
 import { Score } from '../src/systems/score';
 import type { Obstacle } from '../src/systems/traffic';
@@ -349,6 +350,46 @@ describe('heat: crimes and clearing', () => {
       // Unwatched: clean. Watched: the stars stay.
       expect(w.heat.wanted.level).toBe(watched ? 2 : 0);
     }
+  });
+});
+
+describe('heat: ways to lose them', () => {
+  it('NEW WHEELS: a car this chase hasn’t seen, unseen, counts once; the old car or a police car doesn’t', () => {
+    const w = world(21);
+    const car = (archetype: VehicleArchetype, dx: number) => {
+      const v = w.population.takeVehicle(archetype, '#c8342b');
+      v.police = false;
+      Object.assign(v.sim, createVehicleState(9.5 + dx, 9.5, 0));
+      return v;
+    };
+    const a = car('sedan', 0);
+    const b = car('compact', 4);
+    const cop = car('police', 8);
+    w.player.enter(a);
+    w.heat.wanted.force(3);
+    expect(w.heat.police.seen).toBe(false);
+    // Back into the car the chase started in: nothing.
+    w.player.exit();
+    w.player.enter(a);
+    expect(w.heat.wanted.newWheels).toBe(false);
+    // A police car: nothing (and it's a crime of its own).
+    w.player.exit();
+    w.player.enter(cop);
+    expect(w.heat.wanted.newWheels).toBe(false);
+    w.player.exit();
+    w.player.enter(b);
+    expect(w.heat.wanted.newWheels).toBe(true);
+  });
+
+  it('LYING LOW: stopped in a car park while wanted, the heat knows it', () => {
+    const park = new Hideouts(city).list.find((h) => h.kind === 'carPark')!;
+    const x = (park.minX + park.maxX) / 2;
+    const z = (park.minZ + park.maxZ) / 2;
+    const w = world(5, x, z);
+    w.heat.wanted.force(2);
+    w.heat.step(DT);
+    expect(w.heat.hideout?.kind).toBe('carPark');
+    expect(w.heat.wanted.hiding).toBe(true);
   });
 });
 

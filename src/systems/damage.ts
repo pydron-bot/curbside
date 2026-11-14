@@ -50,6 +50,18 @@ const RAMMER_SHARE = 0.3;
  * wrecking).
  */
 export const PLAYER_CRASH_SHARE = 0.6;
+/**
+ * In a big chase the share drops further (index = stars): at 4-5 stars the
+ * walls, rams and PITs come every few seconds, and a car that's gone in half
+ * a minute leaves nothing to play (the 5-star harness, docs/systems/heat.md).
+ * Bullets and blasts aren't crashes: those still count in full.
+ */
+export const PURSUIT_CRASH_SHARE = [0.6, 0.6, 0.6, 0.5, 0.25, 0.15] as const;
+
+/** The player's car's share of crash damage at `stars`. */
+export function playerCrashShare(stars: number): number {
+  return PURSUIT_CRASH_SHARE[Math.max(0, Math.min(5, Math.floor(stars)))];
+}
 /** Landings softer than this (vertical m/s) are free; a car is built for a kerb, not a jump. */
 const LANDING_THRESHOLD = 10;
 const LANDING_PER_MS = 3;

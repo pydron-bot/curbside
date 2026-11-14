@@ -13,10 +13,44 @@ export interface WantedFrame {
   arrest: number;
   /** 0..1 a respray in progress (0 when not in a bay). */
   spray: number;
+  /** The kind of hideout the player is in (LYING LOW), or null. */
+  hideout: 'carPark' | 'alley' | null;
+  /** Lying low there now: stopped and unseen (the clock runs double). */
+  lyingLow: boolean;
+  /** NEW WHEELS is cutting the wait for this star. */
+  newWheels: boolean;
 }
 
 export function createWantedFrame(): WantedFrame {
-  return { level: 0, searching: false, arrest: 0, spray: 0 };
+  return { level: 0, searching: false, arrest: 0, spray: 0, hideout: null, lyingLow: false, newWheels: false };
+}
+
+/** The cue's lines, built once (no string per frame while it shows). */
+const CUE = {
+  carPark: { hint: 'CAR PARK · STOP, STAY UNSEEN', stop: 'CAR PARK · STOP HERE' },
+  alley: { hint: 'ALLEY · STOP, STAY UNSEEN', stop: 'ALLEY · STOP HERE' },
+  low: 'LYING LOW · 2×',
+  wheels: 'NEW WHEELS · ½ WAIT',
+} as const;
+
+/** The first time in a hideout while wanted, the cue explains itself (once per device). */
+const HINT_KEY = 'curbside.hint.lieLow';
+const HINT_SECONDS = 6;
+
+function hintSeen(): boolean {
+  try {
+    return localStorage.getItem(HINT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markHintSeen(): void {
+  try {
+    localStorage.setItem(HINT_KEY, '1');
+  } catch {
+    // Private mode: it'll explain itself again next time.
+  }
 }
 
 /** What each level means, flashed under the stars as it's reached. */
@@ -50,6 +84,13 @@ export class WantedHud {
   private readonly setArrestFill: (s: string) => void;
   private readonly setSprayFill: (s: string) => void;
   private readonly setPopText: (s: string) => void;
+  private readonly cue: HTMLElement;
+  private readonly setCueText: (s: string) => void;
+  private readonly setCueHidden: (h: boolean) => void;
+  private hinted = hintSeen();
+  /** Seconds left of the first-time hint. */
+  private hintLeft = 0;
+  private shownWheels = false;
   private shownLevel = 0;
   private shownSearching = false;
   private popLeft = 0;
@@ -67,7 +108,8 @@ export class WantedHud {
       <div class="w-stars" role="img" aria-label="Wanted level">${star.repeat(5)}</div>
       <div class="w-pop" hidden></div>
       <div class="w-meter w-arrest" hidden><b>ARREST</b><span><i></i></span></div>
-      <div class="w-meter w-spray" hidden><b>RESPRAY</b><span><i></i></span></div>`;
+      <div class="w-meter w-spray" hidden><b>RESPRAY</b><span><i></i></span></div>
+      <div class="w-cue" hidden></div>`;
     const edge = document.createElement('div');
     edge.className = 'w-edge';
     edge.dataset.level = '0';
@@ -86,6 +128,9 @@ export class WantedHud {
     this.setArrestFill = styleSetter(this.arrest.querySelector('i')!, 'transform');
     this.setSprayFill = styleSetter(this.spray.querySelector('i')!, 'transform');
     this.setPopText = textSetter(this.pop);
+    this.cue = el.querySelector('.w-cue')!;
+    this.setCueText = textSetter(this.cue);
+    this.setCueHidden = hiddenSetter(this.cue);
 
     bus.on('wanted', (e) => {
       if (e.level > e.prev) this.flashPop(LEVEL_NAMES[e.level] ?? 'WANTED', 'up');
@@ -149,6 +194,36 @@ export class WantedHud {
     if (spraying) this.setSprayFill(fill(f.spray));
 
     if (this.popLeft > 0 && (this.popLeft -= dt) <= 0) this.pop.hidden = true;
+    this.updateCue(dt, f);
+  }
+
+  /** LYING LOW and NEW WHEELS: one short line under the stars (the first time in a hideout, a longer hint). */
+  private updateCue(dt: number, f: WantedFrame): void {
+    const wanted = f.level > 0;
+    const wheels = wanted && f.newWheels;
+    if (wheels && !this.shownWheels) this.flashPop('NEW WHEELS', 'down');
+    this.shownWheels = wheels;
+    if (wanted && f.hideout && !this.hinted) {
+      this.hinted = true;
+      this.hintLeft = HINT_SECONDS;
+      markHintSeen();
+    }
+    if (this.hintLeft > 0) this.hintLeft -= dt;
+    let text = '';
+    let tone = 'hide';
+    if (wanted && f.hideout) {
+      const where = CUE[f.hideout];
+      text = f.lyingLow ? CUE.low : this.hintLeft > 0 ? where.hint : where.stop;
+      tone = f.lyingLow ? 'low' : 'hide';
+    } else if (wheels) {
+      text = CUE.wheels;
+      tone = 'wheels';
+    }
+    this.setCueHidden(text === '');
+    if (text) {
+      this.setCueText(text);
+      if (this.cue.dataset.tone !== tone) this.cue.dataset.tone = tone;
+    }
   }
 
   private flashPop(text: string, tone: 'up' | 'down' | 'clear'): void {

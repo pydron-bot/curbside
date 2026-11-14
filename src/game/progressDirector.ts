@@ -46,7 +46,7 @@ import { TaxiMode } from './modes/taxiMode';
 import { ServiceMode } from './modes/serviceMode';
 import { PERKS, PERK_RANKS, levelFor, pendingLevels, rankOf } from './cred';
 import { CredKeeper } from './credKeeper';
-import { BUST_FINE } from './heat';
+import { BUST_FINE, getawayPay } from './heat';
 import { MAX_ARMOUR, MAX_HEALTH } from './player';
 import type { Vehicle } from './population';
 import { Progress, bustFine, hospitalBill } from './progress';
@@ -174,6 +174,13 @@ export class ProgressDirector implements ModeCtx {
     // --- Banking, bills, perks ---
     d.bus.on('award', (e) => {
       if (this.live) this.bank.add(e.award.points, d.heat.wanted.level);
+    });
+    // GOT AWAY: losing the heat pays (game/heat.ts getawayPay), and as cash earned it counts toward the life's CRED.
+    // Not in the Chaos Run or a race, where cash isn't what's being scored and the getaway's EVADED points already are.
+    d.bus.on('wanted', (e) => {
+      if (e.reason !== 'evaded' || !this.live || !this.freeRoam || this.races.running) return;
+      const cash = getawayPay(e.peak ?? 0, e.chaseTime ?? 0);
+      if (cash > 0) this.pay(cash, 'getaway', 'GOT AWAY');
     });
     d.bus.on('playerDied', () => this.lifeLost(false));
     d.bus.on('busted', () => this.lifeLost(true));

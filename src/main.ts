@@ -73,7 +73,6 @@ import { WEAPONS, WEAPON_ORDER, type WeaponKind } from './systems/weapons';
 import { toolFor } from './systems/serviceTools';
 import { PICKUP_RESPAWN, placePickups, pickupAt, respawnPickups } from './world/pickups';
 import {
-  PLAYER_CRASH_SHARE,
   applyDamage,
   createDamage,
   crashDamage,
@@ -1019,6 +1018,7 @@ function simulate(dt: number) {
 
   // --- Collisions ---
   prof.begin(P_COLLIDE);
+  const crashShare = heat.crashShare;
   for (let i = 0; i < vehicles.length; i++) {
     const v = vehicles[i];
     if (hold && observe!.held(v)) continue;
@@ -1026,7 +1026,7 @@ function simulate(dt: number) {
     // A ramp's sides and back are solid to anything not riding up it.
     if (!v.sim.airborne && v.sim.y <= 0 && !enteringRamp(v.sim, ramps)) impact = Math.max(impact, collideVehicleStatic(v.sim, rampGrid, contact, v.prev));
     if (impact <= 0) continue;
-    const hit = impactDamage(impact) * (v === driving ? PLAYER_CRASH_SHARE : 1);
+    const hit = impactDamage(impact) * (v === driving ? crashShare : 1);
     applyDamage(v.damage, hit);
     if (v === driving && hit > 0) markPlayerHit(v.damage, simTime);
     if (impact > CRASH_EVENT_MIN) {
@@ -1047,8 +1047,8 @@ function simulate(dt: number) {
       if (impact <= 0) continue;
       // The rammer takes less than the car it hits, the heavier car less than the lighter.
       // A held car takes nothing (it's put back where it was next step).
-      const hitA = hold && observe!.held(a) ? 0 : crashDamage(impact, contact.closingA, contact.closingB, ma, mb) * (a === driving ? PLAYER_CRASH_SHARE : 1);
-      const hitB = hold && observe!.held(b) ? 0 : crashDamage(impact, contact.closingB, contact.closingA, mb, ma) * (b === driving ? PLAYER_CRASH_SHARE : 1);
+      const hitA = hold && observe!.held(a) ? 0 : crashDamage(impact, contact.closingA, contact.closingB, ma, mb) * (a === driving ? crashShare : 1);
+      const hitB = hold && observe!.held(b) ? 0 : crashDamage(impact, contact.closingB, contact.closingA, mb, ma) * (b === driving ? crashShare : 1);
       applyDamage(a.damage, hitA);
       applyDamage(b.damage, hitB);
       // A hard hit throws a bike's rider off (whichever of the two is a bike);
@@ -1622,6 +1622,7 @@ const scanner = new Scanner({
   position: () => player.position,
   driving: () => player.driving,
   stars: () => heat.wanted.level,
+  seen: () => heat.police.seen,
   city: cityLife,
   radar,
   clear: () => scannerHud.clear(),

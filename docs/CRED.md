@@ -24,7 +24,8 @@ life now also leaves you a little stronger.
 
     points / 400 + seconds alive / 6 + cash earned / 50 + 5 × s(s+1)/2   (s = peak stars, 0..5)
 
-"Cash earned" is jobs, fares, races and the like. Banked chains and LEVEL
+"Cash earned" is jobs, fares, races and the like, and GOT AWAY's pay for
+losing a 2★+ chase ([heat.md](systems/heat.md): at most $1,500, so 30 CRED). Banked chains and LEVEL
 UP payouts don't count: a chain's points already do, and its cash grows with
 stars, so counting it too paid one chain three times. That's what took a
 first playtest to level 5 in five minutes (one 52,000-point life at 5 stars
