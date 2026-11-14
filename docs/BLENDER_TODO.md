@@ -980,6 +980,32 @@ the footprints hold.
 
 ## 17. V3: street props, round 3 (`props.glb`, requested 2026-11-14)
 
+**Done 2026-11-14** (`blender/generators/props.py`, round 3 section; budgets in
+`check_assets.py`). Triangles: `a_board` 18, `crate_stack` 30, `bin_bags` 34, `market_stall` 106,
+`flower_stand` 68, `news_stand` 90, `water_barrier` 22, `scaffold` 150, `leaf_pile` 16.
+Notes for the code side:
+- **Tinted (`paint`):** both A-board faces and its ridge; the middle crate of `crate_stack`; the
+  market stall's canopy stripes (alternating with `canopy_cream`); `water_barrier` all over.
+- **New fixed colours** (sRGB), for the stand-ins: `chalk` (238, 236, 228), `bin_bag` (30, 31, 34),
+  `rubbish_pale` (222, 214, 188), `kiosk_green` (38, 104, 66), `stripe_news` (240, 190, 40),
+  `magazine_a` (220, 60, 90), `magazine_b` (60, 150, 220), `stripe_net` (52, 150, 96),
+  `scaffold_board` (182, 140, 82), `leaf_orange` (206, 116, 38), `leaf_red` (166, 54, 30). The rest
+  reuse round-2 colours (`wood`, `pole`, `metal`, `fruit_*`, `flowers`, `white`, `umbrella_red`,
+  `shelter_roof`, `glass`).
+- **`a_board`:** the panels are one-sided quads (2 tris each, facing out and up), chalk band on
+  each, a 0.62 × 0.16 m ridge on top at 1.0 m: from above it's the ridge and two slivers.
+- **`market_stall`:** the canopy is set back from the trestle (it runs from game Z +0.3 to
+  −1.5, i.e. its front edge 0.3 m ahead of the footprint's middle), so the four goods
+  crates at the trestle's front (game +Z 0.32–0.68) show past it from above. Its four poles stand
+  at the canopy's corners (±1.25, game Z +0.25 / −1.45), outside the trestle at the back.
+- **`news_stand`:** body 1.8 × 1.1 × 2.0, roof 1.9 × 1.25 at 2.05–2.1 m, the counter and the
+  magazines (four) at the front, 1.0–1.1 m up.
+- **`scaffold`:** the standards at (±1.95, ±0.65); decks at 2.3 and 4.3 m (so the walkway is
+  clear to 2.27 m), ledgers on the outer face at 3.3, 5.3 and 6.0 m, the net (`stripe_net`) on
+  the outer face from 2.4 to 6.0 m, a ladder at x +1.55 from 1.9 to 6.3 m (inside the footprint,
+  above the walkway's clear height except its rails, which stop at 1.9 m).
+- **`leaf_pile`:** 0.15 m high at its peak, origin on the ground.
+
 Daytime pavements are bare outside the shopfronts. The code side is
 placing more of the §10 props (café tables, planters, bike racks, fruit
 stands) and wants these new roots, same contract as §10 (origin on the

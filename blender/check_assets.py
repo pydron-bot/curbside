@@ -40,6 +40,11 @@ PROP_BUDGET_OVERRIDE.update({
 })
 # The sticky charge (§15): held in weapons.glb, stuck on a car in props.glb (with a `*_glow` lamp face).
 PROP_BUDGET_OVERRIDE.update({"sticky_charge": 120, "charge_stuck": 80})
+# Street props, round 3 (§17, V3).
+PROP_BUDGET_OVERRIDE.update({
+    "a_board": 30, "crate_stack": 40, "bin_bags": 40, "market_stall": 140, "flower_stand": 80, "news_stand": 100,
+    "water_barrier": 30, "scaffold": 200, "leaf_pile": 16,
+})
 NEEDS_GLOW = {"charge_stuck"}
 REQUIRED_ROOTS = {"weapons.glb": {"sticky_charge"}, "props.glb": {"charge_stuck"}}
 

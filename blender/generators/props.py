@@ -129,6 +129,18 @@ def mats():
         "charge_tape": material("charge_tape", (220, 200, 140), 0.6),
         "charge_box": material("charge_box", (210, 30, 30), 0.5),
         "charge_glow": material("charge_glow", (255, 70, 50), 0.3),
+        # Street props, round 3 (§17, V3).
+        "chalk": material("chalk", (238, 236, 228), 0.8),
+        "bin_bag": material("bin_bag", (30, 31, 34), 0.35),
+        "rubbish_pale": material("rubbish_pale", (222, 214, 188), 0.8),
+        "kiosk_green": material("kiosk_green", (38, 104, 66), 0.6),
+        "stripe_news": material("stripe_news", (240, 190, 40), 0.4),
+        "magazine_a": material("magazine_a", (220, 60, 90), 0.5),
+        "magazine_b": material("magazine_b", (60, 150, 220), 0.5),
+        "stripe_net": material("stripe_net", (52, 150, 96), 0.7),
+        "scaffold_board": material("scaffold_board", (182, 140, 82), 0.9),
+        "leaf_orange": material("leaf_orange", (206, 116, 38), 0.9),
+        "leaf_red": material("leaf_red", (166, 54, 30), 0.9),
     }
 
 
@@ -802,6 +814,155 @@ def shopping_cart(m):
     ]
 
 
+# ---------------------------------------------------------------- street props, round 3 (§17, V3)
+# Same rules as round 2: origin on the ground at the middle of the footprint, front (game +Z) is
+# Blender -Y, faces nobody sees left out.
+
+def quad(name, corners, mat):
+    """One flat, one-sided panel (2 tris) through four corners, wound to face the first edge's left."""
+    import bmesh
+
+    from lib.common import _mesh_object
+
+    bm = bmesh.new()
+    bm.faces.new([bm.verts.new(c) for c in corners])
+    bmesh.ops.triangulate(bm, faces=list(bm.faces))
+    return _mesh_object(name, bm, [mat])
+
+
+def a_board(m):
+    # Two panels leaning into an A, a chalk band on each face, a bold ridge along the top.
+    d, top, h = 0.25, 1.0, 0.94  # foot half-depth, ridge height, panel top
+    parts = []
+    for side, y0 in (("front", -d), ("back", d)):
+        k = -1 if side == "front" else 1
+        yt = k * 0.05
+        # Wound so the face looks out (away from the middle) and up.
+        cs = [(-0.3, y0, 0), (0.3, y0, 0), (0.3, yt, h), (-0.3, yt, h)]
+        if side == "back":
+            cs = list(reversed(cs))
+        parts.append(quad(f"a_board_{side}", cs, m["paint"]))
+        lerp = lambda f: y0 + (yt - y0) * f + k * 0.006
+        band = [(-0.24, lerp(0.42), 0.42 * h), (0.24, lerp(0.42), 0.42 * h),
+                (0.24, lerp(0.8), 0.8 * h), (-0.24, lerp(0.8), 0.8 * h)]
+        if side == "back":
+            band = list(reversed(band))
+        parts.append(quad(f"a_board_{side}_chalk", band, m["chalk"]))
+    parts.append(open_box("a_board_ridge", (0.62, 0.16, 0.08), (0, 0, top - 0.04), m["paint"]))
+    return parts
+
+
+def crate_stack(m):
+    # Three delivery crates, a little askew; the middle one in the instance tint.
+    return [
+        open_box("crate_stack_a", (0.78, 0.58, 0.3), (0, 0, 0.15), m["wood"]),
+        rotate(open_box("crate_stack_b", (0.7, 0.52, 0.3), (0.02, -0.01, 0.45), m["paint"]), (0, 0, 7)),
+        rotate(open_box("crate_stack_c", (0.6, 0.46, 0.28), (-0.04, 0.02, 0.74), m["wood"]), (0, 0, -9)),
+    ]
+
+
+def bin_bags(m):
+    # Three black sacks slumped together; one split, something pale spilling out.
+    def sack(name, cx, cy, rx, ry, h, lean=0.0):
+        pts = [(cx + rx * c, cy + ry * s, 0) for c, s in ((1, 0), (0.5, 0.87), (-0.5, 0.87), (-1, 0), (-0.5, -0.87),
+                                                          (0.5, -0.87))]
+        pts.append((cx + lean, cy, h))
+        return hull(name, pts, m["bin_bag"])
+
+    return [
+        sack("bin_bags_a", -0.2, 0.1, 0.25, 0.22, 0.5, 0.05),
+        sack("bin_bags_b", 0.2, 0.12, 0.23, 0.2, 0.44, -0.04),
+        sack("bin_bags_c", 0.02, -0.18, 0.24, 0.17, 0.36, 0.02),
+        hull("bin_bags_spill", [(0.12, -0.3, 0.0), (0.38, -0.3, 0.0), (0.26, -0.12, 0.0), (0.22, -0.24, 0.16)],
+             m["rubbish_pale"]),
+    ]
+
+
+def market_stall(m):
+    # The trestle on the footprint; the striped canopy set back so the goods show past its front edge.
+    parts = [open_box("market_stall_trestle", (2.4, 1.4, 0.8), (0, 0, 0.4), m["wood"])]
+    for i, c in enumerate(("fruit_red", "fruit_yellow", "fruit_green", "fruit_orange")):
+        parts.append(open_box(f"market_stall_goods{i}", (0.56, 0.36, 0.16), (-0.87 + i * 0.58, -0.5, 0.88), m[c]))
+    y0, y1 = -0.3, 1.5  # canopy front and back (1.8 deep), 2.6 wide
+    for x in (-1.25, 1.25):
+        for y in (y0 + 0.05, y1 - 0.05):
+            parts.append(open_box(f"market_stall_pole{x:+.0f}{y:+.1f}", (0.05, 0.05, 2.2), (x, y, 1.1), m["pole"]))
+    ys = [y0 + i * (y1 - y0) / 8 for i in range(9)]
+    parts.append(strips("market_stall_canopy", -1.3, 1.3, ys, 2.1, 2.3, [m["canopy_cream"], m["paint"]]))
+    return parts
+
+
+def flower_stand(m):
+    # Two steps of buckets, the colour open to the sky.
+    parts = [
+        open_box("flower_stand_low", (1.4, 0.4, 0.4), (0, -0.2, 0.2), m["wood"]),
+        open_box("flower_stand_high", (1.4, 0.4, 0.75), (0, 0.2, 0.375), m["wood"]),
+    ]
+    colours = ("flowers", "fruit_yellow", "white", "umbrella_red")
+    for row, (y, z) in enumerate(((-0.2, 0.4), (0.2, 0.75))):
+        for i in range(4):
+            x = -0.52 + i * 0.35
+            c = colours[(i + row * 2) % 4]
+            parts.append(hull(f"flower_stand_bunch{row}{i}", [(x - 0.15, y - 0.16, z), (x + 0.15, y - 0.16, z),
+                                                               (x - 0.15, y + 0.16, z), (x + 0.15, y + 0.16, z),
+                                                               (x, y, z + 0.32)], m[c]))
+    return parts
+
+
+def news_stand(m):
+    # A green kiosk, its counter to the front (Blender -Y), a light roof with a stripe_news front edge.
+    parts = [
+        open_box("news_stand_body", (1.8, 1.1, 2.0), (0, 0.05, 1.0), m["kiosk_green"]),
+        open_box("news_stand_window", (1.4, 0.03, 0.75), (0, -0.51, 1.45), m["glass"]),
+        open_box("news_stand_counter", (1.6, 0.3, 0.06), (0, -0.6, 1.02), m["kiosk_green"]),
+        open_box("news_stand_roof", (1.9, 1.25, 0.1), (0, 0.0, 2.05), m["shelter_roof"]),
+        open_box("news_stand_stripe", (1.9, 0.14, 0.12), (0, -0.56, 2.06), m["stripe_news"]),
+    ]
+    for i, c in enumerate(("magazine_a", "white", "magazine_b", "fruit_yellow")):
+        parts.append(open_box(f"news_stand_mag{i}", (0.26, 0.2, 0.04), (-0.54 + i * 0.36, -0.62, 1.07), m[c]))
+    return parts
+
+
+def water_barrier(m):
+    # The plastic road barrier, its face across X; one tint (the game alternates red and white).
+    return [
+        hull("water_barrier_body", [(x, y, z) for x in (-0.75, 0.75)
+                                    for (y, z) in ((-0.225, 0), (0.225, 0), (-0.1, 0.8), (0.1, 0.8))], m["paint"]),
+        open_box("water_barrier_cap", (0.22, 0.22, 0.04), (-0.45, 0, 0.82), m["paint"]),
+    ]
+
+
+def scaffold(m):
+    # Against a façade at Blender +Y (game -Z). Two lifts of boards over a clear walkway (nothing below
+    # 2.2 m but the corner standards), a debris net on the outer face, a ladder up the +X end.
+    hx, hy = 1.95, 0.65
+    parts = []
+    for x in (-hx, hx):
+        for y in (-hy, hy):
+            parts.append(open_box(f"scaffold_std{x:+.0f}{y:+.1f}", (0.06, 0.06, 6.0), (x, y, 3.0), m["metal"]))
+    for i, z in enumerate((2.3, 4.3)):
+        parts.append(open_box(f"scaffold_deck{i}", (4.0, 1.36, 0.06), (0, 0, z), m["scaffold_board"]))
+    for i, z in enumerate((3.3, 5.3, 6.0)):
+        parts.append(open_box(f"scaffold_ledger{i}", (4.0, 0.06, 0.06), (0, -hy, z), m["metal"]))
+    parts.append(open_box("scaffold_net", (4.0, 0.04, 3.6), (0, -hy - 0.06, 4.2), m["stripe_net"]))
+    lx = 1.55
+    for x in (lx - 0.2, lx + 0.2):
+        parts.append(open_box(f"scaffold_ladder{x:+.2f}", (0.05, 0.05, 4.4), (x, 0.3, 4.1), m["metal"]))
+    for i, z in enumerate((2.7, 3.5, 4.0)):
+        parts.append(open_box(f"scaffold_rung{i}", (0.4, 0.04, 0.04), (lx, 0.3, z), m["metal"]))
+    return parts
+
+
+def leaf_pile(m):
+    # Swept leaves in the gutter, flat enough to drive over (drawn only).
+    return [
+        hull("leaf_pile_heap", [(-0.5, -0.2, 0), (-0.2, -0.4, 0), (0.35, -0.35, 0), (0.5, 0.05, 0), (0.15, 0.4, 0),
+                                (-0.35, 0.3, 0), (0.0, 0.0, 0.15)], m["leaf_orange"]),
+        hull("leaf_pile_red", [(-0.4, -0.1, 0.0), (-0.05, -0.3, 0.0), (0.1, 0.1, 0.0), (-0.25, 0.25, 0.0),
+                               (-0.15, 0.0, 0.11)], m["leaf_red"]),
+    ]
+
+
 PROPS = {
     "streetlamp": streetlamp, "traffic_light": traffic_light, "hydrant": hydrant, "bench": bench,
     "trash_bin": trash_bin, "dumpster": dumpster, "bollard": bollard, "newspaper_box": newspaper_box,
@@ -821,6 +982,10 @@ PROPS = {
     "parking_meter": parking_meter, "recycling_bin": recycling_bin, "cafe_table": cafe_table,
     "vending_machine": vending_machine, "atm": atm, "shopping_cart": shopping_cart,
     "charge_stuck": charge_stuck,  # §15
+    # Street props, round 3 (§17).
+    "a_board": a_board, "crate_stack": crate_stack, "bin_bags": bin_bags, "market_stall": market_stall,
+    "flower_stand": flower_stand, "news_stand": news_stand, "water_barrier": water_barrier, "scaffold": scaffold,
+    "leaf_pile": leaf_pile,
 }
 
 
