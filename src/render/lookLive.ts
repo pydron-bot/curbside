@@ -9,6 +9,7 @@
 import { Color } from 'three';
 import raw from './look.json';
 import { LookTuning, parseLookFile, writeShaderLook } from './lookTuning';
+import { peopleDraw } from './characterModel';
 import { writeGrade } from './post';
 import { worldUniforms } from './shaderLib';
 import { setSkyKeys, tuneKeys } from './timeOfDay';
@@ -31,6 +32,8 @@ function rebuild(): void {
   setSkyKeys(tuneKeys(look));
   writeGrade(look);
   writeShaderLook(look, worldUniforms.uLook.value);
+  peopleDraw.scale = look.peopleScale;
+  peopleDraw.hostile = look.hostileMark;
 }
 lookTuning.onChange(rebuild);
 rebuild();

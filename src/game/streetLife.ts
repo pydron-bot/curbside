@@ -39,7 +39,7 @@ const SOUND_RANGE = 150;
 const CHIME_RANGE = 70;
 /** The ice cream van's chime, every so often, s. */
 const CHIME_EVERY = 9;
-const RIDER_SHIRTS = ['#c94f4f', '#4f7cc9', '#5aa36a', '#d8d2c0', '#2f2f35', '#e08a3c', '#7d4fc9'];
+const RIDER_SHIRTS = ['#e64a3f', '#3d8cf2', '#38c060', '#f2ecdc', '#3a3a48', '#f5902a', '#9650ec'];
 const RIDER_SKIN = ['#e0ac84', '#c68e63', '#8d5a3b', '#f1c9a5', '#5e3b26'];
 
 export interface StreetLifeDeps {

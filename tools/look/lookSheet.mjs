@@ -45,7 +45,7 @@ const VIEWS = [
   ['foot-day', 'On foot, Neon Mile, 13:00', { at: NEON, hour: DAY }],
   ['foot-night', 'On foot, Neon Mile, 22:00', { at: NEON, hour: NIGHT }],
   ['garden-day', 'On foot by a roof garden, 13:00', { at: SPAWN, hour: DAY, garden: true }],
-  ['hostile-day', 'On foot, 2 stars, officers coming, 13:00', { at: DOWNTOWN, hour: DAY, wanted: 2, ff: 7 }],
+  ['hostile-day', 'On foot, 2 stars and three armed locals, 13:00', { at: DOWNTOWN, hour: DAY, wanted: 2, ff: 5, hostile: 3 }],
   ['spawn-day', 'Car, spawn, 13:00', { at: SPAWN, hour: DAY, car: true }],
   ['spawn-dusk', 'Car, spawn, 18:42', { at: SPAWN, hour: DUSK }],
   ['spawn-night', 'Car, spawn, 22:00', { at: SPAWN, hour: NIGHT }],
@@ -79,6 +79,7 @@ await page.waitForFunction(() => window.__ub.look.props.loaded, null, { timeout:
 const spawn = await page.evaluate((sets) => {
   const u = window.__ub;
   for (const [k, v] of sets) if (k in u.lookTuning.look) u.lookTuning.set(k, v);
+  u.testTools.god(); // nobody dies mid-sheet
   u.fastForward(3);
   const p = u.player.position;
   return [p.x, p.z];
@@ -93,6 +94,8 @@ for (const [name, label, v] of VIEWS) {
     await page.evaluate(([x, z]) => {
       const u = window.__ub;
       u.testTools.clearWanted();
+      // The hostile view's gunmen go back to their day.
+      for (const c of u.population.crowd) if (c.agent.role === 'civilian' && (c.agent.mode === 'shoot' || c.agent.mode === 'fight')) Object.assign(c.agent, { temper: 'calm', mode: 'walk', provoked: false });
       u.testTools.teleport(x, z);
       u.fastForward(0.5);
       u.testTools.spawn('sports');
@@ -106,16 +109,17 @@ for (const [name, label, v] of VIEWS) {
     u.testTools.clearWanted();
     u.testTools.setRain(v.rain ? 'on' : 'off');
     if (v.garden) {
-      // The roof garden nearest the spawn: stand on the pavement south of it.
+      // The biggest low roof garden within 150 m of the spawn: stand on the pavement west of it.
       let best = null;
       u.look.plans.forEach((pl, i) => {
         const b = u.city.buildings[i];
+        const area = (b.maxX - b.minX) * (b.maxZ - b.minZ);
         const d = Math.hypot((b.minX + b.maxX) / 2 - x, (b.minZ + b.maxZ) / 2 - z);
-        if (pl.roof === 'garden' && b.height < 20 && (!best || d < best.d)) best = { b, d };
+        if (pl.roof === 'garden' && b.height < 20 && d < 150 && (!best || area > best.area)) best = { b, area };
       });
       if (best) {
-        x = (best.b.minX + best.b.maxX) / 2;
-        z = best.b.maxZ + 4;
+        x = best.b.minX - 3;
+        z = (best.b.minZ + best.b.maxZ) / 2;
       }
     }
     u.testTools.teleport(x, z);
@@ -124,28 +128,39 @@ for (const [name, label, v] of VIEWS) {
     u.fastForward(1.5);
     if (v.wanted) u.testTools.wanted(v.wanted);
     u.fastForward(v.ff ?? 0.3);
+    if (v.hostile) {
+      // The nearest locals draw on the player.
+      const p = u.player.position;
+      const near = u.population.crowd.filter((c) => c.agent.role === 'civilian' && c.agent.mode !== 'down').sort((a, b) => (a.agent.s.x - p.x) ** 2 + (a.agent.s.z - p.z) ** 2 - ((b.agent.s.x - p.x) ** 2 + (b.agent.s.z - p.z) ** 2));
+      near.slice(0, v.hostile).forEach((c, i) => {
+        // Brought in round the player (the crowd keeps to off-screen pavements), then they draw.
+        const a = (i / v.hostile) * Math.PI * 2 + 0.6;
+        Object.assign(c.agent.s, { x: p.x + Math.cos(a) * 7, z: p.z + Math.sin(a) * 5, vx: 0, vz: 0 });
+        Object.assign(c.prev, c.agent.s);
+        Object.assign(c.agent, { temper: 'armed', mode: 'shoot', provoked: true, timer: 30 });
+      });
+      u.fastForward(0.6);
+    }
     // The camera settled at its resting height (it eases over seconds of real time, ~1 fps here).
     const p0 = u.player.position;
     u.rig.snapTo(p0.x, p0.z, u.rig.opts.minHeight);
     u.fastForward(0.1);
     if (v.blast) {
-      // Slow motion so the ~1 fps renderer catches the fireball; the nearest other car goes up.
-      u.testTools.slowMo(0.05);
+      // The nearest car in reach goes up, and a blast beside the player; shot at once (the fireball is short).
       const p = u.player.position;
-      const car = u.vehicles.filter((c) => c !== u.player.driving && c.mesh?.root?.visible && !c.damage.wrecked).sort((a, b) => (a.sim.x - p.x) ** 2 + (a.sim.z - p.z) ** 2 - ((b.sim.x - p.x) ** 2 + (b.sim.z - p.z) ** 2))[0];
+      const car = u.vehicles.filter((c) => c !== u.player.driving && c.mesh?.root?.visible && !c.damage.wrecked && Math.hypot(c.sim.x - p.x, c.sim.z - p.z) < 20)[0];
       if (car) u.explode(car);
-      else u.effects.explode(p.x + 9, p.z - 5);
+      u.effects.explode(p.x + 8, p.z - 4);
     }
   }, [at[0], at[1], v]);
-  await page.waitForTimeout(v.blast ? 1200 : 2500);
+  await page.waitForTimeout(v.blast ? 150 : 2500);
   const file = path.join(dir, `${name}.png`);
   await page.screenshot({ path: file, scale: 'css', timeout: 180000 });
   const m = await page.evaluate(measure);
-  if (v.blast) await page.evaluate(() => window.__ub.testTools.slowMo(1));
   const row = { name, label, ...m };
   if (!MASK) delete row.grid;
   results.push(row);
-  console.log(`${name.padEnd(15)} h ${m.height} wall ${m.wallPct}% player ${String(m.playerPx).padStart(3)} px  roof ${String(m.roofPct).padStart(3)}%  calls ${m.calls}  programs ${m.programs}  ${m.tier}`);
+  console.log(`${name.padEnd(15)} hostile ${m.hostiles} h ${m.height} wall ${m.wallPct}% player ${String(m.playerPx).padStart(3)} px  roof ${String(m.roofPct).padStart(3)}%  calls ${m.calls}  programs ${m.programs}  ${m.tier}`);
 }
 await ctx.close();
 writeFileSync(path.join(dir, 'metrics.json'), JSON.stringify({ tag: TAG, sets: Object.fromEntries(SETS), views: results.map(({ grid, ...r }) => r) }, null, 2));
@@ -299,6 +314,7 @@ function measure() {
     programs: info.programs.length,
     tier: u.resolution?.tier ?? u.resolution?.quality ?? '',
     driving: !!u.player.driving,
+    hostiles: u.population.crowd.filter((c) => c.model.hostile > 0 && c.model.root.visible).length,
     peopleScale: s,
     grid,
     gx: GX,

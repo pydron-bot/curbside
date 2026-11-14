@@ -114,6 +114,7 @@ export class PeoplePose {
     const raised = held !== null && WEAPONS[held].mode !== 'throw' && (aimHeading !== null || this.d.locked() || this.sinceShot < AIM_LINGER || moving < SPRINT_LOWER);
     m.hold(held, raised);
     m.arrested = p.arrested;
+    m.focus = 1;
     m.update(dt, moving, p.down, p.dead > 0 ? Infinity : p.stunned);
   }
 
@@ -183,6 +184,8 @@ function poseCrowdPed(c: CrowdPed, dt: number, alpha: number, view: Rect | null)
   // Crouched in fear, or (an officer, a fighter stopped in smoke) doubled over coughing.
   m.cowering = (a.cower > 0 && a.mode === 'flee') || (a.cough > 0 && a.mode !== 'flee' && a.mode !== 'down');
   m.followStagger(a.stagger);
+  // Coming for someone (the player, nearly always): fighting, shooting, an officer running in to arrest.
+  m.hostile = a.mode === 'fight' || a.mode === 'shoot' || (a.mode === 'arrest' && a.role === 'cop' && !a.march) ? 1 : 0;
   const down = a.mode === 'down';
   const shown = !view || nearView(view, m.root.position.x, m.root.position.z, POSE_MARGIN);
   m.update(dt, len2(s.vx, s.vz), down, down ? a.timer : Infinity, shown);

@@ -1104,6 +1104,8 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
   float across = longX ? rp.y : rp.x;
   float fine = 1.0 - smoothstep(0.03, 0.09, px);
   vec3 c = vRoof;
+  // A landmark roof (helipad, mural, logo, bay number) keeps its colour by day (ROOFS STEP BACK).
+  float mark = type > ${ROOF.helipad} - 0.5 ? 1.0 : 0.0;
 
   if (type < ${ROOF.tar} + 0.5) {
     float seam = ubLine(fract(across / 0.95) - 0.5, 0.47, px / 0.95);
@@ -1141,9 +1143,18 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     float bed = ubLine(gf.x, 1.55, px) * ubLine(gf.y, 0.95, px) * fits;
     float soilIn = ubLine(gf.x, 1.42, px) * ubLine(gf.y, 0.82, px) * fits;
     float bh = ubHash(gi + seed * 30.0);
-    vec3 leaves = leafC * (0.6 + 0.55 * ubNoise(sp * 2.7 + bh * 9.0));
-    float flower = step(0.8, ubHash(floor(sp * 5.0))) * step(0.5, bh) * fine;
-    leaves = mix(leaves, bh > 0.78 ? bSrgb(0.92, 0.32, 0.42) : bSrgb(0.95, 0.8, 0.26), flower);
+    // Planted rows, seen from above: round plants in lines along each bed,
+    // dark soil between, one crop per bed (blended to its average far off,
+    // where single plants would shimmer).
+    vec2 cell = vec2(0.42, 0.36);
+    vec2 pc = (fract((gf + vec2(1.42, 0.82)) / cell) - 0.5) * cell;
+    float pd = length(pc);
+    float plant = mix(0.5, 1.0 - smoothstep(0.14 - px, 0.14 + px, pd), fine);
+    vec3 crop = bh < 0.35 ? leafC * vec3(0.9, 1.2, 0.85) : bh < 0.6 ? leafC * vec3(0.6, 0.78, 0.6) : bh < 0.85 ? leafC * vec3(1.15, 1.15, 1.05) + vec3(0.03, 0.02, 0.0) : leafC * vec3(0.75, 0.95, 0.7);
+    vec3 leaves = mix(bSrgb(0.24, 0.17, 0.11), crop * (0.85 + 0.3 * (1.0 - pd / 0.14) * fine), plant);
+    // Some beds in flower: a bloom on every other plant.
+    float bloom = step(0.85, bh) * plant * step(0.5, fract(dot(floor((gf + vec2(1.42, 0.82)) / cell), vec2(0.5, 0.5)))) * fine;
+    leaves = mix(leaves, fract(bh * 13.0) > 0.5 ? bSrgb(0.92, 0.32, 0.42) : bSrgb(0.95, 0.8, 0.26), bloom * (1.0 - smoothstep(0.05, 0.09, pd)));
     c = mix(c, bSrgb(0.46, 0.33, 0.22), bed);
     c = mix(c, leaves, soilIn);
     float deck = ubLine(across, 1.0, px) * step(1.0, e);
@@ -1222,6 +1233,7 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     float inset = smoothstep(0.9, 1.1, e);
     mural = mix(mural, vec3(dot(mural, vec3(0.2126, 0.7152, 0.0722))), 0.3) * (0.82 + 0.18 * ubNoise(sp * 0.7));
     c = mix(c, mural, min(inset * 0.42 * LK_ART, 1.0)); // sun-faded, the roof showing through
+    mark = 1.0;
   } else if (flatRoof && abs(vInfo.w - ${DISTRICTS.indexOf('downtown')}.0) < 0.5 && fract(seed * 13.7) < 0.12 && e > 1.0) {
     // Downtown: a company's logo on the roof, a ring round a chevron, in cool colours.
     float r = min(hs.x, hs.y) * 0.62;
@@ -1232,6 +1244,7 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     vec3 logoA = fract(seed * 3.7) < 0.5 ? bSrgb(0.18, 0.83, 0.9) : bSrgb(0.54, 0.36, 1.0);
     c = mix(c, logoA, min(ring * 0.6 * LK_ART, 1.0));
     c = mix(c, bSrgb(0.95, 0.95, 0.97), min(chev * 0.6 * LK_ART, 1.0));
+    mark = 1.0;
   } else if (abs(vInfo.w - ${DISTRICTS.indexOf('industrial')}.0) < 0.5 && abs(type - ${ROOF.terracotta}) > 0.5 && type < ${ROOF.helipad} - 0.5 && fract(seed * 13.7) < 0.35 && e > 1.2) {
     // The docks: a big yellow bay number painted on the shed roof, and a border line.
     int n = 10 + int(fract(seed * 91.3) * 89.0);
@@ -1240,6 +1253,7 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
     float digits = sevenSeg(q - vec2(-1.15, -1.0), n / 10) + sevenSeg(q - vec2(0.15, -1.0), n - (n / 10) * 10);
     float border = ubBand(e, 1.2, 1.45, px);
     c = mix(c, bSrgb(0.9, 0.74, 0.2), min(min(1.0, digits + border) * 0.6 * LK_ART, 1.0));
+    mark = 1.0;
   }
   if (type < ${ROOF.helipad} - 0.5) c *= 0.88 + 0.14 * smoothstep(0.25, 0.75, ubFbm(sp * 0.16)); // water stains
   if (abs(type - ${ROOF.terracotta}) > 0.5) {
@@ -1250,6 +1264,13 @@ void roofSurface(inout vec3 col, inout vec3 glow, inout vec3 nW, vec3 l, float p
   } else {
     c *= mix(0.7, 1.0, smoothstep(0.0, 0.3, e)); // eaves
   }
+  // V3 readability: by day ordinary roofs step back (darker, greyer, a broad
+  // shade inside the parapet) so the eye lands on the street; none at night.
+  float back = LK_ROOF * (1.0 - uNight) * (1.0 - mark * 0.85);
+  // Brighter roofs step back further (a pale membrane ~25%, dark tar ~15%).
+  float roofLum = dot(c, vec3(0.2126, 0.7152, 0.0722));
+  c = mix(c, vec3(roofLum), 0.3 * back) * (1.0 - back * (0.14 + 0.2 * min(roofLum, 0.6)));
+  c *= 1.0 - 0.16 * back * (1.0 - smoothstep(0.4, 3.2, e));
   col = c;
 }
 `;
