@@ -1,5 +1,5 @@
 import type { GameAudio } from '../audio/gameAudio';
-import { CAMERA_PRESETS, LOOK_GROUPS, LOOK_SPECS, formatLook, lookDistance, type LookGroup, type LookKey, type LookSpec, type LookTuning } from '../render/lookTuning';
+import { CAMERA_PRESETS, DAY_LOOKS, DAY_LOOK_KEYS, LOOK_GROUPS, LOOK_SPECS, formatLook, lookDistance, type LookGroup, type LookKey, type LookSpec, type LookTuning } from '../render/lookTuning';
 import { getDevice } from '../render/quality';
 import './lookPanel.css';
 
@@ -203,6 +203,7 @@ export class LookPanel {
       this.savePrefs();
     });
     if (group === 'camera') rows.append(this.cameraChips());
+    if (group === 'daylook') rows.append(this.dayLookChips());
     for (const spec of specs) rows.append(this.buildRow(spec));
     this.groups.set(group, { el: sec, sub: sec.querySelector('small')! });
     this.body.append(sec);
@@ -223,6 +224,26 @@ export class LookPanel {
         this.tuning.set('footHeight', p.footHeight);
         this.tuning.set('fieldOfView', p.fieldOfView);
         this.refresh();
+      });
+      chips.append(b);
+    }
+    return chips;
+  }
+
+  /** The three day looks (and TODAY): each sets every day-look slider, its own or back to the shipped value. */
+  private dayLookChips(): HTMLElement {
+    const chips = document.createElement('div');
+    chips.className = 'lookp-chips';
+    for (const d of DAY_LOOKS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'lookp-chip';
+      b.textContent = d.label;
+      b.addEventListener('click', () => {
+        this.audio.ui('click');
+        for (const k of DAY_LOOK_KEYS) this.tuning.set(k, d.values[k] ?? this.tuning.shipped[k]);
+        this.refresh();
+        this.say(d.label === 'TODAY' ? 'THE SHIPPED DAY LOOK' : `${d.label} · EXPORT TO SHIP IT`);
       });
       chips.append(b);
     }

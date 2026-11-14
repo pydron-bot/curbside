@@ -18,13 +18,14 @@ import type { KeyValueStore } from '../core/sessionLog';
 export const LOOK_KEY = 'curbside.look';
 export const LOOK_FILE_VERSION = 1;
 
-export type LookGroup = 'sky' | 'grade' | 'night' | 'day' | 'read' | 'camera';
+export type LookGroup = 'sky' | 'grade' | 'night' | 'day' | 'daylook' | 'read' | 'camera';
 
 export const LOOK_GROUPS: ReadonlyArray<readonly [LookGroup, string]> = [
   ['sky', 'SKY & LIGHT'],
   ['grade', 'COLOUR GRADE'],
   ['night', 'NEON & NIGHT'],
   ['day', 'DAYTIME'],
+  ['daylook', 'DAY LOOK (TRIAL)'],
   ['read', 'PEOPLE & ROOFS'],
   ['camera', 'CAMERA (TRIAL)'],
 ];
@@ -129,6 +130,14 @@ export const LOOK_SPECS = [
   pct('gullSize', 'GULL SIZE', 'day', 'The seagulls at the docks', 0.5, 2),
   pct('streetArt', 'STREET ART', 'day', 'Crossings, murals, logos, bay numbers', 0, 2.5),
   pct('billboards', 'BILLBOARDS BY DAY', 'day', 'How strongly the painted adverts show'),
+  // The day look (V3 L5): by day only (08:00–16:30 full, easing out by dusk), so night never changes.
+  pct('shadowTint', 'SHADOW COLOUR', 'daylook', 'Sky-blue light back into sun shadows (0% = grey)', 0, 2, { def: 0 }),
+  pct('dayShadows', 'DAY SHADOW DARKNESS', 'daylook', 'How dark sun shadows are by day', 0.3, 1.3),
+  pct('shadowSoftness', 'SHADOW SOFTNESS', 'daylook', 'Sun shadow edges by day: crisp ← → soft', 0.4, 3),
+  pct('daySaturation', 'DAY COLOUR', 'daylook', 'Saturation by day', 0.6, 1.6),
+  pct('dayContrast', 'DAY CONTRAST', 'daylook', 'Contrast by day', 0.7, 1.4),
+  shift('dayWarmth', 'DAY WARMTH', 'daylook', 'Cool blue ← → golden'),
+  pct('roadDetail', 'ROAD & PAVEMENT DETAIL', 'day', 'Grain, tracks, patches, drains, arrows, slabs, litter', 0, 2),
   // Readability (V3 stage 1): people drawn larger than life (drawing only:
   // the sim, collisions, doors and seats are life size), lit edges, hostiles
   // marked; roofs a step back by day so the street leads.
@@ -166,9 +175,10 @@ export const SHADER_LOOK: ReadonlyArray<readonly [LookKey, string]> = [
   ['treeSway', 'LK_SWAY'],
   ['peopleRim', 'LK_RIM'],
   ['roofStepBack', 'LK_ROOF'],
+  ['roadDetail', 'LK_ROAD'],
 ];
-/** Floats in `uLook`. */
-export const SHADER_LOOK_FLOATS = 16;
+/** Floats in `uLook` (a multiple of 4: vec4s). */
+export const SHADER_LOOK_FLOATS = 20;
 
 /** Fill `out` (shaderLib uLook) from `v`: each slot the slider's distance from the code's value. */
 export function writeShaderLook(v: Readonly<Record<LookKey, number>>, out: Float32Array): Float32Array {
@@ -183,6 +193,30 @@ export function shaderLookGlsl(): string {
   return `uniform vec4 uLook[${SHADER_LOOK_FLOATS / 4}];\n${lines.join('\n')}\n`;
 }
 export type LookValues = Record<LookKey, number>;
+
+/**
+ * The three day looks to choose from (V3 L5), as LOOK panel chips: each sets
+ * the day-only sliders (DAY_LOOK_KEYS; the rest stay where they are), so
+ * night never changes, and EXPORT then gives its look.json. TODAY puts them
+ * back to the shipped look.
+ */
+export const DAY_LOOKS: ReadonlyArray<{ label: string; values: Readonly<Partial<LookValues>> }> = [
+  { label: 'TODAY', values: {} },
+  {
+    label: 'SUNNY PASTEL',
+    values: { dayBrightness: 1.18, sunlight: 0.9, skyBlue: 1.35, dayHaze: 1.3, cloudShadow: 0.65, shadowTint: 1.2, dayShadows: 0.65, shadowSoftness: 1.6, daySaturation: 0.86, dayContrast: 0.85, dayWarmth: -0.2 },
+  },
+  {
+    label: 'HAZY GOLD',
+    values: { dayBrightness: 1.08, sunlight: 1.05, skyBlue: 0.7, dayHaze: 0.6, goldenWarmth: 1.3, cloudShadow: 0.8, shadowTint: 0.85, dayShadows: 0.72, shadowSoftness: 2.4, daySaturation: 1.02, dayContrast: 0.88, dayWarmth: 0.9 },
+  },
+  {
+    label: 'COMIC',
+    values: { dayBrightness: 1.06, sunlight: 1.25, skyBlue: 1.12, dayHaze: 1.6, cloudShadow: 0.3, shadowTint: 1.5, dayShadows: 1, shadowSoftness: 0.4, daySaturation: 1.4, dayContrast: 1.25, dayWarmth: 0 },
+  },
+];
+/** The sliders a day look sets (any day look's keys). */
+export const DAY_LOOK_KEYS: readonly LookKey[] = [...new Set(DAY_LOOKS.flatMap((d) => Object.keys(d.values) as LookKey[]))];
 
 const SPEC = new Map<string, LookSpec>(LOOK_SPECS.map((s) => [s.key, s]));
 

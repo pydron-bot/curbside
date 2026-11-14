@@ -21,7 +21,7 @@ const SEARCH_REACH = 60;
 export type GlowSource = (glows: GlowSprites, view: Rect) => void;
 import { LowResFx, type LowResSource } from './lowResFx';
 import { PickupMesh } from './pickupMesh';
-import { PostEffects, getExposure, mountNeonFilter, mountVignette, precompile, setExposure } from './post';
+import { PostEffects, getExposure, mountNeonFilter, setDayGrade, mountVignette, precompile, setExposure } from './post';
 import { getQuality, onQualityChange } from './quality';
 import { look } from './lookLive';
 import { SceneLighting } from './sceneLighting';
@@ -217,7 +217,11 @@ export class Look {
     const fog = this.lighting.fog;
     fog.near += this.fogPush;
     fog.far += this.fogPush;
-    this.sunShadow.setStrength(Math.min(1, sky.shadowStrength * look.shadowDarkness));
+    // The day look (V3 L5) scales by day only: night keeps its shadows and grade.
+    const day = 1 - sky.night;
+    this.sunShadow.setStrength(Math.min(1, sky.shadowStrength * look.shadowDarkness * (1 + (look.dayShadows - 1) * day)), look.shadowTint * day);
+    this.sunShadow.setSoftness(1 + (look.shadowSoftness - 1) * day);
+    setDayGrade(day, look.daySaturation, look.dayContrast, look.dayWarmth);
     this.cars.envIntensity = sky.envIntensity;
     this.post.setNight(sky.night, look.bloom);
     this.city.update(sky.night);
