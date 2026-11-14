@@ -504,7 +504,15 @@ function carMaterial(): MeshStandardMaterial {
       shader.fragmentShader,
       '#include <emissivemap_fragment>',
       // Sun glints flicking across paint and glass as the car turns (not the tyres: little reflection).
-      'totalEmissiveRadiance = vCarEmissive + diffuseColor.rgb * ubStreetLight(vCarWorld, normalize(vCarNormal)) + vec3(1.0, 0.97, 0.9) * ubGlint(vCarWorld, normalize(vCarNormal), 60.0) * 3.5 * vCarSurf.z * (1.0 - vCarSurf.x);',
+      // Glass keeps the sharp flash. Paint (rougher) gets a soft, capped highlight in a lighter
+      // shade of itself: the reworked cars' sloped nose and boot are flat facets, and a full
+      // glint lit a whole panel white (blooming on desktop) when one faced the sun.
+      `vec3 carN = normalize(vCarNormal);
+      float carG = ubGlint(vCarWorld, carN, 60.0);
+      float carPaint = smoothstep(0.08, 0.14, vCarSurf.x);
+      vec3 carGlass = vec3(1.0, 0.97, 0.9) * carG * 3.5 * vCarSurf.z * (1.0 - vCarSurf.x);
+      vec3 carSheen = mix(diffuseColor.rgb, vec3(1.0, 0.97, 0.9), 0.55) * (0.42 * carG / (carG + 0.3)) * vCarSurf.z;
+      totalEmissiveRadiance = vCarEmissive + diffuseColor.rgb * ubStreetLight(vCarWorld, carN) + mix(carGlass, carSheen, carPaint);`,
     );
     shader.fragmentShader = after(
       shader.fragmentShader,
