@@ -1093,6 +1093,17 @@ breaks.
 
 ## 20. V3: a heavy (requested 2026-11-14, optional)
 
+**Done 2026-11-14** (`heavy` in `BODIES`, `blender/generators/characters.py`): `heavy.glb`,
+544 tris, the same rig, bone names, palette slots and clip set as the other bodies (it has
+`Roll`, `Swing` and `AimBat` too; the game can ignore them). `check_assets.py` checks it with
+the characters. Height 1.04, shoulders 1.53 (1.3× `ped_stocky`'s 1.18), depth and limbs 1.3.
+From above it's a broad rectangle against `ped_stocky`'s oval. Slots: `heavy_hair` the helmet,
+`heavy_shirt` the vest (torso, raised collar round the back and sides of the neck, a padded
+front panel, a plate on each shoulder that rides its arm), `heavy_shoes` the boots
+(0.19 × 0.32 × 0.17) and the visor band. Default colours are dark (helmet (44, 48, 44), vest
+(56, 62, 52)); the game's palette overrides them as for the others. The head is a coarser
+sphere than the others' (mostly under the helmet), which keeps it under 600.
+
 On-foot enemies are getting three kinds: a rusher, the shooter as now and
 a heavy. The rusher is an existing body in its own colours (code only).
 The heavy wants a silhouette of its own from above:

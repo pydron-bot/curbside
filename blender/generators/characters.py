@@ -19,7 +19,7 @@ All share the same bone names and clips (glTF animation names):
   loop, GetUp 0.917 s, GetUpFast 0.5 s, EnterCar 0.5 s, Arrested 1 s loop (kneeling, hands on head),
   Throw 0.417 s, AimRocket 0.292 s hold, ShootRocket 0.208 s, Punch2 0.333 s (left hook),
   Uppercut 0.417 s, Stagger 0.292 s, Hail / Cower / Cheer 1 s loops, Ride 1 s loop (hips at 0.75 m).
-Story bodies for the payphone missions: vex.glb, tuna.glb, pike.glb.
+Story bodies for the payphone missions: vex.glb, tuna.glb, pike.glb. V3's on-foot heavy: heavy.glb.
 Every clip keys every bone, so any clip can be played or crossfaded alone.
 The game scales Walk/Run playback with speed; `walkSpeed` / `runSpeed` (the
 ground speeds the cycles are authored for) are exported as custom properties.
@@ -109,6 +109,14 @@ BODIES = {
         rig="pike", height=1.06, shoulders=1.05, depth=1.0, limbs=0.95, slick_hair=True, long_coat=True,
         palette={"skin": (226, 196, 176), "hair": (30, 30, 34), "shirt": (34, 34, 40),
                  "pants": (70, 26, 34), "shoes": (16, 16, 18)},
+    ),
+    # The heavy (V3, §20): on-foot enemy with a silhouette of its own from above. Shoulders 1.3x
+    # ped_stocky's, a helmet (hair slot), a padded vest with a raised collar and shoulder plates
+    # (shirt slot), heavy boots (shoes slot).
+    "heavy": dict(
+        rig="heavy", height=1.04, shoulders=1.53, depth=1.3, limbs=1.3, heavy=True,
+        palette={"skin": (170, 122, 92), "hair": (44, 48, 44), "shirt": (56, 62, 52),
+                 "pants": (40, 42, 48), "shoes": (22, 22, 24)},
     ),
 }
 
@@ -244,11 +252,18 @@ def build_body(rig, spec, name, d):
         attach(box(f"{name}_torso", (0.5 * sw, 0.28 * dp, torso_h), (0, 0, torso_mid), shirt, bevel=0.04), "chest")
     hw = spec.get("hips", 1.0)
     attach(box(f"{name}_pelvis", (0.36 * sw * hw, 0.24 * dp, 0.2), (0, 0, d.hip_z + 0.02), pants, bevel=0.03), "hips")
-    attach(ico(f"{name}_head", 0.13, (0, 0, d.neck_z + 0.13), skin, subdiv=2, scale=(1, 1.05, 1.1)), "head")
+    # The heavy's head is mostly under its helmet: a coarser sphere keeps it inside the budget.
+    attach(ico(f"{name}_head", 0.13, (0, 0, d.neck_z + 0.13), skin, subdiv=1 if spec.get("heavy") else 2,
+               scale=(1, 1.05, 1.1)), "head")
     # Nose nub so facing direction reads from above.
     attach(box(f"{name}_nose", (0.04, 0.05, 0.05), (0, -0.135, d.neck_z + 0.12), skin), "head")
 
-    if spec.get("police"):
+    if spec.get("heavy"):
+        # A helmet over the whole crown, a dark visor band (shoes slot) across the front.
+        attach(ico(f"{name}_hair", 0.165, (0, 0.01, d.neck_z + 0.19), hair, subdiv=1, scale=(1.0, 1.08, 0.78)),
+               "head")
+        attach(box(f"{name}_visor", (0.26, 0.06, 0.07), (0, -0.15, d.neck_z + 0.17), shoes), "head")
+    elif spec.get("police"):
         # Peaked cap: crown (hair slot, set navy by the game), a black brim and a silver band
         # (fixed-colour badge slot) that sets officers apart from above at night.
         badge = material(f"{name}_badge", (214, 218, 226), 0.4)
@@ -319,6 +334,15 @@ def build_body(rig, spec, name, d):
         # The collar pale (fixed-colour badge slot): a dark coat's outline from above.
         collar = material(f"{name}_badge", (178, 180, 188), 0.6)
         attach(box(f"{name}_collar", (0.4 * sw, 0.1, 0.16), (0, 0.11 * dp, d.shoulder_z + 0.06), collar), "chest")
+    if spec.get("heavy"):
+        # The vest's raised collar round the back and sides of the neck, and a padded front panel.
+        attach(box(f"{name}_collar", (0.36 * sw, 0.12, 0.14), (0, 0.1 * dp, d.shoulder_z + 0.07), shirt, 0.02),
+               "chest")
+        for x in (-1, 1):
+            attach(box(f"{name}_collar{x:+d}", (0.08, 0.26 * dp, 0.12), (x * 0.17 * sw, 0, d.shoulder_z + 0.06), shirt),
+                   "chest")
+        attach(box(f"{name}_pad", (0.4 * sw, 0.04, torso_h * 0.6), (0, -0.14 * dp - 0.02, torso_mid + 0.04), shirt),
+               "chest")
     if spec.get("police"):
         attach(box(f"{name}_belt", (0.38 * sw, 0.26 * dp, 0.07), (0, 0, d.hip_z + 0.1), shoes), "hips")
         attach(box(f"{name}_holster", (0.07, 0.12, 0.2), (-0.22 * sw, 0, d.hip_z - 0.02), shoes), "hips")
@@ -334,11 +358,18 @@ def build_body(rig, spec, name, d):
         else:
             attach(box(f"{name}_arm.{side}", (0.12 * lw, 0.13 * lw, 0.5), (ax, 0, d.shoulder_z - 0.27), shirt, 0.03),
                    f"arm.{side}")
+        if spec.get("heavy"):
+            # Shoulder plates on the arms, so they lift with them.
+            attach(box(f"{name}_plate.{side}", (0.2 * lw, 0.22 * lw, 0.1), (ax, 0, d.shoulder_z + 0.01), shirt),
+                   f"arm.{side}")
         attach(box(f"{name}_hand.{side}", (0.09, 0.1, 0.1), (ax + 0.01 * x, 0, d.shoulder_z - 0.58), skin), f"arm.{side}")
         leg_h = d.hip_z - 0.1
         attach(box(f"{name}_leg.{side}", (0.15 * lw, 0.17 * lw, leg_h), (0.11 * x, 0, 0.09 + leg_h / 2), pants, 0.03),
                f"leg.{side}")
-        attach(box(f"{name}_shoe.{side}", (0.14, 0.26, 0.09), (0.11 * x, -0.04, 0.045), shoes, 0.02), f"leg.{side}")
+        if spec.get("heavy"):  # heavy boots: wider, longer, up the ankle
+            attach(box(f"{name}_shoe.{side}", (0.19, 0.32, 0.17), (0.11 * x, -0.05, 0.085), shoes, 0.02), f"leg.{side}")
+        else:
+            attach(box(f"{name}_shoe.{side}", (0.14, 0.26, 0.09), (0.11 * x, -0.04, 0.045), shoes, 0.02), f"leg.{side}")
     return parts
 
 

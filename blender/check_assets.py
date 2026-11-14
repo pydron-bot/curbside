@@ -24,7 +24,7 @@ CHAR_CLIPS = {
     "Uppercut": (0.4, 0.05), "Stagger": (0.3, 0.05), "Hail": (1.0, 0.05), "Cower": (1.0, 0.05), "Cheer": (1.0, 0.05),
     "Ride": (1.0, 0.05), "Roll": (0.35, 0.03), "Swing": (0.4, 0.05), "AimBat": (0.3, 0.05),
 }
-CHARACTER_FILES = re.compile(r"^(player(_f)?|ped_\w+|cop|vex|tuna|pike)\.glb$")
+CHARACTER_FILES = re.compile(r"^(player(_f)?|ped_\w+|cop|vex|tuna|pike|heavy)\.glb$")
 # V3 (§16): the nine most-seen cars are drawn up to 48 at once.
 COMMON_CARS = {k: 900 for k in ("sedan", "compact", "sports", "van", "taxi", "pickup", "muscle", "police", "police_suv")}
 TWO_WHEELERS = {"scooter": 600, "cop_bike": 600}
