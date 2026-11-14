@@ -586,6 +586,7 @@ def animate(rig, d):
     key_pose(rig, 24, ride, (0, drop, 0))
 
     roll(rig, d)
+    swing(rig)
 
     rig.animation_data.action = None
     for pb in rig.pose.bones:
@@ -645,6 +646,34 @@ def roll(rig, d):
         t = math.radians(turn)
         loc = (0, c - c * math.cos(t) - low + 0.01, -c * math.sin(t))
         key_pose(rig, frame, {**pose, "root": (turn, 0, 0)}, loc)
+
+
+# The bat cocked over the right shoulder, both hands on it (AimBat, and where Swing starts and ends).
+AIM_BAT = {"arm.R": (-70, 0, 26), "arm.L": (-66, 0, 30), "chest": (0, -14, 0), "head": (0, 12, 0)}
+
+
+def swing(rig):
+    """Swing and AimBat (V3, BLENDER_TODO §19).
+
+    Swing: 0.4 s (10 frames) one-shot on the arms, chest and head (the legs rest, so it layers over
+    them like Punch): from the cocked carry, wound back over the right shoulder, swung flat across to
+    the left, contact at 40% (frame 4), a short follow-through, back toward the carry.
+    AimBat: a 0.3 s hold of the carry with a small sway, for walking about with the bat.
+    """
+    new_action(rig, "Swing")
+    key_pose(rig, 0, AIM_BAT)
+    key_pose(rig, 2.5, {"arm.R": (-128, 0, 52), "arm.L": (-112, 0, 46), "chest": (0, -42, 0), "head": (0, 30, 0),
+                        "hips": (0, -10, 0)}, (0, 0, -0.04))
+    key_pose(rig, 4, {"arm.R": (-90, 0, -4), "arm.L": (-90, 0, 14), "chest": (4, 22, 0), "head": (0, -14, 0),
+                      "hips": (0, 10, 0)}, (0, -0.02, 0.06))
+    key_pose(rig, 6, {"arm.R": (-86, 0, -48), "arm.L": (-82, 0, -40), "chest": (6, 52, 0), "head": (0, -30, 0),
+                      "hips": (0, 16, 0)}, (0, -0.02, 0.06))
+    key_pose(rig, 10, AIM_BAT)
+
+    new_action(rig, "AimBat")
+    key_pose(rig, 0, AIM_BAT)
+    key_pose(rig, 3.5, {**AIM_BAT, "arm.R": (-72, 0, 26), "arm.L": (-68, 0, 30)})
+    key_pose(rig, 7, AIM_BAT)
 
 
 def build_one(out_dir, name, spec, thumbs):

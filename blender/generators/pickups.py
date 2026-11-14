@@ -19,7 +19,7 @@ from pathlib import Path
 
 from mathutils import Matrix
 
-from lib.common import box, cylinder, export_glb, group, hull, material, render_thumbnail, reset_scene, rotate
+from lib.common import box, cylinder, export_glb, group, hull, material, prism, render_thumbnail, reset_scene, rotate
 
 THUMBS = Path(__file__).resolve().parents[1] / "thumbs"
 
@@ -54,6 +54,9 @@ def mats():
         "safety_yellow": material("safety_yellow", (240, 196, 30), 0.5),
         "smoke_green": material("smoke_green", (104, 120, 96), 0.7),
         "charge_body": material("charge_body", (64, 68, 72), 0.8),
+        # The bat (§19, V3): a bold red-taped handle and a pale barrel, to read from above.
+        "bat_tape": material("bat_tape", (200, 34, 40), 0.7),
+        "bat_wood": material("bat_wood", (228, 200, 152), 0.6),
     }
     for gun, rgb in GUN_STRIPES.items():
         m[f"stripe_{gun}"] = material(f"stripe_{gun}", rgb, 0.5)
@@ -229,10 +232,49 @@ def held(m, name):
     return parts, muzzle
 
 
+# ---------------------------------------------------------------- the bat (§19, V3)
+
+BAT_LENGTH = 0.85
+# (distance ahead of the grip along the barrel, radius), knob to tip; the fist closes at 0.
+BAT_PROFILE = ((-0.07, 0.006), (-0.05, 0.027), (-0.035, 0.015), (0.2, 0.018), (0.45, 0.031),
+               (BAT_LENGTH - 0.065, 0.035))
+
+
+def bat_parts(name, m, scale=1.0, widen=1.0, lie=False):
+    """A baseball bat, five-sided, from its knob to its tip (53 tris): taped knob and handle, wooden barrel.
+
+    Held (weapons.glb `bat`): origin at the grip, the barrel toward Blender -Y (game +Z), widened about
+    its axis to read from above like the guns (`widen`). Lying (pickups.glb `bat_pickup`): `scale` all
+    round, along X, its middle at the origin, resting on the ground.
+    """
+    rings = [(z * scale, r * scale * widen) for z, r in BAT_PROFILE]
+    tape, wood = m["bat_tape"], m["bat_wood"]
+    bands = [tape, tape, tape, wood, wood]
+    obj = prism(f"{name}_body", rings, bands, wood, verts=5, spin=0.3)
+    if lie:
+        mid = (BAT_PROFILE[0][0] + BAT_PROFILE[-1][0]) / 2 * scale
+        top = max(r for _, r in BAT_PROFILE) * scale
+        obj.data.transform(Matrix.Translation((0, 0, -mid)))
+        obj.data.transform(Matrix.Rotation(1.5707963, 4, "Y"))  # up the bat → +X
+        obj.data.transform(Matrix.Translation((0, 0, top)))
+    else:
+        obj.data.transform(Matrix.Rotation(1.5707963, 4, "X"))  # up the bat → -Y, the barrel ahead
+    return [obj]
+
+
+def bat(m, p="bat"):
+    return bat_parts(p, m, widen=1.4), round(BAT_LENGTH - 0.065, 3)  # muzzle: the tip, where the swing's trail starts
+
+
+def bat_pickup(m):
+    return bat_parts("bat_pickup", m, scale=1.5, lie=True)
+
+
 GUNS = {"pistol": pistol, "smg": smg, "shotgun": shotgun, "grenade": grenade, "molotov": molotov,
         "rocket_launcher": rocket_launcher, "rocket": rocket,
         "air_horn": air_horn, "taser": taser, "stinger": stinger, "smoke_grenade": smoke_grenade,
-        "sticky_charge": sticky_charge}  # no crate: a story reward and shop item (§15)
+        "sticky_charge": sticky_charge,  # no crate: a story reward and shop item (§15)
+        "bat": bat}  # no crate: lies in the street as `bat_pickup` (§19)
 # The crate roots that don't follow `crate_<gun>` (the names the game asks pickups.glb for).
 CRATE_NAMES = {"rocket_launcher": "crate_rocket", "air_horn": "crate_horn", "smoke_grenade": "crate_smoke"}
 
@@ -326,6 +368,7 @@ PICKUPS = {
     "health_kit": health_kit,
     "package": package,
     "cash": cash,
+    "bat_pickup": bat_pickup,  # §19: no crate, the bat lying flat, 1.5x life size
 }
 
 

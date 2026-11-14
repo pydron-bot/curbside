@@ -1055,6 +1055,22 @@ for any missing clip.
 
 ## 19. V3: the bat (requested 2026-11-14)
 
+**Done 2026-11-14** (`bat` / `bat_pickup` in `blender/generators/pickups.py`, `swing()` in
+`characters.py`; all checked by `check_assets.py`, the two roots required):
+- **`weapons.glb` `bat`** (53 tris): a five-sided turned bat, 0.85 m knob to tip, origin at the
+  grip, the barrel toward game +Z, widened 1.4× about its axis (length kept) to read from above
+  like the guns. Red-taped knob and handle (`bat_tape`, (200, 34, 40)), pale barrel (`bat_wood`,
+  (228, 200, 152)). `muzzle` = 0.785 (the tip). No `<name>_muzzle` node; nothing else needs one.
+- **`pickups.glb` `bat_pickup`** (53 tris): the same bat at 1.5× life size (1.28 m), lying along
+  game X, its origin at the middle of its length, resting on the ground (its lowest point at 0).
+- **`Swing`** on every body: 10 frames (0.417 s, like `Throw`; the contract is 0.4 ± 0.05).
+  Keys: the carry (0), wound back over the right shoulder with the chest turned 42° away (2.5),
+  contact square in front (4, 40%), follow-through across to the left (6), back to the carry
+  (10). Legs at rest, so it layers like `Punch`. The bat isn't in the body GLBs: with no elbows
+  the arms stay a shoulder-width apart, so the bat should hang off `arm.R`'s hand as the guns do.
+- **`AimBat`** on every body (0.292 s, like `Aim`): the carry, both arms forward and out to the
+  right at chest height (`AIM_BAT` in `characters.py`), with a small sway.
+
 A melee weapon to pick up: one swing floors someone, a few swings and it
 breaks.
 

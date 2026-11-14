@@ -22,7 +22,7 @@ CHAR_CLIPS = {
     "GetUp": (0.9, 0.05), "GetUpFast": (0.5, 0.05), "EnterCar": (0.5, 0.05), "Arrested": (1.0, 0.05),
     "Throw": (0.4, 0.05), "AimRocket": (0.3, 0.05), "ShootRocket": (0.2, 0.03), "Punch2": (0.33, 0.05),
     "Uppercut": (0.4, 0.05), "Stagger": (0.3, 0.05), "Hail": (1.0, 0.05), "Cower": (1.0, 0.05), "Cheer": (1.0, 0.05),
-    "Ride": (1.0, 0.05), "Roll": (0.35, 0.03),
+    "Ride": (1.0, 0.05), "Roll": (0.35, 0.03), "Swing": (0.4, 0.05), "AimBat": (0.3, 0.05),
 }
 CHARACTER_FILES = re.compile(r"^(player(_f)?|ped_\w+|cop|vex|tuna|pike)\.glb$")
 # V3 (§16): the nine most-seen cars are drawn up to 48 at once.
@@ -45,8 +45,10 @@ PROP_BUDGET_OVERRIDE.update({
     "a_board": 30, "crate_stack": 40, "bin_bags": 40, "market_stall": 140, "flower_stand": 80, "news_stand": 100,
     "water_barrier": 30, "scaffold": 200, "leaf_pile": 16,
 })
+# The bat (§19, V3): held in weapons.glb, lying in the street in pickups.glb.
+PROP_BUDGET_OVERRIDE.update({"bat": 60, "bat_pickup": 60})
 NEEDS_GLOW = {"charge_stuck"}
-REQUIRED_ROOTS = {"weapons.glb": {"sticky_charge"}, "props.glb": {"charge_stuck"}}
+REQUIRED_ROOTS = {"weapons.glb": {"sticky_charge", "bat"}, "props.glb": {"charge_stuck"}, "pickups.glb": {"bat_pickup"}}
 
 problems = []
 
