@@ -13,10 +13,11 @@
  * no three.js.
  */
 import type { EventBus } from '../core/events';
-import { createPedState, type PedState } from '../entities/pedestrian';
+import { createPedState, type MoveInput, type PedState } from '../entities/pedestrian';
 import { driverDoorPosition, isPoliceArchetype } from '../entities/vehicle';
 import { Arsenal } from '../systems/weapons';
 import type { Vehicle } from './population';
+import { Roll } from './roll';
 import { len2 } from '../core/len';
 
 export const MAX_HEALTH = 100;
@@ -70,6 +71,8 @@ export class Player {
   /** Seconds left in custody after an arrest; 0 when free. */
   custody = 0;
   readonly arsenal = new Arsenal();
+  /** The dodge roll (game/roll.ts): nothing lands while it runs. */
+  readonly roll = new Roll();
 
   constructor(
     private readonly bus: EventBus,
@@ -98,6 +101,21 @@ export class Player {
   /** Busted and being held (lying cuffed until release). */
   get arrested(): boolean {
     return this.custody > 0;
+  }
+
+  /** Mid-roll: hits, shots, blasts and knock-downs pass them by. */
+  get rolling(): boolean {
+    return this.roll.active;
+  }
+
+  /**
+   * Dodge: a roll along the stick (or the way they face), on foot, alive,
+   * on their feet and free, cooled down. Emits `roll`. True if it started.
+   */
+  tryRoll(move: MoveInput): boolean {
+    if (this.driving || !this.ready || this.arrested || !this.roll.start(move, this.ped.heading)) return false;
+    this.bus.emit({ type: 'roll', x: this.ped.x, z: this.ped.z, dirX: this.roll.dirX, dirZ: this.roll.dirZ });
+    return true;
   }
 
   /** Alive and on their feet: free to punch, shoot, get in or out. */
@@ -160,7 +178,8 @@ export class Player {
    * true if it killed.
    */
   hurt(amount: number): boolean {
-    if (!this.alive || this.arrested || amount <= 0) return false;
+    // Mid-roll nothing lands (the dodge's whole point).
+    if (!this.alive || this.arrested || amount <= 0 || this.rolling) return false;
     if (this.invulnerable) {
       // God mode: the hit still lands (flash, knockback, regen pause), the health doesn't move.
       this.sinceHurt = 0;
@@ -182,6 +201,7 @@ export class Player {
    * Never shortens a stun or death already running.
    */
   knockDown(fromX: number, fromZ: number, push: number, seconds: number, cause: KnockCause, byPlayer: boolean): void {
+    if (this.rolling && !this.driving) return;
     const wasDown = this.down;
     this.stunned = Math.max(this.stunned, seconds);
     if (this.driving) return;
@@ -238,6 +258,7 @@ export class Player {
     // God mode on at any point taints the life, even once it's off again.
     if (this.invulnerable) this.cheated = true;
     this.punchCooldown = Math.max(0, this.punchCooldown - dt);
+    this.roll.tick(dt);
     // Left alone for a while, a wounded player gets back on their feet a little.
     this.sinceHurt += dt;
     if (this.alive && this.sinceHurt > REGEN_DELAY && this.health < REGEN_TO) {
@@ -262,6 +283,7 @@ export class Player {
     this.custody = 0;
     this.stunned = 0;
     this.punchCooldown = 0;
+    this.roll.reset();
     this.health = this.maxHealth;
     this.armour = 0;
     this.sinceHurt = Infinity;

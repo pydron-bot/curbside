@@ -1126,7 +1126,8 @@ function writtenMissions(docks: Point & { heading?: number; halfWidth?: number; 
             { do: 'spawnCar', tag: 'limo', archetype: 'limo', paint: '#cbb994', ...limo },
             // A grey suit and a coat; his wardens in hi-vis.
             { do: 'spawnPed', tag: 'clamp', ...clamp, shirt: '#7d838c', armed: true, hostile: true, body: 'ped_coat' },
-            ...wardens.map((p, i) => ({ do: 'spawnPed' as const, tag: `warden${i + 1}`, ...p, shirt: HI_VIS, hostile: true, body: 'ped_stocky' as const })),
+            // His wardens are rushers (stage 6): slim, quick, fists; still in hi-vis.
+            ...wardens.map((p, i) => ({ do: 'spawnPed' as const, tag: `warden${i + 1}`, ...p, shirt: HI_VIS, hostile: true, enemy: 'rusher' as const, body: 'ped_slim' as const })),
           ],
           fail: [{ wrecked: 'limo', reason: "CLAMP'S LIMO IS WRECKED" }],
         },

@@ -707,6 +707,8 @@ export class GameAudio {
         return this.horn(e.x, e.z, e.duration);
       case 'respray':
         return this.oneShot('door', e, FALLOFF.near, 0.8, 0.2, sfx.spray);
+      case 'roll':
+        return this.oneShot('punch', e, FALLOFF.punch, 0.7, 0.15, sfx.throwWhoosh);
       case 'roadblock':
         return; // the scanner's line carries it (its squelch)
       case 'boombox':

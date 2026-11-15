@@ -13,7 +13,9 @@
  */
 import type { GlowSprites } from '../../render/glowSprites';
 import type { ProgressProps } from '../../render/progressLook';
-import { provoke, spawnPed } from '../../systems/crowd';
+import type { Outfit } from '../../render/characterModel';
+import { makeEnemy, provoke, spawnPed, type EnemyKind } from '../../systems/crowd';
+import { HEAVY_BODY, RUSHER_BODY, type BodyKind } from '../bodies';
 import type { Rect } from '../../world/city';
 import { districtAt } from '../../world/districts';
 import {
@@ -54,7 +56,10 @@ interface Member {
   homeX: number;
   homeZ: number;
   armed: boolean;
-  body: GangDef['bodies'][number];
+  /** A rusher or a heavy (crowd.ts makeEnemy), else a shooter (`armed`). */
+  kind: EnemyKind | null;
+  bat: boolean;
+  body: BodyKind;
   ped: CrowdPed | null;
 }
 
@@ -149,13 +154,16 @@ export class GangMode implements Mode {
     const agent = spawnPed(0, 0, 0, 0, ctx.deps.rand);
     Object.assign(agent.s, { x: m.homeX, z: m.homeZ, vx: 0, vz: 0, heading: ctx.deps.rand() * Math.PI * 2 });
     agent.temper = m.armed ? 'armed' : 'fighter';
+    if (m.kind) makeEnemy(agent, m.kind, m.bat);
     agent.gang = m.hangout.gang.id;
     // 'arrest' with a goal is how the crowd keeps someone standing at a spot.
     agent.mode = 'arrest';
     agent.goalX = m.homeX;
     agent.goalZ = m.homeZ;
     const g = m.hangout.gang;
-    return ctx.deps.population.addPed(agent, { shirt: g.shirt, pants: g.pants }, m.body);
+    const ped = ctx.deps.population.addPed(agent, crewOutfit(g, m.kind), m.body);
+    if (m.kind === 'heavy') ped.gun = 'shotgun';
+    return ped;
   }
 
   /** The player knocked one of `gang` over at (x, z): respect, and the crew nearby comes for them. */
@@ -258,17 +266,54 @@ export class GangMode implements Mode {
   private enlist(): void {
     this.hangouts.forEach((h, slot) => {
       h.members.forEach((m, i) => {
+        const role = crewRole(slot, i);
         this.members.push({
           hangout: h,
           slot,
           homeX: m.x,
           homeZ: m.z,
-          // One in each crew carries a gun.
-          armed: i === 0,
-          body: h.gang.bodies[i % h.gang.bodies.length],
+          armed: role.kind === null,
+          kind: role.kind,
+          bat: role.bat,
+          body: role.kind === 'rusher' ? RUSHER_BODY : role.kind === 'heavy' ? HEAVY_BODY : shooterBody(h.gang, slot),
           ped: null,
         });
       });
     });
   }
+}
+
+/**
+ * Who stands where in a crew (stage 6, P10): the first is the shooter, as
+ * before; the second a rusher, with a bat at every other hangout; the third
+ * another rusher with fists, or at every other hangout a heavy. So a crew is
+ * never two guns, a heavy turns up at two of the VIPERS' five corners, and
+ * the rush comes first (fists you can punch back, a bat you can roll from).
+ */
+export function crewRole(slot: number, i: number): { kind: EnemyKind | null; bat: boolean } {
+  if (i === 0) return { kind: null, bat: false };
+  if (i === 1) return { kind: 'rusher', bat: slot % 2 === 0 };
+  return slot % 2 === 1 ? { kind: 'heavy', bat: false } : { kind: 'rusher', bat: false };
+}
+
+/** The crew's shooter: one of the gang's broader bodies (the slim one marks a rusher). */
+function shooterBody(g: GangDef, slot: number): BodyKind {
+  const broad = g.bodies.filter((b) => b !== RUSHER_BODY);
+  return broad.length ? broad[slot % broad.length] : g.bodies[0];
+}
+
+/**
+ * Crew colours: everyone in the gang's shirt; a rusher's cap or hair in a
+ * loud orange (a bandana from above), the shooter's dark; a heavy's vest dark
+ * with the gang's colour on the helmet, so the three read apart from the
+ * play camera (with their builds: slim, stocky or coated, broad).
+ */
+export const RUSHER_BANDANA = '#ff7a1a';
+const HEAVY_VEST = '#2b3127';
+
+function crewOutfit(g: GangDef, kind: EnemyKind | null): Outfit {
+  if (kind === 'rusher') return { shirt: g.shirt, pants: g.pants, hair: RUSHER_BANDANA };
+  if (kind === 'heavy') return { shirt: HEAVY_VEST, pants: g.pants, hair: g.shirt };
+  // A dark cap or hair: the bright head is the rusher's alone.
+  return { shirt: g.shirt, pants: g.pants, hair: g.pants };
 }

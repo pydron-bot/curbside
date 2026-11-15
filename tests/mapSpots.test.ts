@@ -41,7 +41,7 @@ import {
   type MapEdits,
   type SpotEdit,
 } from '../src/world/mapEdits';
-import { PICKUP_KINDS, generatePickups, placePickups } from '../src/world/pickups';
+import { BAT_COUNT, PICKUP_KINDS, generateBats, generatePickups, placePickups } from '../src/world/pickups';
 import { placeCityRamps } from '../src/world/ramps';
 import { placeHospital } from '../src/world/streetSpots';
 
@@ -362,11 +362,13 @@ describe('landmarks', () => {
 
 describe('pickups', () => {
   it('stand where they did, with ids, and move, go and come with the edits', () => {
-    const raw = generatePickups(1337);
+    // The crates, then the bats (stage 6) with ids of their own after them.
+    const raw = [...generatePickups(1337), ...generateBats(1337)];
     const placed = placePickups(1337, NO_EDITS);
     expect(placed.map(({ x, z, kind }) => ({ x, z, kind }))).toEqual(raw.map(({ x, z, kind }) => ({ x, z, kind })));
     expect(placed.map((p) => p.id).slice(0, 2)).toEqual(['pickup-0', 'pickup-1']);
-    expect(placed.at(-1)!.id).toBe('pickup-58');
+    expect(placed.find((p) => p.kind === 'bat')!.id).toBe('pickup-bat-0');
+    expect(placed.at(-1 - BAT_COUNT)!.id).toBe('pickup-58');
     expect(newSpotId(NO_EDITS, 'pickup')).toBe('pickup-59');
     expect(new Set(PICKUP_ITEMS)).toEqual(new Set(PICKUP_KINDS));
     const at = pave(0.6);

@@ -19,14 +19,16 @@
  * (systems/smoke.ts) instead of going off.
  * The sticky charge is thrown like a grenade and sticks to the car it hits
  * (or lies where it lands) until DETONATE sets it off (systems/charges.ts).
+ * The bat is swung (game/combat.ts swing): its "ammo" is the hits it has
+ * left in it, worn one per swing that lands, and at none it breaks.
  */
 import type { Rect } from '../world/city';
 import { len2 } from '../core/len';
 
-export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'grenade' | 'molotov' | 'rocket' | 'horn' | 'taser' | 'stinger' | 'smoke' | 'charge';
+export type WeaponKind = 'bat' | 'pistol' | 'smg' | 'shotgun' | 'grenade' | 'molotov' | 'rocket' | 'horn' | 'taser' | 'stinger' | 'smoke' | 'charge';
 
 /** How a weapon fires: hitscan bullets, a thrown arc, a flying rocket, the air horn's blast, or the taser's darts. */
-export type FireMode = 'gun' | 'throw' | 'launcher' | 'horn' | 'taser';
+export type FireMode = 'gun' | 'throw' | 'launcher' | 'horn' | 'taser' | 'melee';
 
 export interface WeaponSpec {
   label: string;
@@ -56,6 +58,23 @@ export interface WeaponSpec {
 }
 
 export const WEAPONS: Record<WeaponKind, WeaponSpec> = {
+  // Swung, not fired: damage per hit, `range` the reach, ammo the hits left before it breaks.
+  bat: {
+    label: 'BAT',
+    mode: 'melee',
+    damage: 60,
+    pellets: 1,
+    interval: 0.55,
+    spread: 0,
+    bloom: 0,
+    bloomMax: 0,
+    recover: 1,
+    range: 2.1,
+    pickupAmmo: 6,
+    maxAmmo: 6,
+    automatic: false,
+    driveBy: false,
+  },
   pistol: {
     label: 'PISTOL',
     mode: 'gun',
@@ -239,7 +258,7 @@ export const WEAPONS: Record<WeaponKind, WeaponSpec> = {
   },
 };
 
-export const WEAPON_ORDER: WeaponKind[] = ['pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket', 'horn', 'taser', 'stinger', 'smoke', 'charge'];
+export const WEAPON_ORDER: WeaponKind[] = ['bat', 'pistol', 'smg', 'shotgun', 'grenade', 'molotov', 'rocket', 'horn', 'taser', 'stinger', 'smoke', 'charge'];
 /** What an ammo crate tops up: the guns, the air horn's canister and the taser's cartridges. */
 export const GUNS: readonly WeaponKind[] = ['pistol', 'smg', 'shotgun', 'horn', 'taser'];
 /** Fraction of a bullet's damage that applies to vehicles. */
@@ -328,18 +347,39 @@ export class Arsenal {
     return k !== null && this.cooldown <= 0 && this.has(k);
   }
 
-  /** Spend a round if ready; returns the weapon fired, or null. Fire before reading spread for the next. */
+  /**
+   * Spend a round if ready; returns the weapon fired, or null. Fire before
+   * reading spread for the next. A melee weapon spends nothing here: it
+   * wears only when a swing lands (wear()).
+   */
   tryFire(): WeaponKind | null {
     const k = this.current;
     if (!k || this.cooldown > 0) return null;
     const left = this.ammo.get(k) ?? 0;
     if (left <= 0) return null;
-    this.ammo.set(k, left - 1);
     const spec = WEAPONS[k];
+    if (spec.mode === 'melee') {
+      this.cooldown = spec.interval;
+      return k;
+    }
+    this.ammo.set(k, left - 1);
     this.cooldown = spec.interval;
     this.bloom = Math.min(spec.bloomMax, this.bloom + spec.bloom);
     if (left - 1 === 0) this.current = this.nextLoaded(k); // out of ammo: switch to the next weapon
     return k;
+  }
+
+  /**
+   * A swing with `kind` landed: one hit less in it. Returns true if that
+   * broke it (it's gone, and the hand moves on to the next weapon).
+   */
+  wear(kind: WeaponKind): boolean {
+    const left = this.ammo.get(kind) ?? 0;
+    if (left <= 0) return false;
+    this.ammo.set(kind, left - 1);
+    if (left > 1) return false;
+    if (this.current === kind) this.current = this.nextLoaded(kind);
+    return true;
   }
 
   /** The best gun that fires out of a car window, if any (SMG first; the stinger isn't a gun). */

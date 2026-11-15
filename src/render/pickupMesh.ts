@@ -6,6 +6,7 @@ import { after } from './shaderLib';
 import type { WorldProps } from './worldProps';
 
 const COLORS: Record<PickupKind, string> = {
+  bat: '#ff8a3c',
   pistol: '#4fa3ff',
   smg: '#ffa040',
   shotgun: '#ff4d4d',
@@ -53,6 +54,8 @@ const GLOW_MARGIN = 4;
 
 /** The pickups.glb model for each kind (docs/BLENDER_TODO.md §4, §8). */
 export const PICKUP_MODELS: Readonly<Record<PickupKind, string>> = {
+  // Loose, no crate (§19): already modelled 1.5× life size, so it isn't scaled up again (pickupScale).
+  bat: 'bat_pickup',
   pistol: 'crate_pistol',
   smg: 'crate_smg',
   shotgun: 'crate_shotgun',
@@ -71,6 +74,8 @@ export const PICKUP_MODELS: Readonly<Record<PickupKind, string>> = {
 };
 /** The models are life-size (a crate is 0.7 m): shown bigger so they read from 20–60 m up. */
 const MODEL_SCALE = 1.7;
+/** A kind's scale: the bat is modelled big already (BLENDER_TODO §19). */
+const pickupScale = (kind: PickupKind) => (kind === 'bat' ? 1.1 : MODEL_SCALE);
 /** Self-light in their own colours, so they pop against the street (more at night). */
 const MODEL_GLOW = 0.3;
 
@@ -136,7 +141,10 @@ export class PickupMesh {
       if (!s || !glows || !view) continue;
       if (p.x < view.minX - GLOW_MARGIN || p.x > view.maxX + GLOW_MARGIN) continue;
       if (p.z < view.minZ - GLOW_MARGIN || p.z > view.maxZ + GLOW_MARGIN) continue;
-      if (things) things.add(PICKUP_MODELS[p.kind], p.x, 0.35 + bob, p.z, time * 2 + i, MODEL_SCALE, MODEL_SCALE, MODEL_SCALE, 0, MODEL_GLOW);
+      if (things) {
+        const k = pickupScale(p.kind);
+        things.add(PICKUP_MODELS[p.kind], p.x, 0.35 + bob, p.z, time * 2 + i, k, k, k, 0, MODEL_GLOW);
+      }
       const c = this.colours[i];
       const pulse = 0.5 + 0.5 * Math.sin(time * 4 + i * 1.7);
       const ring = 2.1 + pulse * 0.5;

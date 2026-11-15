@@ -124,6 +124,7 @@ export class WorldProps {
       'crate_taser',
       'crate_stinger',
       'crate_smoke',
+      'bat_pickup',
       'health_kit',
       'armour',
       'ammo_box',

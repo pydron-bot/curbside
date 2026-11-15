@@ -26,6 +26,8 @@ export interface TouchControls {
   setWeapon(weapon: WeaponKind | null, canSwap: boolean): void;
   /** Show BOOM (DETONATE) while a sticky charge is out, on foot and in a car. */
   setDetonate(live: boolean): void;
+  /** The dodge roll's readiness, 0..1 (1: ready): ROLL dims while it cools down. */
+  setRoll(readiness: number): void;
   /**
    * Release every on-screen control (pause, resume, blur). A thumb that
    * stays on a stick or the pedals takes it back when it next moves; the
@@ -48,6 +50,7 @@ const TAP_PX = 12;
 
 const WEAPON_ICON: Record<WeaponKind | 'fists', string> = {
   fists: ICONS.fist,
+  bat: ICONS.bat,
   pistol: ICONS.pistol,
   smg: ICONS.smg,
   shotgun: ICONS.shotgun,
@@ -73,6 +76,7 @@ const WEAPON_ICON: Record<WeaponKind | 'fists', string> = {
  *    molotov, aim and let go to throw), FIRE, weapon swap and
  *    ENTER (pulses when a car is in reach).
  *  - BOOM (DETONATE), on foot and in a car, only while a sticky charge is out.
+ *  - ROLL (the dodge), on foot: above and left of ENTER, clear of BOOM and the swap.
  *  - Right side in a car: one pedal pad tracking every finger (slide between
  *    GAS and BRAKE; the band between GAS and HAND presses both, to drift with
  *    one thumb) and EXIT, well away from HAND.
@@ -118,8 +122,10 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   swap.innerHTML = ICONS.swap;
   const boom = el('div', 'tbtn btn-detonate');
   boom.innerHTML = `${ICONS.detonate}<b>BOOM</b>`;
+  const roll = el('div', 'tbtn btn-roll foot-only');
+  roll.innerHTML = `${ICONS.roll}<b>ROLL</b>`;
 
-  layer.append(stickZone, aimZone, pad, door, swap, fire, boom);
+  layer.append(stickZone, aimZone, pad, door, swap, fire, boom, roll);
   root.append(layer);
 
   const applySettings = () => {
@@ -446,6 +452,10 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
     () => (out.fireHeld = false),
   );
   pressable(swap, () => out.cyclePresses++);
+  pressable(roll, () => {
+    out.rollPresses++;
+    haptics?.touch(true);
+  });
   pressable(boom, () => {
     out.detonatePresses++;
     haptics?.touch(true);
@@ -461,6 +471,7 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
   let weapon: WeaponKind | null | undefined;
   let swapShown: boolean | undefined;
   let boomShown = false;
+  let rollReady = true;
   return {
     layer,
     reset() {
@@ -469,7 +480,11 @@ export function mountTouchControls(root: HTMLElement, out: InputSource, haptics?
       parkAim();
       releasePedals(true);
       out.fireHeld = false;
-      for (const b of [fire, swap, door, boom]) b.classList.remove('pressed');
+      for (const b of [fire, swap, door, boom, roll]) b.classList.remove('pressed');
+    },
+    setRoll(readiness) {
+      const ready = readiness >= 1;
+      if (ready !== rollReady) roll.classList.toggle('cooling', !(rollReady = ready));
     },
     setDetonate(live) {
       if (live !== boomShown) boom.classList.toggle('live', (boomShown = live));

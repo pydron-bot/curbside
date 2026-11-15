@@ -12,6 +12,7 @@ import { STORY_BODIES } from '../game/bodies';
 import type { Player } from '../game/player';
 import type { CrowdPed, Vehicle } from '../game/population';
 import { WEAPONS } from '../systems/weapons';
+import { ROLL_SECONDS } from '../game/roll';
 import type { Rect } from '../world/city';
 import { CULL_MARGIN, type CharacterModel } from './characterModel';
 import { len2 } from '../core/len';
@@ -83,6 +84,7 @@ export class PeoplePose {
       if (!p.driving && p.alive && !p.down && e.health > 0) d.model.stagger(HURT_STAGGER);
     });
     bus.on('celebrate', (e) => this.celebrate(e.x, e.z));
+    bus.on('roll', () => d.model.roll(ROLL_SECONDS));
   }
 
   /**
@@ -178,7 +180,9 @@ function poseCrowdPed(c: CrowdPed, dt: number, alpha: number, view: Rect | null)
   m.root.rotation.y = lerpAngle(c.prev.heading, s.heading, alpha);
   // Shooters draw (SWAT an SMG, everyone else a pistol), not while coughing in smoke; a hit makes them reel.
   const shooting = a.mode === 'shoot' && a.cough <= 0;
-  m.hold(shooting ? (c.gun ?? 'pistol') : null, shooting);
+  // A rusher's bat comes out for the fight.
+  const batting = a.bat === true && a.mode === 'fight' && a.cough <= 0;
+  m.hold(batting ? 'bat' : shooting ? (c.gun ?? 'pistol') : null, shooting || batting);
   // A phone held up to call or film: the one-handed aim with nothing in the hand.
   if (c.phone && !shooting) m.armed = 'one';
   // Crouched in fear, or (an officer, a fighter stopped in smoke) doubled over coughing.

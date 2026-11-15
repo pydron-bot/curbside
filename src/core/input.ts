@@ -45,6 +45,8 @@ export interface InputSource {
   stationPresses: number;
   /** DETONATE presses (G, the pad's D-pad down, the touch button) not yet consumed: main.ts acts on them only in play. */
   detonatePresses: number;
+  /** Dodge-roll presses on foot (C, the pad's B, the touch ROLL button) not yet consumed. */
+  rollPresses: number;
   /** Driving: nitro held. */
   boost: boolean;
 }
@@ -73,6 +75,7 @@ export const emptySource = (): InputSource => ({
   pausePresses: 0,
   stationPresses: 0,
   detonatePresses: 0,
+  rollPresses: 0,
   boost: false,
 });
 
@@ -80,7 +83,7 @@ export const emptySource = (): InputSource => ({
 export function clearSource(s: InputSource): void {
   s.steer = s.throttle = s.moveX = s.moveY = s.aimX = s.aimY = 0;
   s.handbrake = s.sprint = s.fireHeld = s.aimFire = s.aimRelease = s.boost = false;
-  s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.pausePresses = s.stationPresses = s.detonatePresses = 0;
+  s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.pausePresses = s.stationPresses = s.detonatePresses = s.rollPresses = 0;
 }
 
 /** Stick deadzone, as a fraction of full deflection (radial, then rescaled). */
@@ -156,7 +159,7 @@ const NAV_KEYS: Readonly<Record<string, NavCommand>> = {
   Backspace: 'back',
 };
 
-type PressKey = 'punchPresses' | 'cyclePresses' | 'cyclePrevPresses' | 'actionPresses' | 'pausePresses' | 'stationPresses' | 'detonatePresses';
+type PressKey = 'punchPresses' | 'cyclePresses' | 'cyclePrevPresses' | 'actionPresses' | 'pausePresses' | 'stationPresses' | 'detonatePresses' | 'rollPresses';
 
 export class Input {
   readonly keyboard = emptySource();
@@ -226,6 +229,7 @@ export class Input {
         }
         if (e.code === 'KeyP' || e.code === 'Escape') kb.pausePresses++;
         if (e.code === 'KeyG') kb.detonatePresses++;
+        if (e.code === 'KeyC' && !this.driving) kb.rollPresses++;
       }
       this.keys.add(e.code);
       this.updateKeyboard();
@@ -365,7 +369,7 @@ export class Input {
     }
     this.updateKeyboard();
     for (const s of this.sources) {
-      s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = 0;
+      s.actionPresses = s.punchPresses = s.cyclePresses = s.cyclePrevPresses = s.rollPresses = 0;
       s.fireHeld = s.aimFire = s.aimRelease = false;
     }
     this.padLatched[PAD_A] = this.padLatched[PAD_X] = this.padLatched[PAD_RT] = true;
@@ -451,7 +455,11 @@ export class Input {
       // D-pad down also navigates menus; main.ts only sets charges off in play.
       else if (i === PAD_DOWN) g.detonatePresses++;
       else if (i === PAD_A) this.pushNav('confirm');
-      else if (i === PAD_B) this.pushNav('back');
+      else if (i === PAD_B) {
+        // B is nitro in a car; on foot it rolls (and is BACK in a menu).
+        if (!this.driving) g.rollPresses++;
+        this.pushNav('back');
+      }
     }
     this.pollPadNav(pad, now);
     if (active) this.device = 'gamepad';
@@ -604,6 +612,11 @@ export class Input {
   /** DETONATE pressed since the last call (drain it every frame; act on it only in play). */
   consumeDetonate(): boolean {
     return this.drain('detonatePresses') > 0;
+  }
+
+  /** A dodge roll asked for since the last call (drain it every frame; on foot only). */
+  consumeRoll(): boolean {
+    return this.drain('rollPresses') > 0;
   }
 
   /** The connected gamepad, if any (for rumble). */

@@ -2,7 +2,8 @@
  * Weapon, ammo, armour and health crates on the sidewalks. Positions come
  * from the city seed so they're in the same places every game; taken crates
  * respawn. Grenades, molotovs and above all rockets are rare; a few starter
- * crates sit by the spawn corner.
+ * crates sit by the spawn corner. Bats lie loose (no crate) at a handful of
+ * spots of their own: one round the spawn corner, the rest scattered.
  */
 import { cornerPoint } from '../systems/crowd';
 import { WEAPONS, type WeaponKind } from '../systems/weapons';
@@ -45,8 +46,11 @@ const KINDS: Array<[PickupKind, number]> = [
   ['smoke', 0.04],
 ];
 
-/** Every kind a crate can be (the map file's added pickups pick from these: mapEdits PICKUP_ITEMS). */
-export const PICKUP_KINDS: readonly PickupKind[] = KINDS.map(([k]) => k);
+/** Every kind a pickup can be (the map file's added pickups pick from these: mapEdits PICKUP_ITEMS). */
+export const PICKUP_KINDS: readonly PickupKind[] = [...KINDS.map(([k]) => k), 'bat'];
+
+/** Bats in the core city: one by the spawn corner, the rest scattered on pavements like the crates. */
+export const BAT_COUNT = 5;
 
 /** The default number of crates in the core city. */
 const CORE_COUNT = 56;
@@ -102,6 +106,23 @@ export function generatePickups(seed: number, count = CORE_COUNT): Pickup[] {
   return out;
 }
 
+/** The bats (BAT_COUNT): the first round the spawn corner, past the starter crates; the rest from a stream of their own. */
+export function generateBats(seed: number): Pickup[] {
+  const at = cornerPoint(core(8), core(8), 0);
+  const out: Pickup[] = [{ x: at.x + 14, z: at.z, kind: 'bat', respawnAt: 0 }];
+  const rand = mulberry32(seed ^ 0xba7);
+  while (out.length < BAT_COUNT) {
+    const bx = core(Math.floor(rand() * CORE_BLOCKS));
+    const bz = core(Math.floor(rand() * CORE_BLOCKS));
+    const edge = Math.floor(rand() * 4);
+    const a = cornerPoint(bx, bz, edge);
+    const b = cornerPoint(bx, bz, edge + 1);
+    const t = 0.25 + rand() * 0.5;
+    out.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, kind: 'bat', respawnAt: 0 });
+  }
+  return out;
+}
+
 /** The available pickup within reach of (x, z), if any. */
 export function pickupAt(pickups: Pickup[], x: number, z: number): Pickup | null {
   // Squared distances: this runs over every crate each step (Math.hypot isn't inlined).
@@ -133,6 +154,11 @@ export function placePickups(seed: number, edits: MapEdits = ACTIVE_MAP): Pickup
   raw.forEach((p, i) => {
     const id = i < CORE_COUNT ? `pickup-${i}` : i < CORE_COUNT + ring ? `pickup-ring-${i - CORE_COUNT}` : `pickup-${i - ring}`;
     const e = editSpot({ ...p, id }, edits, true);
+    if (e) out.push(e);
+  });
+  // Bats after everything else, with ids of their own, so no crate's id or kind moves.
+  generateBats(seed).forEach((p, i) => {
+    const e = editSpot({ ...p, id: `pickup-bat-${i}` }, edits, true);
     if (e) out.push(e);
   });
   for (const s of addedSpots(edits, 'pickup')) out.push({ id: s.id, x: s.x!, z: s.z!, kind: s.pickup ?? 'health', respawnAt: 0 });

@@ -10,6 +10,7 @@
 | A stolen service vehicle's tool: hose (fire truck, hold; aim with the mouse), chime (ice cream van), winch (tow truck) | left click / J (instead of the drive-by) | the car FIRE button becomes HOSE / CHIME / WINCH; drag it to aim the hose | X (right stick aims the hose) |
 | Switch weapon (also in a car) | wheel, right click, Q / Tab (Shift+Tab back) | ⇄ | RB / LB |
 | Set off sticky charges (on foot or in a car, only in play) | G | BOOM (shows while a charge is out) | D-pad down |
+| Dodge roll (on foot) | C | ROLL (on foot, above BOOM's spot left of ENTER; dims while it cools down) | B |
 | Enter / exit car | E / F / Enter | door button (pulses next to a car) | Y |
 | Steer | A/D, ←/→ | **Point** (default): stick = where to go, push further = more gas; **Classic**: stick left/right | left stick |
 | Gas / brake-reverse | W/S, ↑/↓ | pedal pad: GAS / BRAKE — slide between them without lifting | RT / LT |

@@ -74,7 +74,7 @@ export type AddedSpotKind = 'ramp' | 'kicker' | 'hangout' | 'package' | 'phone' 
 export const ADDED_SPOT_KINDS: readonly AddedSpotKind[] = ['ramp', 'kicker', 'hangout', 'package', 'phone', 'frenzy', 'pickup'];
 
 /** What an added pickup can be (world/pickups.ts PICKUP_KINDS, which a test keeps equal). */
-export const PICKUP_ITEMS: readonly PickupKind[] = ['pistol', 'smg', 'shotgun', 'health', 'armour', 'ammo', 'grenade', 'molotov', 'rocket', 'horn', 'taser', 'stinger', 'smoke'];
+export const PICKUP_ITEMS: readonly PickupKind[] = ['pistol', 'smg', 'shotgun', 'health', 'armour', 'ammo', 'grenade', 'molotov', 'rocket', 'horn', 'taser', 'stinger', 'smoke', 'bat'];
 
 export interface SpotEdit {
   /** An anchor id (game/mapAnchors.ts): 'safehouse', 'phone-docks', 'fz-drift', 'vipers-0', 'ramp-3', 'pkg-12'... */

@@ -28,7 +28,7 @@ import { carsTouching } from './arrest';
 import { HELI_FROM, HELI_GONE, HELI_REFUEL, HELI_SHIFT, HELI_SPAWN, stepHelicopter, type Helicopter } from './helicopter';
 import { lineOfSight, sees } from './sight';
 import { createDaze, driveDazed, stepDaze, type Daze, type SmokeView } from './smoke';
-import { knockDown, resumeWalking, spawnPed, type PedRole } from './crowd';
+import { knockDown, makeEnemy, resumeWalking, spawnPed, type PedRole } from './crowd';
 import { RAM_COOLDOWN, createPursuit, drivePursuit, isPursuitHopeless, type PursuitDriver, type PursuitTarget } from './pursuit';
 import { CRUISE_SPEED, TURN_SPEED, createDriver, rerouteAi, spawnAi, type AiDriver, type Obstacle } from './traffic';
 import { len2 } from '../core/len';
@@ -668,11 +668,17 @@ export class PoliceForce {
       agent.s.heading = v.sim.heading;
       agent.goalX = agent.s.x;
       agent.goalZ = agent.s.z;
+      // A SWAT truck's second officer is a heavy (stage 6): armoured, slow, a shotgun.
+      const heavy = u.kind === 'swat' && i === 1;
+      if (heavy) {
+        makeEnemy(agent, 'heavy');
+        agent.role = 'cop';
+      }
       const base = u.kind === 'swat' ? SWAT_OUTFIT : COP_OUTFIT;
       const outfit: Outfit = { ...base, skin: SKIN[Math.floor(rand() * SKIN.length)] };
-      const officer = this.depot.addPed(agent, outfit, 'cop');
-      // SWAT come out with SMGs; patrol officers draw pistols.
-      officer.gun = u.kind === 'swat' ? 'smg' : 'pistol';
+      const officer = this.depot.addPed(agent, outfit, heavy ? 'heavy' : 'cop');
+      // SWAT come out with SMGs (the heavy a shotgun); patrol officers draw pistols.
+      officer.gun = heavy ? 'shotgun' : u.kind === 'swat' ? 'smg' : 'pistol';
       u.officers.push(officer);
       u.aboard--;
     }

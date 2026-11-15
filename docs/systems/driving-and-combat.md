@@ -78,6 +78,60 @@ and a throw a wall would drop within 3 m of your own feet doesn't go) (a touch t
 the aim stick only aims a throwable (it never auto-fires one): let go to
 throw where the ring is, or slide back to the centre first to cancel.
 
+**The dodge roll** (stage 6, `game/roll.ts` pure and tested in
+`tests/onFoot.test.ts`; `Player.tryRoll`): on foot, alive, on your feet and
+free, 4 m in 0.35 s along the stick (the way you face if it's at rest),
+coming out of it at a run (5 m/s), then 1.2 s before the next. While it
+runs nothing lands: `Player.hurt` and `knockDown` ignore every bullet,
+punch, bat, pellet, blast and fire tick, and an officer's grip can't hold
+someone going 11 m/s (the bust meter needs under 2.8 m/s), so a roll also
+slips a cuffing. It moves the player's `PedState` itself in place of
+`stepPedestrian`; walls stop it like walking. Keys: C, the pad's B (on foot;
+B is still nitro in a car and BACK in menus), touch ROLL. Emits `roll` (x,
+z, dirX, dirZ): the `Roll` clip played to fit (§18: in place, the root
+turns 360°, so the instance isn't tipped), a dust ring where it starts, and
+the throw's whoosh.
+
+**Enemies** (stage 6, `systems/crowd.ts` `makeEnemy`): three kinds, told
+apart from above by build and colour.
+- **Shooter**: an armed ped, as before (pistol; SWAT an SMG). In a gang,
+  the stocky or coated body with a dark cap.
+- **Rusher**: 70 HP, a fighter that closes at 5.7 m/s (a fighter 4.6, your
+  sprint 6), punching every 0.75 s; with a bat (`bat`) it swings every
+  1.15 s from 1.9 m for 15, landing at the `Swing` clip's contact like
+  yours (a roll gets you clear). The slim body with a loud orange head.
+- **Heavy**: the `heavy.glb` body (§20), armed with a shotgun (5 pellets,
+  0.2 rad, 16 m, 5 each, 3 from past 9 m, every 1.7 s, opening up from
+  13 m); walks in at 1.5–3 m/s and never backs off; armour takes half of
+  every hit and only a push of 6 m/s or more (a car, a blast) floors them,
+  so punches and the bat only stagger: about four bat swings or six pistol
+  rounds to put one down. Dark vest, the gang's colour on the helmet.
+
+Where they are: each **VIPERS** crew of three is a shooter, a rusher (with
+a bat at every other hangout) and either a second rusher or, at every other
+hangout (two of five), a heavy (`crewRole` in `game/modes/gangMode.ts`): never
+two guns at one corner, and the rush comes first. A **SWAT** truck's second
+officer is a heavy (one at 4★, two at 5★); the first keeps the SMG. In the
+story, Commissioner Clamp's two wardens are rushers with fists
+(`SpawnPed.enemy`), the only job changed; the other jobs' people are as they
+were.
+
+**The bat** (stage 6, `systems/weapons.ts` mode `melee`, `Combat.swing`):
+first in the weapon order. A swing faces the aim (or whoever's closest in
+front within reach) and lands 0.167 s later (40% of `Swing`'s 0.417 s) on
+everyone within 2.1 m in front: 60 and a 4.5 m/s knock, so one swing floors
+an ordinary person (a heavy takes 30 and only staggers). A swing every
+0.55 s. Its ammo is the hits left in it, 6 from a pickup, worn one per
+swing that lands (a miss costs nothing); the last breaks it (splinters,
+BAT BROKE in the feed, `punch` with `broke`) and the hand moves to the next
+weapon; an ammo crate doesn't mend it, another bat does. Bats lie loose (the
+`bat_pickup` model, no crate): one round the spawn corner past the starter
+crates and four scattered on pavements (`generateBats`, ids
+`pickup-bat-<n>` after every crate's, so no crate moves; the map editor can
+move them or add more). Held in `AimBat`'s carry, the bat follows the arm
+(it doesn't swing round to point ahead as a gun does). Swings are `punch`
+events with `bat` (the punch whoosh and thwack, the hit flash).
+
 **Drive-bys**: in a car, FIRE shoots a pistol or SMG (picking one if
 something else is held) out of whichever side window has the best target
 within 1.2 rad of square (hostiles first), with ×1.5 spread; an aim
@@ -265,7 +319,8 @@ one falls back to a procedural fake): Idle/Walk/Run by speed; the aim per
 weapon (pistol `Aim`, SMG/shotgun `AimBoth`, launcher `AimRocket`; a gun is
 lowered while sprinting unaimed) with its `Shoot*` kick per shot; the jab,
 left hook and uppercut of the combo (`Punch`, `Punch2`, `Uppercut`);
-`Throw` for grenades and molotovs; `Stagger` on a hit; knocked down
+`Throw` for grenades and molotovs; the bat's `AimBat` carry and `Swing`;
+`Roll` for the dodge; `Stagger` on a hit; knocked down
 `Fall` → `Down` → `GetUp`, the get-up timed to end as they're allowed up
 (`GetUpFast` after a short knock-down);
 `Arrested` when BUSTED; `EnterCar` at the driver's door before the body

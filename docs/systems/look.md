@@ -291,7 +291,8 @@ Everyone in the city is drawn from the Blender bodies in `public/assets/`
   as `settings.character`; `characters.setBody(model, kind)` moves a model
   between batches at once), the street bodies
   `ped_slim` (backpack), `ped_stocky` (ball cap) and `ped_coat` (long coat or
-  dress), `cop`, and the story characters `vex`, `tuna` and `pike`. Each GLB
+  dress), `cop`, the story characters `vex`, `tuna` and `pike`, and `heavy` (stage 6's
+armoured enemy, §20: never in the street crowd). Each GLB
   is one `CharacterBatch`: one draw call plus its shadow pass, and none at
   all while nobody wearing it is on screen (people more than 8 m outside
   the visible ground are left out, so the crowd walking just off-screen

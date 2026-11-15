@@ -354,6 +354,32 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
   bottom: calc(var(--edge-b) + var(--pad-h) + 12px);
 }
 
+/* ROLL (the dodge), on foot: above BOOM's spot and left of ENTER, so it
+   never covers either (BOOM is 106–162 px in, ENTER 18–78; this is 92–142
+   in and above both). Dims while it cools down. */
+.btn-roll {
+  --accent: #7fe8ff;
+  right: calc(var(--edge-r) + 92px);
+  bottom: calc(var(--edge-b) + 140px);
+  width: 50px;
+  height: 50px;
+  padding: 7px 8px 6px;
+}
+
+.btn-roll svg {
+  width: 22px;
+  height: 22px;
+}
+
+.btn-roll.cooling {
+  opacity: 0.4;
+}
+
+.touch-layer[data-hand='left'] .btn-roll {
+  right: auto;
+  left: calc(var(--edge-l) + 92px);
+}
+
 /* --- Pedal pad: one element, pedals inside are hit-tested in JS --- */
 .pedal-pad {
   position: fixed;
@@ -541,6 +567,12 @@ body[data-scene='play'][data-device='touch'] .touch-layer {
   .btn-detonate svg {
     width: 20px;
     height: 20px;
+  }
+
+  .btn-roll {
+    width: 46px;
+    height: 46px;
+    bottom: calc(var(--edge-b) + 128px);
   }
 }
 

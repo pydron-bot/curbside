@@ -14,7 +14,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { ClipBank, Pose, bake } from '../src/render/characterAnim';
 
-const BODIES = ['player', 'ped_slim', 'ped_stocky', 'ped_coat', 'cop', 'pike', 'tuna', 'vex'];
+const BODIES = ['player', 'ped_slim', 'ped_stocky', 'ped_coat', 'cop', 'pike', 'tuna', 'vex', 'heavy'];
 
 /**
  * The bones and clips of a body GLB, read straight from the file (the

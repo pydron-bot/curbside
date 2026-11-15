@@ -51,7 +51,8 @@ describe('the core city (today’s 16 × 16) at any size', () => {
   it('has the same hand-placed spots', () => {
     const docks = placeDocks(city);
     // The mission data is hashed whole: re-pinned for W3-B's sticky charge (s5 gives two, Lionel's line mentions them; same spots),
-    // and for KEEP IT LOUD chapter 2's jobs (the older jobs' data unchanged).
+    // and for KEEP IT LOUD chapter 2's jobs (the older jobs' data unchanged), and for stage 6 (Clamp's two
+    // wardens are rushers on the slim body: `enemy`, `body`; same spots).
     expect.soft(
       hash({
         safehouse: SAFEHOUSE,
@@ -63,7 +64,7 @@ describe('the core city (today’s 16 × 16) at any size', () => {
         hospital: placeHospital(city),
         missions: buildMissions(docks, SAFEHOUSE),
       }),
-    ).toBe('2d93fb62');
+    ).toBe('71b699ac');
     expect.soft(hash(placeHangouts())).toBe('446c0e20');
   });
 
