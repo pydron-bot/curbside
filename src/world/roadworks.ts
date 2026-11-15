@@ -45,6 +45,10 @@ const SPACING = 140;
 const FIRST = 18;
 const LAST = 46;
 
+/** Water barriers' `paint`, alternating along the line (sRGB). */
+const WATER_RED = '#d8322a';
+const WATER_WHITE = '#eeece6';
+
 type Item = [kind: StreetPropKind, along: number, inset: number, heading: number, phase: number];
 
 /** The kit inside the barrels, and its length along the road, m. */
@@ -131,7 +135,13 @@ function placeSites(sides: readonly BlockSide[], upTo: number, rand: () => numbe
     // Everything clear, or no site here.
     const points = items.map(([kind, along, inset]) => ({ kind, ...s.at(s.tFor(along), inset) }));
     if (!points.every((p) => placer.clearRoad(p.x, p.z, p.kind === 'traffic_cone' || p.kind === 'traffic_barrel' ? 0.3 : 0.9))) continue;
-    items.forEach(([kind, , , heading, phase], i) => placer.put(kind, points[i].x, points[i].z, heading, 1, phase));
+    // Every other site fences its line with plastic water barriers, red and white in turn (V3 L7), in the same spots.
+    const water = out.length % 2 === 1;
+    let barrier = 0;
+    items.forEach(([kind, , , heading, phase], i) => {
+      if (water && kind === 'work_barrier') placer.put('water_barrier', points[i].x, points[i].z, heading, 1, phase, barrier++ % 2 ? WATER_WHITE : WATER_RED);
+      else placer.put(kind, points[i].x, points[i].z, heading, 1, phase);
+    });
     const c0 = s.at(s.tFor(from), 5.7);
     const c1 = s.at(s.tFor(b + 1.5), 8);
     out.push({

@@ -51,6 +51,8 @@ export interface QualityTier {
   readonly fullFires: number;
   /** Blasts at once that get their own fake lights (later ones in a chain are dim anyway). */
   readonly chainLights: number;
+  /** The road and pavement close-up detail (world/ground.ts gRoadDetail): off keeps the plain ground. */
+  readonly groundDetail: boolean;
 }
 
 export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
@@ -72,6 +74,7 @@ export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
     smokeMaxOver: Infinity,
     fullFires: Infinity,
     chainLights: Infinity,
+    groundDetail: true,
   },
   // Phones: 1.5x is ~44% fewer pixels than 2x and still sharp at 460 ppi,
   // which leaves GPU headroom for when the A17 Pro throttles.
@@ -92,6 +95,7 @@ export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
     smokeMaxOver: 5,
     fullFires: 3,
     chainLights: 3,
+    groundDetail: true,
   },
   low: {
     name: 'low',
@@ -110,6 +114,7 @@ export const QUALITY_TIERS: Readonly<Record<QualityTierName, QualityTier>> = {
     smokeMaxOver: 3.5,
     fullFires: 2,
     chainLights: 2,
+    groundDetail: false,
   },
 };
 

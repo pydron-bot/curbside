@@ -74,7 +74,8 @@ describe('the core city (today’s 16 × 16) at any size', () => {
     const d = dressCity(city, pickups, ramps);
     const props = d.street.props.filter((p) => inCore(p.x, p.z)).map((p) => [p.kind, p.x, p.z, p.heading, p.scale, p.tint ?? '']);
     props.sort((a, b) => (a[1] as number) - (b[1] as number) || (a[2] as number) - (b[2] as number) || String(a[0]).localeCompare(String(b[0])));
-    expect.soft(hash(props)).toBe('f41154ea');
+    // V3 L7 (pavementDressing.ts) dressed the pavements: a new hash, the same at every size.
+    expect.soft(hash(props)).toBe('9cf82507');
     expect.soft(hash(d.landmarks.props.filter((p) => inCore(p.x, p.z)))).toBe('bac58205');
     expect.soft(hash(d.street.roadworks.filter((w) => centre(w.area)))).toBe('5076d9ad');
     expect.soft(hash(d.street.busStops.filter((s) => inCore(s.x, s.z)))).toBe('a2b6ebf2');

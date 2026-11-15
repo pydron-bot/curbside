@@ -8,7 +8,7 @@
 // people scale) and the share of the frame that is roof (a grid of rays
 // through the screen against every building box). Also draw calls and
 // programs. A veteran save (no cold open) and time frozen.
-// `--set peopleScale=1.35` sets LOOK sliders (live values, not saved).
+// `--set peopleScale=1.35` sets LOOK sliders (live values), `--look file.json` a whole look.json.
 import { createRequire } from 'module';
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import path from 'path';
@@ -23,10 +23,15 @@ const flag = (name, def) => {
 };
 const PORT = Number(flag('port', 5351));
 const ONLY = flag('only', '');
+/** --views a,b,c: just these views, by name. */
+const PICK = flag('views', '').split(',').filter(Boolean);
 const TAG = flag('tag', '');
 /** Tint what the roof metric counts (roof pink, wall cyan) on the sheet's pictures. */
 const MASK = argv.includes('--mask');
 const SETS = argv.flatMap((a, i) => (a === '--set' ? [argv[i + 1]] : [])).map((s) => s.split('=')).map(([k, v]) => [k, Number(v)]);
+// --look file.json: a look.json's sliders, before any --set.
+const LOOK_FILE = flag('look', '');
+if (LOOK_FILE) SETS.unshift(...Object.entries(JSON.parse(readFileSync(LOOK_FILE, 'utf8')).look ?? {}).map(([k, v]) => [k, Number(v)]));
 mkdirSync(dir, { recursive: true });
 
 const SPAWN = null;
@@ -89,7 +94,7 @@ console.log(`spawn at (${spawn[0].toFixed(1)}, ${spawn[1].toFixed(1)})`);
 const results = [];
 let inCar = false;
 for (const [name, label, v] of VIEWS) {
-  const skip = ONLY && !name.includes(ONLY);
+  const skip = (ONLY && !name.includes(ONLY)) || (PICK.length > 0 && !PICK.includes(name));
   if (v.car && !inCar) {
     await page.evaluate(([x, z]) => {
       const u = window.__ub;

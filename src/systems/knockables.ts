@@ -47,6 +47,11 @@ const DRAG: Readonly<Record<string, number>> = {
   traffic_barrel: 0.02,
   shopping_cart: 0.02,
   traffic_cone: 0.01,
+  a_board: 0.02,
+  crate_stack: 0.04,
+  bin_bags: 0.02,
+  flower_stand: 0.05,
+  water_barrier: 0.06,
 };
 const CELL = 16;
 

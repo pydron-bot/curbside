@@ -15,9 +15,9 @@ const SPRAY_SECONDS = 14;
 const SPRAY_RATE = 28;
 const MAX_SPRAYS = 6;
 /** Light things fly further. */
-const LIGHT: ReadonlySet<string> = new Set(['traffic_cone', 'trash_bin', 'newspaper_box', 'recycling_bin', 'traffic_barrel', 'roadwork_sign', 'shopping_cart']);
+const LIGHT: ReadonlySet<string> = new Set(['traffic_cone', 'trash_bin', 'newspaper_box', 'recycling_bin', 'traffic_barrel', 'roadwork_sign', 'shopping_cart', 'a_board', 'bin_bags', 'crate_stack']);
 /** Plastic and wood: no sparks. */
-const NO_SPARKS: ReadonlySet<string> = new Set(['traffic_cone', 'bench', 'traffic_barrel', 'work_barrier', 'recycling_bin', 'cafe_table']);
+const NO_SPARKS: ReadonlySet<string> = new Set(['traffic_cone', 'bench', 'traffic_barrel', 'work_barrier', 'recycling_bin', 'cafe_table', 'a_board', 'bin_bags', 'crate_stack', 'flower_stand', 'water_barrier']);
 
 interface Flyer {
   kind: string;

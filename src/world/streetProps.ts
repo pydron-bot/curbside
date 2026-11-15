@@ -24,6 +24,7 @@ import { planBuildings, type BuildingPlan } from './buildingPlans';
 import { BLOCKS_PER_SIDE, BLOCK_SIZE, CORE_OFFSET, HALF_EXTENT, blockInterior, blockSpan, inCoreBlock, mergedAway, spanInterior, type Block, type Building, type City, type Rect } from './city';
 import type { District } from './districts';
 import { placeFrontages } from './frontages';
+import { dressPavements, type ClearPoint } from './pavementDressing';
 import { keyedStream, mulberry32 } from './random';
 import { placeRoadworks, type Roadworks } from './roadworks';
 import { signalPoles } from './signals';
@@ -68,6 +69,16 @@ export const STREET_PROP_KINDS = [
   'skip',
   'mini_digger',
   'portable_toilet',
+  // Round 3 (V3 L7, pavementDressing.ts; water barriers in road works).
+  'a_board',
+  'crate_stack',
+  'bin_bags',
+  'market_stall',
+  'flower_stand',
+  'news_stand',
+  'water_barrier',
+  'scaffold',
+  'leaf_pile',
 ] as const;
 export type StreetPropKind = (typeof STREET_PROP_KINDS)[number];
 
@@ -143,6 +154,8 @@ export interface StreetPropOptions {
   propEdits?: readonly PropEdit[];
   /** Map edits (round 3): pedestrian streets (bollards across both ends, benches, planters and tables down the middle). */
   pedestrianRoads?: readonly RoadEdit[];
+  /** Points the pavement dressing (V3 L7) keeps clear of: mission markers (radius in m). */
+  markers?: readonly ClearPoint[];
 }
 
 /** Furniture slots along a block side (m from the block's corner), 3 m apart and clear of the lamps at 16, 32, 48. */
@@ -227,6 +240,8 @@ const SOLID_HALF: Partial<Record<StreetPropKind, readonly [number, number]>> = {
   fruit_stand: [1.0, 0.5],
   skip: [0.8, 1.3],
   portable_toilet: [0.55, 0.55],
+  market_stall: [1.2, 0.6],
+  news_stand: [0.9, 0.6],
 };
 const SOLID_RECTS: Partial<Record<StreetPropKind, readonly Rect[]>> = {
   bus_shelter: [
@@ -235,6 +250,13 @@ const SOLID_RECTS: Partial<Record<StreetPropKind, readonly Rect[]>> = {
     { minX: 1.6, minZ: -0.45, maxX: 1.72, maxZ: 0.33 },
   ],
   mini_digger: [{ minX: -0.75, minZ: -1.3, maxX: 0.75, maxZ: 1.45 }],
+  // The four standards; the walkway under it is open.
+  scaffold: [
+    { minX: -2.01, minZ: -0.71, maxX: -1.89, maxZ: -0.59 },
+    { minX: 1.89, minZ: -0.71, maxX: 2.01, maxZ: -0.59 },
+    { minX: -2.01, minZ: 0.59, maxX: -1.89, maxZ: 0.71 },
+    { minX: 1.89, minZ: 0.59, maxX: 2.01, maxZ: 0.71 },
+  ],
 };
 const KNOCK_RADIUS: Partial<Record<StreetPropKind, number>> = {
   hydrant: 0.25,
@@ -251,6 +273,11 @@ const KNOCK_RADIUS: Partial<Record<StreetPropKind, number>> = {
   traffic_barrel: 0.3,
   work_barrier: 0.92,
   roadwork_sign: 0.58,
+  a_board: 0.34,
+  crate_stack: 0.45,
+  bin_bags: 0.5,
+  flower_stand: 0.75,
+  water_barrier: 0.78,
 };
 /** Long furniture people (and cars) meet as a box (half-sizes, m), clear of the walk line or the lane. */
 const KNOCK_BOX: Partial<Record<StreetPropKind, readonly [number, number]>> = {
@@ -259,6 +286,8 @@ const KNOCK_BOX: Partial<Record<StreetPropKind, readonly [number, number]>> = {
   cafe_table: [0.8, 0.4],
   work_barrier: [0.9, 0.12],
   roadwork_sign: [0.55, 0.3],
+  flower_stand: [0.7, 0.4],
+  water_barrier: [0.75, 0.22],
 };
 /** How much room a prop takes for later placements (radius, m); 0.4 if not listed, trees take none. */
 const ROOM: Partial<Record<StreetPropKind, number>> = {
@@ -287,6 +316,15 @@ const ROOM: Partial<Record<StreetPropKind, number>> = {
   skip: 1.4,
   mini_digger: 1.4,
   portable_toilet: 0.7,
+  a_board: 0.45,
+  crate_stack: 0.5,
+  bin_bags: 0.55,
+  market_stall: 1.5,
+  flower_stand: 0.8,
+  news_stand: 1.1,
+  water_barrier: 0.8,
+  scaffold: 2.1,
+  leaf_pile: 0.6,
 };
 const NO_ROOM: ReadonlySet<StreetPropKind> = new Set(['tree_round', 'tree_tall', 'palm']);
 /** Bucket size for the taken-room lookup, m. */
@@ -374,7 +412,8 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
   // at any city size (W3-A).
   const busStops = placeBusStops(city, placer, roadworks);
   const vendors = placeVendors(city, placer);
-  placeFrontages(city, opts.plans ?? planBuildings(city), placer);
+  const plans = opts.plans ?? planBuildings(city);
+  placeFrontages(city, plans, placer);
 
   // The core city's kerbs and alleys, then a bigger city's ring.
   for (const ring of [false, true]) {
@@ -382,6 +421,14 @@ export function placeStreetProps(city: City, opts: StreetPropOptions = {}): Stre
     dressBlocks(city, blocks, clear, put);
     placeDumpsters(city, city.buildings.filter((b) => inCoreBlock(...blockOf(b)) !== ring), clear, put);
   }
+  // V3 L7: the pavements dressed last, so they only fill gaps (nothing placed before moves);
+  // clear of bus stops (the shelter and where the bus pulls in) and mission markers.
+  const keep: ClearPoint[] = [
+    ...busStops.flatMap((s) => [{ x: s.x, z: s.z, r: 5 }, { x: s.stopX, z: s.stopZ, r: 8 }]),
+    ...roadworks.map((w) => ({ x: (w.area.minX + w.area.maxX) / 2, z: (w.area.minZ + w.area.maxZ) / 2, r: len2(w.area.maxX - w.area.minX, w.area.maxZ - w.area.minZ) / 2 + 1 })),
+    ...(opts.markers ?? []),
+  ];
+  dressPavements(city, plans, placer, keep);
 
   // Map edits (W3-D), after everything generated: barriers across closed roads, then added props.
   const propEditProblems: PropEditProblem[] = removals.filter((r) => !r.used).map((r) => ({ edit: r.edit, problem: `no ${r.edit.kind} within ${PROP_MATCH} m to remove` }));

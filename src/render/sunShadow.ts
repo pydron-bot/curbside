@@ -15,6 +15,7 @@
 import { Vector3, type DirectionalLight, type WebGLRenderer } from 'three';
 import type { Rect } from '../world/city';
 import { getQuality, onQualityChange } from './quality';
+import { packShadow, shadowTintInstalled } from './shadowTint';
 
 /** Tallest thing that casts or receives a shadow (12 m roofs + rooftop tanks), m. */
 export const SHADOW_MAX_HEIGHT = 16;
@@ -24,6 +25,8 @@ const VIEW_MARGIN = 3;
 const SIZE_STEP = 6;
 /** Room above the highest receiver for casters further up the light ray, m. */
 const CASTER_REACH = 60;
+/** PCF filter radius at the shipped softness, texels. */
+const SHADOW_RADIUS = 2.5;
 
 export interface ShadowBox {
   /** Where the light looks (the box centre) and where the light sits. */
@@ -110,6 +113,7 @@ export class SunShadow {
   private readonly dir = new Vector3();
   /** Strength asked for by the time of day (0..1). */
   private strength = 1;
+  private tint = 0;
   private active: boolean;
 
   constructor(
@@ -126,15 +130,25 @@ export class SunShadow {
     s.mapSize.set(size || 512, size || 512);
     s.bias = -0.0004;
     s.normalBias = 0.04;
-    s.radius = 2.5;
+    s.radius = SHADOW_RADIUS;
     onQualityChange(() => this.applyTier());
     this.applyTier();
   }
 
-  /** Shadow darkness from the time of day (fades out as the light does). */
-  setStrength(strength: number): void {
+  /**
+   * Shadow darkness from the time of day (fades out as the light does), and
+   * how much sky-coloured light comes back into them (shadowTint.ts; 0: none).
+   */
+  setStrength(strength: number, tint = 0): void {
+    if (strength === this.strength && tint === this.tint) return;
     this.strength = strength;
+    this.tint = tint;
     this.applyStrength();
+  }
+
+  /** Shadow edge softness: a share of the PCF radius (2.5 texels at 1). */
+  setSoftness(k: number): void {
+    this.light.shadow.radius = SHADOW_RADIUS * k;
   }
 
   /** Refit the shadow box to the visible ground; call once per frame before rendering. */
@@ -177,6 +191,7 @@ export class SunShadow {
   }
 
   private applyStrength(): void {
-    this.light.shadow.intensity = this.active && getQuality().shadowMapSize > 0 ? this.strength : 0;
+    const on = this.active && getQuality().shadowMapSize > 0;
+    this.light.shadow.intensity = !on ? 0 : shadowTintInstalled ? packShadow(this.strength, this.tint) : this.strength;
   }
 }

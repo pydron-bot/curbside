@@ -86,8 +86,32 @@ export function writeGrade(t: GradeTuning, out: Float32Array = GRADE_UNIFORM): F
     out[8 + i] = 1 + (GRADE_BASE.shadowTint[i] - 1) * t.violetShadows;
     out[12 + i] = 1 + (GRADE_BASE.highTint[i] - 1) * t.roseHighlights;
   }
+  if (out === GRADE_UNIFORM) GRADE_ALL_DAY.set(out);
   return out;
 }
+/** The grade as the sliders wrote it, before the day look scales it (setDayGrade). */
+const GRADE_ALL_DAY = new Float32Array(16);
+
+/**
+ * The day look's grade (V3 L5) over the sliders' grade, scaled by `day`
+ * (1 by day, 0 at night: the night grade never changes): saturation,
+ * contrast and a warm ↔ cool turn of the highlights. Call every frame (cheap,
+ * no allocation); writeGrade's values are kept underneath.
+ */
+export function setDayGrade(day: number, saturation: number, contrast: number, warmth: number, out: Float32Array = GRADE_UNIFORM): void {
+  const b = GRADE_ALL_DAY;
+  const sat = 1 + (saturation - 1) * day;
+  out[4] = b[4] * sat;
+  out[5] = b[5] * sat;
+  out[7] = b[7] * (1 + (contrast - 1) * day);
+  const w = warmth * day;
+  out[12] = b[12] * (1 + 0.07 * w);
+  out[13] = b[13] * (1 + 0.012 * w);
+  out[14] = b[14] * (1 - 0.1 * w);
+  out[8] = b[8] * (1 + 0.03 * w);
+  out[10] = b[10] * (1 - 0.05 * w);
+}
+
 writeGrade({ saturation: 1, darkSaturation: 1, violetShadows: 1, roseHighlights: 1, pinkMids: 1, contrast: 1 });
 GRADE_UNIFORM[0] = 1;
 

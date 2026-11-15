@@ -41,22 +41,24 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
 The plan is [V3_PLAN.md](V3_PLAN.md); the owner chose stages 1, 2, 3, 4 and 6
 (not 5). Nothing is shipped: `main` is still 0.33.0.
 
-- **`claude/v3` (integration, pushed, smoke OK on all four profiles):** the
+- **`claude/v3` (integration, pushed; smoke OK on all four profiles up to play stage 6):** the
   Blender instance's assets (BLENDER_TODO §16–§20, all done), look stage 1
   (bigger people, roofs step back, the camera trial, top-centre HUD), play
   stage 4 (chases: 5 stars you can survive, NEW WHEELS, LYING LOW, the
   search ring, roadblock warnings, GOT AWAY pay) and play stage 6 (dodge
   roll, rusher / shooter / heavy, the bat).
-- **`claude/v3-look` (pushed):** stage 2 is committed there (car glint fix,
-  three day looks in the LOOK panel, road and pavement surface, things on
-  the pavement) but **not yet reviewed or merged into `claude/v3`**: check
-  its sheets, merge, `npm test`, `npm run build`, smoke.
+- **Look stage 2 is merged too** (2026-11-15: car glint fix, three day looks
+  as LOOK panel presets with today's still the default, road and pavement
+  surface, things on the pavement). Types and unit tests pass on the merge;
+  **the smoke test has not been run on it yet** (it passed on the stream's
+  own branch). Unmeasured: the ground detail's GPU cost on the phone (GPU
+  BREAKDOWN with ROAD & PAVEMENT DETAIL at 0% and 100%).
 - **Not started: stage 3** (L8 visible car damage, L9's code side `paint2`
   as a second per-car tint, L10 crash juice and the blast brightness cap).
 - **To ship:** a changelog entry and `package.json` version (0.34.0), the
   smoke test, then `main`. **Ask the owner first**; pushing `main` deploys.
 - **The owner still has to choose or try on the phone:** the camera (today's,
-  tilt 0.2 or 0.3), which day look, the ROLL button's place, whether 5 stars
+  tilt 0.2 or 0.3), which day look (the look stream suggests SUNNY PASTEL), the ROLL button's place, whether 5 stars
   now feels fair (the bot escapes 1 in 20; the target was 3), people at
   1.35× at car doors and on scooters, edge-light and cutaway shimmer.
 - A smoke check that fails on `page.goto: Timeout 30000ms` while the machine
@@ -105,7 +107,8 @@ The plan is [V3_PLAN.md](V3_PLAN.md); the owner chose stages 1, 2, 3, 4 and 6
      it is (a test checks it's canonical; if hand-edited, re-serialise with
      `serialiseLookFile(parseLookFile(...))`), bump the version, ship. A
      constant with no slider: add a spec to `LOOK_SPECS`, or to `SHADER_LOOK`
-     with its `LK_*` macro (keep `uLook` within 16 floats).
+     with its `LK_*` macro (`uLook` is vec4[5], 17 of 20 floats used; grow
+     `SHADER_LOOK_FLOATS` by 4 when it fills).
    - Map editor: the frenzy limits (`frenzyLimits.ts`) and whether the
      rectangle rule (REMOVE refused for an L) suits.
    - A bigger city (W3-A): the decisions listed in [W3A_CITY.md](W3A_CITY.md).

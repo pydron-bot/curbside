@@ -21,7 +21,7 @@ const big = placeRamps(1337);
 const ramps = [...big, ...placeKickers(1337, big)];
 const dressing = dressCity(city, generatePickups(1337), ramps);
 const { street } = dressing;
-const WORKS = new Set(['traffic_cone', 'traffic_barrel', 'work_barrier', 'roadwork_sign', 'steel_plate', 'work_trench', 'skip', 'mini_digger', 'portable_toilet']);
+const WORKS = new Set(['traffic_cone', 'traffic_barrel', 'work_barrier', 'water_barrier', 'roadwork_sign', 'steel_plate', 'work_trench', 'skip', 'mini_digger', 'portable_toilet']);
 const DT = 1 / 60;
 
 /** Distance from the nearest road centreline. */
@@ -42,7 +42,9 @@ describe('road works', () => {
       expect(count('roadwork_sign')).toBe(1);
       expect(count('traffic_cone')).toBe(6);
       expect(count('traffic_barrel')).toBeGreaterThanOrEqual(4);
-      expect(count('work_barrier')).toBe(count('traffic_barrel') - 1);
+      // Plastic barriers or (every other site) water barriers between the barrels, never both.
+      expect(count('work_barrier') + count('water_barrier')).toBe(count('traffic_barrel') - 1);
+      expect(count('work_barrier') * count('water_barrier')).toBe(0);
       expect(inside.length).toBeGreaterThan(count('traffic_cone') + 2 * count('traffic_barrel'));
       // The sign faces the traffic coming up to it.
       const sign = inside.find((p) => p.kind === 'roadwork_sign')!;
