@@ -14,6 +14,10 @@ import { addStandIns } from './propStandIns';
 import { addCritterModels } from './critterModels';
 import { worldUniforms } from './shaderLib';
 import { publicUrl } from '../core/paths';
+import { getQuality, onQualityChange } from './quality';
+
+/** Drawn-only street dressing (no collision, nothing to knock): the low tier leaves it out. */
+const DECOR: ReadonlySet<string> = new Set(['leaf_pile']);
 
 /** The rooftop kit's models by plan kind (chimneys and solar panels stay boxes in the city mesh). */
 const ROOF_MODEL: Partial<Record<RoofProp['kind'], string>> = {
@@ -104,8 +108,18 @@ export class WorldProps {
       'skip',
       'mini_digger',
       'portable_toilet',
+      // Round 3 (V3 L7: pavementDressing.ts, road works' water barriers).
+      'a_board',
+      'crate_stack',
+      'bin_bags',
+      'market_stall',
+      'flower_stand',
+      'news_stand',
+      'water_barrier',
+      'scaffold',
+      'leaf_pile',
     ],
-    1100,
+    1400,
   );
   readonly roofs = new PropBatch('roofs', ['ac_unit', 'vent', 'water_tank', 'satellite_dish', 'rooftop_door', 'antenna'], 1400);
   readonly trees = new PropBatch('trees', ['tree_round', 'tree_tall', 'palm'], 400, { receiveShadows: false, sway: true });
@@ -154,6 +168,8 @@ export class WorldProps {
   private signalData: Float32Array;
   /** Scratch for the signals' reflections. */
   private readonly glint: Glint = { x: 0, z: 0, heading: 0, length: 0 };
+  /** Street-family handles of the drawn-only dressing (DECOR), hidden on the low tier. */
+  private readonly decor: number[] = [];
   /** Wall lamps on landmarks (the station's blue lamp, the safehouse's light): x, y, z, kind (0 police, 1 warm). */
   private wallLamps = new Float32Array(0);
 
@@ -162,6 +178,7 @@ export class WorldProps {
     private plans: readonly BuildingPlan[],
   ) {
     this.families = [this.lamps, this.street, this.roofs, this.trees, this.landmarks, this.things, this.debris];
+    onQualityChange(() => this.showDecor());
     this.signalData = signalData(streetProps);
     PropModels.load(publicUrl('assets/props.glb'), publicUrl('assets/pickups.glb'), publicUrl('assets/debris.glb')).then(
       (models) => this.useModels(models),
@@ -310,13 +327,22 @@ export class WorldProps {
 
   private addStreet(): void {
     const tint = new Color();
+    this.decor.length = 0;
     this.streetProps.props.forEach((p, i) => {
       const f = p.kind === 'streetlamp' ? this.lamps : p.kind === 'tree_round' || p.kind === 'tree_tall' || p.kind === 'palm' ? this.trees : this.street;
       if (p.tint) tint.set(p.tint);
       else tint.setRGB(1, 1, 1);
       const h = f.addStatic(p.kind, p.x, 0, p.z, p.heading, p.scale, p.scale, p.scale, p.phase, p.eastWest ? 1 : 0, 0, tint.r, tint.g, tint.b);
       this.handles.set(i, [f, h]);
+      if (DECOR.has(p.kind)) this.decor.push(h);
     });
+    this.showDecor();
+  }
+
+  /** Drawn-only dressing (leaf piles) shows on the tiers with the ground's detail, not on 'low'. */
+  private showDecor(): void {
+    const on = getQuality().groundDetail;
+    for (const h of this.decor) this.street.setHidden(h, !on);
   }
 
   private addLandmarks(): void {

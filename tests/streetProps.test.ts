@@ -18,9 +18,9 @@ const dressing = dressCity(city, pickups, ramps);
 const { street, landmarks } = dressing;
 
 /** The road works' kit, standing in the road. */
-const ROAD_KINDS = new Set(['traffic_cone', 'traffic_barrel', 'work_barrier', 'roadwork_sign', 'steel_plate', 'work_trench', 'skip', 'mini_digger', 'portable_toilet']);
+const ROAD_KINDS = new Set(['leaf_pile', 'water_barrier', 'traffic_cone', 'traffic_barrel', 'work_barrier', 'roadwork_sign', 'steel_plate', 'work_trench', 'skip', 'mini_digger', 'portable_toilet']);
 /** Against the shopfronts. */
-const FRONT_KINDS = new Set(['cafe_table', 'vending_machine', 'atm']);
+const FRONT_KINDS = new Set(['cafe_table', 'vending_machine', 'atm', 'crate_stack', 'flower_stand', 'news_stand', 'market_stall', 'scaffold']);
 
 /** Distance from the nearest road centreline (the road a pavement prop stands beside). */
 function fromCentreline(x: number, z: number): number {
@@ -99,12 +99,14 @@ describe('street furniture', () => {
       for (const b of buildings.near(p.x, p.z, 0.1)) expect(circleVsRect(p.x, p.z, 0.05, b), p.kind).toBeNull();
     }
     // One rect each, three for a shelter (back and ends, open to the road).
-    const solidKinds = new Set(['streetlamp', 'traffic_light', 'bollard', 'dumpster', 'planter', 'vending_machine', 'atm', 'food_cart_hotdog', 'food_cart_coffee', 'fruit_stand', 'skip', 'portable_toilet', 'mini_digger']);
+    const solidKinds = new Set(['streetlamp', 'traffic_light', 'bollard', 'dumpster', 'planter', 'vending_machine', 'atm', 'food_cart_hotdog', 'food_cart_coffee', 'fruit_stand', 'skip', 'portable_toilet', 'mini_digger', 'market_stall', 'news_stand']);
     const shelters = street.props.filter((p) => p.kind === 'bus_shelter').length;
-    expect(street.solids.length).toBe(street.props.filter((p) => solidKinds.has(p.kind)).length + 3 * shelters);
+    // A scaffold is its four standards (people walk under it).
+    const scaffolds = street.props.filter((p) => p.kind === 'scaffold').length;
+    expect(street.solids.length).toBe(street.props.filter((p) => solidKinds.has(p.kind)).length + 3 * shelters + 4 * scaffolds);
     // The knockables are the small things, each a real prop.
     const light = ['hydrant', 'trash_bin', 'newspaper_box', 'mailbox', 'bench', 'parking_meter', 'recycling_bin', 'bike_rack', 'shopping_cart', 'cafe_table'];
-    for (const k of street.knockables) expect([...light, 'traffic_cone', 'traffic_barrel', 'work_barrier', 'roadwork_sign']).toContain(street.props[k.prop].kind);
+    for (const k of street.knockables) expect([...light, 'a_board', 'crate_stack', 'bin_bags', 'flower_stand', 'water_barrier', 'traffic_cone', 'traffic_barrel', 'work_barrier', 'roadwork_sign']).toContain(street.props[k.prop].kind);
     // Benches block people as their box, long side along the kerb, and stay
     // clear of the line walkers follow down the pavement.
     const walkLine = ROAD_WIDTH / 2 + SIDEWALK / 2;

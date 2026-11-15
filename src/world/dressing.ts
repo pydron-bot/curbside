@@ -67,9 +67,13 @@ export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: num
   });
   // Things in the road keep off the spawn corner (its parked cars), the ramps' run-ups and every car a mission parks.
   const reserve = [{ x: 0, z: 0, r: 70 }, ...ramps.map((r) => ({ x: r.x, z: r.z, r: 30 }))];
+  // Where jobs send the player (goto, deliver, collect): the pavement dressing (V3 L7) keeps clear of them.
+  const markers: Array<{ x: number; z: number; r: number }> = [];
   for (const m of buildMissions(docks, safehouse, edits)) {
     for (const step of m.steps) {
       for (const a of [...(step.start ?? []), ...(step.done ?? [])]) if (a.do === 'spawnCar') reserve.push({ x: a.x, z: a.z, r: 6 });
+      if (step.kind === 'goto' || step.kind === 'deliver') markers.push({ x: step.x, z: step.z, r: (step.r ?? 4) + 1 });
+      if (step.kind === 'collect') for (const [x, z] of step.points) markers.push({ x, z, r: (step.r ?? 3) + 1 });
     }
   }
   // No road works on a race's legs.
@@ -89,7 +93,7 @@ export function dressCity(city: City, pickups: ReadonlyArray<{ x: number; z: num
   }
   // Closures (and removals that can't apply, played as closed) and pedestrian streets (round 3), as the road rules read them.
   const rules = new RoadRules(edits.roads, MAX_NODE);
-  const street = placeStreetProps(city, { avoid, keepOut, reserve, quietRoads, closedRoads: rules.closed, propEdits: edits.props, pedestrianRoads: rules.pedestrian });
+  const street = placeStreetProps(city, { avoid, keepOut, reserve, quietRoads, closedRoads: rules.closed, propEdits: edits.props, pedestrianRoads: rules.pedestrian, markers });
   const knockables: KnockableItem[] = [
     ...street.knockables.map((k) => ({ id: k.prop, kind: street.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius, hx: k.hx, hz: k.hz })),
     ...landmarks.knockables.map((k) => ({ id: LANDMARK_KNOCK_ID + k.prop, kind: landmarks.props[k.prop].kind, x: k.x, z: k.z, radius: k.radius })),
