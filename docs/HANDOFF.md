@@ -36,6 +36,32 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
   LOOK panel and changelog loaded on first open. **Ask the owner** whether the "lying flat while aiming" report
   is gone with 0.32.2, and what LOW POWER TESTS showed on the phone.
 
+## V3 in flight (2026-11-15), not on `main`
+
+The plan is [V3_PLAN.md](V3_PLAN.md); the owner chose stages 1, 2, 3, 4 and 6
+(not 5). Nothing is shipped: `main` is still 0.33.0.
+
+- **`claude/v3` (integration, pushed, smoke OK on all four profiles):** the
+  Blender instance's assets (BLENDER_TODO §16–§20, all done), look stage 1
+  (bigger people, roofs step back, the camera trial, top-centre HUD), play
+  stage 4 (chases: 5 stars you can survive, NEW WHEELS, LYING LOW, the
+  search ring, roadblock warnings, GOT AWAY pay) and play stage 6 (dodge
+  roll, rusher / shooter / heavy, the bat).
+- **`claude/v3-look` (pushed):** stage 2 is committed there (car glint fix,
+  three day looks in the LOOK panel, road and pavement surface, things on
+  the pavement) but **not yet reviewed or merged into `claude/v3`**: check
+  its sheets, merge, `npm test`, `npm run build`, smoke.
+- **Not started: stage 3** (L8 visible car damage, L9's code side `paint2`
+  as a second per-car tint, L10 crash juice and the blast brightness cap).
+- **To ship:** a changelog entry and `package.json` version (0.34.0), the
+  smoke test, then `main`. **Ask the owner first**; pushing `main` deploys.
+- **The owner still has to choose or try on the phone:** the camera (today's,
+  tilt 0.2 or 0.3), which day look, the ROLL button's place, whether 5 stars
+  now feels fair (the bot escapes 1 in 20; the target was 3), people at
+  1.35× at car doors and on scooters, edge-light and cutaway shimmer.
+- A smoke check that fails on `page.goto: Timeout 30000ms` while the machine
+  is loaded is load, not the game: re-run that profile on a quiet machine.
+
 ## Open work, in priority order
 
 1. **Real-device pass on the iPhone 15 Pro** (the owner, ~1.5–2 h; steps in
