@@ -41,7 +41,7 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
 The plan is [V3_PLAN.md](V3_PLAN.md); the owner chose stages 1, 2, 3, 4 and 6
 (not 5). Nothing is shipped: `main` is still 0.33.0.
 
-- **`claude/v3` (integration, pushed; smoke OK on all four profiles up to play stage 6):** the
+- **`claude/v3` (integration, pushed, smoke OK on all four profiles):** the
   Blender instance's assets (BLENDER_TODO §16–§20, all done), look stage 1
   (bigger people, roofs step back, the camera trial, top-centre HUD), play
   stage 4 (chases: 5 stars you can survive, NEW WHEELS, LYING LOW, the
@@ -49,9 +49,8 @@ The plan is [V3_PLAN.md](V3_PLAN.md); the owner chose stages 1, 2, 3, 4 and 6
   roll, rusher / shooter / heavy, the bat).
 - **Look stage 2 is merged too** (2026-11-15: car glint fix, three day looks
   as LOOK panel presets with today's still the default, road and pavement
-  surface, things on the pavement). Types and unit tests pass on the merge;
-  **the smoke test has not been run on it yet** (it passed on the stream's
-  own branch). Unmeasured: the ground detail's GPU cost on the phone (GPU
+  surface, things on the pavement). Smoke OK on all four profiles with it
+  merged (131 checks; 38 draw calls on the phone, 53 on desktop). Unmeasured: the ground detail's GPU cost on the phone (GPU
   BREAKDOWN with ROAD & PAVEMENT DETAIL at 0% and 100%).
 - **Not started: stage 3** (L8 visible car damage, L9's code side `paint2`
   as a second per-car tint, L10 crash juice and the blast brightness cap).
