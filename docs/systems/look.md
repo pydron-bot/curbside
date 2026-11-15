@@ -243,9 +243,9 @@ the first time it comes into view.
       low tier (`QualityTier.groundDetail` → `uGroundDetail`, a uniform);
       slider ROAD & PAVEMENT DETAIL (`LK_ROAD`). Cost, SwiftShader at the
       phone profile (CPU raster, relative only; the phone needs GPU
-      BREAKDOWN): the ground is about two thirds of a frame there, and the
-      detail moved the frame between −13% and +20% in three scenes, i.e.
-      within the noise to a fifth.
+      BREAKDOWN): the ground is half to two thirds of a frame there; the
+      detail moved the frame −3% to +7% in three scenes on a quiet machine
+      (−13% to +20% on a loaded one: noise).
     - *Car paint glint*: paint gets a soft, capped highlight in a lighter
       shade of itself (`vehicleBatch.ts`); glass keeps the sharp flash. The
       reworked cars' flat nose and boot facets lit whole panels white.
