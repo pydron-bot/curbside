@@ -43,7 +43,9 @@ NODE_PATH=$(npm root -g) node tools/look/spot.mjs out/x desktop arts:150:-448:22
   and the share of the frame that is roof (and wall), from a 107 × 49 grid
   of rays against every building box (`--mask` tints what it counted, to
   check it); plus draw calls and programs. `--set` moves LOOK sliders
-  before the shots (not saved). About 4 minutes.
+  before the shots (not saved), `--look file.json` a whole look.json
+  (the day-look candidates), `--views a,b` picks views by name. About 4
+  minutes.
 - `sheet.py <dir> <phone|desktop> <out.png>`: a 3×3 contact sheet of a
   `views.mjs` set.
 

@@ -23,6 +23,8 @@ const flag = (name, def) => {
 };
 const PORT = Number(flag('port', 5351));
 const ONLY = flag('only', '');
+/** --views a,b,c: just these views, by name. */
+const PICK = flag('views', '').split(',').filter(Boolean);
 const TAG = flag('tag', '');
 /** Tint what the roof metric counts (roof pink, wall cyan) on the sheet's pictures. */
 const MASK = argv.includes('--mask');
@@ -92,7 +94,7 @@ console.log(`spawn at (${spawn[0].toFixed(1)}, ${spawn[1].toFixed(1)})`);
 const results = [];
 let inCar = false;
 for (const [name, label, v] of VIEWS) {
-  const skip = ONLY && !name.includes(ONLY);
+  const skip = (ONLY && !name.includes(ONLY)) || (PICK.length > 0 && !PICK.includes(name));
   if (v.car && !inCar) {
     await page.evaluate(([x, z]) => {
       const u = window.__ub;

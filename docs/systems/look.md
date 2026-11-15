@@ -212,6 +212,43 @@ the first time it comes into view.
       14 → 20 px, in a car 11 → 15 px; roof share unchanged (21-35% on
       foot by roofs, 0-15% in a car; TILT 0.3 raises it to 39% on the
       Neon Mile with the cutaway opening the street).
+  - *Daylight (V3 stage 2)*, no new draw call or program:
+    - *Shadows lit by the sky* (`render/shadowTint.ts`): patched into
+      three's `lights_fragment_begin` before anything compiles, so every lit
+      material gets it: in sun shadow a share of the sun (up to
+      `SHADOW_TINT_LIFT` × SHADOW COLOUR) comes back in the hemisphere's sky
+      colour pushed toward violet-blue, instead of near-black. The tint
+      rides in the shadow's own `shadowIntensity` uniform with the darkness
+      (`packShadow`: twice the tint step plus the darkness), so no uniform
+      is added; with the tint at 0 it is three's own shadow.
+    - *Day look sliders* (LOOK → DAY LOOK (TRIAL)), all scaled by day
+      (`1 − night`) so night never changes: SHADOW COLOUR (0 shipped),
+      DAY SHADOW DARKNESS, SHADOW SOFTNESS (the PCF radius), DAY COLOUR,
+      DAY CONTRAST, DAY WARMTH (`post.ts` `setDayGrade`: the grade's
+      saturation, contrast and highlight tint × the day factor, every
+      frame over the sliders' grade). Chips TODAY / SUNNY PASTEL / HAZY
+      GOLD / COMIC (`lookTuning` DAY_LOOKS) set them and a few day sky
+      sliders; EXPORT gives each as a look.json. Today's look is shipped
+      until the owner picks.
+    - *Road and pavement* (`world/ground.ts` `gRoadDetail`,
+      `gPavementDetail`): an aggregate mottle, polished wheel tracks, an
+      older sealed patch, oil drips along the kerbside parking line, gully
+      grates every 16 m, straight-on arrows in the lane before the stop
+      line, a yellow bus-stop box at each stop (`uRoadMap` A,
+      `busStopByte`), litter and (old town, suburbs) leaves along the
+      gutters; kerbstones with joints and a lit edge, tactile paving where
+      crossings land, the odd replaced or cracked slab, gum spots downtown
+      and in the arts quarter. Everything finer than a few pixels fades by
+      `fwidth`, so nothing shimmers at the phone's render scale. Off on the
+      low tier (`QualityTier.groundDetail` → `uGroundDetail`, a uniform);
+      slider ROAD & PAVEMENT DETAIL (`LK_ROAD`). Cost, SwiftShader at the
+      phone profile (CPU raster, relative only; the phone needs GPU
+      BREAKDOWN): the ground is about two thirds of a frame there, and the
+      detail moved the frame between −13% and +20% in three scenes, i.e.
+      within the noise to a fifth.
+    - *Car paint glint*: paint gets a soft, capped highlight in a lighter
+      shade of itself (`vehicleBatch.ts`); glass keeps the sharp flash. The
+      reworked cars' flat nose and boot facets lit whole panels white.
   - *HUD*: a pink-cyan-violet radar rim, violet-navy map streets, a hot
     pink health bar, a cyan healthy-car ring. *Settings → Extras → Neon
     filter* (`screenFilter`, off by default): the title's edge light and

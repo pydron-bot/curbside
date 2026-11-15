@@ -79,7 +79,8 @@ is in [`docs/systems/`](systems/) (index in the README); per-release notes in
      it is (a test checks it's canonical; if hand-edited, re-serialise with
      `serialiseLookFile(parseLookFile(...))`), bump the version, ship. A
      constant with no slider: add a spec to `LOOK_SPECS`, or to `SHADER_LOOK`
-     with its `LK_*` macro (keep `uLook` within 16 floats).
+     with its `LK_*` macro (`uLook` is vec4[5], 17 of 20 floats used; grow
+     `SHADER_LOOK_FLOATS` by 4 when it fills).
    - Map editor: the frenzy limits (`frenzyLimits.ts`) and whether the
      rectangle rule (REMOVE refused for an L) suits.
    - A bigger city (W3-A): the decisions listed in [W3A_CITY.md](W3A_CITY.md).

@@ -213,11 +213,36 @@ and every new program is compiled behind the current frame.
   anything placed before it (a bucketed room check, `world/kerbs.ts`
   `Placer`); kerb things stay a metre off the line people walk down,
   wall things a person's width.
+- **The pavements dressed (V3 L7, `world/pavementDressing.ts`)**, placed
+  last so they only fill gaps (nothing older moves), each building and
+  block from its own keyed stream: the props.glb round-3 roots
+  (BLENDER_TODO §17) and more of the round-2 ones. At the kerb in front of
+  shops: A-boards (`paint` a sign colour; arts and old town most), bike
+  racks, planters, newspaper boxes; bin bags on some street sides.
+  Against shopfronts with no awning, where the pavement keeps a clear
+  path (as the café tables): crate stacks (grocers; under awnings too),
+  flower stands, a second café terrace, news stands, market stalls where
+  the building stands back far enough; never across a shop door (`doorIn`
+  works the doors out as the building shader draws them). Scaffolding
+  against a plain street face set back from the walk line (its four
+  standards solid, the walkway under it open). A row of market stalls
+  along one edge of most old-town and arts plazas (not car parks), a news
+  stand at some downtown ones. Leaf piles in the gutters of the leafy
+  districts and beside parks (drawn only, flat enough to drive over;
+  `WorldProps` hides them on the low tier). Kept clear of bus stops (5 m)
+  and where the bus pulls in (8 m), road works, mission markers (goto,
+  deliver and collect points: `dressing.ts` passes them), alleys (only
+  faces on a street: the hideouts stay usable) and car parks. In the core
+  city: ~540 A-boards, ~200 each of crates and bin bags, ~340 leaf piles,
+  ~40 flower stands, ~25 market stalls, ~10 scaffolds and news stands.
+  Knockable: A-boards, crates, bin bags, flower stands, water barriers;
+  solid: market stalls, news stands, the scaffold's standards.
 - **Road works** (`world/roadworks.ts`): 18 sites round the city, each
   closing the strip of road between the kerb and a traffic lane for 20–26
   m of a block: a ROAD WORK A-frame facing the traffic, a taper of four
   cones out from the kerb, traffic barrels every 3 m (their lamps blink in
-  a run along the line) with plastic barriers between them, two cones
+  a run along the line) with plastic barriers between them (every other
+  site red and white water barriers in the same spots), two cones
   closing the far end, and behind them a mix of a trench and its spoil,
   steel plates, a skip, a mini digger and a portable toilet. The barrels
   stand `WORKS_EDGE` (5.95 m) from the centreline and a lane's traffic
